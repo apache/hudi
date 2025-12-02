@@ -311,88 +311,91 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public static class Config implements Serializable {
-
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
 
     @Parameter(names = {"--continuous"}, description = "Running MetadataTableValidator in continuous. "
-        + "Can use --min-validate-interval-seconds to control validation frequency")
+        + "Can use --min-validate-interval-seconds to control validation frequency", required = false)
     public boolean continuous = false;
 
-    @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner")
+    @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner", required = false)
     public boolean skipDataFilesForCleaning = false;
 
-    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.")
+    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.", required = false)
     public boolean validateLatestFileSlices = false;
 
-    @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.")
+    @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
     public boolean validateLatestBaseFiles = false;
 
-    @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.")
+    @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
     public boolean validateAllFileGroups = false;
 
-    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.")
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
     public Integer validateLastNFileSlices = null;
 
-    @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema")
-    public boolean validateAllColumnStats = false;
+    @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)    public boolean validateAllColumnStats = false;
 
-    @Parameter(names = {"--validate-partition-stats"}, description = "Validate partition stats for all columns in the schema")
+    @Parameter(names = {"--validate-partition-stats"}, description = "Validate partition stats for all columns in the schema", required = false)
     public boolean validatePartitionStats = false;
 
-    @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files")
+    @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files", required = false)
     public boolean validateBloomFilters = false;
 
     @Parameter(names = {"--validate-record-index-count"},
         description = "Validate the number of entries in the record index, which should be equal "
-            + "to the number of record keys in the latest snapshot of the table")
+            + "to the number of record keys in the latest snapshot of the table",
+        required = false)
     public boolean validateRecordIndexCount = true;
 
     @Parameter(names = {"--validate-record-index-content"},
         description = "Validate the content of the record index so that each record key should "
-            + "have the correct location, and there is no additional or missing entry")
+            + "have the correct location, and there is no additional or missing entry",
+        required = false)
     public boolean validateRecordIndexContent = true;
 
     @Parameter(names = {"--validate-secondary-index"},
-        description = "Validate the entries in secondary index match the primary key for the records")
+        description = "Validate the entries in secondary index match the primary key for the records",
+        required = false)
     public boolean validateSecondaryIndex = false;
 
     @Parameter(names = {"--num-record-index-error-samples"},
-        description = "Number of error samples to show for record index validation")
+        description = "Number of error samples to show for record index validation",
+        required = false)
     public int numRecordIndexErrorSamples = 100;
 
     @Parameter(names = {"--view-storage-type-fs-listing"},
         description = "View storage type to use for File System based listing. "
-            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.")
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
+        required = false)
     public String viewStorageTypeForFSListing = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--view-storage-type-mdt"},
         description = "View storage type to use for metadata table based listing. "
-            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.")
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
+        required = false)
     public String viewStorageTypeForMetadata = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--min-validate-interval-seconds"},
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
     public Integer minValidateIntervalSeconds = 10 * 60;
 
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation")
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation", required = false)
     public int parallelism = 200;
 
-    @Parameter(names = {"--record-index-parallelism", "-rpl"}, description = "Parallelism for validating record index")
+    @Parameter(names = {"--record-index-parallelism", "-rpl"}, description = "Parallelism for validating record index", required = false)
     public int recordIndexParallelism = 100;
 
-    @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.")
+    @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.", required = false)
     public boolean ignoreFailed = false;
 
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
 
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use")
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
     @Parameter(names = {"--assume-date-partitioning"}, description = "Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path."
-        + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually")
-    public Boolean assumeDatePartitioning = false;
+        + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually", required = false)    public Boolean assumeDatePartitioning = false;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client")
@@ -592,7 +595,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, instant);
 
           return cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().flatMap(cleanerFileInfoList ->
-              cleanerFileInfoList.stream().map(fileInfo -> new Path(fileInfo.getFilePath()).getName())
+            cleanerFileInfoList.stream().map(fileInfo -> new Path(fileInfo.getFilePath()).getName())
           );
 
         } catch (IOException e) {
@@ -615,9 +618,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     try (HoodieMetadataValidationContext metadataTableBasedContext =
-        new HoodieMetadataValidationContext(engineContext, props, metaClient, true, cfg.viewStorageTypeForMetadata);
-        HoodieMetadataValidationContext fsBasedContext =
-            new HoodieMetadataValidationContext(engineContext, props, metaClient, false, cfg.viewStorageTypeForFSListing)) {
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, true, cfg.viewStorageTypeForMetadata);
+         HoodieMetadataValidationContext fsBasedContext =
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, false, cfg.viewStorageTypeForFSListing)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
       List<Pair<Boolean, HoodieValidationException>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
@@ -701,7 +704,8 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   /**
-   * Check metadata is initialized and available to ready. If not we will log.warn and skip current validation.
+   * Check metadata is initialized and available to ready.
+   * If not we will log.warn and skip current validation.
    */
   private boolean checkMetadataTableIsAvailable() {
     try {
@@ -858,9 +862,13 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   /**
-   * Compare the file listing and index data between metadata table and fileSystem. For now, validate five kinds of apis: 1. HoodieTableFileSystemView::getLatestFileSlices 2.
-   * HoodieTableFileSystemView::getLatestBaseFiles 3. HoodieTableFileSystemView::getAllFileGroups and HoodieTableFileSystemView::getAllFileSlices 4. HoodieTableFileSystemView::getColumnStats 5.
-   * HoodieTableFileSystemView::getBloomFilters
+   * Compare the file listing and index data between metadata table and fileSystem.
+   * For now, validate five kinds of apis:
+   * 1. HoodieTableFileSystemView::getLatestFileSlices
+   * 2. HoodieTableFileSystemView::getLatestBaseFiles
+   * 3. HoodieTableFileSystemView::getAllFileGroups and HoodieTableFileSystemView::getAllFileSlices
+   * 4. HoodieTableFileSystemView::getColumnStats
+   * 5. HoodieTableFileSystemView::getBloomFilters
    *
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
@@ -1005,7 +1013,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   @SuppressWarnings("rawtypes")
   private void validateAllColumnStats(HoodieMetadataValidationContext metadataTableBasedContext, HoodieMetadataValidationContext fsBasedContext,
-      String partitionPath, Set<String> baseDataFilesForCleaning) throws Exception {
+                                      String partitionPath, Set<String> baseDataFilesForCleaning) throws Exception {
 
     List<String> latestFileNames = getLatestFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
     List<HoodieColumnRangeMetadata<Comparable>> metadataBasedColStats = metadataTableBasedContext.getSortedColumnStatsList(partitionPath, latestFileNames, metadataTableBasedContext.getSchema());
