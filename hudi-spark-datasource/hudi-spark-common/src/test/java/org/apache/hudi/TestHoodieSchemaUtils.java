@@ -328,9 +328,7 @@ public class TestHoodieSchemaUtils {
     TYPED_PROPERTIES.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(), addNull.toString());
 
     // Convert latestTableSchema to Option<HoodieSchema>
-    Option<HoodieSchema> latestTableSchemaOpt = latestTableSchema != null
-        ? Option.of(HoodieSchema.fromAvroSchema(latestTableSchema))
-        : Option.empty();
+    Option<HoodieSchema> latestTableSchemaOpt = Option.ofNullable(latestTableSchema).map(HoodieSchema::fromAvroSchema);
 
     // Call deduceWriterSchema and convert result back to Avro Schema
     return HoodieSchemaUtils.deduceWriterSchema(

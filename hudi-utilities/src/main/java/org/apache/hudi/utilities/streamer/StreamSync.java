@@ -799,7 +799,7 @@ public class StreamSync implements Serializable, Closeable {
     // schema w/ the table's one
     Schema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
         HoodieSchema.fromAvroSchema(HoodieAvroUtils.removeMetadataFields(incomingSchema)),
-        HoodieSchemaUtils.toHoodieSchemaOption(latestTableSchemaOpt),
+        latestTableSchemaOpt.map(HoodieSchema::fromAvroSchema),
         internalSchemaOpt,
         props
     ).toAvroSchema();

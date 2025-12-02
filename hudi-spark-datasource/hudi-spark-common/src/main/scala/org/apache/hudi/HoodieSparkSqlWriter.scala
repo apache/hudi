@@ -37,7 +37,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.schema.{HoodieSchema}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
@@ -146,7 +146,7 @@ object HoodieSparkSqlWriter {
     Metrics.shutdownAllMetrics()
   }
 
-  def getBulkInsertRowConfig(writerSchema: org.apache.hudi.common.util.Option[HoodieSchema ], hoodieConfig: HoodieConfig,
+  def getBulkInsertRowConfig(writerSchema: org.apache.hudi.common.util.Option[HoodieSchema], hoodieConfig: HoodieConfig,
                              basePath: String, tblName: String): HoodieWriteConfig = {
     var writerSchemaStr: String = null
     if (writerSchema.isPresent) {
@@ -177,7 +177,7 @@ class HoodieSparkSqlWriterInternal {
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
-            schemaFromCatalog: Option[HoodieSchema ] = Option.empty):
+            schemaFromCatalog: Option[HoodieSchema] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     val retryWrite: () => (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = () => {
@@ -216,7 +216,7 @@ class HoodieSparkSqlWriterInternal {
                             sourceDf: DataFrame,
                             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
                             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
-                            schemaFromCatalog: Option[HoodieSchema ] = Option.empty):
+                            schemaFromCatalog: Option[HoodieSchema] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
@@ -353,7 +353,7 @@ class HoodieSparkSqlWriterInternal {
       // Register Avro classes ([[Schema]], [[GenericData]]) w/ Kryo
       sparkContext.getConf.registerKryoClasses(
         Array(classOf[GenericData],
-          classOf[HoodieSchema ]))
+          classOf[HoodieSchema]))
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(tableMetaClient, schemaFromCatalog)
@@ -493,7 +493,7 @@ class HoodieSparkSqlWriterInternal {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val processedDataSchema = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              HoodieSchema.fromAvroSchema(HoodieAvroUtils.removeMetadataFields(dataFileSchema.toAvroSchema()))
+              org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
             }
@@ -656,9 +656,7 @@ class HoodieSparkSqlWriterInternal {
 
   def generateSchemaWithoutPartitionColumns(partitionParam: String, schema: HoodieSchema): HoodieSchema = {
     val partitionColumns = getPartitionColumns(partitionParam)
-    HoodieSchema.fromAvroSchema(
-      HoodieAvroUtils.removeFields(schema.toAvroSchema(), partitionColumns.toSet.asJava)
-    )
+      org.apache.hudi.common.schema.HoodieSchemaUtils.removeFields(schema, partitionColumns.toSet.asJava)
   }
 
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[HoodieSchema] = None): Map[String, String] = {

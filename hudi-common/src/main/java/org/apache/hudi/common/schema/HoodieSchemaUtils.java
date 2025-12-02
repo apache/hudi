@@ -26,6 +26,7 @@ import org.apache.avro.Schema;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -136,6 +137,51 @@ public final class HoodieSchemaUtils {
     // Delegate to AvroSchemaUtils
     Schema nullableAvro = AvroSchemaUtils.createNullableSchema(schema.toAvroSchema());
     return HoodieSchema.fromAvroSchema(nullableAvro);
+  }
+
+  /**
+   * Removes specified fields from a RECORD schema.
+   * This is equivalent to HoodieAvroUtils.removeFields() but operates on HoodieSchema.
+   *
+   * @param schema original schema (must be RECORD type)
+   * @param fieldNamesToRemove set of field names to remove
+   * @return new HoodieSchema without the specified fields
+   * @throws IllegalArgumentException if schema is null or not a RECORD type
+   */
+  public static HoodieSchema removeFields(HoodieSchema schema, Set<String> fieldNamesToRemove) {
+    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+    ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
+        "Only RECORD schemas can have fields removed, got: " + schema.getType());
+
+    if (fieldNamesToRemove == null || fieldNamesToRemove.isEmpty()) {
+      return schema;
+    }
+
+    // Filter out fields to remove
+    List<HoodieSchemaField> filteredFields = schema.getFields().stream()
+        .filter(field -> !fieldNamesToRemove.contains(field.name()))
+        .collect(Collectors.toList());
+
+    if (filteredFields.size() == schema.getFields().size()) {
+      return schema; // No fields were removed
+    }
+
+    // Create record with isError flag preserved
+    HoodieSchema newSchema = HoodieSchema.createRecord(
+        schema.getName(),
+        schema.getDoc().orElse(null),
+        schema.getNamespace().orElse(null),
+        schema.isError(),
+        filteredFields
+    );
+
+    // Copy custom properties
+    Map<String, Object> props = schema.getObjectProps();
+    for (Map.Entry<String, Object> prop : props.entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
+
+    return newSchema;
   }
 
   /**

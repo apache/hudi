@@ -20,12 +20,11 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
-import org.apache.hudi.avro.AvroSchemaUtils.{checkSchemaCompatible, checkValidEvolution, isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.AvroSchemaUtils.{isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -120,9 +119,8 @@ object HoodieSchemaUtils {
         // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of deducing proper writer schema
         //       we're stripping them to make sure we can perform proper analysis
         // add call to fix null ordering to ensure backwards compatibility
-        val latestTableSchema = InternalSchemaConverter.fixNullOrdering(HoodieSchema.fromAvroSchema(
-          removeMetadataFields(latestTableSchemaWithMetaFields.getAvroSchema))).toAvroSchema
-
+        val latestTableSchema = InternalSchemaConverter.fixNullOrdering(
+          org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
@@ -132,7 +130,7 @@ object HoodieSchemaUtils {
         val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
           DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, HoodieSchema.fromAvroSchema(latestTableSchema), opts, !shouldReconcileSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
         } else {
           InternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
@@ -140,7 +138,7 @@ object HoodieSchemaUtils {
         if (shouldReconcileSchema) {
           deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
         } else {
-          deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, HoodieSchema.fromAvroSchema(latestTableSchema), opts)
+          deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, opts)
         }
     }
   }
@@ -173,14 +171,14 @@ object HoodieSchemaUtils {
       } else {
         canonicalizedSourceSchema.toAvroSchema()
       }
-      checkValidEvolution(reconciledSchema, latestTableSchema.toAvroSchema())
+      HoodieSchemaCompatibility.checkValidEvolution(HoodieSchema.fromAvroSchema(reconciledSchema), latestTableSchema)
       HoodieSchema.fromAvroSchema(reconciledSchema)
     } else {
       // If it's merge into writes, we don't check for projection nor schema compatibility. Writers down the line will take care of it.
       // Or it's not merge into writes, and we don't validate schema, but we allow to drop columns automatically.
       // Or it's not merge into writes, we validate schema, and schema is compatible.
       if (shouldValidateSchemasCompatibility) {
-        checkSchemaCompatible(latestTableSchema.toAvroSchema(), canonicalizedSourceSchema.toAvroSchema(), true,
+        HoodieSchemaCompatibility.checkSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, true,
           allowAutoEvolutionColumnDrop, java.util.Collections.emptySet())
       }
       canonicalizedSourceSchema
@@ -193,7 +191,7 @@ object HoodieSchemaUtils {
    */
   private def deduceWriterSchemaWithReconcile(sourceSchema: HoodieSchema,
                                               canonicalizedSourceSchema: HoodieSchema,
-                                              latestTableSchema: Schema,
+                                              latestTableSchema: HoodieSchema,
                                               internalSchemaOpt: Option[InternalSchema],
                                               opts: Map[String, String]): HoodieSchema = {
     internalSchemaOpt match {
@@ -211,7 +209,7 @@ object HoodieSchemaUtils {
         // In case schema reconciliation is enabled we will employ (legacy) reconciliation
         // strategy to produce target writer's schema (see definition below)
         val (reconciledSchema, isCompatible) =
-          reconcileSchemasLegacy(HoodieSchema.fromAvroSchema(latestTableSchema), canonicalizedSourceSchema)
+          reconcileSchemasLegacy(latestTableSchema, canonicalizedSourceSchema)
 
         // NOTE: In some cases we need to relax constraint of incoming dataset's schema to be compatible
         //       w/ the table's one and allow schemas to diverge. This is required in cases where
@@ -240,17 +238,6 @@ object HoodieSchemaUtils {
       HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
       HoodieConversionUtils.toScalaOption(internalSchemaOpt),
       HoodieConversionUtils.fromProperties(props))
-  }
-
-  /**
-   * Converts an Option of Avro Schema to an Option of HoodieSchema.
-   * This is a convenience method for Java callers working with Hudi's Option type.
-   *
-   * @param avroSchemaOpt Optional Avro Schema (Hudi's Option type)
-   * @return Optional HoodieSchema (Hudi's Option type)
-   */
-  def toHoodieSchemaOption(avroSchemaOpt: org.apache.hudi.common.util.Option[Schema]): org.apache.hudi.common.util.Option[HoodieSchema] = {
-    avroSchemaOpt.map(HoodieSchema.fromAvroSchema(_))
   }
 
   /**
@@ -285,7 +272,7 @@ object HoodieSchemaUtils {
     // NOTE: By default Hudi doesn't allow automatic schema evolution to drop the columns from the target
     //       table. However, when schema reconciliation is turned on, we would allow columns to be dropped
     //       in the incoming batch (as these would be reconciled in anyway)
-    if (isCompatibleProjectionOf(tableSchema.toAvroSchema(), newSchema.toAvroSchema())) {
+    if (HoodieSchemaCompatibility.isCompatibleProjectionOf(tableSchema, newSchema)) {
       // Picking table schema as a writer schema we need to validate that we'd be able to
       // rewrite incoming batch's data (written in new schema) into it
       (tableSchema.toAvroSchema(), isSchemaCompatible(newSchema.toAvroSchema(), tableSchema.toAvroSchema()))
