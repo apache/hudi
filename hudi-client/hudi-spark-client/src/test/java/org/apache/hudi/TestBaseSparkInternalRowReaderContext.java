@@ -185,8 +185,8 @@ class TestBaseSparkInternalRowReaderContext {
     public ClosableIterator<InternalRow> getFileRecordIterator(StoragePath filePath,
                                                                long start,
                                                                long length,
-                                                               Schema dataSchema,
-                                                               Schema requiredSchema,
+                                                               HoodieSchema dataSchema,
+                                                               HoodieSchema requiredSchema,
                                                                HoodieStorage storage) throws IOException {
       return null;
     }

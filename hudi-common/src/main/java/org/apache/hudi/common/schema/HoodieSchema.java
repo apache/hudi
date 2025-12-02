@@ -137,6 +137,13 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Parses a JSON schema string and returns the corresponding HoodieSchema allowing validateDefaults to be configured
+   */
+  public static HoodieSchema parse(String jsonSchema, boolean validateDefaults) {
+    return new HoodieSchema.Parser(validateDefaults).parse(jsonSchema);
+  }
+
+  /**
    * Creates a schema for the specified primitive type.
    *
    * @param type the primitive schema type
@@ -856,6 +863,10 @@ public class HoodieSchema implements Serializable {
      */
     public Parser() {
       this.avroParser = new Schema.Parser();
+    }
+
+    public Parser(boolean validateDefaults) {
+      this.avroParser = new Schema.Parser().setValidateDefaults(validateDefaults);
     }
 
     /**

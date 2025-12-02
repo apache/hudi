@@ -362,8 +362,8 @@ public abstract class FileFormatUtils {
    */
   public abstract ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                                                    List<HoodieRecord> records,
-                                                                   Schema writerSchema,
-                                                                   Schema readerSchema, String keyFieldName,
+                                                                   HoodieSchema writerSchema,
+                                                                   HoodieSchema readerSchema, String keyFieldName,
                                                                    Map<String, String> paramsMap) throws IOException;
 
   /**
