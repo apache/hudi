@@ -30,14 +30,11 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SparkSession, SQLContext}
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
+import org.apache.spark.sql.{SparkSession, SQLContext}
+import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -45,13 +42,12 @@ import scala.util.{Failure, Success, Try}
  * and the [[buildScan]] to return the change-data in a specified range.
  */
 class CDCRelation(
-    override val sqlContext: SQLContext,
+    sqlContext: SQLContext,
     metaClient: HoodieTableMetaClient,
     startInstant: String,
     endInstant: String,
-    options: Map[String, String],
     rangeType: RangeType = InstantRange.RangeType.OPEN_CLOSED
-) extends BaseRelation with PrunedFilteredScan with Logging {
+) extends Logging {
 
   imbueConfigs(sqlContext)
 
@@ -85,45 +81,7 @@ class CDCRelation(
         .rangeType(rangeType).build(),
       false)
 
-  override final def needConversion: Boolean = false
-
-  override def schema: StructType = CDCRelation.FULL_CDC_SPARK_SCHEMA
-
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-    val internalRows = buildScan0(requiredColumns, filters)
-    internalRows.asInstanceOf[RDD[Row]]
-  }
-
-  def buildScan0(requiredColumns: Array[String], filters: Array[Filter]): RDD[InternalRow] = {
-    val nameToField = schema.fields.map(f => f.name -> f).toMap
-    val requiredSchema = StructType(requiredColumns.map(nameToField))
-    val originTableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchema.toString)
-    val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = spark,
-      dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = tableStructSchema,
-      filters = Nil,
-      options = options,
-      hadoopConf = spark.sessionState.newHadoopConf()
-    )
-
-    val changes = cdcExtractor.extractCDCFileSplits().values().asScala.map { splits =>
-      HoodieCDCFileGroupSplit(
-        splits.asScala.sorted.toArray
-      )
-    }
-    val cdcRdd = new HoodieCDCRDD(
-      spark,
-      metaClient,
-      parquetReader,
-      originTableSchema,
-      schema,
-      requiredSchema,
-      changes.toArray
-    )
-    cdcRdd.asInstanceOf[RDD[InternalRow]]
-  }
+  def schema: StructType = CDCRelation.FULL_CDC_SPARK_SCHEMA
 
   def imbueConfigs(sqlContext: SQLContext): Unit = {
     // Disable vectorized reading for CDC relation
@@ -203,7 +161,7 @@ object CDCRelation {
       getTimestampOfLatestInstant(metaClient)
     )
 
-    new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, options, rangeType)
+    new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, rangeType)
   }
 
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {

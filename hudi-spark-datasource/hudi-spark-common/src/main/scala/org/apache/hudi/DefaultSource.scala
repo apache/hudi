@@ -304,16 +304,12 @@ object DefaultSource {
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
-        if (isNotMetadataTable) {
-          if (tableType == COPY_ON_WRITE) {
-            new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-          } else {
-            new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-          }
+        if (tableType == COPY_ON_WRITE) {
+          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
         } else {
-          CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
         }
       } else {
 
@@ -345,12 +341,8 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-            if (isNotMetadataTable) {
-              new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
-            } else {
-              HoodieBootstrapMORRelation(sqlContext, userSchema, metaClient, parameters)
-            }
+            new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             if (hoodieTableSupportsCompletionTime) {

@@ -48,6 +48,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
+import org.apache.spark.Partition
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -65,6 +66,12 @@ import java.util.stream.Collectors
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+
+/**
+ * The split that will be processed by spark task.
+ * The [[changes]] should be sorted first.
+ */
+case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
                            metaClient: HoodieTableMetaClient,

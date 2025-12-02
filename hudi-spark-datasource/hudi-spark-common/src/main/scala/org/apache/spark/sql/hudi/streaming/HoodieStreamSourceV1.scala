@@ -154,20 +154,14 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.START_COMMIT.key()-> startCommitTime(startOffset),
           DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
         )
-        if (enableFileGroupReader) {
-          val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
-            new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
-          } else {
-            new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
-          }
-          sparkAdapter.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+        val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
+          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
         } else {
-          val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
-            .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
-
-          sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)}
+          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
+        }
+        sparkAdapter.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
       } else {
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
