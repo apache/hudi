@@ -235,8 +235,8 @@ module.exports = {
               to: "/contribute/rfc-process",
             },
             {
-              label: "Report Issues",
-              to: "/contribute/report-security-issues",
+              label: "Security",
+              to: "/contribute/security",
             },
           ],
         },
