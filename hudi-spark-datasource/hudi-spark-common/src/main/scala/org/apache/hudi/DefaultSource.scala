@@ -294,11 +294,6 @@ object DefaultSource {
         Option(schema)
       }
 
-      lazy val enableFileGroupReader = SparkConfigUtils
-        .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
-      if (!enableFileGroupReader) {
-        throw new IllegalArgumentException("File group reader is disabled")
-      }
       lazy val isNotMetadataTable = !metaClient.isMetadataTable
       lazy val tableVersion = if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
         Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
