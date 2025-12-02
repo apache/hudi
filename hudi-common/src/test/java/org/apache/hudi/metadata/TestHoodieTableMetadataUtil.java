@@ -22,6 +22,7 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -172,13 +173,16 @@ class TestHoodieTableMetadataUtil {
 
   @Test
   void testFiltersOutTimestampMillisColumns() {
-    Schema tableSchema = SchemaBuilder.record("record").fields()
-        .requiredString("name")
-        .name("created_at").type(
-            LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
-        ).noDefault()
-        .requiredInt("age")
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord(
+        "record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("created_at", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
 
     // Case 1: Verify timestamp-millis field is excluded
     List<String> inputCols = Arrays.asList("name", "created_at", "age");
@@ -190,7 +194,7 @@ class TestHoodieTableMetadataUtil {
         .build();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.NINE);
-    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
+    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertEquals(Arrays.asList("name", "age"), result);
     assertFalse(result.contains("created_at"), "Timestamp-millis field should be excluded");
 
@@ -201,13 +205,13 @@ class TestHoodieTableMetadataUtil {
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertEquals(Arrays.asList("name", "created_at", "age"), result);
 
     // Case 3: Verify timestamp-millis field is excluded for initial table version < 9.
     HoodieTableConfig newTableConfig = mock(HoodieTableConfig.class);
     when(newTableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.SIX);
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), newTableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, newTableConfig);
     assertEquals(Arrays.asList("name", "age"), result);
 
     // Case 4: Non-timestamp columns should remain unchanged
@@ -218,7 +222,7 @@ class TestHoodieTableMetadataUtil {
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(inputCols)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertEquals(inputCols, result, "Non-timestamp columns should remain unchanged");
 
     // Case 5: Empty input should return empty output
@@ -228,31 +232,45 @@ class TestHoodieTableMetadataUtil {
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertTrue(result.isEmpty(), "Expected empty output for empty input");
   }
 
   @Test
   void testFilterNestedLogicalTimestampColumn() {
-    Schema nestedSchema = SchemaBuilder.record("RootRecord").fields()
-        .name("user").type(
-            SchemaBuilder.record("UserRecord").fields()
-                .name("profile").type(
-                    SchemaBuilder.record("ProfileRecord").fields()
-                        .name("ts_millis").type(
-                            LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
-                        ).noDefault()
-                        .name("ts_micros").type(
-                            LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))
-                        ).noDefault()
-                        .name("display_name").type().stringType().noDefault()
-                        .endRecord()
-                ).noDefault()
-                .name("age").type().intType().noDefault()
-                .endRecord()
-        ).noDefault()
-        .name("event_id").type().stringType().noDefault()
-        .endRecord();
+    // Create ProfileRecord (innermost nested record)
+    HoodieSchema profileRecordSchema = HoodieSchema.createRecord(
+        "ProfileRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("ts_millis", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("ts_micros", HoodieSchema.createTimestampMicros()),
+            HoodieSchemaField.of("display_name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Create UserRecord (middle level nested record)
+    HoodieSchema userRecordSchema = HoodieSchema.createRecord(
+        "UserRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("profile", profileRecordSchema),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    // Create RootRecord (top level)
+    HoodieSchema nestedSchema = HoodieSchema.createRecord(
+        "RootRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("user", userRecordSchema),
+            HoodieSchemaField.of("event_id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
 
     List<String> inputCols = Arrays.asList(
         "event_id",
@@ -270,7 +288,7 @@ class TestHoodieTableMetadataUtil {
         .build();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.NINE);
-    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(nestedSchema), tableConfig);
+    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, nestedSchema, tableConfig);
 
     // should filter out only the timestamp millis field
     assertEquals(
