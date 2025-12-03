@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceWriteOptions, QuickstartUtils}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
-import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
@@ -37,7 +37,7 @@ import org.apache.spark.sql.types.{DoubleType, StringType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import java.util.function.Consumer
 
@@ -69,14 +69,8 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(Array(
-    "COPY_ON_WRITE,false",
-    "MERGE_ON_READ,false",
-    "COPY_ON_WRITE,true",
-    "MERGE_ON_READ,true"
-  ))
-  def testPartialUpdatesAvroPayloadPrecombine(tableType: String, useFileGroupReader: Boolean): Unit = {
-    val hoodieTableType = HoodieTableType.valueOf(tableType)
+  @EnumSource(value = classOf[HoodieTableType])
+  def testPartialUpdatesAvroPayloadPrecombine(hoodieTableType: HoodieTableType): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
     val recordsRDD = spark.sparkContext.parallelize(records.asScala.toSeq, 2)
@@ -125,9 +119,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val finalDF = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), String.valueOf(useFileGroupReader))
-      .load(basePath)
+    val finalDF = spark.read.format("hudi").load(basePath)
     assertEquals(finalDF.select("rider").collectAsList().get(0).getString(0), upsert1DF.select("rider").collectAsList().get(0).getString(0))
     assertEquals(finalDF.select("driver").collectAsList().get(0).getString(0), upsert2DF.select("driver").collectAsList().get(0).getString(0))
     assertEquals(finalDF.select("fare").collectAsList().get(0).getDouble(0), upsert3DF.select("fare").collectAsList().get(0).getDouble(0))
