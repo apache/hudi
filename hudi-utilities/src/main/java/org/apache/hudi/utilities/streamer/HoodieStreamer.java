@@ -188,7 +188,7 @@ public class HoodieStreamer implements Serializable {
       hoodieConfig.setAll(propsOverride.get());
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
-    } else {
+    } else if (!StringUtils.isNullOrEmpty(cfg.propsFilePath)) {
       hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     } else {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
