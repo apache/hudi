@@ -60,6 +60,10 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    * Duration between splitLatestCommit and now.
    */
   private long splitLatestCommitDelay;
+  /**
+   * Number of corrupt log file which will be skipped when stream read
+   */
+  private long totalCorruptLogFiles;
 
   public FlinkStreamReadMetrics(MetricGroup metricGroup) {
     super(metricGroup);
@@ -71,6 +75,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
     metricGroup.gauge("issuedInstant", () -> issuedInstant);
     metricGroup.gauge("splitLatestCommit", () -> splitLatestCommit);
     metricGroup.gauge("splitLatestCommitDelay", () -> splitLatestCommitDelay);
+    metricGroup.gauge("totalCorruptLogFiles", () -> totalCorruptLogFiles);
   }
 
   public void setIssuedInstant(String issuedInstant) {
@@ -91,6 +96,10 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
     } catch (ParseException e) {
       LOG.warn("Invalid input latest commit: {}", splitLatestCommit);
     }
+  }
+
+  public void setTotalCorruptLogFiles(long totalCorruptLogFiles) {
+    this.totalCorruptLogFiles = totalCorruptLogFiles;
   }
 
 }

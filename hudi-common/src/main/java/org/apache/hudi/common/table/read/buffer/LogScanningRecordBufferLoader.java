@@ -58,6 +58,7 @@ abstract class LogScanningRecordBufferLoader {
       readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
       readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
       readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
+      readStats.setTotalCorruptLogFiles(logRecordReader.getTotalCorruptLogFiles());
       return logRecordReader.getValidBlockInstants();
     }
   }

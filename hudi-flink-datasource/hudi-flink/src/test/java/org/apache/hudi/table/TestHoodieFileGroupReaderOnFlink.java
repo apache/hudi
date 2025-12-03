@@ -19,17 +19,29 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -64,6 +76,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -294,6 +307,72 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
           allRecords, CollectionUtils.combine(initialRecords, updates), orderingFields);
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("logFileOnlyCases")
+  public void testReadLogFilesOnlyInMergeOnReadTableAndCheckTotalCorruptLogFilesMetric(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, true));
+    writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
+    // Use InMemoryIndex to generate log only mor table
+    writeConfigs.put("hoodie.index.type", "INMEMORY");
+
+    // use only one partition
+    final String[] DEFAULT_PARTITION_PATH =
+        {HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH};
+
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF, DEFAULT_PARTITION_PATH, new HashMap<>())) {
+      // One commit; reading one file group containing a log file only
+      List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
+      commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), false, 1, recordMergeMode,
+          initialRecords, initialRecords, new String[]{ORDERING_FIELD_NAME});
+    }
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(getStorageConf(), getBasePath());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getStorageConf());
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
+    FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
+        engineContext,
+        metadataConfig,
+        FileSystemViewStorageConfig.newBuilder().build(),
+        HoodieCommonConfig.newBuilder().build(),
+        mc -> metaClient.getTableFormat().getMetadataFactory().create(
+            engineContext, mc.getStorage(), metadataConfig, getBasePath()));
+    HoodieTableFileSystemView fsView =
+        (HoodieTableFileSystemView) viewManager.getFileSystemView(metaClient);
+    List<String> relativePartitionPathList = FSUtils.getAllPartitionPaths(engineContext, metaClient, metadataConfig);
+    List<FileSlice> fileSlices =
+        relativePartitionPathList.stream().flatMap(fsView::getAllFileSlices)
+            .collect(Collectors.toList());
+
+    // current partition just only one log
+    List<FileSlice> beforeFileSlices =
+        relativePartitionPathList.stream().flatMap(fsView::getAllFileSlices)
+            .collect(Collectors.toList());
+    assertEquals(beforeFileSlices.size(), 1);
+
+    // overwrite the current log in this partition to mock the log's magic num is broken or log is corrupt
+    HoodieLogFile hoodieLogFile = fileSlices.get(0).getLatestLogFile().get();
+    OutputStream outputStream = metaClient.getStorage().create(hoodieLogFile.getPath());
+    outputStream.write(0);
+    outputStream.close();
+
+    List<FileSlice> newFileSlices =
+        relativePartitionPathList.stream().flatMap(fsView::getAllFileSlices)
+            .collect(Collectors.toList());
+    assertEquals(newFileSlices.size(), 1);
+
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
+    Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    HoodieFileGroupReader<RowData> hoodieFileGroupReader =
+        getHoodieFileGroupReader(getStorageConf(), getBasePath(), metaClient, avroSchema, newFileSlices.get(0), 0, props, false);
+
+    HoodieFileGroupReader.HoodieFileGroupReaderIterator closableIterator
+        = (HoodieFileGroupReader.HoodieFileGroupReaderIterator) hoodieFileGroupReader.getClosableBufferedRecordIterator();
+
+    assertEquals(closableIterator.getReadStats().getTotalCorruptLogFiles(),1);
   }
 
   @ParameterizedTest

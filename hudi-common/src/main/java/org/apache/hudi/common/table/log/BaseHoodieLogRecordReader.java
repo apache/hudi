@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -118,6 +119,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private AtomicLong totalRollbacks = new AtomicLong(0);
   // Total number of corrupt blocks written across all log files
   private AtomicLong totalCorruptBlocks = new AtomicLong(0);
+  // Total number of corrupt log files - for metrics
+  private AtomicLong totalCorruptLogFiles = new AtomicLong(0);
+  // Corrupt log files list - for debug
+  private List<String> corruptLogFilesList;
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
@@ -332,6 +337,13 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
       // Done
       progress = 1.0f;
+      totalCorruptLogFiles.set(logFilePaths.size() - scannedLogFiles.size());
+      if (totalCorruptLogFiles.get() > 0) {
+        List<String> scannedLogFilesNames = scannedLogFiles.stream().map(HoodieLogFile::getPath)
+            .map(StoragePath::getName).collect(Collectors.toList());
+        corruptLogFilesList = CollectionUtils.diff(logFilePaths, scannedLogFilesNames);
+        LOG.info("Corrupt Log Files: {}", corruptLogFilesList);
+      }
       totalLogRecords.set(recordBuffer.getTotalLogRecords());
     } catch (IOException e) {
       LOG.error("Got IOException when reading log file", e);
@@ -637,6 +649,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
   public long getTotalCorruptBlocks() {
     return totalCorruptBlocks.get();
+  }
+
+  public long getTotalCorruptLogFiles() {
+    return totalCorruptLogFiles.get();
   }
 
   public boolean isWithOperationField() {

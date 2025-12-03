@@ -826,7 +826,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return actualRecordList;
   }
 
-  private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf,
+  protected HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf,
                                                             String tablePath,
                                                             HoodieTableMetaClient metaClient,
                                                             Schema avroSchema,
@@ -890,7 +890,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return actualRecordList;
   }
 
-  private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
+  protected TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
     props.setProperty("hoodie.payload.ordering.field", metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
