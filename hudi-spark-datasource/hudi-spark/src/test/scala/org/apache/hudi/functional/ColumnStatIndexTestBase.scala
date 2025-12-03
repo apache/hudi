@@ -298,7 +298,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .build()
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema(false))
+    val tableSchema = schemaUtil.getTableSchema(false)
     val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
@@ -340,7 +340,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema(false))
+    val tableSchema = schemaUtil.getTableSchema(false)
     val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
 
     val pStatsIndex = new PartitionStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)

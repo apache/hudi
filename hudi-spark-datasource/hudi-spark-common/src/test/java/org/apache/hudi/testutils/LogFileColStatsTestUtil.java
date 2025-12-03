@@ -70,7 +70,7 @@ public class LogFileColStatsTestUtil {
 
   public static Option<HoodieSchema> getSchemaForTable(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    return Option.of(HoodieSchema.fromAvroSchema(schemaResolver.getTableAvroSchema()));
+    return Option.of(schemaResolver.getTableSchema());
   }
 }
 

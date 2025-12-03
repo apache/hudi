@@ -145,7 +145,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
   }
 
   def getSchema(metaClient: HoodieTableMetaClient): HoodieSchema = {
-    HoodieSchema.fromAvroSchema(new TableSchemaResolver(metaClient).getTableAvroSchema)
+    new TableSchemaResolver(metaClient).getTableSchema
   }
 
   def getStructSchema(hoodieSchema: HoodieSchema): StructType = {

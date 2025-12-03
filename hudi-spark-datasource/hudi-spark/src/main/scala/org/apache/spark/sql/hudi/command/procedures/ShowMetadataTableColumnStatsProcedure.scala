@@ -80,7 +80,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
       .build
     val metaClient = createMetaClient(jsc, basePath)
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val hoodieSchema = HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema)
+    val hoodieSchema = schemaUtil.getTableSchema
     val structSchema = AvroConversionUtils.convertAvroSchemaToStructType(hoodieSchema.toAvroSchema)
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, hoodieSchema, metadataConfig, metaClient)
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)

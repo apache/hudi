@@ -109,7 +109,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   lazy val rawHoodieSchema: HoodieSchema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema)
+    schemaUtil.getTableSchema
   }
 
   private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {

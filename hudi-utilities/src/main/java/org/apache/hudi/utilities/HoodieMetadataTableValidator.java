@@ -1831,7 +1831,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         this.props = new Properties();
         this.props.putAll(props);
         this.metaClient = metaClient;
-        this.schema = HoodieSchema.fromAvroSchema(new TableSchemaResolver(metaClient).getTableAvroSchema());
+        this.schema = new TableSchemaResolver(metaClient).getTableSchema();
         this.enableMetadataTable = enableMetadataTable;
         this.metadataConfig = HoodieMetadataConfig.newBuilder()
             .enable(enableMetadataTable)

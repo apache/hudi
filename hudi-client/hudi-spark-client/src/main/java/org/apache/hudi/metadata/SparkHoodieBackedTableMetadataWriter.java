@@ -256,7 +256,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
         Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
     int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
-    HoodieSchema tableSchema = HoodieSchema.fromAvroSchema(new TableSchemaResolver(dataMetaClient).getTableAvroSchema());
+    HoodieSchema tableSchema = new TableSchemaResolver(dataMetaClient).getTableSchema();
     HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
     // Step 2: Compute the expression index column stat and partition stat records for these newly created files
     // partitionRecordsFunctionOpt - Function used to generate partition stats. These stats are generated only for expression index created using column stats
