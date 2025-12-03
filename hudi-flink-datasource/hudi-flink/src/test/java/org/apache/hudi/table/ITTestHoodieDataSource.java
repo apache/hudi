@@ -526,6 +526,36 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, expected, true);
   }
 
+  @Test
+  void testDataSkippingWithRecordLevelIndex() throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), true)
+        .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid = 'id1'").execute().collect());
+    assertRowsEquals(result1, "[+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]]");
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid in ('id7', 'id8')").execute().collect());
+    assertRowsEquals(result2, "["
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid = 'id1' or uuid = 'id7' or uuid = 'id8'").execute().collect());
+    assertRowsEquals(result3, "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
   @ParameterizedTest
   @MethodSource("tableTypeAndBooleanTrueFalseParams")
   void testReadWithPartitionStatsPruning(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {

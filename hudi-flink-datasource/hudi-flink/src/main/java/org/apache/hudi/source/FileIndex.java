@@ -23,12 +23,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.stats.FileStatsIndex;
+import org.apache.hudi.source.stats.RecordLevelIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
@@ -71,6 +73,7 @@ public class FileIndex implements Serializable {
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
+  private final Option<RecordLevelIndex> recordLevelIndex;
   private final HoodieTableMetaClient metaClient;
 
   private FileIndex(
@@ -89,6 +92,8 @@ public class FileIndex implements Serializable {
     this.partitionPruner = partitionPruner;
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
+    List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
+    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators);
     this.metaClient = metaClient;
   }
 
@@ -184,8 +189,13 @@ public class FileIndex implements Serializable {
       return Collections.emptyList();
     }
 
+    // data skipping based on record index
+    if (recordLevelIndex.isPresent()) {
+      filteredFileSlices = recordLevelIndex.get().computeCandidateFileSlices(filteredFileSlices);
+    }
+
     // data skipping based on column stats
-    List<String> allFiles = fileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
+    List<String> allFiles = filteredFileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
     Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
