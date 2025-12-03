@@ -31,7 +31,6 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -536,69 +535,5 @@ public final class HoodieSchemaUtils {
     }
     HoodieSchema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
     return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
-  }
-
-  /**
-   * Generates a projection schema from the original schema, including only the specified fields.
-   * This is equivalent to HoodieAvroUtils.generateProjectionSchema() but operates on HoodieSchema.
-   *
-   * @param originalSchema the source schema
-   * @param fieldNames     the list of field names to include in the projection
-   * @return new HoodieSchema containing only the specified fields
-   * @throws IllegalArgumentException if schema is null or not a record type
-   * @since 1.2.0
-   */
-  public static HoodieSchema generateProjectionSchema(HoodieSchema originalSchema, List<String> fieldNames) {
-    ValidationUtils.checkArgument(originalSchema != null, "Original schema cannot be null");
-    ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
-
-    // Delegate to HoodieAvroUtils
-    Schema projectedAvro = HoodieAvroUtils.generateProjectionSchema(originalSchema.toAvroSchema(), fieldNames);
-    return HoodieSchema.fromAvroSchema(projectedAvro);
-  }
-
-  /**
-   * Prunes the data schema to only include fields that are required by the required schema,
-   * plus any mandatory fields specified.
-   * This is equivalent to AvroSchemaUtils.pruneDataSchema() but operates on HoodieSchema.
-   *
-   * @param dataSchema      the full data schema
-   * @param requiredSchema  the schema containing required fields
-   * @param mandatoryFields set of field names that must be included regardless
-   * @return new HoodieSchema with pruned fields
-   * @throws IllegalArgumentException if either schema is null
-   * @since 1.2.0
-   */
-  public static HoodieSchema pruneDataSchema(HoodieSchema dataSchema, HoodieSchema requiredSchema, Set<String> mandatoryFields) {
-    ValidationUtils.checkArgument(dataSchema != null, "Data schema cannot be null");
-    ValidationUtils.checkArgument(requiredSchema != null, "Required schema cannot be null");
-
-    Set<String> mandatorySet = mandatoryFields != null ? mandatoryFields : Collections.emptySet();
-
-    // Delegate to AvroSchemaUtils
-    Schema prunedAvro = AvroSchemaUtils.pruneDataSchema(
-        dataSchema.toAvroSchema(),
-        requiredSchema.toAvroSchema(),
-        mandatorySet);
-    return HoodieSchema.fromAvroSchema(prunedAvro);
-  }
-
-  /**
-   * Checks if two schemas are projection equivalent (i.e., they have the same fields and types
-   * for projection purposes, ignoring certain metadata differences).
-   * This is equivalent to AvroSchemaUtils.areSchemasProjectionEquivalent() but operates on HoodieSchema.
-   *
-   * @param schema1 the first schema
-   * @param schema2 the second schema
-   * @return true if schemas are projection equivalent
-   * @throws IllegalArgumentException if either schema is null
-   * @since 1.2.0
-   */
-  public static boolean areSchemasProjectionEquivalent(HoodieSchema schema1, HoodieSchema schema2) {
-    ValidationUtils.checkArgument(schema1 != null, "Schema1 cannot be null");
-    ValidationUtils.checkArgument(schema2 != null, "Schema2 cannot be null");
-
-    // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.areSchemasProjectionEquivalent(schema1.toAvroSchema(), schema2.toAvroSchema());
   }
 }
