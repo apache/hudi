@@ -27,7 +27,7 @@ rolling upgrades from older versions to this release.
 
 ### Format changes
 
-[HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242) is the main epic covering all the format changes proposals,
+[This GitHub issue](https://github.com/apache/hudi/issues/15964) is the main epic covering all the format changes proposals,
 which are also partly covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main
 changes in this release:
 

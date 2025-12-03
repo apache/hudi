@@ -458,7 +458,7 @@ ALTER TABLE hudi_table UNSET TBLPROPERTIES IF EXISTS ('note');
 ```
 
 :::note
-Currently, trying to change the column type may throw an error ```ALTER TABLE CHANGE COLUMN is not supported for changing column colName with oldColType to colName with newColType.```, due to an [open SPARK issue](https://issues.apache.org/jira/browse/SPARK-21823)
+Currently, trying to change the column type may throw an error ```ALTER TABLE CHANGE COLUMN is not supported for changing column colName with oldColType to colName with newColType.```, due to an [open SPARK issue](https://github.com/apache/hudi/issues/SPARK-21823)
 :::
 
 ### Alter config options
