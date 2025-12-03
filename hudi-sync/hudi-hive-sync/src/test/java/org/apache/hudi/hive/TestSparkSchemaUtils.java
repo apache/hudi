@@ -18,16 +18,12 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.sync.common.util.Parquet2SparkSchemaUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.sync.common.util.SparkSchemaUtils;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter;
-import org.apache.parquet.schema.MessageType;
 import org.apache.spark.sql.execution.SparkSqlParser;
-import org.apache.spark.sql.execution.datasources.parquet.SparkToParquetSchemaConverter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.IntegerType$;
@@ -43,9 +39,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestParquetToSparkSchemaUtils {
-  private final SparkToParquetSchemaConverter sparkToParquetConverter =
-          new SparkToParquetSchemaConverter(new SQLConf());
+public class TestSparkSchemaUtils {
   private final SparkSqlParser parser = createSqlParser();
 
   private static SparkSqlParser createSqlParser() {
@@ -67,30 +61,29 @@ public class TestParquetToSparkSchemaUtils {
                     + " f8 decimal(5,2) NOT NULL, f9 decimal(5,2), f10 timestamp, f11 timestamp NOT NULL, f12 timestamp_ntz NOT NULL, f13 timestamp_ntz,"
                     + " f14 date NOT NULL, f15 int NOT NULL, f16 bigint NOT NULL, f17 string NOT NULL, f18 string");
 
-    Schema schemaWithSupportedTypes =
-        Schema.createRecord("root", null, null, false, Arrays.asList(
-            new Schema.Field("f0", Schema.create(Schema.Type.INT), null, null),
-            new Schema.Field("f1", Schema.create(Schema.Type.STRING), null, null),
-            new Schema.Field("f2", Schema.create(Schema.Type.LONG), null, null),
-            new Schema.Field("f3", AvroSchemaUtils.createNullableSchema(Schema.Type.FLOAT), null, null),
-            new Schema.Field("f4", AvroSchemaUtils.createNullableSchema(Schema.Type.DOUBLE), null, null),
-            new Schema.Field("f5", AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), null, null),
-            new Schema.Field("f6", AvroSchemaUtils.createNullableSchema(Schema.Type.BYTES), null, null),
-            new Schema.Field("f7", Schema.createFixed("fixed", null, null, 10), null, null),
-            new Schema.Field("f8", LogicalTypes.decimal(5, 2).addToSchema(Schema.createFixed("decimal", null, null, 16)), null, null),
-            new Schema.Field("f9", AvroSchemaUtils.createNullableSchema(LogicalTypes.decimal(5, 2).addToSchema(Schema.create(Schema.Type.BYTES))), null, null),
-            new Schema.Field("f10", AvroSchemaUtils.createNullableSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, null),
-            new Schema.Field("f11", LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG)), null, null),
-            new Schema.Field("f12", LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)), null, null),
-            new Schema.Field("f13", AvroSchemaUtils.createNullableSchema(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG))), null, null),
-            new Schema.Field("f14", LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)), null, null),
-            new Schema.Field("f15", LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT)), null, null),
-            new Schema.Field("f16", LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG)), null, null),
-            new Schema.Field("f17", Schema.createEnum("enum", null, null, Arrays.asList("A", "B", "C")), null, null),
-            new Schema.Field("f18", AvroSchemaUtils.createNullableSchema(LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING))), null, null)
+    HoodieSchema schemaWithSupportedTypes =
+        HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+            HoodieSchemaField.of("f0", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("f1", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+            HoodieSchemaField.of("f2", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+            HoodieSchemaField.of("f3", HoodieSchema.createNullable(HoodieSchemaType.FLOAT), null, null),
+            HoodieSchemaField.of("f4", HoodieSchema.createNullable(HoodieSchemaType.DOUBLE), null, null),
+            HoodieSchemaField.of("f5", HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN), null, null),
+            HoodieSchemaField.of("f6", HoodieSchema.createNullable(HoodieSchemaType.BYTES), null, null),
+            HoodieSchemaField.of("f7", HoodieSchema.createFixed("fixed", null, null, 10), null, null),
+            HoodieSchemaField.of("f8", HoodieSchema.createDecimal("decimal", null, null, 5, 2, 16), null, null),
+            HoodieSchemaField.of("f9", HoodieSchema.createNullable(HoodieSchema.createDecimal(5, 2)), null, null),
+            HoodieSchemaField.of("f10", HoodieSchema.createNullable(HoodieSchema.createTimestampMicros()), null, null),
+            HoodieSchemaField.of("f11", HoodieSchema.createTimestampMillis(), null, null),
+            HoodieSchemaField.of("f12", HoodieSchema.createLocalTimestampMicros(), null, null),
+            HoodieSchemaField.of("f13", HoodieSchema.createNullable(HoodieSchema.createLocalTimestampMillis()), null, null),
+            HoodieSchemaField.of("f14", HoodieSchema.createDate(), null, null),
+            HoodieSchemaField.of("f15", HoodieSchema.createTimeMillis(), null, null),
+            HoodieSchemaField.of("f16", HoodieSchema.createTimeMicros(), null, null),
+            HoodieSchemaField.of("f17", HoodieSchema.createEnum("enum", null, null, Arrays.asList("A", "B", "C")), null, null),
+            HoodieSchemaField.of("f18", HoodieSchema.createNullable(HoodieSchema.createUUID()), null, null)
         ));
-    MessageType parquetSchema = HoodieAvroParquetSchemaConverter.getAvroSchemaConverter(new Configuration()).convert(schemaWithSupportedTypes);
-    String sparkSchemaJson = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(parquetSchema);
+    String sparkSchemaJson = SparkSchemaUtils.convertToSparkSchemaJson(schemaWithSupportedTypes);
     StructType convertedSparkSchema = (StructType) StructType.fromJson(sparkSchemaJson);
     assertEquals(sparkSchema.json(), convertedSparkSchema.json());
   }
@@ -101,33 +94,34 @@ public class TestParquetToSparkSchemaUtils {
             "f0 int, f1 map<string, int>, f2 array<decimal(10,2)>"
                     + ",f3 map<string, struct<nested: struct<double_nested: int>>>, f4 array<array<double>>"
                     + ",f5 struct<id:int, name:string>");
-    Schema schemaWithSupportedTypes =
-        Schema.createRecord("root", null, null, false, Arrays.asList(
-            new Schema.Field("f0", AvroSchemaUtils.createNullableSchema(Schema.Type.INT), null, null),
-            new Schema.Field("f1", AvroSchemaUtils.createNullableSchema(Schema.createMap(AvroSchemaUtils.createNullableSchema(Schema.Type.INT))), null, null),
-            new Schema.Field("f2", AvroSchemaUtils.createNullableSchema(Schema.createArray(
-                    LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES)))), null, null),
-            new Schema.Field("f3", AvroSchemaUtils.createNullableSchema(Schema.createMap(AvroSchemaUtils.createNullableSchema(Schema.createRecord(
+    HoodieSchema schemaWithSupportedTypes =
+        HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+            HoodieSchemaField.of("f0", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("f1", HoodieSchema.createNullable(HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchemaType.INT))), null, null),
+            HoodieSchemaField.of("f2", HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createDecimal(10, 2)))), null, null),
+            HoodieSchemaField.of("f3", HoodieSchema.createNullable(HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchema.createRecord(
                     "struct", null, null, false, Collections.singletonList(
-                        new Schema.Field("nested", AvroSchemaUtils.createNullableSchema(Schema.createRecord(
+                        HoodieSchemaField.of("nested", HoodieSchema.createNullable(HoodieSchema.createRecord(
                             "double_nested_struct", null, null, false, Collections.singletonList(
-                                new Schema.Field("double_nested", AvroSchemaUtils.createNullableSchema(Schema.Type.INT), null, null)))), null, null)))))), null, null),
-            new Schema.Field("f4", AvroSchemaUtils.createNullableSchema(Schema.createArray(Schema.createArray(Schema.create(Schema.Type.DOUBLE)))), null, null),
-            new Schema.Field("f5", AvroSchemaUtils.createNullableSchema(Schema.createRecord("struct",
+                                HoodieSchemaField.of("double_nested", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null)))), null, null)))))), null, null),
+            HoodieSchemaField.of("f4", HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchemaType.DOUBLE))))), null, null),
+            HoodieSchemaField.of("f5", HoodieSchema.createNullable(HoodieSchema.createRecord("struct",
                     null, null, false, Arrays.asList(
-                    new Schema.Field("id", AvroSchemaUtils.createNullableSchema(Schema.Type.INT), null, null),
-                    new Schema.Field("name", AvroSchemaUtils.createNullableSchema(Schema.Type.STRING), null, null)
+                    HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null),
+                    HoodieSchemaField.of("name", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null)
             ))), null, null)));
-    MessageType parquetSchema = HoodieAvroParquetSchemaConverter.getAvroSchemaConverter(new Configuration()).convert(schemaWithSupportedTypes);
-    String sparkSchemaJson = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(parquetSchema);
+    String sparkSchemaJson = SparkSchemaUtils.convertToSparkSchemaJson(schemaWithSupportedTypes);
     StructType convertedSparkSchema = (StructType) StructType.fromJson(sparkSchemaJson);
     assertEquals(sparkSchema.json(), convertedSparkSchema.json());
     // Test complex type with nullable
     StructField field0 = new StructField("f0", new ArrayType(StringType$.MODULE$, true), false, Metadata.empty());
     StructField field1 = new StructField("f1", new MapType(StringType$.MODULE$, IntegerType$.MODULE$, true), false, Metadata.empty());
     StructType sparkSchemaWithNullable = new StructType(new StructField[]{field0, field1});
-    String sparkSchemaWithNullableJson = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(
-            sparkToParquetConverter.convert(sparkSchemaWithNullable).asGroupType());
+    HoodieSchema schemaWithNullable = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("f0", HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchemaType.STRING)), null, null),
+        HoodieSchemaField.of("f1",HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchemaType.INT)), null, null)
+    ));
+    String sparkSchemaWithNullableJson = SparkSchemaUtils.convertToSparkSchemaJson(schemaWithNullable);
     StructType convertedSparkSchemaWithNullable = (StructType) StructType.fromJson(sparkSchemaWithNullableJson);
     assertEquals(sparkSchemaWithNullable.json(), convertedSparkSchemaWithNullable.json());
   }

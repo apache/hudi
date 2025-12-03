@@ -61,6 +61,13 @@ public class SparkSchemaUtils {
         } else {
           return "\"timestamp_ntz\"";
         }
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) fieldSchema;
+        if (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+          return "\"integer\"";
+        } else {
+          return "\"long\"";
+        }
       case DECIMAL:
         HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) fieldSchema;
         return "\"decimal(" + decimal.getPrecision() + "," + decimal.getScale() + ")\"";
