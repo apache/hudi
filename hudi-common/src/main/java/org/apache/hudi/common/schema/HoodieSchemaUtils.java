@@ -31,7 +31,6 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -374,106 +373,6 @@ public final class HoodieSchemaUtils {
               prefix + rootFieldName + "."
           ));
     }
-  }
-
-  // ==================== Client-Specific Utilities ====================
-
-  /**
-   * Gets the field position (index) within a record schema by field name.
-   * This is useful for position-based field access in RecordContext operations.
-   *
-   * @param schema    the record schema
-   * @param fieldName the name of the field to find
-   * @return the field position (0-indexed), or -1 if not found
-   * @throws IllegalArgumentException if schema is null or not a record type
-   * @since 1.2.0
-   */
-  public static int getFieldPosition(HoodieSchema schema, String fieldName) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-    ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
-        "Schema must be a record type, but was: " + schema.getType());
-
-    if (fieldName == null || fieldName.isEmpty()) {
-      return -1;
-    }
-
-    List<HoodieSchemaField> fields = schema.getFields();
-    for (int i = 0; i < fields.size(); i++) {
-      if (fields.get(i).name().equals(fieldName)) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  /**
-   * Checks if a field exists in the schema by name.
-   *
-   * @param schema    the record schema
-   * @param fieldName the name of the field to check
-   * @return true if the field exists, false otherwise
-   * @throws IllegalArgumentException if schema is null
-   * @since 1.2.0
-   */
-  public static boolean hasField(HoodieSchema schema, String fieldName) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-
-    if (schema.getType() != HoodieSchemaType.RECORD || fieldName == null || fieldName.isEmpty()) {
-      return false;
-    }
-
-    return schema.getField(fieldName) != null;
-  }
-
-  /**
-   * Projects a schema to only include the specified field names, preserving field order.
-   * This is useful for creating required schemas for file reading operations.
-   *
-   * @param schema     the source schema
-   * @param fieldNames the names of fields to include
-   * @return a new HoodieSchema containing only the specified fields
-   * @throws IllegalArgumentException if schema is null or not a record type
-   * @since 1.2.0
-   */
-  public static HoodieSchema projectSchema(HoodieSchema schema, List<String> fieldNames) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-    ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
-        "Schema must be a record type for projection");
-
-    if (fieldNames == null || fieldNames.isEmpty()) {
-      return schema;
-    }
-
-    Set<String> includeNames = new HashSet<>(fieldNames);
-    List<HoodieSchemaField> projectedFields = schema.getFields().stream()
-        .filter(field -> includeNames.contains(field.name()))
-        .collect(Collectors.toList());
-
-    return HoodieSchema.createRecord(
-        schema.getName(),
-        schema.getDoc().orElse(null),
-        schema.getNamespace().orElse(null),
-        schema.isError(),
-        projectedFields
-    );
-  }
-
-  /**
-   * Checks if two schemas are compatible for reading (reader schema can read data written with writer schema).
-   * This is useful for schema evolution checks in client operations.
-   *
-   * @param readerSchema the reader schema
-   * @param writerSchema the writer schema
-   * @return true if schemas are compatible for reading
-   * @throws IllegalArgumentException if either schema is null
-   * @since 1.2.0
-   */
-  public static boolean isReadCompatible(HoodieSchema readerSchema, HoodieSchema writerSchema) {
-    ValidationUtils.checkArgument(readerSchema != null, "Reader schema cannot be null");
-    ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
-
-    // Delegate to AvroSchemaUtils for compatibility check
-    return AvroSchemaUtils.isSchemaCompatible(writerSchema.toAvroSchema(), readerSchema.toAvroSchema());
   }
 
   /**
