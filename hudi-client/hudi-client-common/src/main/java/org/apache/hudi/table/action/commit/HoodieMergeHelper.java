@@ -182,7 +182,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
         try {
-          fileSchema = InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchema(true)));
+          fileSchema = InternalSchemaConverter.convert(tableSchemaResolver.getTableSchema(true));
         } catch (Exception e) {
           throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
         }

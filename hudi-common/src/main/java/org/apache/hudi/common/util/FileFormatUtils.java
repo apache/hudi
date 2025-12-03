@@ -26,6 +26,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -60,15 +61,23 @@ import java.util.stream.Collectors;
  */
 public abstract class FileFormatUtils {
   /**
-   * Aggregate column range statistics across files in a partition.
+   * Aggregate column range statistics across files in a partition. HoodieSchema is used to properly
+   * extract and compare statistics values based on their data types (including logical types).
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based serialization.
    *
    * @param relativePartitionPath relative partition path for the column range stats
+   * @param columnName the column name for which to aggregate statistics
    * @param fileColumnRanges List of column range statistics for each file in a partition
+   * @param colsToIndexSchemaMap Map from column name to HoodieSchema for type coercion
+   * @param indexVersion the index version to determine metadata format
+   * @return aggregated HoodieColumnRangeMetadata for the column
+   * @since 1.2.0
    */
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(String relativePartitionPath,
                                                                                                  String columnName,
                                                                                                  @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges,
-                                                                                                 Map<String, Schema> colsToIndexSchemaMap,
+                                                                                                 Map<String, HoodieSchema> colsToIndexSchemaMap,
                                                                                                  HoodieIndexVersion indexVersion) {
 
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
@@ -83,7 +92,7 @@ public abstract class FileFormatUtils {
                 e.getTotalUncompressedSize(), valueMetadata);
           }).reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
     }
-    
+
     // Let's do one pass and deduce all columns that needs to go through schema evolution.
     Map<String, Set<Class<?>>> schemaSeenForColsToIndex = new HashMap<>();
     Set<String> colsWithSchemaEvolved = new HashSet<>();
@@ -116,7 +125,7 @@ public abstract class FileFormatUtils {
             return HoodieColumnRangeMetadata.merge(a, b);
           } else {
             // schema is evolving for the column of interest.
-            Schema schema = colsToIndexSchemaMap.get(a.getColumnName());
+            HoodieSchema schema = colsToIndexSchemaMap.get(a.getColumnName());
             HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),

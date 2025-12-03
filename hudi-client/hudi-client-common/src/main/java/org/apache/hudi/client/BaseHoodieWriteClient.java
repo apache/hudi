@@ -1692,7 +1692,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {
     return schemaUtil.getTableInternalSchemaFromCommitMetadata().orElseGet(() -> {
       try {
-        return InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema()));
+        return InternalSchemaConverter.convert(schemaUtil.getTableSchema());
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }

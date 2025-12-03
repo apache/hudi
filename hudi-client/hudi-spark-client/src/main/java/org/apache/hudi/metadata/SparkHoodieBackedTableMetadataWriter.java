@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CommitUtils;
@@ -54,7 +55,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -256,8 +256,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
         Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
     int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
-    Schema tableSchema = new TableSchemaResolver(dataMetaClient).getTableAvroSchema();
-    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
+    HoodieSchema tableSchema = new TableSchemaResolver(dataMetaClient).getTableSchema();
+    HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
     // Step 2: Compute the expression index column stat and partition stat records for these newly created files
     // partitionRecordsFunctionOpt - Function used to generate partition stats. These stats are generated only for expression index created using column stats
     //
@@ -275,7 +275,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema tableSchema, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               HoodieSchema tableSchema, HoodieSchema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime) {
     ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
         metaClient, parallelism, tableSchema, readerSchema, instantTime, engineContext, dataWriteConfig,
