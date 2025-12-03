@@ -84,7 +84,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
   private final RowType rowType;
   private final String basePath;
   private final Configuration conf;
-  private HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
 
   public FileStatsIndex(
@@ -101,6 +101,12 @@ public class FileStatsIndex implements ColumnStatsIndex {
   @Override
   public String getIndexPartitionName() {
     return HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+  }
+
+  @Override
+  public boolean isIndexAvailable() {
+    return metaClient.getTableConfig().isMetadataTableAvailable()
+        && metaClient.getTableConfig().getMetadataPartitions().contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
   }
 
   public HoodieTableMetadata getMetadataTable() {
@@ -124,7 +130,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
   @Override
   public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
-    if (probe == null) {
+    if (probe == null || !isIndexAvailable()) {
       return null;
     }
     try {
