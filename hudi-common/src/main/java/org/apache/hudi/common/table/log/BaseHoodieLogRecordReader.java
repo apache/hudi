@@ -358,6 +358,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         } catch (Exception e) {
           LOG.warn("Could not extract fileId from log path", e);
+          LOG.info("Finished scanning log files. BaseInstantTime: {}, "
+                  + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
+              latestInstantTime,
+              totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         }
       }
     }
@@ -587,6 +591,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         } catch (Exception e) {
           LOG.warn("Could not extract fileId from log path", e);
+          LOG.info("Finished scanning log files. BaseInstantTime: {}, "
+                  + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
+              latestInstantTime,
+              totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         }
       }
     }
