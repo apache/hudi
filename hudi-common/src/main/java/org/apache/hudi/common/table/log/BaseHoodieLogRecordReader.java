@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -348,8 +349,17 @@ public abstract class BaseHoodieLogRecordReader<T> {
         // Eat exception as we do not want to mask the original exception that can happen
         LOG.error("Unable to close log format reader", ioe);
       }
-      LOG.info("Finished scanning log files. Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-          totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
+      if (!logFiles.isEmpty()) {
+        try {
+          String fileId = FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath());
+          LOG.info("Finished scanning log files. FileId: {}, BaseInstantTime: {}, "
+                  + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
+              fileId, latestInstantTime,
+              totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
+        } catch (Exception e) {
+          LOG.warn("Could not extract fileId from log path", e);
+        }
+      }
     }
   }
 
@@ -568,8 +578,17 @@ public abstract class BaseHoodieLogRecordReader<T> {
         // Eat exception as we do not want to mask the original exception that can happen
         LOG.error("Unable to close log format reader", ioe);
       }
-      LOG.info("Finished scanning log files. Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-          totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
+      if (!logFiles.isEmpty()) {
+        try {
+          String fileId = FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath());
+          LOG.info("Finished scanning log files. FileId: {}, BaseInstantTime: {}, "
+                  + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
+              fileId, latestInstantTime,
+              totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
+        } catch (Exception e) {
+          LOG.warn("Could not extract fileId from log path", e);
+        }
+      }
     }
   }
 
