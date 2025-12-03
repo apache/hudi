@@ -170,7 +170,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(key);
       writeStat.setPath(DEFAULT_PATH);
-      writeStat.setFileId(setDefaultFileId ? DEFAULT_FILEID : FSUtils.getFileId(f));
+      writeStat.setFileId(setDefaultFileId ? DEFAULT_FILEID : FSUtils.getFileIdFromFileName(f));
       writeStat.setTotalWriteBytes(DEFAULT_TOTAL_WRITE_BYTES);
       writeStat.setPrevCommit(DEFAULT_PRE_COMMIT);
       writeStat.setNumWrites(writes.orElse(DEFAULT_NUM_WRITES));

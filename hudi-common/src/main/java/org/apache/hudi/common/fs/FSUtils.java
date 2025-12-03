@@ -333,7 +333,7 @@ public class FSUtils {
       }
       return matcher.group(1);
     }
-    return FSUtils.getFileId(fileName);
+    return fileName.split("_", 2)[0];
   }
 
   public static String getFileIdFromLogPath(StoragePath path) {
@@ -345,10 +345,7 @@ public class FSUtils {
   }
 
   public static String getFileIdFromFilePath(StoragePath filePath) {
-    if (FSUtils.isLogFile(filePath)) {
-      return FSUtils.getFileIdFromLogPath(filePath);
-    }
-    return FSUtils.getFileId(filePath.getName());
+    return getFileIdFromFileName(filePath.getName());
   }
 
   /**

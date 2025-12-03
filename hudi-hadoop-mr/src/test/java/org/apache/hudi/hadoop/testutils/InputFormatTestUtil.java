@@ -144,7 +144,7 @@ public class InputFormatTestUtil {
     }
     List<File> toUpdateList = dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
-      String fileId = FSUtils.getFileId(file.getName());
+      String fileId = FSUtils.getFileIdFromFileName(file.getName());
       Files.createFile(directory.toPath().resolve(FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId,
           baseFileExtension)));
     }
@@ -342,7 +342,7 @@ public class InputFormatTestUtil {
   public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,
                                             int totalNumberOfRecords, int numberOfRecordsToUpdate, String newCommit) throws IOException {
     File fileToUpdate = Objects.requireNonNull(directory.listFiles((dir, name) -> name.endsWith("parquet")))[0];
-    String fileId = FSUtils.getFileId(fileToUpdate.getName());
+    String fileId = FSUtils.getFileIdFromFileName(fileToUpdate.getName());
     File dataFile = new File(directory,
         FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
     try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema)) {
