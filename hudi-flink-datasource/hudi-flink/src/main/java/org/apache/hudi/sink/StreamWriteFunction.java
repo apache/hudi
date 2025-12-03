@@ -36,6 +36,7 @@ import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
@@ -151,7 +152,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   public StreamWriteFunction(Configuration config, RowType rowType) {
     super(config);
     this.rowType = rowType;
-    this.keyGen = RowDataKeyGen.instance(config, rowType);
+    this.keyGen = RowDataKeyGens.instance(config, rowType);
   }
 
   @Override
