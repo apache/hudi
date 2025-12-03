@@ -18,6 +18,7 @@
 package org.apache.spark.sql.avro
 
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.common.util.StringUtils
 
 import org.apache.avro.{JsonProperties, LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.LogicalTypes.{Date, Decimal, LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
@@ -98,7 +99,7 @@ private[sql] object SchemaConverters {
         val newRecordNames = existingRecordNames + avroSchema.getFullName
         val fields = avroSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          val metadata = if (f.doc() == null) {
+          val metadata = if (StringUtils.isNullOrEmpty(f.doc())) {
             Metadata.empty
           } else {
             new MetadataBuilder().putString("comment", f.doc()).build()
