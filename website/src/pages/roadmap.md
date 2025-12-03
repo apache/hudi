@@ -56,7 +56,7 @@ down by areas on our [stack](/docs/hudi_stack).
 |---------------------------------------------------------|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Default Java 17 support 	                              | 1.2.0	         | [#16082](https://github.com/apache/hudi/issues/16082)                                                                                                                             |
 | Spark datasource V2 read                                | 1.2.0          | [#15292](https://github.com/apache/hudi/issues/15292)                                                                                                                             |
-| Simplification of engine integration and module organization | 1.2.0          | [#17044](https://github.com/apache/hudi/issues/17044) |
+| Simplification of engine integration and module organization | 1.2.0          | [#17044](https://github.com/apache/hudi/issues/16857) |
 | End-to-end DataFrame write path on Spark                | 1.2.0          | [#16846](https://github.com/apache/hudi/issues/16846), [#15433](https://github.com/apache/hudi/issues/15433) |
 | Support Hudi 1.0 release in Presto Hudi Connector       | Presto Release / Q2 | [#14992](https://github.com/apache/hudi/issues/14992) |
 | Support of new indexes in Presto Hudi Connector         | Presto Release / Q3 | [#15246](https://github.com/apache/hudi/issues/15246), [#15319](https://github.com/apache/hudi/issues/15319) |
@@ -67,7 +67,7 @@ down by areas on our [stack](/docs/hudi_stack).
 
 | Feature                                                                                           | Target Release | Tracking                                                                                                                               |
 |---------------------------------------------------------------------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| Syncing as non-partitoned tables in catalogs             | 1.2.0          | [#17045](https://github.com/apache/hudi/issues/17045) |
+| Syncing as non-partitoned tables in catalogs             | 1.2.0          | [#17045](https://github.com/apache/hudi/issues/16858) |
 | Hudi Reverse streamer                                                                             | 1.2.0          | [RFC-70](https://github.com/apache/hudi/pull/9040)                                                                                      |
 | Diagnostic Reporter                                                                               | 1.2.0          | [RFC-62](https://github.com/apache/hudi/pull/6600)                                                                        |
 | Mutable, Transactional caching for Hudi Tables (could be accelerated based on community feedback) | 2.0.0          | [Strawman design](https://docs.google.com/presentation/d/1QBgLw11TM2Qf1KUESofGrQDb63EuggNCpPaxc82Kldo/edit#slide=id.gf7e0551254_0_5), [#16072](https://github.com/apache/hudi/issues/16072) |
