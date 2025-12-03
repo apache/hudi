@@ -25,11 +25,12 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -110,13 +111,12 @@ public final class SchemaTestUtil {
     }
   }
 
-  public static Schema getSchemaFromFields(List<String> fields) {
-    SchemaBuilder.FieldAssembler<Schema> schemaFieldAssembler = SchemaBuilder.builder().record("test_schema")
-        .namespace("test_namespace").fields();
-    for (String field : fields) {
-      schemaFieldAssembler = schemaFieldAssembler.name(field).type().stringType().noDefault();
-    }
-    return schemaFieldAssembler.endRecord();
+  public static HoodieSchema getSchemaFromFields(List<String> fields) {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    List<HoodieSchemaField> hoodieFields = fields.stream()
+        .map(fieldName -> HoodieSchemaField.of(fieldName, stringSchema))
+        .collect(Collectors.toList());
+    return HoodieSchema.createRecord("test_schema", "test_namespace", null, hoodieFields);
   }
 
   private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)

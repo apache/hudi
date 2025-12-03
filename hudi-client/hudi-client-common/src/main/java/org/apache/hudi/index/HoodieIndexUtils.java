@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -417,8 +418,8 @@ public class HoodieIndexUtils {
   private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecordWithExpressionPayload(
       HoodieRecord<R> incoming,
       HoodieRecord<R> existing,
-      Schema writeSchema,
-      Schema writeSchemaWithMetaFields,
+      HoodieSchema writeSchema,
+      HoodieSchema writeSchemaWithMetaFields,
       HoodieWriteConfig config,
       BufferedRecordMerger<R> recordMerger,
       BaseKeyGenerator keyGenerator,
@@ -442,13 +443,13 @@ public class HoodieIndexUtils {
     //record is inserted or updated
     String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
     HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(),
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
-    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
-        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields.toAvroSchema(), properties, Option.empty(),
+        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema.toAvroSchema())));
   }
 
-  private static <R> String inferPartitionPath(HoodieRecord<R> incoming, HoodieRecord<R> existing, Schema recordSchema, BaseKeyGenerator keyGenerator,
+  private static <R> String inferPartitionPath(HoodieRecord<R> incoming, HoodieRecord<R> existing, HoodieSchema recordSchema, BaseKeyGenerator keyGenerator,
                                                RecordContext<R> recordContext, BufferedRecord<R> resultingBufferedRecord) {
     R record = resultingBufferedRecord.getRecord();
     if (record == incoming.getData()) {
@@ -467,8 +468,8 @@ public class HoodieIndexUtils {
   private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(
       HoodieRecord<R> incoming,
       HoodieRecord<R> existing,
-      Schema writeSchema,
-      Schema writeSchemaWithMetaFields,
+      HoodieSchema writeSchema,
+      HoodieSchema writeSchemaWithMetaFields,
       HoodieWriteConfig config,
       BufferedRecordMerger<R> recordMerger,
       BaseKeyGenerator keyGenerator,
@@ -497,11 +498,11 @@ public class HoodieIndexUtils {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
         HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(),
             new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
         // the merged record needs to be converted back to the original payload
-        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
-            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields.toAvroSchema(), properties, Option.empty(),
+            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema.toAvroSchema())));
       }
     }
   }
@@ -560,7 +561,7 @@ public class HoodieIndexUtils {
         properties,
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
-    DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, writerSchema.get());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, HoodieSchema.fromAvroSchema(writerSchema.get()));
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -571,10 +572,10 @@ public class HoodieIndexUtils {
             return Collections.singletonList(incoming).iterator();
           }
           HoodieRecord<R> existing = existingOpt.get();
-          Schema writeSchema = writerSchema.get();
+          HoodieSchema writeSchema = HoodieSchema.fromAvroSchema(writerSchema.get());
 
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
-              incoming, existing, writeSchema, writerSchemaWithMetaFields.get(), updatedConfig,
+              incoming, existing, writeSchema, HoodieSchema.fromAvroSchema(writerSchemaWithMetaFields.get()), updatedConfig,
               recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldsArray, properties, isExpressionPayload, deleteContext);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
@@ -636,7 +637,7 @@ public class HoodieIndexUtils {
     // if the index is not updating the partition of the record, and the table is COW, then we do not need to do merging at
     // this phase since the writer path will merge when rewriting the files as part of the upsert operation.
     boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath || table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
-    DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, writerSchema.get());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, HoodieSchema.fromAvroSchema(writerSchema.get()));
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations

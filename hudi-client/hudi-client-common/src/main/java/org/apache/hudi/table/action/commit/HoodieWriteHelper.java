@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.collection.Pair;
@@ -66,7 +67,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
     RecordContext<T> recordContext = readerContext.getRecordContext();
-    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema.get());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, HoodieSchema.fromAvroSchema(schema.get()));
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath

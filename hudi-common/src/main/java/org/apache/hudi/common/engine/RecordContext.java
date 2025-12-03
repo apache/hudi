@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.JavaTypeConverter;
-import org.apache.hudi.common.util.LocalAvroSchemaCache;
+import org.apache.hudi.common.util.LocalHoodieSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
@@ -64,7 +64,7 @@ public abstract class RecordContext<T> implements Serializable {
 
   private final SerializableBiFunction<T, Schema, String> recordKeyExtractor;
   // for encoding and decoding schemas to the spillable map
-  private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
+  private final LocalHoodieSchemaCache localSchemaCache = LocalHoodieSchemaCache.getInstance();
 
   protected final JavaTypeConverter typeConverter;
   protected String partitionPath;
@@ -89,7 +89,7 @@ public abstract class RecordContext<T> implements Serializable {
     this.partitionPath = partitionPath;
   }
 
-  public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+  public T extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
     return (T) record.getData();
   }
 
@@ -100,23 +100,23 @@ public abstract class RecordContext<T> implements Serializable {
    *
    * @return The avro schema if it is encoded in the metadata map, else null
    */
-  public Schema getSchemaFromBufferRecord(BufferedRecord<T> record) {
+  public HoodieSchema getSchemaFromBufferRecord(BufferedRecord<T> record) {
     return decodeAvroSchema(record.getSchemaId());
   }
 
   /**
    * Encodes the given avro schema for efficient serialization.
    */
-  public Integer encodeAvroSchema(Schema schema) {
-    return this.localAvroSchemaCache.cacheSchema(schema);
+  public Integer encodeSchema(HoodieSchema schema) {
+    return this.localSchemaCache.cacheSchema(schema);
   }
 
   /**
    * Decodes the avro schema with given version ID.
    */
   @Nullable
-  public Schema decodeAvroSchema(Object versionId) {
-    return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
+  public HoodieSchema decodeAvroSchema(Object versionId) {
+    return this.localSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 
   /**
@@ -158,7 +158,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T mergeWithEngineRecord(Schema schema,
+  public abstract T mergeWithEngineRecord(HoodieSchema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
 
@@ -169,7 +169,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @param fieldValues  the values of all fields
    * @return A new instance of Engine record.
    */
-  public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
+  public abstract T constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues);
 
   public JavaTypeConverter getTypeConverter() {
     return typeConverter;
@@ -182,8 +182,8 @@ public abstract class RecordContext<T> implements Serializable {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public String getRecordKey(T record, Schema schema) {
-    return recordKeyExtractor.apply(record, schema);
+  public String getRecordKey(T record, HoodieSchema schema) {
+    return recordKeyExtractor.apply(record, schema.toAvroSchema());
   }
 
   /**
@@ -243,21 +243,7 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
-  public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
-
-  /**
-   * Converts the engine-specific record to an Avro GenericRecord using HoodieSchema.
-   * This method uses HoodieSchema for in-memory processing while maintaining
-   * compatibility with existing Avro-based serialization.
-   *
-   * @param record The engine-specific record.
-   * @param schema The HoodieSchema of the record.
-   * @return An Avro GenericRecord.
-   * @since 1.2.0
-   */
-  public GenericRecord convertToAvroRecord(T record, HoodieSchema schema) {
-    return convertToAvroRecord(record, schema.toAvroSchema());
-  }
+  public abstract GenericRecord convertToAvroRecord(T record, HoodieSchema schema);
 
   /**
    * Fills an empty row with record key fields and returns.
@@ -285,7 +271,7 @@ public abstract class RecordContext<T> implements Serializable {
     if (!deleteContext.hasBuiltInDeleteField()) {
       return false;
     }
-    Object columnValue = getValue(record, HoodieSchema.fromAvroSchema(deleteContext.getReaderSchema()), HOODIE_IS_DELETED_FIELD);
+    Object columnValue = getValue(record, deleteContext.getReaderSchema(), HOODIE_IS_DELETED_FIELD);
     return columnValue != null && getTypeConverter().castToBoolean(columnValue);
   }
 
@@ -313,7 +299,7 @@ public abstract class RecordContext<T> implements Serializable {
       return false;
     }
     Pair<String, String> markerKeyValue = deleteContext.getCustomDeleteMarkerKeyValue().get();
-    Object deleteMarkerValue = getValue(record, HoodieSchema.fromAvroSchema(deleteContext.getReaderSchema()), markerKeyValue.getLeft());
+    Object deleteMarkerValue = getValue(record, deleteContext.getReaderSchema(), markerKeyValue.getLeft());
     return deleteMarkerValue != null
         && markerKeyValue.getRight().equals(deleteMarkerValue.toString());
   }

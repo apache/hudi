@@ -239,7 +239,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       return true;
     }
 
-    decodeRecord(deleteContext.getReaderSchema());
+    decodeRecord(deleteContext.getReaderSchema().toAvroSchema());
     if (getData().equals(SENTINEL)) {
       return false; // Sentinel record is not a delete
     }

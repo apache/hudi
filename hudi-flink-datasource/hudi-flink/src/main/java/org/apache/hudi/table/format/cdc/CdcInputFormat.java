@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -338,7 +339,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
   // accounting to HoodieCDCInferenceCase.LOG_FILE
   static class DataLogFileIterator implements ClosableIterator<RowData> {
-    private final Schema tableSchema;
+    private final HoodieSchema tableSchema;
     private final long maxCompactionMemoryInBytes;
     private final ImageManager imageManager;
     private final RowDataProjection projection;
@@ -360,7 +361,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadTableState tableState,
         ClosableIterator<HoodieRecord<RowData>> logRecordIterator,
         HoodieTableMetaClient metaClient) throws IOException {
-      this.tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
+      this.tableSchema = HoodieSchema.parse(tableState.getAvroSchema());
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.imageManager = imageManager;
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
@@ -376,7 +377,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           readerContext.getMergeMode(),
           false,
           Option.of(imageManager.writeConfig.getRecordMerger()),
-          tableSchema,
+          tableSchema.toAvroSchema(),
           Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
           props,
           metaClient.getTableConfig().getPartialUpdateMode());

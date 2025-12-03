@@ -20,14 +20,15 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -48,11 +49,12 @@ import static org.mockito.Mockito.when;
 class TestFlinkRowDataReaderContext {
   private final StorageConfiguration<?> storageConfig = mock(StorageConfiguration.class);
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-  private static final Schema AVRO_SCHEMA = SchemaBuilder.record("TestRecord").fields()
-      .requiredInt("id")
-      .requiredString("name")
-      .requiredBoolean("active")
-      .endRecord();
+  private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
+      java.util.Arrays.asList(
+          HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+          HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+      ));
   private FlinkRowDataReaderContext readerContext;
 
   @BeforeEach
@@ -68,7 +70,7 @@ class TestFlinkRowDataReaderContext {
   @Test
   void testConstructEngineRecordWithFieldValues() {
     Object[] fieldVals = new Object[] {1, StringData.fromString("Alice"), true};
-    RowData row = readerContext.getRecordContext().constructEngineRecord(AVRO_SCHEMA, fieldVals);
+    RowData row = readerContext.getRecordContext().constructEngineRecord(SCHEMA, fieldVals);
     assertEquals(fieldVals[0], row.getInt(0));
     assertEquals(fieldVals[1], row.getString(1));
     assertEquals(fieldVals[2], row.getBoolean(2));
@@ -79,7 +81,7 @@ class TestFlinkRowDataReaderContext {
     RowData base = createBaseRow(1, "Alice", true);
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0));
     assertEquals("Alice", result.getString(1).toString());
@@ -93,7 +95,7 @@ class TestFlinkRowDataReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, StringData.fromString("Bob"));
 
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0)); // unchanged
     assertEquals("Bob", result.getString(1).toString()); // updated
@@ -108,7 +110,7 @@ class TestFlinkRowDataReaderContext {
     updates.put(0, 42);
     updates.put(1, StringData.fromString("Zoe"));
     updates.put(2, false);
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(42, result.getInt(0));
     assertEquals("Zoe", result.getString(1).toString());
@@ -121,7 +123,7 @@ class TestFlinkRowDataReaderContext {
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, null);
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(5, result.getInt(0));
     assertTrue(result.isNullAt(1));

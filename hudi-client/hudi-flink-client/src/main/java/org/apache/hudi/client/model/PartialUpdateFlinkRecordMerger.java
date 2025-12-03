@@ -21,6 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
@@ -95,17 +96,17 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       if (older.isDelete() || newer.isDelete()) {
         return older;
       } else {
-        Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-        return mergeRecord(newer, newSchema, older, oldSchema, newSchema, recordContext, props);
+        HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+        return mergeRecord(newer, newSchema.toAvroSchema(), older, oldSchema.toAvroSchema(), newSchema.toAvroSchema(), recordContext, props);
       }
     } else {
       if (newer.isDelete() || older.isDelete()) {
         return newer;
       } else {
-        Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-        return mergeRecord(older, oldSchema, newer, newSchema, newSchema, recordContext, props);
+        HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+        return mergeRecord(older, oldSchema.toAvroSchema(), newer, newSchema.toAvroSchema(), newSchema.toAvroSchema(), recordContext, props);
       }
     }
   }
@@ -157,6 +158,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       lowOrderIdx++;
       highOrderIdx++;
     }
-    return BufferedRecords.fromEngineRecord((T) mergedRow, newSchema, recordContext, highOrderRecord.getOrderingValue(), highOrderRecord.getRecordKey(), highOrderRecord.isDelete());
+    return BufferedRecords.fromEngineRecord((T) mergedRow, HoodieSchema.fromAvroSchema(newSchema),
+        recordContext, highOrderRecord.getOrderingValue(), highOrderRecord.getRecordKey(), highOrderRecord.isDelete());
   }
 }

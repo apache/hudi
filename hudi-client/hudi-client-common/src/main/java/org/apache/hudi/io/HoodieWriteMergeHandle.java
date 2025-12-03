@@ -367,15 +367,16 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
-        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
+        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, HoodieSchema.fromAvroSchema(oldSchema), readerContext.getRecordContext(), props, orderingFields, false);
+        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(newSchema),
+            readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
-        Schema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
+        HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
         HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
-        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
+        if (combinedRecord.shouldIgnore(combineRecordSchema.toAvroSchema(), props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
-        } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
+        } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema.toAvroSchema())) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
            * write the combined new value

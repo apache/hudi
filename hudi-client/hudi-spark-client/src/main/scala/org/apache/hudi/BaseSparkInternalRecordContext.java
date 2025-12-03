@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
@@ -125,29 +126,29 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
-    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
+    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema()),
         false, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override
-  public InternalRow constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+  public InternalRow constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     return new GenericInternalRow(fieldValues);
   }
 
   @Override
-  public InternalRow mergeWithEngineRecord(Schema schema,
+  public InternalRow mergeWithEngineRecord(HoodieSchema schema,
                                            Map<Integer, Object> updateValues,
                                            BufferedRecord<InternalRow> baseRecord) {
-    List<Schema.Field> fields = schema.getFields();
+    List<HoodieSchemaField> fields = schema.getFields();
     Object[] values = new Object[fields.size()];
-    for (Schema.Field field : fields) {
+    for (HoodieSchemaField field : fields) {
       int pos = field.pos();
       if (updateValues.containsKey(pos)) {
         values[pos] = updateValues.get(pos);
       } else {
-        values[pos] = getValue(baseRecord.getRecord(), HoodieSchema.fromAvroSchema(schema), field.name());
+        values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
       }
     }
     return new GenericInternalRow(values);

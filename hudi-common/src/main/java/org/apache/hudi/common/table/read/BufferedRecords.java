@@ -25,8 +25,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.avro.Schema;
-
 import java.util.List;
 import java.util.Properties;
 
@@ -35,40 +33,41 @@ import java.util.Properties;
  */
 public class BufferedRecords {
 
-  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, DeleteContext deleteContext) {
+  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, HoodieSchema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields,
+      DeleteContext deleteContext) {
     boolean isDelete = record.isDelete(deleteContext, props);
     return fromHoodieRecord(record, schema, recordContext, props, orderingFields, isDelete);
   }
 
-  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
+  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, HoodieSchema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
     HoodieKey hoodieKey = record.getKey();
     T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
+    Integer schemaId = recordContext.encodeSchema(schema);
+    Comparable orderingValue = record.getOrderingValue(schema.toAvroSchema(), props, orderingFields);
     return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
 
-  public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
+  public static <T> BufferedRecord<T> fromEngineRecord(T record, HoodieSchema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
     String recordKey = recordContext.getRecordKey(record, schema);
     return fromEngineRecord(record, recordKey, schema, recordContext, orderingFieldNames, isDelete ? HoodieOperation.DELETE : null);
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(
-      T record, String recordKey, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation) {
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = recordContext.getOrderingValue(record, HoodieSchema.fromAvroSchema(schema), orderingFieldNames);
+      T record, String recordKey, HoodieSchema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation) {
+    Integer schemaId = recordContext.encodeSchema(schema);
+    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 
-  public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = recordContext.getOrderingValue(record, HoodieSchema.fromAvroSchema(schema), orderingFieldNames);
+  public static <T> BufferedRecord<T> fromEngineRecord(T record, HoodieSchema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
+    Integer schemaId = recordContext.encodeSchema(schema);
+    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
   }
 
-  public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, Comparable orderingValue, String recordKey, boolean isDelete) {
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
+  public static <T> BufferedRecord<T> fromEngineRecord(T record, HoodieSchema schema, RecordContext<T> recordContext, Comparable orderingValue, String recordKey, boolean isDelete) {
+    Integer schemaId = recordContext.encodeSchema(schema);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
   }
 

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -125,7 +126,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       this.allowInflightInstants = allowInflightInstants;
       this.orderingFields = ConfigUtils.getOrderingFields(this.hoodieTableMetaClient.getTableConfig().getProps());
       TypedProperties mergeProps = ConfigUtils.getMergeProps(getPayloadProps(), this.hoodieTableMetaClient.getTableConfig());
-      this.deleteContext = new DeleteContext(mergeProps, readerSchema).withReaderSchema(readerSchema);
+      HoodieSchema readerHoodieSchema = HoodieSchema.fromAvroSchema(readerSchema);
+      this.deleteContext = new DeleteContext(mergeProps, readerHoodieSchema).withReaderSchema(readerHoodieSchema);
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -258,8 +260,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     if (prevRecord != null) {
       // Merge and store the combined record
       RecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
-      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
-      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, HoodieSchema.fromAvroSchema(readerSchema),
+          recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(readerSchema),
+          recordContext, this.getPayloadProps(), orderingFields, deleteContext);
       BufferedRecord<T> combinedRecord = recordMerger.merge(prevBufferedRecord, newBufferedRecord, recordContext, this.getPayloadProps());
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getRecord() != prevRecord.getData()) {

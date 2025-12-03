@@ -82,7 +82,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
@@ -493,7 +493,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   }
 
   private static void populateValidAndDeletedSecondaryIndexRecords(HoodieRecord record, List<HoodieRecord> deletedSecondaryIndexRecords, List<HoodieRecord> validSecondaryIndexRecords) {
-    if (record.isDelete(new DeleteContext(CollectionUtils.emptyProps(), HoodieMetadataRecord.getClassSchema()), CollectionUtils.emptyProps())) {
+    if (record.isDelete(new DeleteContext(CollectionUtils.emptyProps(), HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema())), CollectionUtils.emptyProps())) {
       deletedSecondaryIndexRecords.add(record);
     } else {
       validSecondaryIndexRecords.add(record);
@@ -610,7 +610,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   }
 
   private void assertHoodieRecordListEquality(List<HoodieRecord> actualList, List<HoodieRecord> expectedList) {
-    DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), AVRO_SCHEMA).withReaderSchema(AVRO_SCHEMA);
+    DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), HOODIE_SCHEMA).withReaderSchema(HOODIE_SCHEMA);
     assertEquals(expectedList.size(), actualList.size());
     List<String> expectedInsertRecordKeys = expectedList.stream().filter(record -> !record.isDelete(deleteContext, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());

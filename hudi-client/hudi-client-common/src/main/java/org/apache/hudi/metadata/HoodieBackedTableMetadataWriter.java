@@ -890,7 +890,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .build();
       String baseFileInstantTime = fileSlice.getBaseInstantTime();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
-        String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
+        String recordKey = readerContext.getRecordContext().getRecordKey(record, HoodieSchema.fromAvroSchema(requestedSchema));
         return HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
             baseFileInstantTime, 0);
       });

@@ -255,8 +255,8 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        Schema schema = recordContext.decodeAvroSchema(oldRecord.getSchemaId());
-        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord.getRecord(), HoodieSchema.fromAvroSchema(schema), secondaryIndexSourceField));
+        HoodieSchema schema = recordContext.decodeAvroSchema(oldRecord.getSchemaId());
+        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord.getRecord(), schema, secondaryIndexSourceField));
       }
 
       // For new/combined record
@@ -264,8 +264,8 @@ public class SecondaryIndexStreamingTracker {
       Object newSecondaryKey = null;
 
       if (combinedRecordOpt.isPresent() && !isDelete) {
-        Schema schema = recordContext.decodeAvroSchema(combinedRecordOpt.get().getSchemaId());
-        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get().getRecord(), HoodieSchema.fromAvroSchema(schema), secondaryIndexSourceField));
+        HoodieSchema schema = recordContext.decodeAvroSchema(combinedRecordOpt.get().getSchemaId());
+        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get().getRecord(), schema, secondaryIndexSourceField));
         hasNewValue = true;
       }
 

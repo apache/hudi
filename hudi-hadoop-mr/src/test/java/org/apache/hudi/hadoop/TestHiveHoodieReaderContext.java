@@ -20,14 +20,14 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -49,11 +49,12 @@ class TestHiveHoodieReaderContext {
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
   private final HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = mock(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator.class);
   private final StorageConfiguration<?> storageConfiguration = new HadoopStorageConfiguration(false);
-  private static final Schema SCHEMA = SchemaBuilder.record("TestRecord").fields()
-      .requiredInt("id")
-      .requiredString("name")
-      .requiredBoolean("active")
-      .endRecord();
+  private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
+      Arrays.asList(
+          HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+          HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+      ));
 
   @Test
   void getRecordKeyWithSingleKey() {
@@ -81,7 +82,7 @@ class TestHiveHoodieReaderContext {
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
-    assertEquals("value3", avroReaderContext.getRecordContext().getValue(row, HoodieSchema.fromAvroSchema(getBaseSchema()), "field_3.nested_field").toString());
+    assertEquals("value3", avroReaderContext.getRecordContext().getValue(row, getBaseSchema(), "field_3.nested_field").toString());
   }
 
   @Test
@@ -144,14 +145,16 @@ class TestHiveHoodieReaderContext {
     assertTrue(((BooleanWritable) values[2]).get());
   }
 
-  private static Schema getBaseSchema() {
-    Schema baseDataSchema = Schema.createRecord("test", null, null, false);
-    Schema.Field baseField1 = new Schema.Field("field_1", Schema.create(Schema.Type.STRING));
-    Schema.Field baseField2 = new Schema.Field("field_2", Schema.create(Schema.Type.STRING));
-    Schema.Field baseField3 = new Schema.Field("field_3", Schema.createRecord("nested", null, null, false, Collections.singletonList(new Schema.Field("nested_field", Schema.create(
-        Schema.Type.STRING)))));
-    baseDataSchema.setFields(Arrays.asList(baseField1, baseField2, baseField3));
-    return baseDataSchema;
+  private static HoodieSchema getBaseSchema() {
+    HoodieSchema nestedSchema = HoodieSchema.createRecord("nested", null, null,
+        Collections.singletonList(HoodieSchemaField.of("nested_field", HoodieSchema.create(HoodieSchemaType.STRING))));
+
+    return HoodieSchema.createRecord("test", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("field_1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field_2", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field_3", nestedSchema)
+        ));
   }
 
   private ArrayWritable createBaseRecord(Writable[] values) {

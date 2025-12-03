@@ -328,7 +328,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "my_key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -350,7 +350,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("other")))
-    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -365,7 +365,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test

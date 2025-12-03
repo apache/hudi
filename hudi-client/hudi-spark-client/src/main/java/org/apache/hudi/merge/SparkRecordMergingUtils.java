@@ -24,6 +24,7 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.collection.Pair;
@@ -132,7 +133,8 @@ public class SparkRecordMergingUtils {
         }
       }
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
-      return BufferedRecords.fromEngineRecord(mergedRow, mergedSchemaPair.getRight().getRight(), recordContext, newer.getOrderingValue(), newer.getRecordKey(), newer.isDelete());
+      return BufferedRecords.fromEngineRecord(mergedRow, HoodieSchema.fromAvroSchema(mergedSchemaPair.getRight().getRight()),
+          recordContext, newer.getOrderingValue(), newer.getRecordKey(), newer.isDelete());
     } else {
       return newer;
     }

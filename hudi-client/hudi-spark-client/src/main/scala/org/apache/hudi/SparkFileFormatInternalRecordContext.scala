@@ -23,9 +23,9 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.RecordContext
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.DefaultJavaTypeConverter
-
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -58,10 +58,10 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
     deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
   }
 
-  override def convertToAvroRecord(record: InternalRow, schema: Schema): GenericRecord = {
-    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
-    val serializer = serializerMap.getOrElseUpdate(schema, {
-      sparkAdapter.createAvroSerializer(structType, schema, isNullable(schema))
+  override def convertToAvroRecord(record: InternalRow, schema: HoodieSchema): GenericRecord = {
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema)
+    val serializer = serializerMap.getOrElseUpdate(schema.toAvroSchema, {
+      sparkAdapter.createAvroSerializer(structType, schema.toAvroSchema, isNullable(schema.toAvroSchema))
     })
     serializer.serialize(record).asInstanceOf[GenericRecord]
   }

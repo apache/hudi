@@ -20,13 +20,13 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -49,19 +49,19 @@ public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
   }
 
   @SuppressWarnings("rawtypes, unchecked")
-  private <T> BufferedRecord<T> preCombine(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, Schema newSchema, TypedProperties props) {
+  private <T> BufferedRecord<T> preCombine(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, HoodieSchema newSchema, TypedProperties props) {
     GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
     GenericRecord olderAvroRecord = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
     HoodieRecordPayload newerPayload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
     HoodieRecordPayload olderPayload = HoodieRecordUtils.loadPayload(payloadClass, olderAvroRecord, older.getOrderingValue());
-    HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema, props);
+    HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema.toAvroSchema(), props);
     try {
       if (payload == olderPayload) {
         return older;
       } else if (payload == newerPayload) {
         return newer;
       } else {
-        Option<IndexedRecord> indexedRecord = payload.getIndexedRecord(newSchema, props);
+        Option<IndexedRecord> indexedRecord = payload.getIndexedRecord(newSchema.toAvroSchema(), props);
         T mergedRecord = indexedRecord.map(recordContext::convertAvroRecord).orElse(null);
         return BufferedRecords.fromEngineRecord(mergedRecord, newSchema, recordContext, orderingFields, newer.getRecordKey(), indexedRecord.isEmpty());
       }

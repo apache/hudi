@@ -102,7 +102,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = metaClient.getTableConfig();
-    this.deleteContext = new DeleteContext(properties, tableSchema);
+    this.deleteContext = new DeleteContext(properties, HoodieSchema.fromAvroSchema(tableSchema));
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
