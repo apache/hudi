@@ -84,7 +84,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
   private final RowType rowType;
   private final String basePath;
   private final Configuration conf;
-  private HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
 
   public FileStatsIndex(
@@ -103,28 +103,34 @@ public class FileStatsIndex implements ColumnStatsIndex {
     return HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
   }
 
+  @Override
+  public boolean isIndexAvailable() {
+    return getMetaClient().getTableConfig().isMetadataTableAvailable()
+        && getMetaClient().getTableConfig().getMetadataPartitions().contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+  }
+
   public HoodieTableMetadata getMetadataTable() {
     // initialize the metadata table lazily
     if (this.metadataTable == null) {
-      initMetaClient();
-      this.metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+      this.metadataTable = getMetaClient().getTableFormat().getMetadataFactory().create(
           HoodieFlinkEngineContext.DEFAULT,
-          metaClient.getStorage(),
+          getMetaClient().getStorage(),
           StreamerUtil.metadataConfig(conf),
           basePath);
     }
     return this.metadataTable;
   }
 
-  private void initMetaClient() {
+  protected HoodieTableMetaClient getMetaClient() {
     if (this.metaClient == null) {
       this.metaClient = StreamerUtil.createMetaClient(conf);
     }
+    return this.metaClient;
   }
 
   @Override
   public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
-    if (probe == null) {
+    if (probe == null || !isIndexAvailable()) {
       return null;
     }
     try {

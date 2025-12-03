@@ -417,6 +417,19 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by "
           + "skipping over files");
 
+  @AdvancedConfig
+  public static final ConfigOption<Integer> RECORD_INDEX_KEYS_MAX_COUNT = ConfigOptions
+      .key("read.record.index.keys.max.count")
+      .intType()
+      .defaultValue(8)
+      .withDescription("Record Level index statistics will be read from metadata table (MDT) for data skipping optimization,\n"
+          + "and currently the index statistics are collected by a single process, i.e., flink client for batch query or\n"
+          + "split monitor operator for streaming query. This config is used to constrain the maximum number of hoodie\n"
+          + "keys that can be read from MDT without sacrificing any performance. If the number of hoodie keys from query\n"
+          + "predicate is bigger than the maximum value, the query will fallback to not using record level index.\n"
+          + "E.g., given query: SELECT * FROM T WHERE `uuid` IN (1,2,3,4,5,6,7,8,9), the number of hoodie keys is 9, and\n"
+          + "the maximum value is 8, so the source will not perform data skipping based on record level index.");
+
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------
