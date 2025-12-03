@@ -106,4 +106,38 @@ class TestHoodieMetadataConfig {
         .build();
     assertTrue(configWithCustomValue.isGlobalRecordLevelIndexEnabled());
   }
+
+  @Test
+  void testRecordIndexMaxFileGroupSizeBytes() {
+    // Test default value (1GB)
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertEquals(1024L * 1024L * 1024L, config.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Test custom value using builder method
+    long customSize = 2L * 1024L * 1024L * 1024L; // 2GB
+    HoodieMetadataConfig configWithBuilder = HoodieMetadataConfig.newBuilder()
+        .withRecordIndexMaxFileGroupSizeBytes(customSize)
+        .build();
+    assertEquals(customSize, configWithBuilder.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Test custom value via Properties
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key(), String.valueOf(customSize));
+    HoodieMetadataConfig configWithProperties = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertEquals(customSize, configWithProperties.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Test value larger than Integer.MAX_VALUE to ensure long is properly handled
+    long largeSize = 3L * 1024L * 1024L * 1024L; // 3GB (exceeds Integer.MAX_VALUE which is ~2.1GB)
+    Properties propsLarge = new Properties();
+    propsLarge.put(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key(), String.valueOf(largeSize));
+    HoodieMetadataConfig configWithLargeValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsLarge)
+        .build();
+    assertEquals(largeSize, configWithLargeValue.getRecordIndexMaxFileGroupSizeBytes());
+
+    // Verify that the value is indeed larger than Integer.MAX_VALUE
+    assertTrue(largeSize > Integer.MAX_VALUE, "Test value should exceed Integer.MAX_VALUE to validate long type");
+  }
 }

@@ -2696,7 +2696,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getRecordIndexGrowthFactor();
   }
 
-  public int getRecordIndexMaxFileGroupSizeBytes() {
+  public long getRecordIndexMaxFileGroupSizeBytes() {
     return metadataConfig.getRecordIndexMaxFileGroupSizeBytes();
   }
 
