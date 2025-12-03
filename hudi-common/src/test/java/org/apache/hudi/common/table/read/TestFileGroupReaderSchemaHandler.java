@@ -224,8 +224,8 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       dataSchemaFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
 
-    Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
-    Schema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    HoodieSchema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
+    HoodieSchema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
 
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
@@ -263,16 +263,16 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     if (addHoodieIsDeleted) {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
-    Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
-    when(recordMerger.getMandatoryFieldsForMerging(dataSchema, hoodieTableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
+    HoodieSchema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
+    when(recordMerger.getMandatoryFieldsForMerging(dataSchema.toAvroSchema(), hoodieTableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
-    DeleteContext deleteContext = new DeleteContext(props, dataSchema);
+    DeleteContext deleteContext = new DeleteContext(props, dataSchema.toAvroSchema());
     assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDeleteField());
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
         deleteContext.getCustomDeleteMarkerKeyValue());
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
-        dataSchema, requestedSchema, Option.empty(), props, metaClient);
+        dataSchema.toAvroSchema(), requestedSchema.toAvroSchema(), Option.empty(), props, metaClient);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
     assertEquals(expectedSchema, actualSchema);
   }

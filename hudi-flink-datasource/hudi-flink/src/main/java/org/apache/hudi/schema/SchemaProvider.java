@@ -18,7 +18,7 @@
 
 package org.apache.hudi.schema;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import java.io.Serializable;
 
@@ -29,9 +29,9 @@ public abstract class SchemaProvider implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public abstract Schema getSourceSchema();
+  public abstract HoodieSchema getSourceSchema();
 
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
   }

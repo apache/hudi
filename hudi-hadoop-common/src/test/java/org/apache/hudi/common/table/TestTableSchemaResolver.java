@@ -116,12 +116,12 @@ class TestTableSchemaResolver {
   void testGetTableSchema() throws Exception {
     // Setup: Create mock metaClient and configure behavior
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    Schema expectedSchema = getSimpleSchema();
+    HoodieSchema expectedSchema = getSimpleSchema();
 
     // Mock table setup
     when(metaClient.getTableConfig().populateMetaFields()).thenReturn(true);
     when(metaClient.getTableConfig().getTableCreateSchema())
-        .thenReturn(Option.of(expectedSchema));
+        .thenReturn(Option.of(expectedSchema.toAvroSchema()));
 
     when(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema())
         .thenReturn(Option.empty());
@@ -152,8 +152,8 @@ class TestTableSchemaResolver {
   void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
     String testDir = initTestDir("read_schema_from_log_file");
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
-    Schema expectedSchema = getSimpleSchema();
-    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
+    HoodieSchema expectedSchema = getSimpleSchema();
+    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
     assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
         logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
   }

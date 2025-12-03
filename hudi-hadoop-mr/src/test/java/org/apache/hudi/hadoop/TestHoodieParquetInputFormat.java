@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,6 +26,8 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,7 +43,6 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -196,7 +196,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatLoadForNonPartitionedAndVirtualKeyedTable() throws IOException {
     // initial commit
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
     File partitionDir = InputFormatTestUtil.prepareCustomizedTable(basePath, baseFileFormat, 10, "100", true, false,
         true, schema);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
@@ -574,7 +574,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testPredicatePushDown() throws IOException {
     // initial commit
-    Schema schema = getSchemaFromResource(getClass(), "/sample1.avsc");
+    HoodieSchema schema = getSchemaFromResource(getClass(), "/sample1.avsc");
     String commit1 = "20160628071126";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);
@@ -781,7 +781,7 @@ public class TestHoodieParquetInputFormat {
       long testTimestampLong = System.currentTimeMillis();
       int testDate = 19116;// 2022-05-04
 
-      Schema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
+      HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
       String commit = "20160628071126";
       HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
           HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
@@ -789,8 +789,8 @@ public class TestHoodieParquetInputFormat {
       String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",
           HoodieFileFormat.PARQUET.getFileExtension());
       try (AvroParquetWriter parquetWriter = new AvroParquetWriter(
-          new Path(partitionPath.resolve(fileId).toString()), schema)) {
-        GenericData.Record record = new GenericData.Record(schema);
+          new Path(partitionPath.resolve(fileId).toString()), schema.toAvroSchema())) {
+        GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
         record.put("test_timestamp", testTimestampLong * 1000);
         record.put("test_long", testTimestampLong * 1000);
         record.put("test_date", testDate);

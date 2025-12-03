@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -34,10 +33,11 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
@@ -56,8 +56,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class HoodieAdaptablePayloadDataGenerator {
 
-  public static final Schema SCHEMA = SchemaTestUtil.getSchemaFromResource(HoodieAdaptablePayloadDataGenerator.class, "/adaptable-payload.avsc");
-  public static final Schema SCHEMA_WITH_METAFIELDS = HoodieAvroUtils.addMetadataFields(SCHEMA, false);
+  public static final HoodieSchema SCHEMA = SchemaTestUtil.getSchemaFromResource(HoodieAdaptablePayloadDataGenerator.class, "/adaptable-payload.avsc");
+  public static final HoodieSchema SCHEMA_WITH_METAFIELDS = HoodieSchemaUtils.addMetadataFields(SCHEMA, false);
   public static final String SCHEMA_STR = SCHEMA.toString();
 
   public static Properties getKeyGenProps(Class<?> payloadClass) {
@@ -102,7 +102,7 @@ public class HoodieAdaptablePayloadDataGenerator {
   }
 
   private static GenericRecord getInsert(int id, String pt, long ts, RecordGen recordGen) {
-    GenericRecord r = new GenericData.Record(SCHEMA);
+    GenericRecord r = new GenericData.Record(SCHEMA.toAvroSchema());
     r.put("id", id);
     r.put("pt", pt);
     return recordGen.populateForInsert(r, ts);
@@ -113,7 +113,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> updates = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
       GenericRecord updated = getUpdate(Integer.parseInt(gr.get("id").toString()), gr.get("pt").toString(), ts, recordGen);
       updates.add(getHoodieRecord(updated, recordGen.getPayloadClass()));
     }
@@ -125,7 +125,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> updates = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
       GenericRecord updated = getUpdate(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
       updates.add(getHoodieRecord(updated, recordGen.getPayloadClass()));
     }
@@ -133,7 +133,7 @@ public class HoodieAdaptablePayloadDataGenerator {
   }
 
   private static GenericRecord getUpdate(int id, String pt, long ts, RecordGen recordGen) {
-    GenericRecord r = new GenericData.Record(SCHEMA);
+    GenericRecord r = new GenericData.Record(SCHEMA.toAvroSchema());
     r.put("id", id);
     r.put("pt", pt);
     return recordGen.populateForUpdate(r, ts);
@@ -144,7 +144,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> deletes = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
       GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), gr.get("pt").toString(), ts, recordGen);
       deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
     }
@@ -157,7 +157,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> deletes = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
       GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
       deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
     }
@@ -181,7 +181,7 @@ public class HoodieAdaptablePayloadDataGenerator {
   }
 
   private static GenericRecord getDelete(int id, String pt, long ts, RecordGen recordGen) {
-    GenericRecord r = new GenericData.Record(SCHEMA);
+    GenericRecord r = new GenericData.Record(SCHEMA.toAvroSchema());
     r.put("id", id);
     r.put("pt", pt);
     return recordGen.populateForDelete(r, ts);
@@ -197,18 +197,18 @@ public class HoodieAdaptablePayloadDataGenerator {
     }
     return new HoodieAvroIndexedRecord(r)
         .prependMetaFields(
-            SCHEMA,
-            SCHEMA_WITH_METAFIELDS,
+            SCHEMA.toAvroSchema(),
+            SCHEMA_WITH_METAFIELDS.toAvroSchema(),
             new MetadataValues().setRecordKey(r.get("id").toString()).setPartitionPath(r.get("pt").toString()),
             new Properties())
         .wrapIntoHoodieRecordPayloadWithParams(
-            SCHEMA_WITH_METAFIELDS,
+            SCHEMA_WITH_METAFIELDS.toAvroSchema(),
             getPayloadProps(payloadClass),
             Option.empty(),
             false,
             Option.empty(),
             false,
-            Option.of(SCHEMA));
+            Option.of(SCHEMA.toAvroSchema()));
   }
 
   public static class RecordGen {

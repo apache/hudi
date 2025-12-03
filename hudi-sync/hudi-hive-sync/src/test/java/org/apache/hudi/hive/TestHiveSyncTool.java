@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -53,8 +55,6 @@ import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
@@ -951,11 +951,11 @@ public class TestHiveSyncTool {
 
     Map<String, Pair<String, String>> alterCommentSchema = new HashMap<>();
     //generate commented schema field
-    Schema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test.avsc");
-    Schema commentedSchema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test-doced.avsc");
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test.avsc");
+    HoodieSchema commentedSchema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test-doced.avsc");
     Map<String, String> fieldsNameAndDoc = commentedSchema.getFields().stream().collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT),
-        field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
-    for (Field field : schema.getFields()) {
+        field -> StringUtils.isNullOrEmpty(field.doc().get()) ? "" : field.doc().get()));
+    for (HoodieSchemaField field : schema.getFields()) {
       String name = field.name().toLowerCase(Locale.ROOT);
       String comment = fieldsNameAndDoc.get(name);
       if (fieldsNameAndDoc.containsKey(name) && !comment.equals(field.doc())) {
@@ -1902,9 +1902,9 @@ public class TestHiveSyncTool {
         hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(), "The last commit that was synced should be updated in the TBLPROPERTIES");
 
     // make sure correct schema is picked
-    Schema schema = SchemaTestUtil.getSimpleSchema();
-    for (Field field : schema.getFields()) {
-      assertEquals(field.schema().getType().getName(),
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
+    for (HoodieSchemaField field : schema.getFields()) {
+      assertEquals(field.schema().getType().name(),
           hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).get(field.name()).toLowerCase(),
           String.format("Hive Schema Field %s was added", field));
     }

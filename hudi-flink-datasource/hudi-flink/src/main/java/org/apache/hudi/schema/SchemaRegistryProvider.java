@@ -20,11 +20,11 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -110,12 +110,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
     checkRequiredConfigProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL));
   }
 
-  private Schema getSchema(String registryUrl) throws IOException {
-    return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+  private HoodieSchema getSchema(String registryUrl) throws IOException {
+    return new HoodieSchema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     try {
       return getSchema(registryUrl);
@@ -125,7 +125,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl = getStringWithAltKeys(
         config, Config.TARGET_SCHEMA_REGISTRY_URL, registryUrl);

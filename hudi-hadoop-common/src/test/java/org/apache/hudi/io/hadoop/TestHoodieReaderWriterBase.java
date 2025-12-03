@@ -132,16 +132,16 @@ public abstract class TestHoodieReaderWriterBase {
   @Test
   public void testWriteReadComplexRecord() throws Exception {
     String schemaPath = "/exampleSchemaWithUDT.avsc";
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
-    Schema udtSchema = avroSchema.getField("driver").schema().getTypes().get(1);
-    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
+    HoodieSchema schema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
+    HoodieSchema udtSchema = schema.getField("driver").get().schema().getTypes().get(1);
+    HoodieAvroFileWriter writer = createWriter(schema.toAvroSchema(), true);
     for (int i = 0; i < NUM_RECORDS; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String key = "key" + String.format("%02d", i);
       record.put("_row_key", key);
       record.put("time", Integer.toString(i));
       record.put("number", i);
-      GenericRecord innerRecord = new GenericData.Record(udtSchema);
+      GenericRecord innerRecord = new GenericData.Record(udtSchema.toAvroSchema());
       innerRecord.put("driver_name", "driver" + i);
       innerRecord.put("list", Collections.singletonList(i));
       innerRecord.put("map", Collections.singletonMap(key, "value" + i));
@@ -195,10 +195,10 @@ public abstract class TestHoodieReaderWriterBase {
   }
 
   private void writeFileWithSchemaWithMeta() throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
+    HoodieSchema schema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroFileWriter writer = createWriter(schema.toAvroSchema(), true);
     for (int i = 0; i < NUM_RECORDS; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String key = "key" + String.format("%02d", i);
       record.put("_row_key", key);
       record.put("time", Integer.toString(i));

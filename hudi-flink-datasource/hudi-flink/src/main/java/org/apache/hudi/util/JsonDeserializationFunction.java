@@ -41,7 +41,7 @@ public final class JsonDeserializationFunction
   public static JsonDeserializationFunction getInstance(Configuration conf) {
     // Read from file source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf).toAvroSchema())
             .getLogicalType();
     return getInstance(rowType);
   }

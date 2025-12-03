@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -31,7 +32,6 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -142,7 +142,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimpleUpsert() throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema(), false);
 
     try (RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
       SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -165,7 +165,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
       while (itr.hasNext()) {
         HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
         try {
-          IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema).get();
+          IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema.toAvroSchema()).get();
           String latestCommitTime =
               ((GenericRecord) indexedRecord).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
           assert recordKeys.contains(rec.getRecordKey()) || updatedRecordKeys.contains(rec.getRecordKey());

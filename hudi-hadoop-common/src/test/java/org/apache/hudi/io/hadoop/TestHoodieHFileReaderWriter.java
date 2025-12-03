@@ -199,12 +199,12 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsAndTestAvroWithMeta")
   public void testWriteReadHFileWithMetaFields(boolean populateMetaFields, boolean testAvroWithMeta) throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieAvroHFileWriter writer = createWriter(avroSchema, populateMetaFields);
+    HoodieSchema schema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroHFileWriter writer = createWriter(schema.toAvroSchema(), populateMetaFields);
     List<String> keys = new ArrayList<>();
     Map<String, GenericRecord> recordMap = new TreeMap<>();
     for (int i = 0; i < 100; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String key = String.format("%s%04d", "key", i);
       record.put("_row_key", key);
       keys.add(key);
