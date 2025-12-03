@@ -98,7 +98,12 @@ private[sql] object SchemaConverters {
         val newRecordNames = existingRecordNames + avroSchema.getFullName
         val fields = avroSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          StructField(f.name, schemaType.dataType, schemaType.nullable)
+          val metadata = if (f.doc() == null) {
+            Metadata.empty
+          } else {
+            new MetadataBuilder().putString("comment", f.doc()).build()
+          }
+          StructField(f.name, schemaType.dataType, schemaType.nullable, metadata)
         }
 
         SchemaType(StructType(fields.toSeq), nullable = false)
@@ -189,10 +194,10 @@ private[sql] object SchemaConverters {
         Schema.createArray(toAvroType(et, containsNull, recordName, nameSpace))
       case MapType(StringType, vt, valueContainsNull) =>
         Schema.createMap(toAvroType(vt, valueContainsNull, recordName, nameSpace))
-      case st: StructType =>
+      case struct: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
-        if (canBeUnion(st)) {
-          val nonNullUnionFieldTypes = st.map(f => toAvroType(f.dataType, nullable = false, f.name, childNameSpace))
+        if (canBeUnion(struct)) {
+          val nonNullUnionFieldTypes = struct.map(f => toAvroType(f.dataType, nullable = false, f.name, childNameSpace))
           val unionFieldTypes = if (nullable) {
             nullSchema +: nonNullUnionFieldTypes
           } else {
@@ -200,14 +205,13 @@ private[sql] object SchemaConverters {
           }
           Schema.createUnion(unionFieldTypes:_*)
         } else {
-          val fields = st.map { f =>
-            val doc = f.metadata.getString("comment")
-            val fieldAvroType =
-              toAvroType(f.dataType, f.nullable, f.name, childNameSpace)
+          val fields = struct.map { field =>
+            val doc = field.getComment().orNull
+            val fieldAvroType = toAvroType(field.dataType, field.nullable, field.name, childNameSpace)
             if (AvroSchemaUtils.isNullable(fieldAvroType)) {
-              HoodieAvroUtils.createNewSchemaField(f.name, fieldAvroType, doc, JsonProperties.NULL_VALUE)
+              HoodieAvroUtils.createNewSchemaField(field.name, fieldAvroType, doc, JsonProperties.NULL_VALUE)
             } else {
-              HoodieAvroUtils.createNewSchemaField(f.name, fieldAvroType, doc, null)
+              HoodieAvroUtils.createNewSchemaField(field.name, fieldAvroType, doc, null)
             }
           }
           Schema.createRecord(recordName, null, nameSpace, false, fields.asJava)
@@ -218,7 +222,7 @@ private[sql] object SchemaConverters {
     }
 
     if (nullable && catalystType != NullType && schema.getType != Schema.Type.UNION) {
-      Schema.createUnion(schema, nullSchema)
+      Schema.createUnion(nullSchema, schema)
     } else {
       schema
     }
