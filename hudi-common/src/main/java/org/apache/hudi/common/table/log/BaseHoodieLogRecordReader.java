@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -351,16 +352,15 @@ public abstract class BaseHoodieLogRecordReader<T> {
       }
       if (!logFiles.isEmpty()) {
         try {
-          String fileId = FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath());
+          StoragePath path = logFiles.get(0).getPath();
           LOG.info("Finished scanning log files. FileId: {}, BaseInstantTime: {}, "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-              fileId, latestInstantTime,
+              FSUtils.getFileIdFromLogPath(path), FSUtils.getDeltaCommitTimeFromLogPath(path),
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         } catch (Exception e) {
           LOG.warn("Could not extract fileId from log path", e);
-          LOG.info("Finished scanning log files. BaseInstantTime: {}, "
+          LOG.info("Finished scanning log files. "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-              latestInstantTime,
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         }
       }
@@ -584,16 +584,15 @@ public abstract class BaseHoodieLogRecordReader<T> {
       }
       if (!logFiles.isEmpty()) {
         try {
-          String fileId = FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath());
+          StoragePath path = logFiles.get(0).getPath();
           LOG.info("Finished scanning log files. FileId: {}, BaseInstantTime: {}, "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-              fileId, latestInstantTime,
+              FSUtils.getFileIdFromLogPath(path), FSUtils.getDeltaCommitTimeFromLogPath(path),
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         } catch (Exception e) {
           LOG.warn("Could not extract fileId from log path", e);
-          LOG.info("Finished scanning log files. BaseInstantTime: {}, "
+          LOG.info("Finished scanning log files. "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
-              latestInstantTime,
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
         }
       }
