@@ -2374,7 +2374,7 @@ public class HoodieTableMetadataUtil {
    * @return The estimated number of file groups.
    */
   public static int estimateFileGroupCount(MetadataPartitionType partitionType, Supplier<Long> recordCountSupplier, int averageRecordSize, int minFileGroupCount,
-                                           int maxFileGroupCount, float growthFactor, int maxFileGroupSizeBytes) {
+                                           int maxFileGroupCount, float growthFactor, long maxFileGroupSizeBytes) {
     int fileGroupCount;
 
     long recordCount = -1;
