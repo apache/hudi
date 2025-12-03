@@ -45,7 +45,7 @@ private[sql] object SchemaConverters {
    *
    * @since 2.4.0
    */
-  case class SchemaType(dataType: DataType, nullable: Boolean)
+  case class SchemaType(dataType: DataType, nullable: Boolean, doc: Option[String])
 
   /**
    * Converts an Avro schema to a corresponding Spark SQL schema.
@@ -59,33 +59,33 @@ private[sql] object SchemaConverters {
   private val unionFieldMemberPrefix = "member"
 
   private def toSqlTypeHelper(avroSchema: Schema, existingRecordNames: Set[String]): SchemaType = {
-    avroSchema.getType match {
-      case INT => avroSchema.getLogicalType match {
-        case _: Date => SchemaType(DateType, nullable = false)
-        case _ => SchemaType(IntegerType, nullable = false)
+    (avroSchema.getType, Option(avroSchema.getDoc)) match {
+      case (INT, doc) => avroSchema.getLogicalType match {
+        case _: Date => SchemaType(DateType, nullable = false, doc)
+        case _ => SchemaType(IntegerType, nullable = false, doc)
       }
-      case STRING => SchemaType(StringType, nullable = false)
-      case BOOLEAN => SchemaType(BooleanType, nullable = false)
-      case BYTES | FIXED => avroSchema.getLogicalType match {
+      case (STRING, doc) => SchemaType(StringType, nullable = false, doc)
+      case (BOOLEAN, doc) => SchemaType(BooleanType, nullable = false, doc)
+      case (BYTES | FIXED, doc) => avroSchema.getLogicalType match {
         // For FIXED type, if the precision requires more bytes than fixed size, the logical
         // type will be null, which is handled by Avro library.
-        case d: Decimal => SchemaType(DecimalType(d.getPrecision, d.getScale), nullable = false)
-        case _ => SchemaType(BinaryType, nullable = false)
+        case d: Decimal => SchemaType(DecimalType(d.getPrecision, d.getScale), nullable = false, doc)
+        case _ => SchemaType(BinaryType, nullable = false, doc)
       }
 
-      case DOUBLE => SchemaType(DoubleType, nullable = false)
-      case FLOAT => SchemaType(FloatType, nullable = false)
-      case LONG => avroSchema.getLogicalType match {
-        case _: TimestampMillis | _: TimestampMicros => SchemaType(TimestampType, nullable = false)
-        case _: LocalTimestampMillis | _: LocalTimestampMicros => SchemaType(TimestampNTZType, nullable = false)
-        case _ => SchemaType(LongType, nullable = false)
+      case (DOUBLE, doc) => SchemaType(DoubleType, nullable = false, doc)
+      case (FLOAT, doc) => SchemaType(FloatType, nullable = false, doc)
+      case (LONG, doc) => avroSchema.getLogicalType match {
+        case _: TimestampMillis | _: TimestampMicros => SchemaType(TimestampType, nullable = false, doc)
+        case _: LocalTimestampMillis | _: LocalTimestampMicros => SchemaType(TimestampNTZType, nullable = false, doc)
+        case _ => SchemaType(LongType, nullable = false, doc)
       }
 
-      case ENUM => SchemaType(StringType, nullable = false)
+      case (ENUM, doc) => SchemaType(StringType, nullable = false, doc)
 
-      case NULL => SchemaType(NullType, nullable = true)
+      case (NULL, doc) => SchemaType(NullType, nullable = true, doc)
 
-      case RECORD =>
+      case (RECORD, doc) =>
         if (existingRecordNames.contains(avroSchema.getFullName)) {
           throw new IncompatibleSchemaException(
             s"""
@@ -96,24 +96,25 @@ private[sql] object SchemaConverters {
         val newRecordNames = existingRecordNames + avroSchema.getFullName
         val fields = avroSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          StructField(f.name, schemaType.dataType, schemaType.nullable)
+          val metadata = if(f.doc != null) new MetadataBuilder().putString("comment", f.doc).build() else Metadata.empty
+          StructField(f.name, schemaType.dataType, schemaType.nullable, metadata)
         }
 
-        SchemaType(StructType(fields.toSeq), nullable = false)
+        SchemaType(StructType(fields.toSeq), nullable = false, doc)
 
-      case ARRAY =>
+      case (ARRAY, doc) =>
         val schemaType = toSqlTypeHelper(avroSchema.getElementType, existingRecordNames)
         SchemaType(
           ArrayType(schemaType.dataType, containsNull = schemaType.nullable),
-          nullable = false)
+          nullable = false, doc)
 
-      case MAP =>
+      case (MAP, doc) =>
         val schemaType = toSqlTypeHelper(avroSchema.getValueType, existingRecordNames)
         SchemaType(
           MapType(StringType, schemaType.dataType, valueContainsNull = schemaType.nullable),
-          nullable = false)
+          nullable = false, doc)
 
-      case UNION =>
+      case (UNION, doc) =>
         if (avroSchema.getTypes.asScala.exists(_.getType == NULL)) {
           // In case of a union with null, eliminate it and make a recursive call
           val remainingUnionTypes = avroSchema.getTypes.asScala.filterNot(_.getType == NULL)
@@ -127,9 +128,9 @@ private[sql] object SchemaConverters {
           case Seq(t1) =>
             toSqlTypeHelper(avroSchema.getTypes.get(0), existingRecordNames)
           case Seq(t1, t2) if Set(t1, t2) == Set(INT, LONG) =>
-            SchemaType(LongType, nullable = false)
+            SchemaType(LongType, nullable = false, doc)
           case Seq(t1, t2) if Set(t1, t2) == Set(FLOAT, DOUBLE) =>
-            SchemaType(DoubleType, nullable = false)
+            SchemaType(DoubleType, nullable = false, doc)
           case _ =>
             // Convert complex unions to struct types where field names are member0, member1, etc.
             // This is consistent with the behavior when converting between Avro and Parquet.
@@ -137,10 +138,11 @@ private[sql] object SchemaConverters {
               case (s, i) =>
                 val schemaType = toSqlTypeHelper(s, existingRecordNames)
                 // All fields are nullable because only one of them is set at a time
-                StructField(s"$unionFieldMemberPrefix$i", schemaType.dataType, nullable = true)
+                val metadata = if(schemaType.doc.isDefined) new MetadataBuilder().putString("comment", schemaType.doc.get).build() else Metadata.empty
+                StructField(s"$unionFieldMemberPrefix$i", schemaType.dataType, nullable = true, metadata)
             }
 
-            SchemaType(StructType(fields.toSeq), nullable = false)
+            SchemaType(StructType(fields.toSeq), nullable = false, doc)
         }
 
       case other => throw new IncompatibleSchemaException(s"Unsupported type $other")

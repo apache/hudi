@@ -192,14 +192,17 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
         + "{\"name\":\"uuid\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
         + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"age\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},"
-        + "{\"name\":\"infos\",\"type\":{\"type\":\"array\", \"elementType\":\"string\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"infos\",\"type\":{\"type\":\"array\",\"elementType\":\"string\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_3\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_6\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}";
-    assertEquals(expectedAvroSchemaStr, avroSchemaStr);
+    // Use robust JSON comparison instead of brittle string comparison
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode expectedNode = mapper.readTree(expectedAvroSchemaStr);
+    JsonNode actualNode = mapper.readTree(avroSchemaStr);
+    assertEquals(expectedNode, actualNode, "Schema JSON structure doesn't match");
 
     // validate array field nullable
-    ObjectMapper mapper = new ObjectMapper();
     JsonNode arrayFieldTypeNode = mapper.readTree(avroSchemaStr).get("fields").get(8).get("type");
     assertThat(arrayFieldTypeNode.get("type").asText(), is("array"));
     assertThat(arrayFieldTypeNode.get("containsNull").asBoolean(), is(true));
