@@ -31,6 +31,7 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.commit.BaseJavaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaBucketIndexPartitioner;
 import org.apache.hudi.table.action.commit.JavaUpsertPartitioner;
 import org.apache.hudi.table.action.commit.Partitioner;
 
@@ -64,6 +65,10 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
 
   @Override
   public Partitioner getUpsertPartitioner(WorkloadProfile profile) {
+    // Use bucket index partitioner if bucket index is enabled
+    if (table.getIndex() instanceof org.apache.hudi.index.bucket.HoodieBucketIndex) {
+      return new JavaBucketIndexPartitioner(profile, context, table, config);
+    }
     this.partitioner = (JavaUpsertPartitioner) super.getUpsertPartitioner(profile);
     return this.partitioner;
   }
