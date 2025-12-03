@@ -165,7 +165,7 @@ class TestHoodieWriteHandle {
 
     Map<String, String> existingMetadata = new HashMap<>();
     existingMetadata.put("existing_key", "existing_value");
-    HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record, HoodieOperation.INSERT, Option.of(existingMetadata));
+    HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record, HoodieOperation.INSERT, Option.of(existingMetadata), null, null);
 
     DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "event_time");
 

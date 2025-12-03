@@ -23,6 +23,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.util.Utf8;
@@ -141,7 +143,7 @@ public class TestHoodieWriteStat {
     minMaxValues.forEach(entry -> {
       String colName = targetColNamePrefix + "_" + (finalCounter1.getAndIncrement());
       columnRangeMetadataMap.put(colName, HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get()));
     });
 
     Map<String, HoodieColumnRangeMetadata<Comparable>> clonedInput = new HashMap<>();

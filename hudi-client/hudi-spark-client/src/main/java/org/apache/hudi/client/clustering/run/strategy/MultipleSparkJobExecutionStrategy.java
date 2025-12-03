@@ -19,6 +19,7 @@
 package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -68,8 +69,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.HoodieDataTypeUtils;
-import org.apache.spark.sql.HoodieUnsafeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -109,11 +108,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
         new CustomizedThreadFactory("clustering-job-group", true));
     try {
-      boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true)
-          && HoodieDataTypeUtils.canUseRowWriter(schema, engineContext.hadoopConfiguration());
-      if (canUseRowWriter) {
-        HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(writeConfig.getProps(), schema);
-      }
+      boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true);
       // execute clustering for each group async and collect WriteStatus
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
               clusteringPlan.getInputGroups().stream()
@@ -332,8 +327,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       }
     }).rdd();
 
-    return HoodieUnsafeUtils.createDataFrameFromRDD(((HoodieSparkEngineContext) getEngineContext()).getSqlContext().sparkSession(),
-        internalRowRDD, sparkSchemaWithMetaFields);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getUnsafeUtils()
+        .createDataFrameFromRDD(((HoodieSparkEngineContext) getEngineContext()).getSqlContext().sparkSession(),
+            internalRowRDD, sparkSchemaWithMetaFields);
   }
 
   /**

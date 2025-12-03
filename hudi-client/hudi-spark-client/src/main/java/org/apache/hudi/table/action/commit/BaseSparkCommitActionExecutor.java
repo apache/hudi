@@ -49,9 +49,9 @@ import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.io.CreateHandleFactory;
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -401,8 +401,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       mergeHandle.setPartitionFields(partitionFields);
       mergeHandle.setPartitionValues(partitionValues);
     }
-    if (readerContextFactory != null && mergeHandle instanceof FileGroupReaderBasedMergeHandle) {
-      ((FileGroupReaderBasedMergeHandle) mergeHandle).setReaderContext(readerContextFactory.getContext());
+    if (readerContextFactory != null && mergeHandle instanceof HoodieWriteMergeHandle) {
+      ((HoodieWriteMergeHandle) mergeHandle).setReaderContext(readerContextFactory.getContext());
     }
     return mergeHandle;
   }

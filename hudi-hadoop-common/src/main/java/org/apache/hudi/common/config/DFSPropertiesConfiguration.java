@@ -120,7 +120,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     try {
       conf.addPropsFromFile(DEFAULT_PATH);
     } catch (Exception e) {
-      LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
+      LOG.warn("Cannot load default config file: {}", DEFAULT_PATH, e);
     }
     Option<StoragePath> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent() && !defaultConfPath.get().equals(DEFAULT_PATH)) {
@@ -154,7 +154,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
 
     try {
       if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
-        LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
+        LOG.debug("Properties file {} not found. Ignoring to load props file", filePath);
         return;
       }
     } catch (IOException ioe) {
@@ -231,7 +231,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   private static Option<StoragePath> getConfPathFromEnv() {
     String confDir = System.getenv(CONF_FILE_DIR_ENV_NAME);
     if (confDir == null) {
-      LOG.warn("Cannot find " + CONF_FILE_DIR_ENV_NAME + ", please set it as the dir of " + DEFAULT_PROPERTIES_FILE);
+      LOG.debug("Environment variable " + CONF_FILE_DIR_ENV_NAME + ", not set. If desired, set it to the folder containing: " + DEFAULT_PROPERTIES_FILE);
       return Option.empty();
     }
     if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {

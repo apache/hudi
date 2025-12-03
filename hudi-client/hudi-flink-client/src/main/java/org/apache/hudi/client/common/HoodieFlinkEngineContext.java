@@ -248,7 +248,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
-      return new AvroReaderContextFactory(metaClient);
+      return new AvroReaderContextFactory(metaClient, new TypedProperties());
     }
     return getEngineReaderContextFactory(metaClient);
   }

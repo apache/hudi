@@ -96,7 +96,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.warn("Falling back to key based merge for Read");
+      LOG.debug("Falling back to key based merge for data block");
       fallbackToKeyBasedBuffer();
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
@@ -120,7 +120,6 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           recordMergeMode,
           true,
           recordMerger,
-          orderingFieldNames,
           readerSchema,
           payloadClasses,
           props,
@@ -182,7 +181,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     List<Long> recordPositions = extractRecordPositions(deleteBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.warn("Falling back to key based merge for Read");
+      LOG.debug("Falling back to key based merging for delete block");
       fallbackToKeyBasedBuffer();
       super.processDeleteBlock(deleteBlock);
       return;
@@ -300,7 +299,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
     Roaring64NavigableMap positions = logBlock.getRecordPositions();
     if (positions == null || positions.isEmpty()) {
-      LOG.warn("No record position info is found when attempt to do position based merge.");
+      LOG.info("No record position info is found when attempting to do position based merge.");
       return null;
     }
 
@@ -310,7 +309,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     if (blockPositions.isEmpty()) {
-      LOG.warn("No positions are extracted.");
+      LOG.info("No positions are extracted.");
       return null;
     }
 

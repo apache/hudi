@@ -208,7 +208,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     if (clusteringGroups.isEmpty()) {
-      LOG.warn("No data available to cluster");
+      LOG.info("No data available to cluster");
       return Option.empty();
     }
 

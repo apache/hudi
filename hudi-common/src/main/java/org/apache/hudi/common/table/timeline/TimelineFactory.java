@@ -33,6 +33,8 @@ public abstract class TimelineFactory implements Serializable {
 
   public abstract HoodieArchivedTimeline createArchivedTimeline(HoodieTableMetaClient metaClient, String startTs);
 
+  public abstract HoodieArchivedTimeline createArchivedTimeline(HoodieTableMetaClient metaClient, boolean shouldLoadInstants);
+
   public abstract ArchivedTimelineLoader createArchivedTimelineLoader();
 
   public abstract HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient);
@@ -40,6 +42,4 @@ public abstract class TimelineFactory implements Serializable {
   public abstract HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter);
 
   public abstract CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient);
-
-  public abstract CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient, String eagerInstant);
 }

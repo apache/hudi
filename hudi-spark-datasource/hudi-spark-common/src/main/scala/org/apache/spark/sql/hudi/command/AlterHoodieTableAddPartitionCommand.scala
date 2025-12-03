@@ -22,12 +22,13 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{makePartitionPath, normalizePartitionSpec}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 import scala.util.control.NonFatal
 
@@ -43,7 +44,7 @@ case class AlterHoodieTableAddPartitionCommand(
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
     if (!hoodieCatalogTable.isPartitionedTable) {
-      throw new AnalysisException(s"$tableIdentifier is a non-partitioned table that is not allowed to add partition")
+      throw new HoodieAnalysisException(s"$tableIdentifier is a non-partitioned table that is not allowed to add partition")
     }
 
     val catalog = sparkSession.sessionState.catalog
@@ -52,7 +53,7 @@ case class AlterHoodieTableAddPartitionCommand(
 
     val normalizedSpecs: Seq[Map[String, String]] = partitionSpecsAndLocs.map { case (spec, location) =>
       if (location.isDefined) {
-        throw new AnalysisException(s"Hoodie table does not support specify partition location explicitly")
+        throw new HoodieAnalysisException(s"Hoodie table does not support specify partition location explicitly")
       }
       normalizePartitionSpec(
         spec,
@@ -69,7 +70,7 @@ case class AlterHoodieTableAddPartitionCommand(
       val fullPartitionPath: StoragePath = FSUtils.constructAbsolutePath(basePath, partitionPath)
       val metadata = if (HoodiePartitionMetadata.hasPartitionMetadata(storage, fullPartitionPath)) {
         if (!ifNotExists) {
-          throw new AnalysisException(s"Partition metadata already exists for path: $fullPartitionPath")
+          throw new HoodieAnalysisException(s"Partition metadata already exists for path: $fullPartitionPath")
         }
         None
       } else Some(new HoodiePartitionMetadata(storage, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format))
@@ -85,7 +86,7 @@ case class AlterHoodieTableAddPartitionCommand(
       }
     } catch {
       case NonFatal(e) =>
-        logWarning("Failed to add partitions in external catalog", e)
+        logError("Failed to add partitions in external catalog", e)
     }
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
 

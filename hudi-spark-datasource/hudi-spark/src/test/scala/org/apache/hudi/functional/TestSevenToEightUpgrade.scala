@@ -143,7 +143,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "price",
-      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
       // Ensure MDT compaction does not run before downgrade.
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "100"
     )

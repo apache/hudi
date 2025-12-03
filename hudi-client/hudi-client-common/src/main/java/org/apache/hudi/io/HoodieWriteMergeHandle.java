@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -28,12 +29,15 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -98,9 +102,11 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteMergeHandle.class);
 
+  private final String[] orderingFields;
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
+  protected HoodieReaderContext<T> readerContext;
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -120,6 +126,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt, false);
     populateIncomingRecordsMap(recordItr);
     initMarkerFileAndFileWriter(fileId, partitionPath);
+    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
+    this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
   }
 
   /**
@@ -134,6 +142,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
         !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.keyToNewRecords = keyToNewRecords;
     initMarkerFileAndFileWriter(fileId, this.partitionPath);
+    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
+    this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
   }
 
   /**
@@ -149,6 +159,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                                 String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
+    this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
   }
 
   @Override
@@ -169,7 +180,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
-          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+
+          config, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), taskContextSupplier, getRecordType());
     } catch (IOException io) {
       LOG.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
@@ -236,19 +248,19 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     return keyToNewRecords.isEmpty();
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema) throws IOException {
     boolean isDelete = false;
-    if (combineRecordOpt.isPresent()) {
-      if (oldRecord.getData() != combineRecordOpt.get().getData()) {
-        // the incoming record is chosen
-        isDelete = isDeleteRecord(newRecord);
-      } else {
-        // the incoming record is dropped
-        return false;
+    if (oldRecord.getData() != combineRecord.getData()) {
+      // the incoming record is chosen
+      isDelete = isDeleteRecord(combineRecord);
+      if (!isDelete) {
+        updatedRecordsWritten++;
       }
-      updatedRecordsWritten++;
+    } else {
+      // the incoming record is dropped
+      return false;
     }
-    return writeRecord(newRecord, oldRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+    return writeRecord(newRecord, oldRecord, combineRecord, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
@@ -262,12 +274,12 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
       throws IOException {
-    if (writeRecord(newRecord, null, Option.of(newRecord), schema, prop, isDeleteRecord(newRecord))) {
+    if (writeRecord(newRecord, null, newRecord, schema, prop, isDeleteRecord(newRecord))) {
       insertRecordsWritten++;
     }
   }
 
-  protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
+  protected boolean writeRecord(HoodieRecord<T> newRecord, HoodieRecord combineRecord, Schema schema, Properties prop) throws IOException {
     return writeRecord(newRecord, null, combineRecord, schema, prop, false);
   }
 
@@ -296,7 +308,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
    */
   private boolean writeRecord(HoodieRecord<T> newRecord,
                               @Nullable HoodieRecord<T> oldRecord,
-                              Option<HoodieRecord> combineRecord,
+                              HoodieRecord combineRecord,
                               Schema schema,
                               Properties props,
                               boolean isDelete) {
@@ -308,27 +320,15 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       return false;
     }
     try {
-      if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
-        // Last-minute check.
-        boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
-
-        if (decision) {
-          // CASE (1): Flush the merged record.
-          HoodieKey hoodieKey = newRecord.getKey();
-          if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
-          }
-          writeToFile(hoodieKey, combineRecord.get(), schema, props, preserveMetadata);
-          recordsWritten++;
-        } else {
-          // CASE (2): A delete operation.
-          if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
-          }
-          recordsDeleted++;
+      if (!isDelete && !combineRecord.isDelete(deleteContext, config.getProps())) {
+        // Flush the merged record.
+        HoodieKey hoodieKey = newRecord.getKey();
+        if (isSecondaryIndexStatsStreamingWritesEnabled) {
+          SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
+              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
         }
+        writeToFile(hoodieKey, combineRecord, schema, props, preserveMetadata);
+        recordsWritten++;
       } else {
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
           SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
@@ -371,10 +371,12 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
-        Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
-        Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
-        if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
+        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
+        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
+        BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
+        Schema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
+        HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
+        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
         } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
@@ -407,16 +409,18 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
+  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
       HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
-      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
+      //TODO boundary to follow up in later pr to use HoodieSchema directly
+      fileWriter.write(key.getRecordKey(), populatedRecord, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
+      //TODO boundary to follow up in later pr to use HoodieSchema directly
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
-      fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields);
+      fileWriter.writeWithMetadata(key, record, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), props);
     }
   }
 
@@ -508,5 +512,13 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
               baseFileToMerge.getCommitTime(), oldNumWrites));
     }
+  }
+
+  /**
+   * This is only for spark, the engine context fetched from a serialized hoodie table is always local,
+   * overrides it to spark specific reader context.
+   */
+  public void setReaderContext(HoodieReaderContext<T> readerContext) {
+    this.readerContext = readerContext;
   }
 }

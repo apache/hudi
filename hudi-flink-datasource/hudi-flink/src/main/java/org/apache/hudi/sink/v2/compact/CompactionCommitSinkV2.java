@@ -121,7 +121,7 @@ public class CompactionCommitSinkV2 extends CleanFunctionV2<CompactionCommitEven
     if (event.isFailed()
         || (event.getWriteStatuses() != null
         && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
-      LOG.warn("Receive abnormal CompactionCommitEvent of instant {}, task ID is {},"
+      LOG.warn("Received abnormal CompactionCommitEvent of instant {}, task ID is {},"
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }

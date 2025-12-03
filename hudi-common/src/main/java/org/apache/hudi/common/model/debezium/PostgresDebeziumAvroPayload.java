@@ -108,9 +108,9 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     fields.forEach(field -> {
       // There are only four avro data types that have unconstrained sizes, which are
       // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
-      if (((GenericData.Record) incomingRecord).get(field.name()) != null
+      if (((GenericRecord) incomingRecord).get(field.name()) != null
           && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
-        ((GenericData.Record) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
+        ((GenericRecord) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
       }
     });
   }
@@ -126,8 +126,8 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     return ((field.schema().getType() == Schema.Type.STRING
         || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.STRING)))
         // Check length first as an optimization
-        && ((CharSequence) ((GenericData.Record) incomingRecord).get(field.name())).length() == DEBEZIUM_TOASTED_VALUE.length()
-        && DEBEZIUM_TOASTED_VALUE.equals(((CharSequence) ((GenericData.Record) incomingRecord).get(field.name())).toString()));
+        && ((CharSequence) ((GenericRecord) incomingRecord).get(field.name())).length() == DEBEZIUM_TOASTED_VALUE.length()
+        && DEBEZIUM_TOASTED_VALUE.equals(((CharSequence) ((GenericRecord) incomingRecord).get(field.name())).toString()));
   }
 
   /**

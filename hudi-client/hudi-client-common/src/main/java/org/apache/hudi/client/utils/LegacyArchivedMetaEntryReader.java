@@ -328,7 +328,7 @@ public class LegacyArchivedMetaEntryReader {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting suffix for archived file: " + f.getPath());
+      LOG.warn("error getting suffix for archived file: {}", f.getPath());
     }
     // return default value in case of any errors
     return 0;

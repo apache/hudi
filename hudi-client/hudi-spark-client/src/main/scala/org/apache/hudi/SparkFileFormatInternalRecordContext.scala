@@ -22,7 +22,10 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
+import org.apache.hudi.common.engine.RecordContext
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.DefaultJavaTypeConverter
+
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -30,8 +33,7 @@ import org.apache.spark.sql.hudi.SparkAdapter
 
 import scala.collection.mutable
 
-class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRecordContext(tableConfig) {
+trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContext {
 
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
@@ -63,4 +65,11 @@ class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
     })
     serializer.serialize(record).asInstanceOf[GenericRecord]
   }
+}
+
+object SparkFileFormatInternalRecordContext {
+  private val FIELD_ACCESSOR_INSTANCE = SparkFileFormatInternalRecordContext.apply()
+  def getFieldAccessorInstance: RecordContext[InternalRow] = FIELD_ACCESSOR_INSTANCE
+  def apply(): SparkFileFormatInternalRecordContext = new BaseSparkInternalRecordContext() with SparkFileFormatInternalRecordContext
+  def apply(tableConfig: HoodieTableConfig): SparkFileFormatInternalRecordContext = new BaseSparkInternalRecordContext(tableConfig) with SparkFileFormatInternalRecordContext
 }

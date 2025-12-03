@@ -78,6 +78,19 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
   }
 
+  /**
+   * Creates an archived timeline without loading any instants.
+   * Instants can be loaded later using methods like loadCompletedInstantDetailsInMemory, loadCompactionDetailsInMemory, etc.
+   */
+  public ArchivedTimelineV1(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    this.metaClient = metaClient;
+    if (shouldLoadInstants) {
+      setInstants(this.loadInstants(false));
+    } else {
+      setInstants(new ArrayList<>());
+    }
+  }
+
   private ArchivedTimelineV1(HoodieTableMetaClient metaClient, TimeRangeFilter timeRangeFilter) {
     this(metaClient, timeRangeFilter, null, Option.of(HoodieInstant.State.COMPLETED));
   }
@@ -209,40 +222,43 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   @Override
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+    List<HoodieInstant> loadedInstants = loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
         record -> {
           // Older files don't have action state set.
           Object action = record.get(ACTION_STATE);
           return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
               && (action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
         });
+    appendLoadedInstants(loadedInstants);
   }
 
   @Override
   public void loadCompactionDetailsInMemory(int limit) {
-    loadInstantsWithLimit(limit, true,
+    loadAndCacheInstantsWithLimit(limit, true,
         record -> {
-          Object action = record.get(ACTION_STATE);
+          Object actionState = record.get(ACTION_STATE);
+          // Older files & archivedTimelineV2 don't have action state set.
           return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
-              && (action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
+              && (actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(actionState.toString()));
         });
   }
 
   @Override
   public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
-    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+    List<HoodieInstant> loadedInstants = loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
         record -> {
-          Object action = record.get(ACTION_STATE);
-          return action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+          Object actionState = record.get(ACTION_STATE);
+          return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
         });
+    appendLoadedInstants(loadedInstants);
   }
 
   @Override
   public void loadCompletedInstantDetailsInMemory(int limit) {
-    loadInstantsWithLimit(limit, true,
+    loadAndCacheInstantsWithLimit(limit, true,
         record -> {
-          Object action = record.get(ACTION_STATE);
-          return action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+          Object actionState = record.get(ACTION_STATE);
+          return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
         });
   }
 
@@ -272,15 +288,21 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader);
+        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader, Option.empty());
     return loader.getInstantsInRangeCollected().values()
         .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
   }
 
-  private void loadInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
-    InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(loadInstantDetails, limit);
+  private void loadAndCacheInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
+    InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader);
+        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, Option.of(limit));
+    List<HoodieInstant> collectedInstants = loader.getInstantsInRangeCollected().values()
+        .stream()
+        .flatMap(Collection::stream)
+        .sorted()
+        .collect(Collectors.toList());
+    appendLoadedInstants(collectedInstants);
   }
 
   /**
@@ -300,39 +322,6 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
       if (instant.isPresent()) {
         instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
             .add(instant.get());
-      }
-    }
-
-    public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
-      return instantsInRange;
-    }
-  }
-
-  public class InstantsLoaderWithLimit implements BiConsumer<String, GenericRecord> {
-    private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
-    private final boolean loadInstantDetails;
-    private final int limit;
-    private volatile int loadedCount = 0;
-
-    private InstantsLoaderWithLimit(boolean loadInstantDetails, int limit) {
-      this.loadInstantDetails = loadInstantDetails;
-      this.limit = limit;
-    }
-
-    @Override
-    public void accept(String instantTime, GenericRecord record) {
-      if (loadedCount >= limit) {
-        return;
-      }
-      Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
-      if (instant.isPresent()) {
-        synchronized (this) {
-          if (loadedCount < limit) {
-            instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
-                .add(instant.get());
-            loadedCount++;
-          }
-        }
       }
     }
 

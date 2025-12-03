@@ -37,6 +37,7 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -52,7 +53,6 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -145,7 +145,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       }
       // fallback to loading column ranges from files
       if (isNullOrEmpty(fileInfoList)) {
-        LOG.warn("fallback to loading column ranges from files");
+        LOG.info("fallback to loading column ranges from files");
         fileInfoList = loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable);
       }
     } else {
@@ -172,7 +172,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(pf.getValue().getValue());
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey(), minMaxKeys[0], minMaxKeys[1]));
       } catch (MetadataNotFoundException me) {
-        LOG.warn("Unable to find range metadata in file :" + pf);
+        LOG.warn("Unable to find range metadata in file :{}", pf);
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
       }
     }, Math.max(partitionPathFileIDList.size(), 1));
@@ -231,12 +231,13 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>(fileToColumnStatsMap.size());
 
     for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
+      ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(entry.getValue().getValueType());
       result.add(Pair.of(entry.getKey().getLeft(),
           new BloomIndexFileInfo(
               partitionAndFileNameToFileId.get(entry.getKey()),
               // NOTE: Here we assume that the type of the primary key field is string
-              unwrapAvroValueWrapper(entry.getValue().getMinValue()).toString(),
-              unwrapAvroValueWrapper(entry.getValue().getMaxValue()).toString()
+              valueMetadata.unwrapValue(entry.getValue().getMinValue()).toString(),
+              valueMetadata.unwrapValue(entry.getValue().getMaxValue()).toString()
           )));
     }
 

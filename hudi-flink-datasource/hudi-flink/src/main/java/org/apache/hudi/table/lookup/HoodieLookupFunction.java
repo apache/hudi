@@ -171,15 +171,11 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
         }
         numRetry++;
         long toSleep = numRetry * RETRY_INTERVAL.toMillis();
-        LOG.warn(
-            String.format(
-                "Failed to load table into cache, will retry in %d seconds",
-                toSleep / 1000),
-            e);
+        LOG.info("Failed to load table into cache, will retry in {} seconds", toSleep / 1000, e);
         try {
           Thread.sleep(toSleep);
         } catch (InterruptedException ex) {
-          LOG.warn("Interrupted while waiting to retry failed cache load, aborting");
+          LOG.error("Interrupted while waiting to retry failed cache load, aborting", ex);
           throw new FlinkRuntimeException(ex);
         }
       }

@@ -23,7 +23,6 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,7 +30,10 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -64,10 +66,24 @@ public abstract class FileFormatUtils {
    * @param fileColumnRanges List of column range statistics for each file in a partition
    */
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(String relativePartitionPath,
+                                                                                                 String columnName,
                                                                                                  @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges,
-                                                                                                 Map<String, Schema> colsToIndexSchemaMap) {
+                                                                                                 Map<String, Schema> colsToIndexSchemaMap,
+                                                                                                 HoodieIndexVersion indexVersion) {
 
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
+    if (indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2)) {
+      ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(colsToIndexSchemaMap.get(columnName), indexVersion);
+      return fileColumnRanges.stream()
+          .map(e -> {
+            T minValue = (T) valueMetadata.standardizeJavaTypeAndPromote(e.getMinValue());
+            T maxValue = (T) valueMetadata.standardizeJavaTypeAndPromote(e.getMaxValue());
+            return HoodieColumnRangeMetadata.create(
+                relativePartitionPath, e.getColumnName(), minValue, maxValue, e.getNullCount(), e.getValueCount(), e.getTotalSize(),
+                e.getTotalUncompressedSize(), valueMetadata);
+          }).reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
+    }
+    
     // Let's do one pass and deduce all columns that needs to go through schema evolution.
     Map<String, Set<Class<?>>> schemaSeenForColsToIndex = new HashMap<>();
     Set<String> colsWithSchemaEvolved = new HashSet<>();
@@ -91,7 +107,8 @@ public abstract class FileFormatUtils {
     return fileColumnRanges.stream()
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
-            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
+            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize(),
+            e.getValueMetadata()))
         .reduce((a,b) -> {
           if (colsWithSchemaEvolved.isEmpty() || colsToIndexSchemaMap.isEmpty()
               || a.getMinValue() == null || a.getMaxValue() == null || b.getMinValue() == null || b.getMaxValue() == null
@@ -103,11 +120,11 @@ public abstract class FileFormatUtils {
             HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
-                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize());
+                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize(), a.getValueMetadata());
             HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
-                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize());
+                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize(), b.getValueMetadata());
             return HoodieColumnRangeMetadata.merge(left, right);
           }
         }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
@@ -302,7 +319,8 @@ public abstract class FileFormatUtils {
   @SuppressWarnings("rawtype")
   public abstract List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage,
                                                                                           StoragePath filePath,
-                                                                                          List<String> columnList);
+                                                                                          List<String> columnList,
+                                                                                          HoodieIndexVersion indexVersion);
 
   /**
    * @return The subclass's {@link HoodieFileFormat}.

@@ -230,11 +230,11 @@ public class MarkerHandler extends Handler {
         earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
 
       } catch (HoodieEarlyConflictDetectionException he) {
-        LOG.warn("Detected the write conflict due to a concurrent writer, "
+        LOG.error("Detected the write conflict due to a concurrent writer, "
             + "failing the marker creation as the early conflict detection is enabled", he);
         return finishCreateMarkerFuture(context, markerDir, markerName);
       } catch (Exception e) {
-        LOG.warn("Failed to execute early conflict detection.", e);
+        LOG.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
         // When early conflict detection fails to execute, we still allow the marker creation
         // to continue
         return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);

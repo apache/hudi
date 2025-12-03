@@ -101,8 +101,11 @@ object HoodieProcedures {
       ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
       ,(ShowCleansPartitionMetadataProcedure.NAME, ShowCleansPartitionMetadataProcedure.builder)
       ,(ShowCleansPlanProcedure.NAME, ShowCleansPlanProcedure.builder)
+      ,(ShowTimelineProcedure.NAME, ShowTimelineProcedure.builder)
       ,(SetAuditLockProcedure.NAME, SetAuditLockProcedure.builder)
       ,(ShowAuditLockStatusProcedure.NAME, ShowAuditLockStatusProcedure.builder)
+      ,(ValidateAuditLockProcedure.NAME, ValidateAuditLockProcedure.builder)
+      ,(CleanupAuditLockProcedure.NAME, CleanupAuditLockProcedure.builder)
     )
   }
 }

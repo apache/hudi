@@ -131,7 +131,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
           return true;
         }
       } catch (NumberFormatException e) {
-        LOG.warn("File is not bucket file");
+        LOG.warn("File is not bucket file {}", fileName);
       }
     }
     return false;

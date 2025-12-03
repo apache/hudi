@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.1.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -86,6 +86,7 @@
                   <include>org.apache.parquet:parquet-format-structures</include>
                   <include>org.apache.parquet:parquet-hadoop</include>
                   <include>org.apache.parquet:parquet-jackson</include>
+                  <include>org.apache.parquet:parquet-format</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
                   <!-- Kryo -->
@@ -131,6 +132,8 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>META-INF/versions/21/**</exclude>
+                    <exclude>META-INF/versions/22/**</exclude>
                     <exclude>**/*.proto</exclude>
                   </excludes>
                 </filter>

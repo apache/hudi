@@ -36,7 +36,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
@@ -181,7 +181,7 @@ public class SchemaEvolutionContext {
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
-      LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit) split).getPath()), e);
+      LOG.error("Not a valid hoodie table, table path: {}", ((FileSplit) split).getPath(), e);
       return null;
     }
   }
@@ -194,7 +194,7 @@ public class SchemaEvolutionContext {
    */
   public void doEvolutionForRealtimeInputFormat(AbstractRealtimeRecordReader realtimeRecordReader) throws Exception {
     if (!(split instanceof RealtimeSplit)) {
-      LOG.warn("expect realtime split for mor table, but find other type split {}", split);
+      LOG.warn("Expected realtime split for mor table. Found split: {}", split);
       return;
     }
     if (internalSchemaOption.isPresent()) {
@@ -206,12 +206,12 @@ public class SchemaEvolutionContext {
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
           : new ArrayList<>();
-      Schema writerSchema = AvroInternalSchemaConverter.convert(internalSchemaOption.get(), tableAvroSchema.getName());
+      Schema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableAvroSchema.getName()).toAvroSchema();
       writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
       Map<String, Schema.Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
       // we should get HoodieParquetInputFormat#HIVE_TMP_COLUMNS,since serdeConstants#LIST_COLUMNS maybe change by HoodieParquetInputFormat#setColumnNameList
       Schema hiveSchema = realtimeRecordReader.constructHiveOrderedSchema(writerSchema, schemaFieldsMap, job.get(HIVE_TMP_COLUMNS));
-      Schema readerSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName());
+      Schema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName()).toAvroSchema();
       // setUp evolution schema
       realtimeRecordReader.setWriterSchema(writerSchema);
       realtimeRecordReader.setReaderSchema(readerSchema);
@@ -319,13 +319,19 @@ public class SchemaEvolutionContext {
       case DOUBLE:
       case DATE:
       case TIMESTAMP:
+      case TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+      case LOCAL_TIMESTAMP_MILLIS:
       case STRING:
       case UUID:
       case FIXED:
       case BINARY:
       case DECIMAL:
+      case DECIMAL_BYTES:
+      case DECIMAL_FIXED:
         return typeInfo;
       case TIME:
+      case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
         LOG.error("cannot convert unknown type: {} to Hive", type);

@@ -122,7 +122,7 @@ public class HoodieTestUtils {
     record.put("time", time);
     record.put("number", number);
     String partition = partitionPath.orElseGet(() -> extractPartitionFromTimeField(time));
-    return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partition), record, null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")));
+    return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partition), record, null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")), null, null);
   }
 
   public static String extractPartitionFromTimeField(String timeField) {

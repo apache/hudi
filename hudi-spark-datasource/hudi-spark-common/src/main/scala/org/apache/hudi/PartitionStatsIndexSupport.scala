@@ -19,22 +19,21 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.{getValidIndexedColumns, PARTITION_NAME_COLUMN_STATS}
+import org.apache.hudi.util.{JFunction, Lazy}
 
+import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
@@ -45,16 +44,18 @@ import scala.collection.JavaConverters._
 
 class PartitionStatsIndexSupport(spark: SparkSession,
                                  tableSchema: StructType,
+                                 avroSchema: Schema,
                                  @transient metadataConfig: HoodieMetadataConfig,
                                  @transient metaClient: HoodieTableMetaClient,
                                  allowCaching: Boolean = false)
-  extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) with Logging {
+  extends ColumnStatsIndexSupport(spark, tableSchema, avroSchema, metadataConfig, metaClient, allowCaching) with Logging with SparkAdapterSupport {
 
   override def getIndexName: String = PartitionStatsIndexSupport.INDEX_NAME
 
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled &&
-      metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS)
+      metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS) &&
+      metaClient.getIndexMetadata.isPresent
   }
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
@@ -90,9 +91,14 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     if (isIndexAvailable && queryFilters.nonEmpty) {
       // Filter out sql queries. Partition stats only supports simple queries on field attribute without any operation on the field
       val nonSqlFilters = filterNonSqlExpressions(queryFilters)
-      val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+      val filteredIndexedCols = {
+        val indexDefinition = metaClient.getIndexMetadata.get()
+          .getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
+
+        getValidIndexedColumns(indexDefinition, avroSchema, metaClient.getTableConfig).asScala.toSeq
+      }
       // Filter out queries involving null and value count checks
-      val filteredQueryFilters: Seq[Expression] = filterExpressionsExcludingNullAndValue(nonSqlFilters, indexedCols)
+      val filteredQueryFilters: Seq[Expression] = filterExpressionsExcludingNullAndValue(nonSqlFilters, filteredIndexedCols)
       lazy val queryReferencedColumns = collectReferencedColumns(spark, filteredQueryFilters, tableSchema)
 
       if (filteredQueryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
@@ -111,12 +117,12 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                 //       column in a filter does not have the stats available, by making sure such a
                 //       filter does not prune any partition.
                 // to be fixed. HUDI-8836.
-                val indexFilter = filteredQueryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
+                val indexFilter = filteredQueryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = filteredIndexedCols)).reduce(And)
                 if (indexFilter.equals(TrueLiteral)) {
                   // if there are any non indexed cols or we can't translate source expr, we cannot prune partitions based on col stats lookup.
                   Some(allPartitions)
                 } else {
-                  Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                  Some(transposedPartitionStatsDF.where(sparkAdapter.createColumnFromExpression(indexFilter))
                     .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                     .collect()
                     .map(_.getString(0))

@@ -114,6 +114,22 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     clearState();
   }
 
+  /**
+   * Helper method to append loaded instants to the timeline, filtering out duplicates.
+   * This is used by both time-range and limit-based loading to avoid code duplication.
+   *
+   * @param loadedInstants The list of instants that were loaded to readCommit field of timeline
+   */
+  protected void appendLoadedInstants(List<HoodieInstant> loadedInstants) {
+    List<HoodieInstant> existingInstants = getInstants();
+    List<HoodieInstant> newInstants = loadedInstants.stream()
+        .filter(instant -> !existingInstants.contains(instant))
+        .collect(Collectors.toList());
+    if (!newInstants.isEmpty()) {
+      appendInstants(newInstants);
+    }
+  }
+
   protected List<HoodieInstant> getInstantsFromFileSystem(HoodieTableMetaClient metaClient, Set<String> includedExtensions, boolean applyLayoutFilters) {
     try {
       return metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(), includedExtensions, applyLayoutFilters);
@@ -263,7 +279,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInClosedRange(s.getCompletionTime(), startTs, endTs)),
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInRange(s.getCompletionTime(), startTs, endTs)),
         getInstantReader());
   }
 

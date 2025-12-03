@@ -84,7 +84,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -105,7 +105,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -113,14 +113,11 @@ trait ProvidesHoodieConfig extends Logging {
    * Deduce the sql write operation for INSERT_INTO
    */
   private def deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
-                                                     shouldAutoKeyGen: Boolean, preCombineField: String,
-                                                     sparkSqlInsertIntoOperationSet: Boolean, sparkSqlInsertIntoOperation: String): String = {
+                                                     sparkSqlInsertIntoOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
       INSERT_OVERWRITE_OPERATION_OPT_VAL
-    } else if (!sparkSqlInsertIntoOperationSet && !shouldAutoKeyGen && preCombineField.nonEmpty) {
-      UPSERT_OPERATION_OPT_VAL
     } else {
       sparkSqlInsertIntoOperation
     }
@@ -182,7 +179,7 @@ trait ProvidesHoodieConfig extends Logging {
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
@@ -215,7 +212,8 @@ trait ProvidesHoodieConfig extends Logging {
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val combineBeforeInsert = !hoodieCatalogTable.orderingFields.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
+    val combineBeforeInsert = combinedOpts.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
 
     /*
      * The sql write operation has higher precedence than the legacy insert mode.
@@ -231,8 +229,7 @@ trait ProvidesHoodieConfig extends Logging {
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, shouldAutoKeyGen)
       } else {
-        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable,
-          shouldAutoKeyGen, orderingFieldsStr, sparkSqlInsertIntoOperationSet, sparkSqlInsertIntoOperation)
+        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable, sparkSqlInsertIntoOperation)
       }
     )
 
@@ -306,7 +303,7 @@ trait ProvidesHoodieConfig extends Logging {
         keyGeneratorClassName, partitionFieldsStr, hoodieCatalogTable)
     ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -343,7 +340,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = extraOptions ++ Map(
       "path" -> catalogTable.tableLocation
     )
-    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
     val operation = combinedOpts.getOrElse(OPERATION.key, null)
     val isOverwriteOperation = operation != null &&
@@ -410,7 +407,7 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 
@@ -438,7 +435,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOptsForDelete(hoodieCatalogTable)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -446,7 +443,7 @@ trait ProvidesHoodieConfig extends Logging {
                           hoodieCatalogTable: HoodieCatalogTable,
                           tableConfig: HoodieTableConfig,
                           extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val props = toProperties(combinedOpts)
 

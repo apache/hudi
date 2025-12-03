@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieRecordCreationException;
@@ -108,7 +109,7 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
       doNothing().when(errorTableWriter.get()).addErrorEvents(errorEventCaptor.capture());
     }
     Option<JavaRDD<HoodieRecord>> recordOpt = HoodieStreamerUtils.createHoodieRecords(cfg, props, Option.of(recordRdd),
-        new SimpleSchemaProvider(jsc, schema, props), recordType, false, "000", errorTableWriter);
+        new SimpleSchemaProvider(jsc, schema, props), recordType, false, "000", errorTableWriter, new HoodieTableConfig());
 
     if (errorTableWriter.isPresent()) {
       assertEquals(0, errorEventCaptor.getValue().collect().size());
@@ -153,7 +154,7 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
       doNothing().when(errorTableWriter.get()).addErrorEvents(errorEventCaptor.capture());
     }
     Option<JavaRDD<HoodieRecord>> records = HoodieStreamerUtils.createHoodieRecords(cfg, props, Option.of(recordRdd),
-        schemaProvider, recordType, false, "000", errorTableWriter);
+        schemaProvider, recordType, false, "000", errorTableWriter, new HoodieTableConfig());
     assertTrue(records.isPresent());
 
     if (enableErrorTableWriter) {

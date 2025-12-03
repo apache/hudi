@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -72,7 +73,17 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
-    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer);
+    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
+  }
+
+  @Override
+  public void loadInstants(HoodieTableMetaClient metaClient,
+                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                           HoodieArchivedTimeline.LoadMode loadMode,
+                           Function<GenericRecord, Boolean> commitsFilter,
+                           BiConsumer<String, GenericRecord> recordConsumer,
+                           Option<Integer> limit) {
+    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
   }
 
   public void loadInstants(HoodieTableMetaClient metaClient,
@@ -80,8 +91,12 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
-                           BiConsumer<String, GenericRecord> recordConsumer) {
+                           BiConsumer<String, GenericRecord> recordConsumer,
+                           Option<Integer> limit) {
     Set<String> instantsInRange = new HashSet<>();
+    AtomicInteger loadedCount = new AtomicInteger(0);
+    boolean hasLimit = limit.isPresent() && limit.get() > 0;
+    
     try {
       // List all files
       List<StoragePathInfo> entryList = metaClient.getStorage().globEntries(
@@ -91,6 +106,10 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
+        if (hasLimit && loadedCount.get() >= limit.get()) {
+          break;
+        }
+        
         if (logFileFilter.isPresent() && !logFileFilter.get().shouldLoadFile(fs)) {
           continue;
         }
@@ -99,7 +118,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
             new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
-          while (reader.hasNext()) {
+          while (reader.hasNext() && (!hasLimit || loadedCount.get() < limit.get())) {
             HoodieLogBlock block = reader.next();
             if (block instanceof HoodieAvroDataBlock) {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
@@ -111,10 +130,16 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
+                      if (hasLimit && loadedCount.get() >= limit.get()) {
+                        return;
+                      }
                       String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
                       if (filter == null || filter.isInRange(instantTime)) {
-                        instantsInRange.add(instantTime);
+                        boolean isNewInstant = instantsInRange.add(instantTime);
                         recordConsumer.accept(instantTime, r);
+                        if (hasLimit && isNewInstant) {
+                          loadedCount.incrementAndGet();
+                        }
                       }
                     });
               }
@@ -139,7 +164,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
               HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadataLegacy(FileIOUtils.readDataFromPath(storage, planPath).get(), HoodieMergeArchiveFilePlan.class);
               String mergedArchiveFileName = plan.getMergedArchiveFileName();
               if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
-                LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");
+                LOG.debug("Catch exception because of reading uncompleted merging archive file {}. Ignore it here.", mergedArchiveFileName);
                 continue;
               }
             }
@@ -174,7 +199,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
         }
       } catch (NumberFormatException e) {
         // log and ignore any format warnings
-        LOG.warn("error getting suffix for archived file: " + f.getPath());
+        LOG.warn("error getting suffix for archived file: {}", f.getPath());
       }
 
       // return default value in case of any errors

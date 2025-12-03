@@ -46,7 +46,7 @@ import org.apache.spark.unsafe.types.UTF8String;
  *   allow in-place updates due to its memory layout)</li>
  * </ul>
  */
-public class HoodieInternalRow extends InternalRow {
+public abstract class HoodieInternalRow extends InternalRow {
 
   /**
    * Collection of meta-fields as defined by {@link HoodieRecord#HOODIE_META_COLUMNS}
@@ -56,32 +56,13 @@ public class HoodieInternalRow extends InternalRow {
    *       can be updated (for ex, {@link UnsafeRow} doesn't support mutations due to
    *       its memory layout, as it persists field offsets)
    */
-  private final UTF8String[] metaFields;
-  private final InternalRow sourceRow;
+  protected final UTF8String[] metaFields;
+  protected final InternalRow sourceRow;
 
   /**
    * Specifies whether source {@link #sourceRow} contains meta-fields
    */
-  private final boolean sourceContainsMetaFields;
-
-  public HoodieInternalRow(UTF8String commitTime,
-                           UTF8String commitSeqNumber,
-                           UTF8String recordKey,
-                           UTF8String partitionPath,
-                           UTF8String fileName,
-                           InternalRow sourceRow,
-                           boolean sourceContainsMetaFields) {
-    this.metaFields = new UTF8String[] {
-        commitTime,
-        commitSeqNumber,
-        recordKey,
-        partitionPath,
-        fileName
-    };
-
-    this.sourceRow = sourceRow;
-    this.sourceContainsMetaFields = sourceContainsMetaFields;
-  }
+  protected final boolean sourceContainsMetaFields;
 
   public HoodieInternalRow(UTF8String[] metaFields,
                            InternalRow sourceRow,
@@ -228,16 +209,7 @@ public class HoodieInternalRow extends InternalRow {
     return sourceRow.getMap(rebaseOrdinal(ordinal));
   }
 
-  @Override
-  public InternalRow copy() {
-    UTF8String[] copyMetaFields = new UTF8String[metaFields.length];
-    for (int i = 0; i < metaFields.length; i++) {
-      copyMetaFields[i] = metaFields[i] != null ? metaFields[i].copy() : null;
-    }
-    return new HoodieInternalRow(copyMetaFields, sourceRow == null ? null : sourceRow.copy(), sourceContainsMetaFields);
-  }
-
-  private int rebaseOrdinal(int ordinal) {
+  protected int rebaseOrdinal(int ordinal) {
     // NOTE: In cases when source row does not contain meta fields, we will have to
     //       rebase ordinal onto its indexes
     return sourceContainsMetaFields ? ordinal : ordinal - metaFields.length;
@@ -249,7 +221,7 @@ public class HoodieInternalRow extends InternalRow {
     }
   }
 
-  private void ruleOutMetaFieldsAccess(int ordinal, Class<?> expectedDataType) {
+  protected void ruleOutMetaFieldsAccess(int ordinal, Class<?> expectedDataType) {
     if (ordinal < metaFields.length) {
       throw new ClassCastException(String.format("Can not cast meta-field of type UTF8String at (%d) as %s", ordinal, expectedDataType.getName()));
     }

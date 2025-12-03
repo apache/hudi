@@ -20,8 +20,8 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.CollectionUtils;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -29,18 +29,18 @@ import java.util.Properties;
 public interface HoodieFileWriter extends AutoCloseable {
   boolean canWrite();
 
-  void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;
+  void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException;
 
-  void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException;
+  void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException;
 
   void close() throws IOException;
 
-  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema) throws IOException {
-    writeWithMetadata(key, record, schema, new Properties());
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema) throws IOException {
+    writeWithMetadata(key, record, schema, CollectionUtils.emptyProps());
   }
 
-  default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
-    write(recordKey, record, schema, new Properties());
+  default void write(String recordKey, HoodieRecord record, HoodieSchema schema) throws IOException {
+    write(recordKey, record, schema, CollectionUtils.emptyProps());
   }
 
   /**

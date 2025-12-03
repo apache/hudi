@@ -79,7 +79,7 @@ public class MultiTableServiceUtils {
               return true;
             } else {
               // Log the wrong path in console.
-              LOG.warn("Hoodie table not found in path {}, skip", tablePath);
+              LOG.info("Hoodie table not found in path {}, skip", tablePath);
               return false;
             }
           }).collect(Collectors.toList());

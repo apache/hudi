@@ -168,7 +168,7 @@ public class CloudObjectsSelectorCommon {
       boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
       return exists ? Option.of(filePathUrl) : Option.empty();
     } catch (Exception exception) {
-      LOG.warn(String.format("Failed to generate path to cloud file %s", filePath), exception);
+      LOG.error("Failed to generate path to cloud file {}", filePath, exception);
       throw new HoodieException(String.format("Failed to generate path to cloud file %s", filePath), exception);
     }
   }

@@ -54,6 +54,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -257,6 +258,37 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation(KeyGeneratorType.class,
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
+
+  public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_NEW_ENCODING = ConfigProperty
+      .key("hoodie.write.complex.keygen.new.encoding")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
+      .withDocumentation("This config only takes effect for writing table version 8 and below. "
+          + "If set to false, the record key field name is encoded and prepended "
+          + "in the case where a single record key field is used in the complex key generator, "
+          + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
+          + "`<field_name>:<field_value>`, which conforms to the behavior "
+          + "in 0.14.0 release and older. If set to true, the record key field name is not "
+          + "encoded under the same case in the complex key generator, i.e., record keys stored "
+          + "in _hoodie_record_key meta field is in the format of `<field_value>`, "
+          + "which conforms to the behavior in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases.");
+
+  public static final ConfigProperty<Boolean> ENABLE_COMPLEX_KEYGEN_VALIDATION = ConfigProperty
+      .key("hoodie.write.complex.keygen.validation.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
+      .withDocumentation("This config only takes effect for writing table version 8 and below, "
+          + "upgrade or downgrade. If set to true, the writer enables the validation on whether the "
+          + "table uses the complex key generator with a single record key field, which can be affected "
+          + "by a breaking change in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases, causing key "
+          + "encoding change and potential duplicates in the table. The validation fails the "
+          + "pipeline if the table meets the condition for the user to take proper action. "
+          + "The user can turn this validation off by setting the config to false, after "
+          + "evaluating the table and situation and doing table repair if needed.");
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
@@ -1500,6 +1532,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
   }
 
+  public boolean enableComplexKeygenValidation() {
+    return getBoolean(ENABLE_COMPLEX_KEYGEN_VALIDATION);
+  }
+
   public boolean shouldFailOnDuplicateDataFileDetection() {
     return getBoolean(FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION);
   }
@@ -1591,6 +1627,12 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isEmbeddedTimelineServerReuseEnabled() {
     return getBoolean(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED);
+  }
+
+  public boolean isRemoteViewStorageType() {
+    FileSystemViewStorageType storageType = getViewStorageConfig().getStorageType();
+    return storageType == FileSystemViewStorageType.REMOTE_ONLY
+        || storageType == FileSystemViewStorageType.REMOTE_FIRST;
   }
 
   public int getEmbeddedTimelineServerPort() {
@@ -2099,28 +2141,25 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
-    if (isMetadataColumnStatsIndexEnabled()) {
-      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
-    }
-    return false;
+    return isMetadataColumnStatsIndexEnabled();
   }
 
   /**
-   * Determines if the record index is enabled.
+   * Determines if the global record index is enabled.
    *
-   * <p>The record index is enabled if the record index is enabled in the metadata configuration.
+   * <p>The global record index is enabled if the record index is enabled in the metadata configuration.
    *
    * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
    * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the record index is enabled, {@code false} otherwise.
    */
-  public boolean isRecordIndexEnabled() {
-    return metadataConfig.isRecordIndexEnabled();
+  public boolean isGlobalRecordLevelIndexEnabled() {
+    return metadataConfig.isGlobalRecordLevelIndexEnabled();
   }
 
-  public boolean isPartitionedRecordIndexEnabled() {
-    return metadataConfig.isPartitionedRecordIndexEnabled();
+  public boolean isRecordLevelIndexEnabled() {
+    return metadataConfig.isRecordLevelIndexEnabled();
   }
 
   public int getPartitionStatsIndexParallelism() {
@@ -2644,20 +2683,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
   }
 
-  public int getRecordIndexMinFileGroupCount() {
-    return metadataConfig.getRecordIndexMinFileGroupCount();
+  public int getGlobalRecordLevelIndexMinFileGroupCount() {
+    return metadataConfig.getGlobalRecordLevelIndexMinFileGroupCount();
   }
 
-  public int getRecordIndexMaxFileGroupCount() {
-    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  public int getGlobalRecordLevelIndexMaxFileGroupCount() {
+    return metadataConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
   }
 
-  public int getPartitionedRecordIndexMinFileGroupCount() {
-    return metadataConfig.getPartitionedRecordIndexMinFileGroupCount();
+  public int getRecordLevelIndexMinFileGroupCount() {
+    return metadataConfig.getRecordLevelIndexMinFileGroupCount();
   }
 
-  public int getPartitionedRecordIndexMaxFileGroupCount() {
-    return metadataConfig.getPartitionedRecordIndexMaxFileGroupCount();
+  public int getRecordLevelIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordLevelIndexMaxFileGroupCount();
   }
 
   public float getRecordIndexGrowthFactor() {
@@ -3117,6 +3156,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withComplexKeygenValidation(boolean enableComplexKeygenValidation) {
+      writeConfig.setValue(ENABLE_COMPLEX_KEYGEN_VALIDATION, String.valueOf(enableComplexKeygenValidation));
+      return this;
+    }
+
     public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
       writeConfig.setValue(WRITE_BUFFER_LIMIT_BYTES_VALUE, String.valueOf(writeBufferLimit));
       return this;
@@ -3561,8 +3605,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       if (writeConfig.isAutoAdjustLockConfigs() && writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
         if (writeConfig.getLockProviderClass() != null && !writeConfig.getLockProviderClass().equals(InProcessLockProvider.class.getCanonicalName())) {
           // add logs only when explicitly overridden by the user.
-          LOG.warn(String.format("For a single writer mode, overriding lock provider class (%s) to %s. So, user configured lock provider %s may not take effect",
-              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass()));
+          LOG.warn("For a single writer mode, overriding lock provider class ({}) to {}. So, user configured lock provider {} may not take effect",
+              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass());
           writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
               InProcessLockProvider.class.getName());
         }

@@ -22,10 +22,10 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,6 +34,10 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -43,8 +47,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.column.statistics.Statistics;
+import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -83,6 +87,9 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_BLOCK_SI
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS;
 
 /**
  * Utility functions involving with parquet.
@@ -106,12 +113,20 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   public static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath) {
+    return readMetadata(storage, parquetFilePath, NO_FILTER);
+  }
+
+  public static ParquetMetadata readFileMetadataOnly(HoodieStorage storage, StoragePath parquetFilePath) {
+    return readMetadata(storage, parquetFilePath, SKIP_ROW_GROUPS);
+  }
+
+  private static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath, ParquetMetadataConverter.MetadataFilter metadataFilter) {
     Path parquetFileHadoopPath = new Path(parquetFilePath.toUri());
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
       footer = ParquetFileReader.readFooter(storage.newInstance(
-          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
+          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath, metadataFilter);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
@@ -230,7 +245,7 @@ public class ParquetUtils extends FileFormatUtils {
    * Get the schema of the given parquet file.
    */
   public MessageType readSchema(HoodieStorage storage, StoragePath parquetFilePath) {
-    return readMetadata(storage, parquetFilePath).getFileMetaData().getSchema();
+    return readFileMetadataOnly(storage, parquetFilePath).getFileMetaData().getSchema();
   }
   
   /**
@@ -243,7 +258,7 @@ public class ParquetUtils extends FileFormatUtils {
       MessageType schema = parquetUtils.readSchema(storage, parquetFilePath);
       return schema.hashCode();
     } catch (Exception e) {
-      LOG.warn("Failed to read schema hash from file: " + parquetFilePath, e);
+      LOG.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
       return 0;
     }
   }
@@ -252,7 +267,7 @@ public class ParquetUtils extends FileFormatUtils {
   public Map<String, String> readFooter(HoodieStorage storage, boolean required,
                                         StoragePath filePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
-    ParquetMetadata footer = readMetadata(storage, filePath);
+    ParquetMetadata footer = readFileMetadataOnly(storage, filePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
     for (String footerName : footerNames) {
       if (metadata.containsKey(footerName)) {
@@ -268,42 +283,47 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readSchema(storage, filePath);
-    return new AvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
+    return getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
   @Override
   public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage,
                                                                                  StoragePath filePath,
-                                                                                 List<String> columnList) {
+                                                                                 List<String> columnList,
+                                                                                 HoodieIndexVersion indexVersion) {
     ParquetMetadata metadata = readMetadata(storage, filePath);
-    return readColumnStatsFromMetadata(metadata, filePath.getName(), Option.of(columnList));
+    return readColumnStatsFromMetadata(metadata, filePath.getName(), Option.of(columnList), indexVersion);
   }
 
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(ParquetMetadata metadata, String filePath, Option<List<String>> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(ParquetMetadata metadata, String filePath, Option<List<String>> columnList, HoodieIndexVersion indexVersion) {
     // Collect stats from all individual Parquet blocks
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         metadata.getBlocks().stream().sequential().flatMap(blockMetaData ->
             blockMetaData.getColumns().stream()
-                    .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
-                    .map(columnChunkMetaData -> {
-                      Statistics stats = columnChunkMetaData.getStatistics();
-                      return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
-                          filePath,
-                          columnChunkMetaData.getPath().toDotString(),
-                          convertToNativeJavaType(
-                              columnChunkMetaData.getPrimitiveType(),
-                              stats.genericGetMin()),
-                          convertToNativeJavaType(
-                              columnChunkMetaData.getPrimitiveType(),
-                              stats.genericGetMax()),
-                          // NOTE: In case when column contains only nulls Parquet won't be creating
-                          //       stats for it instead returning stubbed (empty) object. In that case
-                          //       we have to equate number of nulls to the value count ourselves
-                          stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
-                          columnChunkMetaData.getValueCount(),
-                          columnChunkMetaData.getTotalSize(),
-                          columnChunkMetaData.getTotalUncompressedSize());
-                    })
+                .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
+                .map(columnChunkMetaData -> {
+                  Statistics stats = columnChunkMetaData.getStatistics();
+                  ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
+                  return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
+                      filePath,
+                      columnChunkMetaData.getPath().toDotString(),
+                      convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMin(),
+                          valueMetadata),
+                      convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMax(),
+                          valueMetadata),
+                      // NOTE: In case when column contains only nulls Parquet won't be creating
+                      //       stats for it instead returning stubbed (empty) object. In that case
+                      //       we have to equate number of nulls to the value count ourselves
+                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+                      columnChunkMetaData.getValueCount(),
+                      columnChunkMetaData.getTotalSize(),
+                      columnChunkMetaData.getTotalUncompressedSize(),
+                      valueMetadata);
+                })
         );
 
     return mergeColumnStats(hoodieColumnRangeMetadataStream);
@@ -391,11 +411,11 @@ public class ParquetUtils extends FileFormatUtils {
 
   @Override
   public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
-                                           List<HoodieRecord> records,
-                                           Schema writerSchema,
-                                           Schema readerSchema,
-                                           String keyFieldName,
-                                           Map<String, String> paramsMap) throws IOException {
+                                                          List<HoodieRecord> records,
+                                                          Schema writerSchema,
+                                                          Schema readerSchema,
+                                                          String keyFieldName,
+                                                          Map<String, String> paramsMap) throws IOException {
     if (records.size() == 0) {
       return new ByteArrayOutputStream(0);
     }
@@ -406,12 +426,15 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(writerSchema);
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
+        //TODO boundary to revisit in follow up to use HoodieSchema directly
+        HoodieFileFormat.PARQUET, outputStream, storage, config, schema, recordType)) {
       for (HoodieRecord<?> record : records) {
         String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-        parquetWriter.write(recordKey, record, writerSchema);
+        parquetWriter.write(recordKey, record, schema);
       }
       outputStream.flush();
     }
@@ -433,12 +456,13 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
 
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(writerSchema);
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
+        HoodieFileFormat.PARQUET, outputStream, storage, config, schema, recordType);
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
       String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-      parquetWriter.write(recordKey, record, writerSchema);
+      parquetWriter.write(recordKey, record, schema);
     }
     outputStream.flush();
     parquetWriter.close();
@@ -473,9 +497,13 @@ public class ParquetUtils extends FileFormatUtils {
         .reduce(HoodieColumnRangeMetadata::merge).get();
   }
 
-  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {
+  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val, ValueMetadata valueMetadata) {
     if (val == null) {
       return null;
+    }
+
+    if (valueMetadata.getValueType() != ValueType.V1) {
+      return valueMetadata.standardizeJavaTypeAndPromote(val);
     }
 
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {

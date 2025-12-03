@@ -52,7 +52,7 @@ public class StorageLockProviderAuditService implements AuditService {
    */
   public static String getAuditConfigPath(String basePath) {
     String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
-    return String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+    return new StoragePath(lockFolderPath, AUDIT_CONFIG_FILE_NAME).toString();
   }
   
   /**
@@ -63,7 +63,7 @@ public class StorageLockProviderAuditService implements AuditService {
    */
   public static String getAuditFolderPath(String basePath) {
     String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
-    return String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
+    return new StoragePath(lockFolderPath, AUDIT_FOLDER_NAME).toString();
   }
   
   private final String ownerId;
@@ -100,10 +100,7 @@ public class StorageLockProviderAuditService implements AuditService {
     
     // Generate audit file path: <txn-start>_<full-owner-id>.jsonl
     String filename = String.format("%d_%s.jsonl", transactionStartTime, ownerId);
-    this.auditFilePath = String.format("%s%s%s",
-        getAuditFolderPath(basePath),
-        StoragePath.SEPARATOR,
-        filename);
+    this.auditFilePath = new StoragePath(getAuditFolderPath(basePath), filename).toString();
     
     LOG.debug("Initialized audit service for transaction starting at {} with file: {}", 
         transactionStartTime, auditFilePath);

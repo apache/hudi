@@ -178,19 +178,19 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
       try {
         // if no heartbeat, then ignore this instant
         if (!HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), metaClient.getBasePath().toString(), instant.requestedTime())) {
-          LOG.info("Ignoring instant " + instant + " as no heartbeat found");
+          LOG.info("Ignoring instant {} as no heartbeat found", instant);
           return true;
         }
         // if heartbeat exists, but expired, then ignore this instant
         if (table.getConfig().getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instant.requestedTime())) {
-          LOG.info("Ignoring instant " + instant + " as heartbeat expired");
+          LOG.info("Ignoring instant {} as heartbeat expired", instant);
           return true;
         }
       } catch (IOException e) {
         throw new HoodieIOException("Unable to check if heartbeat expired for instant " + instant, e);
       }
       try {
-        LOG.warn("instant not completed, reloading timeline " + instant);
+        LOG.info("instant not completed, reloading timeline {}", instant);
         reloadTimelineWithWait(instant);
       } catch (InterruptedException e) {
         throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);

@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -51,7 +53,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,10 +126,10 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   @Override
   protected long analyzeSingleFile(String filePath) {
     if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      return SparkBasedReader.readParquet(new SparkSession(jsc.sc()), Arrays.asList(filePath),
+      return SparkBasedReader.readParquet(SQLContext.getOrCreate(jsc.sc()), Arrays.asList(filePath),
           Option.empty(), Option.empty()).count();
     } else if (filePath.endsWith(HoodieFileFormat.ORC.getFileExtension())) {
-      return SparkBasedReader.readOrc(new SparkSession(jsc.sc()), Arrays.asList(filePath),
+      return SparkBasedReader.readOrc(SQLContext.getOrCreate(jsc.sc()), Arrays.asList(filePath),
           Option.empty(), Option.empty()).count();
     }
     throw new UnsupportedOperationException("Format for " + filePath + " is not supported yet.");
@@ -272,7 +274,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   private Iterator<IndexedRecord> readColumnarOrLogFiles(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
       // Read the base files using the latest writer schema.
-      Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
+      HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(new HoodieSchema.Parser().parse(schemaStr), false);
       HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieIOFactory.getIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(

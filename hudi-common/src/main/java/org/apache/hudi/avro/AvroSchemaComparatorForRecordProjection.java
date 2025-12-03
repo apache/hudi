@@ -23,7 +23,7 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 
 public class AvroSchemaComparatorForRecordProjection extends AvroSchemaComparatorForSchemaEvolution {
 
@@ -41,7 +41,7 @@ public class AvroSchemaComparatorForRecordProjection extends AvroSchemaComparato
     if (s1 == null || s2 == null) {
       return false;
     }
-    return super.schemaEqualsInternal(resolveNullableSchema(s1), resolveNullableSchema(s2));
+    return super.schemaEqualsInternal(getNonNullTypeFromUnion(s1), getNonNullTypeFromUnion(s2));
   }
 
   @Override

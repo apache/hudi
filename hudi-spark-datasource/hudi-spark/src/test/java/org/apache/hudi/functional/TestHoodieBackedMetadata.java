@@ -43,7 +43,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -109,6 +108,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -188,6 +188,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
@@ -341,7 +342,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withProperties(cfg.getMetadataConfig().getProps())
             .withMetadataIndexColumnStats(false)
-            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 
@@ -1140,11 +1140,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(false, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             // Disable the other two default index for this test because the test orchestrates
             // the rollback with the assumption of init commits being in certain order
             .withMetadataIndexColumnStats(false)
-            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 
@@ -1722,7 +1721,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(5, 5)
             .build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
@@ -1747,7 +1746,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(5, 5)
             .build())
         .build();
@@ -1794,7 +1793,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(3, 3)
             .build())
         .build();
@@ -2850,7 +2849,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE);
     // Enable Record index and set index type to record index.
     Properties props = new Properties();
-    props.setProperty(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
+    props.setProperty(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     props.setProperty(HoodieIndexConfig.INDEX_TYPE.key(), "RECORD_INDEX");
     HoodieWriteConfig cfg = getWriteConfigBuilder(true, true, false)
         .withProps(props).build();
@@ -3223,7 +3222,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         Map<String, HoodieColumnRangeMetadata<Comparable>> parquetStatsMap =
             HoodieIOFactory.getIOFactory(metaClient.getStorage())
                 .getFileFormatUtils(HoodieFileFormat.PARQUET)
-                .readColumnStatsFromMetadata(metaClient.getStorage(), fullFilePath, columns)
+                .readColumnStatsFromMetadata(metaClient.getStorage(), fullFilePath, columns, V1)
                 .stream()
                 .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
         Map<String, HoodieMetadataColumnStats> columnStatsMap = stats.stream().collect(Collectors.toMap(HoodieMetadataColumnStats::getColumnName, Function.identity()));
@@ -3333,7 +3332,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enable(true)
             .enableMetrics(false)
             .ignoreSpuriousDeletes(false)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .build())
         .build();
 
@@ -3592,7 +3591,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE, true);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withEnableRecordIndex(true).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withEnableGlobalRecordLevelIndex(true).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
         .build();
 
