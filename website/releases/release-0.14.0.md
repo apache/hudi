@@ -259,7 +259,7 @@ significantly reduce read latencies by 20 to 40% when compared to the older file
 bootstrap queries. The goal is to bring the latencies closer to those of the COW (Copy On Write) file format. To utilize 
 this new file format, users need to set `hoodie.datasource.read.use.new.parquet.file.format=true`. It's important to note
 that this feature is still experimental and comes with a few limitations. For more details and if you're interested in 
-contributing, please refer to [HUDI-6568](https://issues.apache.org/jira/browse/HUDI-6568).
+contributing, please refer to [this GitHub issue](https://github.com/apache/hudi/issues/16112).
 
 ### Spark write side improvements
 
@@ -332,7 +332,7 @@ compaction, clustering, and metadata table support has been added to Java Engine
 In Hudi 0.14.0, when querying a table that uses ComplexKeyGenerator or CustomKeyGenerator, partition values are returned
 as string. Note that there is no type change on the storage i.e. partition fields are written in the user-defined type 
 on storage. However, this is a breaking change for the aforementioned key generators and will be fixed in 0.14.1 -
-[HUDI-6914](https://issues.apache.org/jira/browse/HUDI-6914)
+[tracking issue](https://github.com/apache/hudi/issues/16251)
 
 ## Raw Release Notes
 

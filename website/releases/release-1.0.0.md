@@ -41,8 +41,7 @@ and [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#sup
 
 ### Format changes
 
-The main epic covering all the format changes is [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242), which is also 
-covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main highlights with respect to format changes:
+The main epic covering all the format changes is [this GitHub issue](https://github.com/apache/hudi/issues/15964), which is also covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main highlights with respect to format changes:
 
 #### Timeline
 

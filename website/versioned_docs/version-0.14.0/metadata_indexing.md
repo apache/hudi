@@ -208,4 +208,4 @@ Asynchronous indexing feature is still evolving. Few points to note from deploym
   For example, if async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
 
 Some of these limitations will be removed in the upcoming releases. Please
-follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
+follow [this GitHub issue](https://github.com/apache/hudi/issues/14870) for developments on this feature.

@@ -556,7 +556,7 @@ Please check the below table for query types supported and installation instruct
 :::note
 Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
 connector. However, it is in our roadmap, and you can track the development
-under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
+under [this GitHub issue](https://github.com/apache/hudi/issues/14992).
 :::
 
 To use the Hudi connector, please configure hudi catalog in ` /presto-server-0.2xxx/etc/catalog/hudi.properties` as follows:
