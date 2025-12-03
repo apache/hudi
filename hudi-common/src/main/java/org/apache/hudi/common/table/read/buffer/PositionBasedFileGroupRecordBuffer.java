@@ -121,7 +121,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           recordMergeMode,
           true,
           recordMerger,
-          readerSchema,
+          readerSchema.toAvroSchema(),
           payloadClasses,
           props,
           partialUpdateModeOpt);
@@ -129,7 +129,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    Schema schema = AvroSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight());
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight()));
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
@@ -233,7 +234,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return doHasNextFallbackBaseRecord(baseRecord);
     }
 
-    nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, HoodieSchema.fromAvroSchema(readerSchema),
+    nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
     return super.hasNextBaseRecord(baseRecord, logRecordInfo);
@@ -242,7 +243,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
     if (needToDoHybridStrategy) {
       //see if there is a delete block with record positions
-      nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, HoodieSchema.fromAvroSchema(readerSchema),
+      nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
       BufferedRecord<T> logRecordInfo  = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {
@@ -266,7 +267,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return false;
     }
 
-    String recordKey = readerContext.getRecordContext().getRecordKey(record, writerSchema.toAvroSchema());
+    String recordKey = readerContext.getRecordContext().getRecordKey(record, writerSchema);
     // Can not extract the record key, throw.
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("Can not extract the key for a record");

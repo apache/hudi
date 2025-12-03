@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -27,31 +27,30 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * An avro schema cache implementation for managing different version of schemas.
+ * A HoodieSchema cache implementation for managing different versions of schemas.
  * This is a local cache; the versionId only works for local thread in one container/executor.
  * A map of {version_id, schema} is maintained.
  */
 @NotThreadSafe
-@Deprecated
-public class LocalAvroSchemaCache implements Serializable {
+public class LocalHoodieSchemaCache implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private final Map<Integer, Schema> versionIdToSchema; // the mapping from version_id -> schema
-  private final Map<Schema, Integer> schemaToVersionId; // the mapping from schema -> version_id
+  private final Map<Integer, HoodieSchema> versionIdToSchema; // the mapping from version_id -> schema
+  private final Map<HoodieSchema, Integer> schemaToVersionId; // the mapping from schema -> version_id
 
   private int nextVersionId = 0;
 
-  private LocalAvroSchemaCache() {
+  private LocalHoodieSchemaCache() {
     this.versionIdToSchema = new HashMap<>();
     this.schemaToVersionId = new HashMap<>();
   }
 
-  public static LocalAvroSchemaCache getInstance() {
-    return new LocalAvroSchemaCache();
+  public static LocalHoodieSchemaCache getInstance() {
+    return new LocalHoodieSchemaCache();
   }
 
-  public Integer cacheSchema(Schema schema) {
+  public Integer cacheSchema(HoodieSchema schema) {
     Integer versionId = this.schemaToVersionId.get(schema);
     if (versionId == null) {
       versionId = nextVersionId++;
@@ -61,7 +60,7 @@ public class LocalAvroSchemaCache implements Serializable {
     return versionId;
   }
 
-  public Option<Schema> getSchema(Integer versionId) {
+  public Option<HoodieSchema> getSchema(Integer versionId) {
     return Option.ofNullable(this.versionIdToSchema.get(versionId));
   }
 }

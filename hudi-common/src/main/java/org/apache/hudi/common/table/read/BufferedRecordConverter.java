@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import org.apache.avro.Schema;
 
@@ -53,7 +54,7 @@ public interface BufferedRecordConverter<T> {
 
           @Override
           public BufferedRecord<T> convert(T record) {
-            String recordKey = recordContext.getRecordKey(record, readerSchema);
+            String recordKey = recordContext.getRecordKey(record, HoodieSchema.fromAvroSchema(readerSchema));
             return reusedBufferedRecord.replaceRecordKey(recordKey);
           }
         };
@@ -61,7 +62,7 @@ public interface BufferedRecordConverter<T> {
         return new BufferedRecordConverter<T>() {
           @Override
           public BufferedRecord<T> convert(T record) {
-            return BufferedRecords.fromEngineRecord(record, readerSchema, recordContext, orderingFieldNames, false);
+            return BufferedRecords.fromEngineRecord(record, HoodieSchema.fromAvroSchema(readerSchema), recordContext, orderingFieldNames, false);
           }
         };
     }

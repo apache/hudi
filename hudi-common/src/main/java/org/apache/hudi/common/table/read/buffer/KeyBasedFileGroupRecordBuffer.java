@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -83,13 +84,14 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           recordMergeMode,
           true,
           recordMerger,
-          readerSchema,
+          readerSchema.toAvroSchema(),
           payloadClasses,
           props,
           partialUpdateModeOpt);
     }
 
-    Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight()));
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {

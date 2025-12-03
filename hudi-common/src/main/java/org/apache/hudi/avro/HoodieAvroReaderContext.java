@@ -259,7 +259,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
-    return new BufferedRecordSerializer<>(new AvroRecordSerializer(versionId -> getRecordContext().decodeAvroSchema(versionId)));
+    return new BufferedRecordSerializer<>(new AvroRecordSerializer(versionId -> getRecordContext().decodeAvroSchema(versionId).toAvroSchema()));
   }
 
   @Override

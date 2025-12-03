@@ -604,9 +604,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                      new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
-            String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
+            String recordKey = readerContext.getRecordContext().getRecordKey(record, HoodieSchema.fromAvroSchema(avroSchema));
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(record, HoodieSchema.fromAvroSchema(avroSchema),
+                readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext.getRecordContext()));
 
             //test position based
@@ -617,7 +618,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           //Validate that everything is correct
           position = 0L;
           for (T record : records) {
-            String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
+            String recordKey = readerContext.getRecordContext().getRecordKey(record, HoodieSchema.fromAvroSchema(avroSchema));
             BufferedRecord<T> keyBased = spillableMap.get(recordKey);
             assertNotNull(keyBased);
             BufferedRecord<T> positionBased = spillableMap.get(position++);
@@ -674,7 +675,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput);
     assertEquals(expectedRecords.size(), actualRecordList.size());
     actualRecordList.forEach(r -> assertRecordMatchesSchema(avroSchema, r));
-    Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.getRecordContext().convertToAvroRecord(r, avroSchema))
+    Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.getRecordContext().convertToAvroRecord(r, HoodieSchema.fromAvroSchema(avroSchema)))
         .map(r -> HoodieAvroUtils.removeFields(r, metaCols))
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
@@ -860,7 +861,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       while (fileGroupReaderIterator.hasNext()) {
         T next = fileGroupReaderIterator.next();
         if (sortOutput) {
-          String currentKey = readerContext.getRecordContext().getRecordKey(next, avroSchema);
+          String currentKey = readerContext.getRecordContext().getRecordKey(next, HoodieSchema.fromAvroSchema(avroSchema));
           assertTrue(lastKey == null || lastKey.compareTo(currentKey) < 0, "Record keys should be sorted within the file group");
           lastKey = currentKey;
         }
@@ -956,7 +957,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), String.join(",", orderingFields));
     return records.stream()
         .map(record -> {
-          T data = readerContext.getRecordContext().extractDataFromRecord(record, schema, props);
+          T data = readerContext.getRecordContext().extractDataFromRecord(record, HoodieSchema.fromAvroSchema(schema), props);
           return new HoodieTestDataGenerator.RecordIdentifier(
               record.getRecordKey(),
               removeHiveStylePartition(record.getPartitionPath()),

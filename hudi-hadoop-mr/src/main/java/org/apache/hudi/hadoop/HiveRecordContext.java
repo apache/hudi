@@ -90,18 +90,19 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
           bufferedRecord.getOrderingValue(),
           HoodieRecord.HoodieRecordType.HIVE);
     }
-    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema), bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
+    return new HoodieHiveRecord(key, writable, schema.toAvroSchema(), getHiveAvroSerializer(schema.toAvroSchema()),
+        bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override
-  public ArrayWritable constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+  public ArrayWritable constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     return new ArrayWritable(Writable.class, (Writable[]) fieldValues);
   }
 
   @Override
-  public ArrayWritable mergeWithEngineRecord(Schema schema,
+  public ArrayWritable mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<ArrayWritable> baseRecord) {
     Writable[] engineRecord = baseRecord.getRecord().get();
@@ -141,8 +142,8 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public GenericRecord convertToAvroRecord(ArrayWritable record, Schema schema) {
-    return getHiveAvroSerializer(schema).serialize(record);
+  public GenericRecord convertToAvroRecord(ArrayWritable record, HoodieSchema schema) {
+    return getHiveAvroSerializer(schema.toAvroSchema()).serialize(record);
   }
 
   @Override

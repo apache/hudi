@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
@@ -104,8 +105,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public GenericRecord convertToAvroRecord(RowData record, Schema schema) {
-    return (GenericRecord) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowDataToAvroConverter().convert(schema, record);
+  public GenericRecord convertToAvroRecord(RowData record, HoodieSchema schema) {
+    return (GenericRecord) RowDataAvroQueryContexts.fromAvroSchema(schema.toAvroSchema()).getRowDataToAvroConverter().convert(schema.toAvroSchema(), record);
   }
 
   @Override
@@ -144,21 +145,21 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+  public RowData constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     return GenericRowData.of(fieldValues);
   }
 
   @Override
-  public RowData mergeWithEngineRecord(Schema schema,
+  public RowData mergeWithEngineRecord(HoodieSchema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {
     GenericRowData genericRowData = new GenericRowData(schema.getFields().size());
-    for (Schema.Field field : schema.getFields()) {
+    for (HoodieSchemaField field : schema.getFields()) {
       int pos = field.pos();
       if (updateValues.containsKey(pos)) {
         genericRowData.setField(pos, updateValues.get(pos));
       } else {
-        genericRowData.setField(pos, getValue(baseRecord.getRecord(), HoodieSchema.fromAvroSchema(schema), field.name()));
+        genericRowData.setField(pos, getValue(baseRecord.getRecord(), schema, field.name()));
       }
     }
     return genericRowData;

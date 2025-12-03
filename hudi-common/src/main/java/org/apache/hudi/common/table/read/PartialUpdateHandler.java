@@ -19,18 +19,18 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.PartialUpdateMode;
-
-import org.apache.avro.Schema;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
@@ -70,9 +70,9 @@ public class PartialUpdateHandler<T> implements Serializable {
    */
   BufferedRecord<T> partialMerge(BufferedRecord<T> highOrderRecord,
                                  BufferedRecord<T> lowOrderRecord,
-                                 Schema highOrderSchema,
-                                 Schema lowOrderSchema,
-                                 Schema newSchema) {
+                                 HoodieSchema highOrderSchema,
+                                 HoodieSchema lowOrderSchema,
+                                 HoodieSchema newSchema) {
     // Note that: When either highOrderRecord or lowOrderRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (null == lowOrderRecord
@@ -105,22 +105,22 @@ public class PartialUpdateHandler<T> implements Serializable {
    */
   BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> highOrderRecord,
                                            BufferedRecord<T> lowOrderRecord,
-                                           Schema highOrderSchema,
-                                           Schema lowOrderSchema,
-                                           Schema newSchema) {
-    List<Schema.Field> fields = newSchema.getFields();
+                                           HoodieSchema highOrderSchema,
+                                           HoodieSchema lowOrderSchema,
+                                           HoodieSchema newSchema) {
+    List<HoodieSchemaField> fields = newSchema.getFields();
     Object[] fieldVals = new Object[fields.size()];
     int idx = 0;
     boolean updated = false;
     // decide value for each field with default value in new record ignored.
-    for (Schema.Field field: fields) {
+    for (HoodieSchemaField field: fields) {
       String fieldName = field.name();
       // The default value only from the top-level data type is validated. That means,
       // for nested columns, we do not check the leaf level data type defaults.
-      Object defaultValue = toJavaDefaultValue(field);
-      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(highOrderSchema), fieldName);
+      Object defaultValue = HoodieAvroUtils.toJavaDefaultValue(field.getAvroField());
+      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
       if (defaultValue == newValue) {
-        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(lowOrderSchema), fieldName);
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
         updated = true;
       } else {
         fieldVals[idx++] = newValue;
@@ -151,22 +151,22 @@ public class PartialUpdateHandler<T> implements Serializable {
    */
   BufferedRecord<T> reconcileMarkerValues(BufferedRecord<T> highOrderRecord,
                                           BufferedRecord<T> lowOrderRecord,
-                                          Schema highOrderSchema,
-                                          Schema lowOrderSchema,
-                                          Schema newSchema) {
-    List<Schema.Field> fields = newSchema.getFields();
+                                          HoodieSchema highOrderSchema,
+                                          HoodieSchema lowOrderSchema,
+                                          HoodieSchema newSchema) {
+    List<HoodieSchemaField> fields = newSchema.getFields();
     Object[] fieldVals = new Object[fields.size()];
     String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_UNAVAILABLE_VALUE);
     int idx = 0;
     boolean updated = false;
     // decide value for each field with customized mark value ignored.
-    for (Schema.Field field: fields) {
+    for (HoodieSchemaField field: fields) {
       String fieldName = field.name();
-      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(highOrderSchema), fieldName);
+      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
           && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(recordContext.getTypeConverter().castToString(newValue)))) {
-        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(lowOrderSchema), fieldName);
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
         updated = true;
       } else {
         fieldVals[idx++] = newValue;
@@ -184,18 +184,18 @@ public class PartialUpdateHandler<T> implements Serializable {
         highOrderRecord.getHoodieOperation());
   }
 
-  static boolean isStringTyped(Schema.Field field) {
-    return hasTargetType(field.schema(), Schema.Type.STRING);
+  static boolean isStringTyped(HoodieSchemaField field) {
+    return hasTargetType(field.schema(), HoodieSchemaType.STRING);
   }
 
-  static boolean isBytesTyped(Schema.Field field) {
-    return hasTargetType(field.schema(), Schema.Type.BYTES);
+  static boolean isBytesTyped(HoodieSchemaField field) {
+    return hasTargetType(field.schema(), HoodieSchemaType.BYTES);
   }
 
-  static boolean hasTargetType(Schema schema, Schema.Type targetType) {
+  static boolean hasTargetType(HoodieSchema schema, HoodieSchemaType targetType) {
     if (schema.getType() == targetType) {
       return true;
-    } else if (schema.getType() == Schema.Type.UNION) {
+    } else if (schema.getType() == HoodieSchemaType.UNION) {
       // Stream is lazy, so this is efficient even with multiple types
       return schema.getTypes().stream().anyMatch(s -> s.getType() == targetType);
     }

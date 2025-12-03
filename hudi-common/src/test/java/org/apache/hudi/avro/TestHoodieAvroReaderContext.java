@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
@@ -177,7 +178,7 @@ class TestHoodieAvroReaderContext {
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "record_key";
     IndexedRecord indexedRecord = createSkeletonRecord(recordKey, "field2", 3);
-    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, SKELETON_SCHEMA.toAvroSchema()));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, SKELETON_SCHEMA));
   }
 
   @Test
@@ -188,15 +189,15 @@ class TestHoodieAvroReaderContext {
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "base_field_1:compound,base_field_3.nested_field:3.2";
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
-    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, BASE_SCHEMA.toAvroSchema()));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, BASE_SCHEMA));
   }
 
   @Test
   void getRecordKeyFromMetadataFields() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
-    Schema schemaWithMetaFields = HoodieAvroUtils.addMetadataFields(SKELETON_SCHEMA.toAvroSchema());
+    HoodieSchema schemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(SKELETON_SCHEMA, false);
     String recordKey = "record_key";
-    IndexedRecord indexedRecord = new GenericData.Record(schemaWithMetaFields);
+    IndexedRecord indexedRecord = new GenericData.Record(schemaWithMetaFields.toAvroSchema());
     indexedRecord.put(0, "commit_time");
     indexedRecord.put(1, "commit_seqno");
     indexedRecord.put(2, recordKey);
@@ -211,7 +212,7 @@ class TestHoodieAvroReaderContext {
     HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
     HoodieSchema schema = getSkeletonSchema();
     Object[] fieldVals = new Object[]{"String1", "String2", 1};
-    IndexedRecord row = readerContext.getRecordContext().constructEngineRecord(schema.toAvroSchema(), fieldVals);
+    IndexedRecord row = readerContext.getRecordContext().constructEngineRecord(schema, fieldVals);
     assertEquals(fieldVals[0], row.get(0));
     assertEquals(fieldVals[1], row.get(1));
     assertEquals(fieldVals[2], row.get(2));
@@ -225,7 +226,7 @@ class TestHoodieAvroReaderContext {
     BufferedRecord<IndexedRecord> baseRecord =
         new BufferedRecord<>("key1", 1, engineRecord, 0, null);
     Map<Integer, Object> updates = new HashMap<>();
-    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema.toAvroSchema(), updates, baseRecord);
+    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1", output.get(0));
     assertEquals("String2", output.get(1));
     assertEquals(1, output.get(2));
@@ -241,7 +242,7 @@ class TestHoodieAvroReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, "String1_0");
     updates.put(2, 2);
-    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema.toAvroSchema(), updates, baseRecord);
+    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1_0", output.get(0));
     assertEquals("String2", output.get(1));
     assertEquals(2, output.get(2));

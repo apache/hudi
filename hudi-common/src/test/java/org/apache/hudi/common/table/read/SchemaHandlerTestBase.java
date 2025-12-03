@@ -324,7 +324,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public GenericRecord convertToAvroRecord(String record, Schema schema) {
+        public GenericRecord convertToAvroRecord(String record, HoodieSchema schema) {
           return null;
         }
 
@@ -349,12 +349,12 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
+        public String mergeWithEngineRecord(HoodieSchema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
           return "";
         }
 
         @Override
-        public String constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+        public String constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
           return "";
         }
 
