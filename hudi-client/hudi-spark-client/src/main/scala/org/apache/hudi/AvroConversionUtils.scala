@@ -155,8 +155,7 @@ object AvroConversionUtils {
                                     recordNamespace: String): Schema = {
     try {
       val schemaConverters = sparkAdapter.getAvroSchemaConverters
-      val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
-      getAvroSchemaWithDefaults(avroSchema, structType)
+      schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
     } catch {
       case a: AvroRuntimeException => throw new HoodieSchemaException(a.getMessage, a)
       case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)
@@ -195,73 +194,6 @@ object AvroConversionUtils {
   }
 
   /**
-   *
-   * Method to add default value of null to nullable fields in given avro schema
-   *
-   * @param schema input avro schema
-   * @return Avro schema with null default set to nullable fields
-   */
-  def getAvroSchemaWithDefaults(schema: Schema, dataType: DataType): Schema = {
-
-    schema.getType match {
-      case Schema.Type.RECORD => {
-        val structType = dataType.asInstanceOf[StructType]
-        val structFields = structType.fields
-        val modifiedFields = schema.getFields.asScala.map(field => {
-          val i = structType.fieldIndex(field.name())
-          val comment = if (structFields(i).metadata.contains("comment")) {
-            structFields(i).metadata.getString("comment")
-          } else {
-            field.doc()
-          }
-          //need special handling for union because we update field default to null if it's in the union
-          val (newSchema, containsNullSchema) = field.schema().getType match {
-            case Schema.Type.UNION => resolveUnion(field.schema(), structFields(i).dataType)
-            case _ => (getAvroSchemaWithDefaults(field.schema(), structFields(i).dataType), false)
-          }
-          createNewSchemaField(field.name(), newSchema, comment,
-            if (containsNullSchema) JsonProperties.NULL_VALUE else field.defaultVal())
-        }).asJava
-        Schema.createRecord(schema.getName, schema.getDoc, schema.getNamespace, schema.isError, modifiedFields)
-      }
-
-      case Schema.Type.UNION => {
-       val (resolved, _) = resolveUnion(schema, dataType)
-        resolved
-      }
-
-      case Schema.Type.MAP => {
-        Schema.createMap(getAvroSchemaWithDefaults(schema.getValueType, dataType.asInstanceOf[MapType].valueType))
-      }
-
-      case Schema.Type.ARRAY => {
-        Schema.createArray(getAvroSchemaWithDefaults(schema.getElementType, dataType.asInstanceOf[ArrayType].elementType))
-      }
-
-      case _ => schema
-    }
-  }
-
-  /**
-   * Helper method for getAvroSchemaWithDefaults for schema type union
-   * re-arrange so that null is first if it is in the union
-   *
-   * @param schema input avro schema
-   * @return Avro schema with null default set to nullable fields and bool that is true if the union contains null
-   *
-   * */
-  private def resolveUnion(schema: Schema, dataType: DataType) = {
-    val innerFields = schema.getTypes.asScala
-    val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
-    (if (containsNullSchema) {
-      Schema.createUnion((List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
-        .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType))).asJava)
-    } else {
-      Schema.createUnion(schema.getTypes.asScala.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)).asJava)
-    }, containsNullSchema)
-  }
-
-  /**
    * Please use [[AvroSchemaUtils.getAvroRecordQualifiedName(String)]]
    */
   @Deprecated
@@ -269,14 +201,6 @@ object AvroConversionUtils {
     val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
     val nameParts = qualifiedName.split('.')
     (nameParts.last, nameParts.init.mkString("."))
-  }
-
-  private def handleUnion(schema: Schema): Schema = {
-    if (schema.getType == Type.UNION) {
-      val index = if (schema.getTypes.get(0).getType == Schema.Type.NULL) 1 else 0
-      return schema.getTypes.get(index)
-    }
-    schema
   }
 
   /**
