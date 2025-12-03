@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -414,9 +415,16 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     if (Files.notExists(logFilePath)) {
       Files.createFile(logFilePath);
     }
-    RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw");
-    raf.setLength(length);
-    raf.close();
+    try (RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw")) {
+      // Use provided length if >= 6
+      raf.setLength(Math.max(length, 6)); // Set minimum length to 6 bytes
+      // Seek to the beginning of the file
+      raf.seek(0);
+      // Write the string "#HUDI#" magic.
+      raf.write(HoodieLogFormat.MAGIC);
+    } catch (IOException e) {
+      throw new IOException("Error writing #HUDI# to file: " + logFilePath, e);
+    }
     return logFilePath.toString();
   }
 
