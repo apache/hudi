@@ -37,7 +37,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.schema.{HoodieSchema}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
@@ -366,7 +366,7 @@ class HoodieSparkSqlWriterInternal {
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas
       val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s =>
-        (s.getName, toScalaOption(s.getNamespace).orNull))
+        (s.getName, toScalaOption(s.getNamespace).orNull(null)))
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = HoodieSchema.fromAvroSchema(
@@ -805,7 +805,7 @@ class HoodieSparkSqlWriterInternal {
   def validateSchemaForHoodieIsDeleted(schema: HoodieSchema): Unit = {
     val fieldOpt = schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD)
     if (fieldOpt.isPresent &&
-        getNonNullTypeFromUnion(fieldOpt.get().schema().toAvroSchema).getType != Schema.Type.BOOLEAN) {
+      fieldOpt.get().schema().getNonNullType.getType != HoodieSchemaType.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
         + fieldOpt.get().schema().getType)
     }

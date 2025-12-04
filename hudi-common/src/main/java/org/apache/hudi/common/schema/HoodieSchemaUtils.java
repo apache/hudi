@@ -153,7 +153,7 @@ public final class HoodieSchemaUtils {
   public static HoodieSchema removeFields(HoodieSchema schema, Set<String> fieldNamesToRemove) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
     ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
-        "Only RECORD schemas can have fields removed, got: " + schema.getType());
+        () -> "Only RECORD schemas can have fields removed, got: " + schema.getType());
 
     if (fieldNamesToRemove == null || fieldNamesToRemove.isEmpty()) {
       return schema;
@@ -162,7 +162,7 @@ public final class HoodieSchemaUtils {
     // Filter and copy fields (must create new instances, can't reuse Avro fields)
     List<HoodieSchemaField> filteredFields = schema.getFields().stream()
         .filter(field -> !fieldNamesToRemove.contains(field.name()))
-        .map(field -> HoodieSchemaField.of(
+        .map(field -> HoodieSchemaUtils.createNewSchemaField(
             field.name(),
             field.schema(),
             field.doc().orElse(null),

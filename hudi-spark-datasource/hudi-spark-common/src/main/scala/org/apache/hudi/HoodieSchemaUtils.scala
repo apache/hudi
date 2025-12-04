@@ -166,12 +166,12 @@ object HoodieSchemaUtils {
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), setNullForMissingColumns)
+        HoodieSchema.fromAvroSchema(AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), setNullForMissingColumns))
       } else {
-        canonicalizedSourceSchema.toAvroSchema()
+        canonicalizedSourceSchema
       }
-      HoodieSchemaCompatibility.checkValidEvolution(HoodieSchema.fromAvroSchema(reconciledSchema), latestTableSchema)
-      HoodieSchema.fromAvroSchema(reconciledSchema)
+      HoodieSchemaCompatibility.checkValidEvolution(reconciledSchema, latestTableSchema)
+      reconciledSchema
     } else {
       // If it's merge into writes, we don't check for projection nor schema compatibility. Writers down the line will take care of it.
       // Or it's not merge into writes, and we don't validate schema, but we allow to drop columns automatically.
