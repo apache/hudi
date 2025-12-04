@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -50,8 +51,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.List;
@@ -90,7 +89,7 @@ public abstract class HoodieReaderContext<T> {
 
   // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
-  protected Option<InstantRange> instantRangeOpt = Option.empty();
+  protected Option<InstantRange> instantRangeOpt;
   private RecordMergeMode mergeMode;
   protected RecordContext<T> recordContext;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
@@ -246,8 +245,8 @@ public abstract class HoodieReaderContext<T> {
    * @param filePath       {@link StoragePath} instance of a file.
    * @param start          Starting byte to start reading.
    * @param length         Bytes to read.
-   * @param dataSchema     Schema of records in the file in {@link Schema}.
-   * @param requiredSchema Schema containing required fields to read in {@link Schema} for projection.
+   * @param dataSchema     Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema Schema containing required fields to read in {@link HoodieSchema} for projection.
    * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
@@ -262,8 +261,8 @@ public abstract class HoodieReaderContext<T> {
    * @param storagePathInfo {@link StoragePathInfo} instance of a file.
    * @param start           Starting byte to start reading.
    * @param length          Bytes to read.
-   * @param dataSchema      Schema of records in the file in {@link Schema}.
-   * @param requiredSchema  Schema containing required fields to read in {@link Schema} for projection.
+   * @param dataSchema      Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema  Schema containing required fields to read in {@link HoodieSchema} for projection.
    * @param storage         {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
@@ -358,8 +357,8 @@ public abstract class HoodieReaderContext<T> {
       return fileRecordIterator;
     }
     InstantRange instantRange = getInstantRange().get();
-    final Schema.Field commitTimeField = getSchemaHandler().getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    final int commitTimePos = commitTimeField.pos();
+    final Option<HoodieSchemaField> commitTimeFieldOpt = HoodieSchema.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final int commitTimePos = commitTimeFieldOpt.get().pos();
     java.util.function.Predicate<T> instantFilter =
         row -> instantRange.isInRange(recordContext.getMetaFieldValue(row, commitTimePos));
     return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
