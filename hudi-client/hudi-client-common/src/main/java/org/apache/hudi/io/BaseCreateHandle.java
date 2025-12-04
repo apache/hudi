@@ -84,8 +84,9 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return (fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath()))
-        || layoutControlsNumFiles();
+    boolean partitionPathCheck = hoodieTable.isPartitioned() ? 
+      record.getPartitionPath().equals(writeStatus.getPartitionPath()) : true;
+    return (fileWriter.canWrite() && partitionPathCheck) || layoutControlsNumFiles();
   }
 
   /**
