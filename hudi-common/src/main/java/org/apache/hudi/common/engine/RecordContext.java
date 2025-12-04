@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -62,7 +61,7 @@ public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private final SerializableBiFunction<T, Schema, String> recordKeyExtractor;
+  private final SerializableBiFunction<T, HoodieSchema, String> recordKeyExtractor;
   // for encoding and decoding schemas to the spillable map
   private final LocalHoodieSchemaCache localSchemaCache = LocalHoodieSchemaCache.getInstance();
 
@@ -183,7 +182,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @return The record key in String.
    */
   public String getRecordKey(T record, HoodieSchema schema) {
-    return recordKeyExtractor.apply(record, schema.toAvroSchema());
+    return recordKeyExtractor.apply(record, schema);
   }
 
   /**
@@ -331,27 +330,7 @@ public abstract class RecordContext<T> implements Serializable {
    *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns
    */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
-
-  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
-    return projectRecord(from, to, Collections.emptyMap());
-  }
-
-  /**
-   * Creates a function that will reorder records of schema "from" to schema of "to" using HoodieSchema.
-   * This method uses HoodieSchema for in-memory processing while maintaining
-   * compatibility with existing Avro-based operations.
-   *
-   * @param from           the HoodieSchema of records to be passed into UnaryOperator
-   * @param to             the HoodieSchema of records produced by UnaryOperator
-   * @param renamedColumns map of renamed columns where the key is the new name from the query and
-   *                       the value is the old name that exists in the file
-   * @return a function that takes in a record and returns the record with reordered columns
-   * @since 1.2.0
-   */
-  public UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
-    return projectRecord(from.toAvroSchema(), to.toAvroSchema(), renamedColumns);
-  }
+  public abstract UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns);
 
   public final UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to) {
     return projectRecord(from, to, Collections.emptyMap());
@@ -452,17 +431,17 @@ public abstract class RecordContext<T> implements Serializable {
     return false;
   }
 
-  private SerializableBiFunction<T, Schema, String> metadataKeyExtractor() {
-    return (record, schema) -> getValue(record, HoodieSchema.fromAvroSchema(schema), RECORD_KEY_METADATA_FIELD).toString();
+  private SerializableBiFunction<T, HoodieSchema, String> metadataKeyExtractor() {
+    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
-  private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
+  private SerializableBiFunction<T, HoodieSchema, String> virtualKeyExtractor(String[] recordKeyFields) {
     if (recordKeyFields.length == 1) {
       // there might be consistency for record key encoding when partition fields are multiple for cow merging,
       // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value
       // while here the field names are ignored, this function would be used to extract record keys from old base file.
       return (record, schema) -> {
-        Object result = getValue(record, HoodieSchema.fromAvroSchema(schema), recordKeyFields[0]);
+        Object result = getValue(record, schema, recordKeyFields[0]);
         if (result == null) {
           throw new HoodieKeyException("recordKey cannot be null");
         }
@@ -470,9 +449,8 @@ public abstract class RecordContext<T> implements Serializable {
       };
     }
     return (record, schema) -> {
-      HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
       BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
-        Object result = getValue(record, hoodieSchema, recordKeyField);
+        Object result = getValue(record, schema, recordKeyField);
         return result != null ? result.toString() : null;
       };
       return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);

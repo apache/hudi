@@ -25,7 +25,7 @@ import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -147,8 +147,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
-      val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema.toAvroSchema,
-        HoodieAvroUtils.removeFields(skeletonRequiredSchema.toAvroSchema, rowIndexColumn))
+      val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema,
+        HoodieSchemaUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getShouldMergeUseRecordPosition) {

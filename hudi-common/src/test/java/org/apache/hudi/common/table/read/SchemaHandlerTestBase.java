@@ -369,7 +369,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+        public UnaryOperator<String> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
           return null;
         }
       });

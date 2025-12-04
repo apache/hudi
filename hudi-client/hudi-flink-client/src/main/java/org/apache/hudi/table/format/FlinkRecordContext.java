@@ -194,9 +194,9 @@ public class FlinkRecordContext extends RecordContext<RowData> {
    * @return a function that takes in a record and returns the record with reordered columns
    */
   @Override
-  public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
-    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
+  public UnaryOperator<RowData> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from.toAvroSchema()).getRowType().getLogicalType();
+    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to.toAvroSchema()).getRowType().getLogicalType();
     RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
   }

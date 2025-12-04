@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -41,7 +40,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 
-import org.apache.avro.Schema;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,10 +125,10 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           partialUpdateModeOpt);
     }
 
-    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight()));
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged (this schema is interned originally)
+    HoodieSchema schema = schemaTransformerWithEvolvedSchema.getRight();
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.

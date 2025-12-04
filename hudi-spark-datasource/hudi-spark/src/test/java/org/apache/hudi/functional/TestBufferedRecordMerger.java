@@ -997,7 +997,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Override
     public UnaryOperator<InternalRow> projectRecord(
-        Schema from, Schema to, Map<String, String> renamedColumns) {
+        HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
       return null;
     }
   }

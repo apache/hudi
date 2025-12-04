@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -39,8 +38,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -73,7 +70,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
+    Pair<ClosableIterator<T>, HoodieSchema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
     if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
       // When a data block contains partial updates, subsequent record merging must always use
@@ -90,8 +87,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           partialUpdateModeOpt);
     }
 
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight()));
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged (this schema is interned originaly)
+    HoodieSchema schema = recordsIteratorSchemaPair.getRight();
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
