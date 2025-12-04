@@ -125,7 +125,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    s"${getClass.getSimpleName.toLowerCase}_${tableId.incrementAndGet()}"
+    s"h${getClass.getSimpleName.toLowerCase}_${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
