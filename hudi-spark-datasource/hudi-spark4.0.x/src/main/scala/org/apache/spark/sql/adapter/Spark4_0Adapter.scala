@@ -186,4 +186,7 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
+
+  override def getHoodieSchemaConverters: org.apache.hudi.HoodieSchemaConverters =
+    org.apache.hudi.Spark40HoodieSchemaConverters
 }
