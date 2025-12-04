@@ -220,6 +220,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val table3 = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName3))
       assertResult(table3.properties("type"))("mor")
       assertResult(table3.properties("primaryKey"))("id")
+      System.out.println("FULL DDL " + table3.schema.toDDL)
       assertResult(
         HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
           ++ Seq(
