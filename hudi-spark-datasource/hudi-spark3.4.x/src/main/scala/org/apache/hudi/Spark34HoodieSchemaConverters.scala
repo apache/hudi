@@ -17,7 +17,8 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+
 import org.apache.spark.sql.types._
 
 /**
