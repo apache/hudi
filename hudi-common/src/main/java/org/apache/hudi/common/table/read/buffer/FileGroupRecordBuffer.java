@@ -50,8 +50,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
@@ -193,7 +191,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    * @param keySpecOpt
    * @return
    */
-  protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
+  protected Pair<ClosableIterator<T>, HoodieSchema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
     try {
       if (keySpecOpt.isPresent()) {
@@ -202,7 +200,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       } else {
         blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
       }
-      Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+      Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
       return Pair.of(new CloseableMappingIterator<>(
           blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
     } catch (IOException e) {
@@ -219,7 +217,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    * @param dataBlock current processed block
    * @return final read schema.
    */
-  protected Option<Pair<Function<T, T>, Schema>> composeEvolvedSchemaTransformer(
+  protected Option<Pair<Function<T, T>, HoodieSchema>> composeEvolvedSchemaTransformer(
       HoodieDataBlock dataBlock) {
     if (internalSchema.isEmptySchema()) {
       return Option.empty();
@@ -229,13 +227,13 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
-    Schema mergedAvroSchema = InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName()).getAvroSchema();
+    HoodieSchema mergedAvroSchema = HoodieSchema.fromAvroSchema(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName()).getAvroSchema());
     // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
     // then the new added column in `mergedAvroSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see
     // InternalSchemaMerger#buildRecordType() for details.
     // Delete and add a field with the same name, reads should not return previously inserted datum of dropped field of the same name,
     // so we use `mergedAvroSchema` as the target schema for record projecting.
-    return Option.of(Pair.of(readerContext.getRecordContext().projectRecord(dataBlock.getSchema().toAvroSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
+    return Option.of(Pair.of(readerContext.getRecordContext().projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
@@ -270,8 +268,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     return false;
   }
 
-  protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
-    Option<Pair<Function<T, T>, Schema>> schemaEvolutionTransformerOpt =
+  protected Pair<Function<T, T>, HoodieSchema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
+    Option<Pair<Function<T, T>, HoodieSchema>> schemaEvolutionTransformerOpt =
         composeEvolvedSchemaTransformer(dataBlock);
 
     // In case when schema has been evolved original persisted records will have to be
@@ -280,8 +278,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
         schemaEvolutionTransformerOpt.map(Pair::getLeft)
             .orElse(Function.identity());
 
-    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(() -> dataBlock.getSchema().toAvroSchema());
+    HoodieSchema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight).orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
   }
 

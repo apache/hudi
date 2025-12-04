@@ -162,7 +162,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, renamedColumns);
+  public UnaryOperator<ArrayWritable> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from.toAvroSchema(), to.toAvroSchema(), renamedColumns);
   }
 }

@@ -27,7 +27,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -533,5 +535,247 @@ public class TestHoodieSchemaUtils {
     assertEquals("address.street", result.get().getLeft());
     assertEquals("street", result.get().getRight().name());
     assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testRemoveFields() {
+    // Create schema with multiple fields
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        "org.apache.hudi.test",
+        "Test record documentation",
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("email", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Remove some fields
+    Set<String> fieldsToRemove = Collections.singleton("age");
+    HoodieSchema resultSchema = HoodieSchemaUtils.removeFields(schema, fieldsToRemove);
+
+    assertNotNull(resultSchema);
+    assertEquals(HoodieSchemaType.RECORD, resultSchema.getType());
+
+    // Should have 3 fields remaining (id, name, email)
+    List<HoodieSchemaField> fields = resultSchema.getFields();
+    assertEquals(3, fields.size());
+
+    // Verify correct fields are present
+    assertTrue(resultSchema.getField("id").isPresent());
+    assertTrue(resultSchema.getField("name").isPresent());
+    assertTrue(resultSchema.getField("email").isPresent());
+
+    // Verify removed field is not present
+    assertFalse(resultSchema.getField("age").isPresent());
+
+    // Verify schema metadata is preserved
+    assertEquals("TestRecord", resultSchema.getName());
+    assertEquals("Test record documentation", resultSchema.getDoc().get());
+    assertEquals("org.apache.hudi.test", resultSchema.getNamespace().get());
+  }
+
+  @Test
+  public void testRemoveMultipleFields() {
+    // Create schema with multiple fields
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("field3", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("field4", HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
+            HoodieSchemaField.of("field5", HoodieSchema.create(HoodieSchemaType.DOUBLE))
+        )
+    );
+
+    // Remove multiple fields
+    Set<String> fieldsToRemove = new HashSet<>(Arrays.asList("field2", "field4"));
+    HoodieSchema resultSchema = HoodieSchemaUtils.removeFields(schema, fieldsToRemove);
+
+    assertNotNull(resultSchema);
+
+    // Should have 3 fields remaining (field1, field3, field5)
+    List<HoodieSchemaField> fields = resultSchema.getFields();
+    assertEquals(3, fields.size());
+
+    // Verify correct fields are present
+    assertTrue(resultSchema.getField("field1").isPresent());
+    assertTrue(resultSchema.getField("field3").isPresent());
+    assertTrue(resultSchema.getField("field5").isPresent());
+
+    // Verify removed fields are not present
+    assertFalse(resultSchema.getField("field2").isPresent());
+    assertFalse(resultSchema.getField("field4").isPresent());
+  }
+
+  @Test
+  public void testRemoveFieldsEmptySet() {
+    // Create schema
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Remove no fields (empty set)
+    HoodieSchema resultSchema = HoodieSchemaUtils.removeFields(schema, Collections.emptySet());
+
+    assertNotNull(resultSchema);
+
+    // Should have all original fields
+    assertEquals(schema.getFields().size(), resultSchema.getFields().size());
+    assertTrue(resultSchema.getField("id").isPresent());
+    assertTrue(resultSchema.getField("name").isPresent());
+  }
+
+  @Test
+  public void testRemoveFieldsNonExistentField() {
+    // Create schema
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Try to remove non-existent field
+    Set<String> fieldsToRemove = Collections.singleton("nonexistent");
+    HoodieSchema resultSchema = HoodieSchemaUtils.removeFields(schema, fieldsToRemove);
+
+    assertNotNull(resultSchema);
+
+    // Should have all original fields
+    assertEquals(schema.getFields().size(), resultSchema.getFields().size());
+    assertTrue(resultSchema.getField("id").isPresent());
+    assertTrue(resultSchema.getField("name").isPresent());
+  }
+
+  @Test
+  public void testRemoveFieldsWithComplexTypes() {
+    // Create schema with complex nested types
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    // Remove the complex nested field
+    Set<String> fieldsToRemove = Collections.singleton("address");
+    HoodieSchema resultSchema = HoodieSchemaUtils.removeFields(schema, fieldsToRemove);
+
+    assertNotNull(resultSchema);
+
+    // Should have 3 fields remaining (id, name, age)
+    List<HoodieSchemaField> fields = resultSchema.getFields();
+    assertEquals(3, fields.size());
+
+    // Verify complex field is removed
+    assertFalse(resultSchema.getField("address").isPresent());
+
+    // Verify other fields are present
+    assertTrue(resultSchema.getField("id").isPresent());
+    assertTrue(resultSchema.getField("name").isPresent());
+    assertTrue(resultSchema.getField("age").isPresent());
+  }
+
+  @Test
+  public void testRemoveFieldsPreservesFieldOrder() {
+    // Create schema with fields in specific order
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("field3", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("field4", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+        )
+    );
+
+    // Remove middle field
+    Set<String> fieldsToRemove = Collections.singleton("field2");
+    HoodieSchema resultSchema = HoodieSchemaUtils.removeFields(schema, fieldsToRemove);
+
+    assertNotNull(resultSchema);
+
+    // Verify field order is preserved (field1, field3, field4)
+    List<HoodieSchemaField> fields = resultSchema.getFields();
+    assertEquals(3, fields.size());
+    assertEquals("field1", fields.get(0).name());
+    assertEquals("field3", fields.get(1).name());
+    assertEquals("field4", fields.get(2).name());
+  }
+
+  @Test
+  public void testRemoveFieldsValidation() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Should throw on null schema
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.removeFields(null, Collections.emptySet()));
+
+    // Should throw on null fieldsToRemove
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.removeFields(schema, null));
+  }
+
+  @Test
+  public void testRemoveFieldsConsistencyWithAvro() {
+    // Test that HoodieSchemaUtils.removeFields produces equivalent results to HoodieAvroUtils.removeFields
+    String schemaString = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"TestRecord\","
+        + "\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"name\",\"type\":\"string\"},"
+        + "{\"name\":\"age\",\"type\":\"int\"},"
+        + "{\"name\":\"email\",\"type\":\"string\"}"
+        + "]}";
+
+    Schema avroSchema = new Schema.Parser().parse(schemaString);
+    HoodieSchema hoodieSchema = HoodieSchema.parse(schemaString);
+
+    Set<String> fieldsToRemove = new HashSet<>(Arrays.asList("age", "email"));
+
+    // Apply removeFields using both approaches
+    Schema avroResult = HoodieAvroUtils.removeFields(avroSchema, fieldsToRemove);
+    HoodieSchema hoodieResult = HoodieSchemaUtils.removeFields(hoodieSchema, fieldsToRemove);
+
+    // Should produce equivalent schemas
+    assertEquals(avroResult.toString(), hoodieResult.toString());
   }
 }

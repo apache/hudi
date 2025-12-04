@@ -183,8 +183,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
+  public UnaryOperator<IndexedRecord> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to.toAvroSchema(), renamedColumns);
   }
 
   @Override

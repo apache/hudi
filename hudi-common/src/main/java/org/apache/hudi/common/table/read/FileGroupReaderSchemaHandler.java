@@ -143,7 +143,7 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
-      return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));
+      return Option.of(readerContext.getRecordContext().projectRecord(HoodieSchema.fromAvroSchema(requiredSchema), HoodieSchema.fromAvroSchema(requestedSchema)));
     }
     return Option.empty();
   }
