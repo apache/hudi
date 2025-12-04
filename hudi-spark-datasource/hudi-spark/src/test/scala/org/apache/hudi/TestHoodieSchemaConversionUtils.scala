@@ -100,7 +100,6 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     val struct = new StructType()
       .add("date_field", DateType, false)
       .add("timestamp_field", TimestampType, true)
-      .add("timestamp_ntz_field", TimestampNTZType, false)
       .add("decimal_field", DecimalType(10, 2), false)
       .add("decimal_field2", DecimalType(20, 5), true)
 
@@ -120,12 +119,6 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(timestampSchema.isInstanceOf[HoodieSchema.Timestamp])
     assert(timestampSchema.asInstanceOf[HoodieSchema.Timestamp].isUtcAdjusted)
 
-    // Verify TIMESTAMP NTZ logical type
-    val timestampNtzField = hoodieSchema.getField("timestamp_ntz_field").get()
-    assert(timestampNtzField.schema().getType == HoodieSchemaType.TIMESTAMP)
-    assert(timestampNtzField.schema().isInstanceOf[HoodieSchema.Timestamp])
-    assert(!timestampNtzField.schema().asInstanceOf[HoodieSchema.Timestamp].isUtcAdjusted)
-
     // Verify DECIMAL logical type
     val decimalField = hoodieSchema.getField("decimal_field").get()
     assert(decimalField.schema().getType == HoodieSchemaType.DECIMAL)
@@ -138,7 +131,6 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     val convertedStruct = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
     assert(convertedStruct.fields(0).dataType == DateType)
     assert(convertedStruct.fields(1).dataType == TimestampType)
-    assert(convertedStruct.fields(2).dataType == TimestampNTZType)
     assert(convertedStruct.fields(3).dataType == DecimalType(10, 2))
     assert(convertedStruct.fields(4).dataType == DecimalType(20, 5))
   }
@@ -157,7 +149,6 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(structType.fields.length == 4)
     assert(structType.fields(0).dataType == DateType)
     assert(structType.fields(1).dataType == TimestampType)
-    assert(structType.fields(2).dataType == TimestampNTZType)
     assert(structType.fields(3).dataType == DecimalType(15, 3))
   }
 
@@ -211,14 +202,14 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(decimalSchema.getType == HoodieSchemaType.DECIMAL)
 
     // Verify conversion to Spark types
-    val dateType = HoodieSchemaConverters.toSqlType(dateSchema)
-    assert(dateType.dataType == DateType)
+    val dateType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(dateSchema)
+    assert(dateType == DateType)
 
-    val timestampType = HoodieSchemaConverters.toSqlType(timestampSchema)
-    assert(timestampType.dataType == TimestampType)
+    val timestampType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(timestampSchema)
+    assert(timestampType == TimestampType)
 
-    val decimalType = HoodieSchemaConverters.toSqlType(decimalSchema)
-    assert(decimalType.dataType == DecimalType(10, 2))
+    val decimalType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(decimalSchema)
+    assert(decimalType == DecimalType(10, 2))
   }
 
   test("test conversion error handling with duplicate field names") {

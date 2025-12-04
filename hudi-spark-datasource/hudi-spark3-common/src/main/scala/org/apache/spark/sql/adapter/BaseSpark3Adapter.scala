@@ -68,6 +68,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
+  override def getHoodieSchemaConverters: org.apache.hudi.HoodieSchemaConverters = org.apache.hudi.BaseSpark3HoodieSchemaConverters
+
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
     cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
   }

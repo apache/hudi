@@ -200,4 +200,8 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
       storageConf.getBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis),
       getRebaseSpec("CORRECTED"))
   }
+
+  override def getHoodieSchemaConverters: org.apache.hudi.HoodieSchemaConverters =
+    org.apache.hudi.Spark35HoodieSchemaConverters
+
 }

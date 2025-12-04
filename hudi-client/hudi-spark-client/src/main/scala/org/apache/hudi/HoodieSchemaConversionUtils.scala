@@ -18,7 +18,8 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
@@ -41,7 +42,10 @@ object HoodieSchemaConversionUtils {
    */
   def convertHoodieSchemaToStructType(hoodieSchema: HoodieSchema): StructType = {
     try {
-      HoodieSchemaConverters.toSqlType(hoodieSchema).dataType.asInstanceOf[StructType]
+      val schemaConverters = sparkAdapter.getHoodieSchemaConverters
+      schemaConverters.toSqlType(hoodieSchema) match {
+        case (dataType, _) => dataType.asInstanceOf[StructType]
+      }
     } catch {
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert HoodieSchema to StructType: $hoodieSchema", e)
@@ -57,7 +61,10 @@ object HoodieSchemaConversionUtils {
    */
   def convertHoodieSchemaToDataType(hoodieSchema: HoodieSchema): DataType = {
     try {
-      HoodieSchemaConverters.toSqlType(hoodieSchema).dataType
+      val schemaConverters = sparkAdapter.getHoodieSchemaConverters
+      schemaConverters.toSqlType(hoodieSchema) match {
+        case (dataType, _) => dataType
+      }
     } catch {
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert HoodieSchema to DataType: $hoodieSchema", e)
@@ -97,7 +104,8 @@ object HoodieSchemaConversionUtils {
                                       structName: String,
                                       recordNamespace: String): HoodieSchema = {
     try {
-      HoodieSchemaConverters.toHoodieType(structType, nullable = false, structName, recordNamespace)
+      val schemaConverters = sparkAdapter.getHoodieSchemaConverters
+      schemaConverters.toHoodieType(structType, nullable = false, structName, recordNamespace)
     } catch {
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert struct type to HoodieSchema: $structType", e)
