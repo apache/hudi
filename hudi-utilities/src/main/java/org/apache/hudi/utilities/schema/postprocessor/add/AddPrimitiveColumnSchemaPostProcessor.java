@@ -19,9 +19,6 @@
 package org.apache.hudi.utilities.schema.postprocessor.add;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -35,7 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaField;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -60,28 +57,28 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
   }
 
   @Override
-  public HoodieSchema processSchema(HoodieSchema schema) {
+  public Schema processSchema(Schema schema) {
     String newColumnName = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP);
 
-    if (schema.getField(newColumnName).isPresent()) {
+    if (schema.getField(newColumnName) != null) {
       throw new HoodieSchemaPostProcessException(String.format("Column %s already exist!", newColumnName));
     }
 
-    List<HoodieSchemaField> sourceFields = schema.getFields();
-    List<HoodieSchemaField> targetFields = new ArrayList<>(sourceFields.size() + 1);
+    List<Schema.Field> sourceFields = schema.getFields();
+    List<Schema.Field> targetFields = new ArrayList<>(sourceFields.size() + 1);
 
 
-    for (HoodieSchemaField sourceField : sourceFields) {
+    for (Schema.Field sourceField : sourceFields) {
       targetFields.add(createNewSchemaField(sourceField));
     }
 
     // add new column to the end
     targetFields.add(buildNewColumn());
 
-    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
+    return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, targetFields);
   }
 
-  private HoodieSchemaField buildNewColumn() {
+  private Schema.Field buildNewColumn() {
 
     String columnName = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP);
     String type = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP).toUpperCase(Locale.ROOT);
@@ -94,15 +91,15 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(type));
     ValidationUtils.checkArgument(!Schema.Type.NULL.getName().equals(type));
 
-    HoodieSchema newSchema = createSchema(type, nullable);
+    Schema newSchema = createSchema(type, nullable);
 
-    return HoodieSchemaField.of(columnName, newSchema, doc, defaultValue.isPresent() ? defaultValue.get() : null);
+    return new Schema.Field(columnName, newSchema, doc, defaultValue.isPresent() ? defaultValue.get() : null);
   }
 
-  private HoodieSchema createSchema(String type, boolean nullable) {
-    HoodieSchema schema = HoodieSchema.create(HoodieSchemaType.valueOf(type));
+  private Schema createSchema(String type, boolean nullable) {
+    Schema schema = Schema.create(Schema.Type.valueOf(type));
     if (nullable) {
-      return HoodieSchema.createNullable(schema);
+      schema = Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
     }
     return schema;
   }

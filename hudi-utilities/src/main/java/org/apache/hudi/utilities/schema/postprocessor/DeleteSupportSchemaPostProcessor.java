@@ -20,11 +20,9 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaField;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 
 /**
  * An implementation of {@link SchemaPostProcessor} which will add a column named "_hoodie_is_deleted" to the end of
@@ -47,23 +45,23 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
   }
 
   @Override
-  public HoodieSchema processSchema(HoodieSchema schema) {
+  public Schema processSchema(Schema schema) {
 
-    if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).isPresent()) {
+    if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
       LOG.warn("column {} already exists!", HoodieRecord.HOODIE_IS_DELETED_FIELD);
       return schema;
     }
 
-    List<HoodieSchemaField> sourceFields = schema.getFields();
-    List<HoodieSchemaField> targetFields = new ArrayList<>(sourceFields.size() + 1);
+    List<Schema.Field> sourceFields = schema.getFields();
+    List<Schema.Field> targetFields = new ArrayList<>(sourceFields.size() + 1);
     // copy existing columns
-    for (HoodieSchemaField sourceField : sourceFields) {
+    for (Schema.Field sourceField : sourceFields) {
       targetFields.add(createNewSchemaField(sourceField));
     }
     // add _hoodie_is_deleted column
-    targetFields.add(HoodieSchemaField.of(HoodieRecord.HOODIE_IS_DELETED_FIELD, HoodieSchema.create(HoodieSchemaType.BOOLEAN), null, false));
+    targetFields.add(new Schema.Field(HoodieRecord.HOODIE_IS_DELETED_FIELD, Schema.create(Schema.Type.BOOLEAN), null, false));
 
-    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
+    return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, targetFields);
   }
 
 }

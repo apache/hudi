@@ -18,16 +18,14 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.Arrays;
@@ -35,6 +33,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**
@@ -63,32 +62,31 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
   }
 
   @Override
-  public HoodieSchema processSchema(HoodieSchema schema) {
+  public Schema processSchema(Schema schema) {
     // this method adds kafka offset fields namely source offset, partition, timestamp and kafka message key to the schema of the batch.
-    List<HoodieSchemaField> fieldList = schema.getFields();
-    Set<String> fieldNames = fieldList.stream().map(HoodieSchemaField::name).collect(Collectors.toSet());
+    List<Schema.Field> fieldList = schema.getFields();
+    Set<String> fieldNames = fieldList.stream().map(Schema.Field::name).collect(Collectors.toSet());
     // if the source schema already contains the kafka offset fields, then return the schema as is.
     if (fieldNames.containsAll(Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN, KAFKA_SOURCE_KEY_COLUMN))) {
       return schema;
     }
     try {
-      List<HoodieSchemaField> newFieldList = fieldList.stream()
-          .map(HoodieSchemaUtils::createNewSchemaField).collect(Collectors.toList());
+      List<Schema.Field> newFieldList = fieldList.stream()
+          .map(HoodieAvroUtils::createNewSchemaField).collect(Collectors.toList());
       // handle case where source schema provider may have already set 1 or more of these fields
       if (!fieldNames.contains(KAFKA_SOURCE_OFFSET_COLUMN)) {
-        newFieldList.add(HoodieSchemaField.of(KAFKA_SOURCE_OFFSET_COLUMN, HoodieSchema.create(HoodieSchemaType.LONG), "offset column", 0));
+        newFieldList.add(new Schema.Field(KAFKA_SOURCE_OFFSET_COLUMN, Schema.create(Schema.Type.LONG), "offset column", 0));
       }
       if (!fieldNames.contains(KAFKA_SOURCE_PARTITION_COLUMN)) {
-        newFieldList.add(HoodieSchemaField.of(KAFKA_SOURCE_PARTITION_COLUMN, HoodieSchema.create(HoodieSchemaType.INT), "partition column", 0));
+        newFieldList.add(new Schema.Field(KAFKA_SOURCE_PARTITION_COLUMN, Schema.create(Schema.Type.INT), "partition column", 0));
       }
       if (!fieldNames.contains(KAFKA_SOURCE_TIMESTAMP_COLUMN)) {
-        newFieldList.add(HoodieSchemaField.of(KAFKA_SOURCE_TIMESTAMP_COLUMN, HoodieSchema.create(HoodieSchemaType.LONG), "timestamp column", 0));
+        newFieldList.add(new Schema.Field(KAFKA_SOURCE_TIMESTAMP_COLUMN, Schema.create(Schema.Type.LONG), "timestamp column", 0));
       }
       if (!fieldNames.contains(KAFKA_SOURCE_KEY_COLUMN)) {
-        newFieldList.add(HoodieSchemaField.of(KAFKA_SOURCE_KEY_COLUMN, HoodieSchema.createNullable(HoodieSchemaType.STRING),
-            "kafka key column", JsonProperties.NULL_VALUE));
+        newFieldList.add(new Schema.Field(KAFKA_SOURCE_KEY_COLUMN, createNullableSchema(Schema.Type.STRING), "kafka key column", JsonProperties.NULL_VALUE));
       }
-      return HoodieSchema.createRecord(schema.getName() + "_processed", schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, newFieldList);
+      return Schema.createRecord(schema.getName() + "_processed", schema.getDoc(), schema.getNamespace(), false, newFieldList);
     } catch (Exception e) {
       throw new HoodieSchemaException("Kafka offset post processor failed with schema: " + schema, e);
     }
