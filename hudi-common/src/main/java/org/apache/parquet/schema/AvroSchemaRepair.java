@@ -228,7 +228,7 @@ public class AvroSchemaRepair {
         return hasTimestampMillisField(tableSchema.getValueType());
 
       case UNION:
-        return hasTimestampMillisField(AvroSchemaUtils.getNonNullTypeFromUnion(tableSchema));
+        return tableSchema.getTypes().stream().anyMatch(AvroSchemaRepair::hasTimestampMillisField);
 
       default:
         return tableSchema.getType() == Schema.Type.LONG

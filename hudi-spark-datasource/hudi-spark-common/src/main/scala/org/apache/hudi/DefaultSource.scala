@@ -21,21 +21,19 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.HoodieSchemaNotFoundException
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, WRITE_TABLE_VERSION}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-import org.apache.hudi.util.{SparkConfigUtils}
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -294,7 +292,6 @@ object DefaultSource {
         Option(schema)
       }
 
-      lazy val isNotMetadataTable = !metaClient.isMetadataTable
       lazy val tableVersion = if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
         Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
       } else {
@@ -304,16 +301,12 @@ object DefaultSource {
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
-        if (isNotMetadataTable) {
-          if (tableType == COPY_ON_WRITE) {
-            new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-          } else {
-            new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-          }
+        if (tableType == COPY_ON_WRITE) {
+          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
         } else {
-          CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
         }
       } else {
 
@@ -321,12 +314,8 @@ object DefaultSource {
           case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
                (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
                (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-            if (isNotMetadataTable) {
-              new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-            } else {
-              resolveBaseFileOnlyRelation(sqlContext, userSchema, metaClient, parameters)
-            }
+            new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             if (hoodieTableSupportsCompletionTime) {
               new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
@@ -337,20 +326,14 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-            if (isNotMetadataTable) {
-              new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-            } else {
-              new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, userSchema)
-            }
+            new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-            if (isNotMetadataTable) {
-              new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
-            } else {
-              HoodieBootstrapMORRelation(sqlContext, userSchema, metaClient, parameters)
-            }
+            new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             if (hoodieTableSupportsCompletionTime) {
@@ -370,24 +353,6 @@ object DefaultSource {
               s"isBootstrappedTable: $isBootstrappedTable ")
         }
       }
-    }
-  }
-
-  private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
-                                          userSchema: Option[StructType],
-                                          metaClient: HoodieTableMetaClient,
-                                          optParams: Map[String, String]): BaseRelation = {
-    val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema)
-
-    // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
-    //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
-    //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
-    //
-    //       You can check out HUDI-3896 for more details
-    if (baseRelation.hasSchemaOnRead) {
-      baseRelation
-    } else {
-      baseRelation.toHadoopFsRelation
     }
   }
 

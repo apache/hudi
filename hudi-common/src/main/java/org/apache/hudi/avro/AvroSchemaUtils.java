@@ -425,7 +425,7 @@ public class AvroSchemaUtils {
    *         data schema metadata where possible
    */
   public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
-    Schema prunedDataSchema = pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatoryFields);
+    Schema prunedDataSchema = pruneDataSchemaInternal(dataSchema, requiredSchema, mandatoryFields);
     if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
       return createNullableSchema(prunedDataSchema);
     }
@@ -472,8 +472,24 @@ public class AvroSchemaUtils {
         return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
 
       case UNION:
-        throw new IllegalArgumentException("Data schema is a union");
-
+        // special case for basic nullable types
+        if (requiredSchema.getTypes().size() == 2 && requiredSchema.isNullable()) {
+          return pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatoryFields);
+        }
+        // handle more complex unions
+        if (dataSchema.getType() != Schema.Type.UNION || dataSchema.getTypes().size() != requiredSchema.getTypes().size()) {
+          throw new IllegalArgumentException("Data schema is not a union or union sizes don't match");
+        }
+        List<Schema> newUnionTypes = new ArrayList<>(requiredSchema.getTypes().size());
+        for (int i = 0; i < requiredSchema.getTypes().size(); i++) {
+          Schema prunedType = pruneDataSchema(
+              dataSchema.getTypes().get(i),
+              requiredSchema.getTypes().get(i),
+              Collections.emptySet()
+          );
+          newUnionTypes.add(prunedType);
+        }
+        return Schema.createUnion(newUnionTypes);
       default:
         return dataSchema;
     }

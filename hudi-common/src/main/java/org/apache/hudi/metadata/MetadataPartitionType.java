@@ -285,13 +285,13 @@ public enum MetadataPartitionType {
   }
 
   private static void constructFilesMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
-    Map<String, HoodieMetadataFileInfo> metadata = getNestedFieldValue(record, SCHEMA_FIELD_NAME_METADATA);
+    Map<CharSequence, GenericRecord> metadata = getNestedFieldValue(record, SCHEMA_FIELD_NAME_METADATA);
     if (metadata != null) {
-      payload.filesystemMetadata = metadata;
-      payload.filesystemMetadata.keySet().forEach(k -> {
-        GenericRecord v = payload.filesystemMetadata.get(k);
-        payload.filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
-      });
+      payload.filesystemMetadata = metadata.entrySet().stream()
+          .collect(Collectors.toMap(
+              entry -> entry.getKey().toString(),
+              entry -> new HoodieMetadataFileInfo((Long) entry.getValue().get("size"), (Boolean) entry.getValue().get("isDeleted"))));
+
     }
   }
 
