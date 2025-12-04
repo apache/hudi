@@ -64,7 +64,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
       // No data to merge with, simply return the newer one
       return newer;
     } else {
-      Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema.toAvroSchema(), props);
+      Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema != null ? newerSchema.toAvroSchema() : null, props);
       if (updatedValue.isPresent()) {
         IndexedRecord updatedRecord = updatedValue.get();
         // If there is no change in the record or the merge results in SENTINEL record (returned by expression payload when condition is not matched), then return the older record
