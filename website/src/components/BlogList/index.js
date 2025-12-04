@@ -280,7 +280,11 @@ export default function BlogList() {
       )}
 
       <div className={styles.paginationInfo}>
-        Showing {startIndex + 1}-{Math.min(endIndex, sortedBlogPosts.length)} of {sortedBlogPosts.length} posts
+        {currentPosts.length > 0 ? (
+          <>Showing {startIndex + 1}-{Math.min(endIndex, sortedBlogPosts.length)} of {sortedBlogPosts.length} posts</>
+        ) : (
+          <>No blog posts available</>
+        )}
       </div>
     </div>
   );

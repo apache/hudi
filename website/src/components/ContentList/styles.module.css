@@ -406,6 +406,8 @@
 
 .searchInput::placeholder {
   color: var(--ifm-blue-900);
+  opacity: 0.6;
+  font-size: 14px;
 }
 
 .searchInput:focus {
