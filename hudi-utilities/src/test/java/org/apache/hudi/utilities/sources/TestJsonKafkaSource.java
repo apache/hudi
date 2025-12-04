@@ -278,11 +278,11 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     List<GenericRecord> recs = fetch1.getBatch().get().collect();
     assertEquals(10, recs.size());
 
-    Schema deducedSchema =
-        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceHoodieSchema().toAvroSchema(), Option.empty(), Option.empty(), props);
-    verifyDecimalValue(recs, deducedSchema, "decfield");
-    verifyDecimalValue(recs, deducedSchema, "lowprecision");
-    verifyDecimalValue(recs, deducedSchema, "highprecision");
+    HoodieSchema deducedSchema =
+        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceHoodieSchema(), Option.empty(), Option.empty(), props);
+    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "decfield");
+    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "lowprecision");
+    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "highprecision");
 
     testUtils.sendMessages(topic, jsonifyRecords(
         dataGenerator.generateInsertsAsPerSchema("001", 20, HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA)));
