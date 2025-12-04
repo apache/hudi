@@ -548,6 +548,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
     Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
     String newTimestamp = WriteClientTestUtils.createNewInstantTime();
+    // Ensure newTimestamp doesn't end with DEFAULT_MILLIS_EXT to avoid collision with instant6
+    while (newTimestamp.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
+      newTimestamp = WriteClientTestUtils.createNewInstantTime();
+    }
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant5), metaClient.getActiveTimeline());
