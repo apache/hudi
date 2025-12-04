@@ -166,12 +166,7 @@ public final class HoodieSchemaUtils {
     // Filter and copy fields (must create new instances, can't reuse Avro fields)
     List<HoodieSchemaField> filteredFields = schema.getFields().stream()
         .filter(field -> !fieldNamesToRemove.contains(field.name()))
-        .map(field -> HoodieSchemaUtils.createNewSchemaField(
-            field.name(),
-            field.schema(),
-            field.doc().orElse(null),
-            field.defaultVal().orElse(null)
-        ))
+        .map(HoodieSchemaUtils::createNewSchemaField)
         .collect(Collectors.toList());
 
     if (filteredFields.size() == schema.getFields().size()) {
