@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.{AvroSchemaCache, AvroSchemaUtils, HoodieAvroReaderContext}
+import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
