@@ -39,10 +39,12 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
 class TestCreateTable extends HoodieSparkSqlTestBase {
+  private val LOG = LoggerFactory.getLogger(getClass)
 
   test("Test Create Managed Hoodie Table") {
     val databaseName = "hudi_database"
