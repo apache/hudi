@@ -953,8 +953,9 @@ public class TestHiveSyncTool {
     //generate commented schema field
     HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test.avsc");
     HoodieSchema commentedSchema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, "/simple-test-doced.avsc");
-    Map<String, String> fieldsNameAndDoc = commentedSchema.getFields().stream().collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT),
-        field -> StringUtils.isNullOrEmpty(field.doc().get()) ? "" : field.doc().get()));
+    Map<String, String> fieldsNameAndDoc = commentedSchema.getFields().stream()
+        .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT),
+            field -> field.doc().map(doc -> StringUtils.isNullOrEmpty(doc) ? "" : doc).orElse("")));
     for (HoodieSchemaField field : schema.getFields()) {
       String name = field.name().toLowerCase(Locale.ROOT);
       String comment = fieldsNameAndDoc.get(name);
@@ -1904,7 +1905,7 @@ public class TestHiveSyncTool {
     // make sure correct schema is picked
     HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
     for (HoodieSchemaField field : schema.getFields()) {
-      assertEquals(field.schema().getType().name(),
+      assertEquals(field.schema().getType().name().toLowerCase(),
           hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).get(field.name()).toLowerCase(),
           String.format("Hive Schema Field %s was added", field));
     }
