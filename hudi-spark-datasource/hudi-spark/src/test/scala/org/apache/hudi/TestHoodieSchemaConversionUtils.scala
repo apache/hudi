@@ -131,8 +131,8 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     val convertedStruct = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
     assert(convertedStruct.fields(0).dataType == DateType)
     assert(convertedStruct.fields(1).dataType == TimestampType)
-    assert(convertedStruct.fields(3).dataType == DecimalType(10, 2))
-    assert(convertedStruct.fields(4).dataType == DecimalType(20, 5))
+    assert(convertedStruct.fields(2).dataType == DecimalType(10, 2))
+    assert(convertedStruct.fields(3).dataType == DecimalType(20, 5))
   }
 
   test("test HoodieSchema to Spark conversion for logical types") {
