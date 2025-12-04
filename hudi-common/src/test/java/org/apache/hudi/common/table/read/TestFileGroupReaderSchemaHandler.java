@@ -274,6 +274,6 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
         dataSchema.toAvroSchema(), requestedSchema.toAvroSchema(), Option.empty(), props, metaClient);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
-    assertEquals(expectedSchema, actualSchema);
+    assertEquals(expectedSchema.toAvroSchema(), actualSchema);
   }
 }
