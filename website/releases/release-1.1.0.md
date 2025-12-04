@@ -372,6 +372,13 @@ For more details, see the [community discussion](https://github.com/apache/hudi/
 
 ---
 
+## Known Regressions
+Streaming writes to metadata support was added in 1.1.0 release to speed up metadata table writes. Even though we ran benchmarks at large scale to ensure
+the feature meets the performance expectations, the new spark DAG written has behavior difference based on spark runtimes used. 
+EMR spark seems to be in good shape, but EKS and other spark runtimes could face severe performance impact. For users using spark engine to write to Hudi, 
+we recommend disabling this feature until 1.1.1 is released via `hoodie.metadata.streaming.write.enabled=false`. 
+[tracking issue](https://github.com/apache/hudi/issues/17476)
+
 ## Contributors
 
 Hudi 1.1.0 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.
