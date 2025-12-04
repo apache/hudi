@@ -39,12 +39,10 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
 class TestCreateTable extends HoodieSparkSqlTestBase {
-  private val LOG = LoggerFactory.getLogger(getClass)
 
   test("Test Create Managed Hoodie Table") {
     val databaseName = "hudi_database"
@@ -222,8 +220,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val table3 = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName3))
       assertResult(table3.properties("type"))("mor")
       assertResult(table3.properties("primaryKey"))("id")
-      System.out.println("FULL DDL " + table3.schema.toDDL)
-      LOG.error("FULL DDL " + table3.schema.toDDL)
       assertResult(
         HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
           ++ Seq(
