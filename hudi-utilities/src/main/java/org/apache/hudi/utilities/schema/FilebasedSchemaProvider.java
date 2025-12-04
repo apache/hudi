@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -32,6 +31,7 @@ import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -54,9 +54,9 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   private final String sourceFile;
   private final String targetFile;
 
-  protected HoodieSchema sourceSchema;
+  protected Schema sourceSchema;
 
-  protected HoodieSchema targetSchema;
+  protected Schema targetSchema;
 
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -70,31 +70,31 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     }
   }
 
-  private HoodieSchema parseSchema(String schemaFile) {
+  private Schema parseSchema(String schemaFile) {
     return readSchemaFromFile(schemaFile, this.fs, config);
   }
 
   @Override
-  public HoodieSchema getSourceHoodieSchema() {
+  public Schema getSourceSchema() {
     return sourceSchema;
   }
 
   @Override
-  public HoodieSchema getTargetHoodieSchema() {
+  public Schema getTargetSchema() {
     if (targetSchema != null) {
       return targetSchema;
     } else {
-      return super.getTargetHoodieSchema();
+      return super.getTargetSchema();
     }
   }
 
-  private static HoodieSchema readSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
+  private static Schema readSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
     return schemaPath.endsWith(".json")
         ? readJsonSchemaFromFile(schemaPath, fs, props)
         : readAvroSchemaFromFile(schemaPath, fs, props);
   }
 
-  private static HoodieSchema readJsonSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
+  private static Schema readJsonSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
     String schemaConverterClass = getStringWithAltKeys(props, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
     SchemaRegistryProvider.SchemaConverter schemaConverter;
     try {
@@ -114,16 +114,16 @@ public class FilebasedSchemaProvider extends SchemaProvider {
       throw new HoodieSchemaProviderException(String.format("Error converting json schema from file %s", schemaPath),
           e);
     }
-    return HoodieSchema.parse(convertedSchema);
+    return new Schema.Parser().parse(convertedSchema);
   }
 
-  private static HoodieSchema readAvroSchemaFromFile(String schemaPath,
+  private static Schema readAvroSchemaFromFile(String schemaPath,
                                                FileSystem fs,
                                                TypedProperties props) {
     boolean shouldSanitize = SanitizationUtils.shouldSanitize(props);
     String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     String schemaStr = readSchemaString(schemaPath, fs);
-    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask);
+    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask).toAvroSchema();
   }
 
   private static String readSchemaString(String schemaPath, FileSystem fs) {

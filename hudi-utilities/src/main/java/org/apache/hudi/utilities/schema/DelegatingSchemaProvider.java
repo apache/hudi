@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -40,13 +40,13 @@ public class DelegatingSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceHoodieSchema() {
-    return sourceSchemaProvider.getSourceHoodieSchema();
+  public Schema getSourceSchema() {
+    return sourceSchemaProvider.getSourceSchema();
   }
 
   @Override
-  public HoodieSchema getTargetHoodieSchema() {
-    return targetSchemaProvider.getTargetHoodieSchema();
+  public Schema getTargetSchema() {
+    return targetSchemaProvider.getTargetSchema();
   }
 
   public SchemaProvider getSourceSchemaProvider() {

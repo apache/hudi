@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.UtilHelpers;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.HashMap;
@@ -40,7 +40,7 @@ import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOU
  * A schema provider to get metadata through Jdbc.
  */
 public class JdbcbasedSchemaProvider extends SchemaProvider {
-  private HoodieSchema sourceSchema;
+  private Schema sourceSchema;
   private final Map<String, String> options = new HashMap<>();
 
   public JdbcbasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
@@ -57,7 +57,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceHoodieSchema() {
+  public Schema getSourceSchema() {
     if (this.sourceSchema != null) {
       return sourceSchema;
     }

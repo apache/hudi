@@ -21,10 +21,10 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.TableIdentifier;
@@ -43,8 +43,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class HiveSchemaProvider extends SchemaProvider {
 
-  private final HoodieSchema sourceSchema;
-  private HoodieSchema targetSchema;
+  private final Schema sourceSchema;
+  private Schema targetSchema;
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -57,10 +57,10 @@ public class HiveSchemaProvider extends SchemaProvider {
     try {
       TableIdentifier sourceSchemaTable = new TableIdentifier(sourceSchemaTableName, scala.Option.apply(sourceSchemaDatabaseName));
       StructType sourceSchema = spark.sessionState().catalog().getTableMetadata(sourceSchemaTable).schema();
-      this.sourceSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
+      this.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
           sourceSchema,
           sourceSchemaTableName,
-          "hoodie." + sourceSchemaDatabaseName));
+          "hoodie." + sourceSchemaDatabaseName);
     } catch (NoSuchTableException | NoSuchDatabaseException e) {
       throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", sourceSchemaDatabaseName, sourceSchemaTableName), e);
     }
@@ -72,10 +72,10 @@ public class HiveSchemaProvider extends SchemaProvider {
       try {
         TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));
         StructType targetSchema = spark.sessionState().catalog().getTableMetadata(targetSchemaTable).schema();
-        this.targetSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
+        this.targetSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
             targetSchema,
             targetSchemaTableName,
-            "hoodie." + targetSchemaDatabaseName));
+            "hoodie." + targetSchemaDatabaseName);
       } catch (NoSuchDatabaseException | NoSuchTableException e) {
         throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
       }
@@ -83,16 +83,16 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceHoodieSchema() {
+  public Schema getSourceSchema() {
     return sourceSchema;
   }
 
   @Override
-  public HoodieSchema getTargetHoodieSchema() {
+  public Schema getTargetSchema() {
     if (targetSchema != null) {
       return targetSchema;
     } else {
-      return super.getTargetHoodieSchema();
+      return super.getTargetSchema();
     }
   }
 }
