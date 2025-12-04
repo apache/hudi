@@ -26,6 +26,10 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -285,6 +289,36 @@ public final class HoodieSchemaUtils {
    */
   public static HoodieSchemaField createNewSchemaField(HoodieSchemaField field) {
     return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+  }
+
+  /**
+   * Converts a byte array to a BigDecimal using the given decimal schema.
+   *
+   * @param value         the byte array to convert
+   * @param decimalSchema the decimal schema containing precision and scale
+   * @return the resulting BigDecimal
+   * @throws IllegalArgumentException if the schema is not a DECIMAL type
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, HoodieSchema decimalSchema) {
+    ValidationUtils.checkArgument(decimalSchema != null, "Decimal schema cannot be null");
+    ValidationUtils.checkArgument(decimalSchema.getType() == HoodieSchemaType.DECIMAL,
+        () -> "Schema must be of DECIMAL type, but is " + decimalSchema.getType());
+
+    HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) decimalSchema;
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
+  }
+
+  /**
+   * Converts a byte array to a BigDecimal with the specified precision and scale.
+   *
+   * @param value     the byte array to convert
+   * @param precision the precision of the decimal
+   * @param scale     the scale of the decimal
+   * @return the resulting BigDecimal
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
+    return new BigDecimal(new BigInteger(value),
+        scale, new MathContext(precision, RoundingMode.HALF_UP));
   }
 
   /**

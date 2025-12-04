@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
@@ -280,9 +281,9 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
     HoodieSchema deducedSchema =
         HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceHoodieSchema(), Option.empty(), Option.empty(), props);
-    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "decfield");
-    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "lowprecision");
-    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "highprecision");
+    verifyDecimalValue(recs, deducedSchema, "decfield");
+    verifyDecimalValue(recs, deducedSchema, "lowprecision");
+    verifyDecimalValue(recs, deducedSchema, "highprecision");
 
     testUtils.sendMessages(topic, jsonifyRecords(
         dataGenerator.generateInsertsAsPerSchema("001", 20, HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA)));
@@ -294,13 +295,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         .filter("highprecision < 100000000000000000000.0").filter("highprecision > 10000000000000000000.0").count());
   }
 
-  private static void verifyDecimalValue(List<GenericRecord> records, Schema schema, String fieldname) {
-    Schema fieldSchema = schema.getField(fieldname).schema();
-    LogicalTypes.Decimal decField = (LogicalTypes.Decimal) fieldSchema.getLogicalType();
-    double maxVal = Math.pow(10, decField.getPrecision() - decField.getScale());
+  private static void verifyDecimalValue(List<GenericRecord> records, HoodieSchema schema, String fieldname) {
+    HoodieSchema.Decimal decSchema = (HoodieSchema.Decimal) schema.getField(fieldname).get().schema();
+    double maxVal = Math.pow(10, decSchema.getPrecision() - decSchema.getScale());
     double minVal = maxVal * 0.1;
     for (GenericRecord record : records) {
-      BigDecimal dec = HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decField);
+      BigDecimal dec = org.apache.hudi.common.schema.HoodieSchemaUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
       double doubleValue = dec.doubleValue();
       assertTrue(doubleValue <= maxVal && doubleValue >= minVal);
     }
