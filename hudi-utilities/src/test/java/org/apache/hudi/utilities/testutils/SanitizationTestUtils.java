@@ -20,6 +20,9 @@
 package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -31,6 +34,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.params.provider.Arguments;
 
+import java.util.Arrays;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
@@ -110,29 +114,26 @@ public class SanitizationTestUtils {
             DataTypes.LongType, true, Metadata.empty())
     });
 
-    StructType personStruct = new StructType(new StructField[] {
+    return new StructType(new StructField[] {
         new StructField(sanitizeIfNeeded("@name", shouldSanitize),
             DataTypes.StringType, true, Metadata.empty()),
         new StructField(sanitizeIfNeeded("@map9", shouldSanitize),
             new MapType(DataTypes.StringType, addressStruct, true), true, Metadata.empty()),
     });
-    return personStruct;
   }
 
-  public static Schema generateProperFormattedSchema() {
-    Schema addressSchema = SchemaBuilder.record("Address").fields()
-        .requiredString("streetaddress")
-        .requiredString("city")
-        .endRecord();
-    Schema personSchema = SchemaBuilder.record("Person").fields()
-        .requiredString("firstname")
-        .requiredString("lastname")
-        .name("address").type(addressSchema).noDefault()
-        .endRecord();
-    return personSchema;
+  public static HoodieSchema generateProperFormattedSchema() {
+    HoodieSchema addressSchema =
+        HoodieSchema.createRecord("Address", null, null, Arrays.asList(HoodieSchemaField.of("streetaddress", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))));
+
+    return HoodieSchema.createRecord("Person", null, null,
+        Arrays.asList(HoodieSchemaField.of("firstname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("lastname", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)));
   }
 
-  public static Schema generateRenamedSchemaWithDefaultReplacement() {
+  public static HoodieSchema generateRenamedSchemaWithDefaultReplacement() {
     Schema addressSchema = SchemaBuilder.record("__Address").fields()
         .nullableString("__stree9add__ress", "@@@any_address")
         .requiredString("cit__y__")
@@ -142,10 +143,10 @@ public class SanitizationTestUtils {
         .requiredString("__lastname")
         .name("address").type(addressSchema).noDefault()
         .endRecord();
-    return personSchema;
+    return HoodieSchema.fromAvroSchema(personSchema);
   }
 
-  public static Schema generateRenamedSchemaWithConfiguredReplacement() {
+  public static HoodieSchema generateRenamedSchemaWithConfiguredReplacement() {
     Schema addressSchema = SchemaBuilder.record("_Address").fields()
         .nullableString("_stree9add_ress", "@@@any_address")
         .requiredString("cit_y_")
@@ -155,7 +156,7 @@ public class SanitizationTestUtils {
         .requiredString("_lastname")
         .name("address").type(addressSchema).noDefault()
         .endRecord();
-    return personSchema;
+    return HoodieSchema.fromAvroSchema(personSchema);
   }
 
   public static Stream<Arguments> provideDataFiles() {

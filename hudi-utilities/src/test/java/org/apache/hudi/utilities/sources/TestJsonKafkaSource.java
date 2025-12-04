@@ -278,7 +278,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(10, recs.size());
 
     Schema deducedSchema =
-        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceSchema(), Option.empty(), Option.empty(), props);
+        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceHoodieSchema().toAvroSchema(), Option.empty(), Option.empty(), props);
     verifyDecimalValue(recs, deducedSchema, "decfield");
     verifyDecimalValue(recs, deducedSchema, "lowprecision");
     verifyDecimalValue(recs, deducedSchema, "highprecision");

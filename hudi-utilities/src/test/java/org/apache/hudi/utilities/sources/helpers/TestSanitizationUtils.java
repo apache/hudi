@@ -19,13 +19,13 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaParseException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -83,45 +83,44 @@ public class TestSanitizationUtils {
     assertEquals(expectedSanitizedDataset.collectAsList(), sanitizedDataset.collectAsList());
   }
 
-  private void testSanitizeSchema(String unsanitizedSchema, Schema expectedSanitizedSchema) {
+  private void testSanitizeSchema(String unsanitizedSchema, HoodieSchema expectedSanitizedSchema) {
     testSanitizeSchema(unsanitizedSchema, expectedSanitizedSchema, true);
   }
 
-  private void testSanitizeSchema(String unsanitizedSchema, Schema expectedSanitizedSchema, boolean shouldSanitize) {
+  private void testSanitizeSchema(String unsanitizedSchema, HoodieSchema expectedSanitizedSchema, boolean shouldSanitize) {
     testSanitizeSchema(unsanitizedSchema, expectedSanitizedSchema, shouldSanitize, invalidCharMask);
   }
 
-  private void testSanitizeSchema(String unsanitizedSchema, Schema expectedSanitizedSchema, boolean shouldSanitize, String charMask) {
-    Schema sanitizedSchema = SanitizationUtils.parseAvroSchema(unsanitizedSchema, shouldSanitize, charMask);
+  private void testSanitizeSchema(String unsanitizedSchema, HoodieSchema expectedSanitizedSchema, boolean shouldSanitize, String charMask) {
+    HoodieSchema sanitizedSchema = SanitizationUtils.parseAvroSchema(unsanitizedSchema, shouldSanitize, charMask);
     assertEquals(sanitizedSchema, expectedSanitizedSchema);
   }
 
   @Test
   public void testGoodAvroSchema() {
     String goodJson = getJson("src/test/resources/streamer-config/file_schema_provider_valid.avsc");
-    testSanitizeSchema(goodJson,generateProperFormattedSchema());
+    testSanitizeSchema(goodJson, generateProperFormattedSchema());
   }
 
   @Test
   public void testBadAvroSchema() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
-    testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement());
+    testSanitizeSchema(badJson, generateRenamedSchemaWithDefaultReplacement());
   }
 
   @Test
   public void testBadAvroSchemaAltCharMask() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
-    testSanitizeSchema(badJson,generateRenamedSchemaWithConfiguredReplacement(),true, "_");
+    testSanitizeSchema(badJson, generateRenamedSchemaWithConfiguredReplacement(),true, "_");
   }
 
   @Test
   public void testBadAvroSchemaDisabledTest() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
-    assertThrows(SchemaParseException.class, () -> testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement(), false));
+    assertThrows(HoodieAvroSchemaException.class, () -> testSanitizeSchema(badJson, generateRenamedSchemaWithDefaultReplacement(), false));
   }
 
-  @Test
-  private String getJson(String path) {
+  String getJson(String path) {
     FileSystem fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration(), true);
     String schemaStr;
     try (InputStream in = fs.open(new Path(path))) {

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -32,7 +33,6 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
@@ -87,9 +87,9 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
   @MethodSource("testCreateHoodieRecords")
   void testCreateValidHoodieRecords(
       HoodieRecordType recordType, boolean enableErrorTableWriter, String recordKeyField) {
-    Schema schema = new Schema.Parser().parse(SCHEMA_STRING);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_STRING);
     JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
-      GenericRecord genericRecord = new GenericData.Record(schema);
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
       genericRecord.put(0, i * 1000L);
       genericRecord.put(1, "key" + i);
       genericRecord.put(2, "path" + i);
@@ -118,7 +118,7 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     List<HoodieRecord> records = recordOpt.get().collect();
     assertEquals(1, records.size());
     Object[] columnValues = records.get(0).getColumnValues(
-        schema, new String[] {"timestamp", "_row_key", "partition_path", "rider", "driver"}, false);
+        schema.toAvroSchema(), new String[] {"timestamp", "_row_key", "partition_path", "rider", "driver"}, false);
     Object[] expectedValues = recordType == HoodieRecordType.SPARK
         ? new Object[] {1000L, UTF8String.fromString("key1"), UTF8String.fromString("path1"),
         UTF8String.fromString("rider1"), UTF8String.fromString("driver1")}
@@ -130,9 +130,9 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
   @MethodSource("testCreateHoodieRecords")
   void testCreateHoodieRecordsWithError(
       HoodieRecordType recordType, boolean enableErrorTableWriter, String recordKeyField) {
-    Schema schema = new Schema.Parser().parse(SCHEMA_STRING);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_STRING);
     JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
-      GenericRecord genericRecord = new GenericData.Record(schema);
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
       genericRecord.put(0, i * 1000L);
       genericRecord.put(1, "key" + i);
       genericRecord.put(2, "path" + i);

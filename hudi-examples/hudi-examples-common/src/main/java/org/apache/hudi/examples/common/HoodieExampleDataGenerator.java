@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -60,7 +61,8 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
       + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
       + "{\"name\":\"fare\",\"type\": \"double\"}]}";
-  public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA);
 
   private static final Random RAND = new Random(46474747);
 
@@ -92,7 +94,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
 
   public GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
                                              long timestamp) {
-    GenericRecord rec = new GenericData.Record(avroSchema);
+    GenericRecord rec = new GenericData.Record(AVRO_SCHEMA);
     rec.put("uuid", rowKey);
     rec.put("ts", timestamp);
     rec.put("rider", riderName);
@@ -196,7 +198,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   private Option<String> convertToString(HoodieRecord<T> record) {
     try {
       String str = HoodieAvroUtils
-          .bytesToAvro(((HoodieAvroPayload) record.getData()).getRecordBytes(), avroSchema)
+          .bytesToAvro(((HoodieAvroPayload) record.getData()).getRecordBytes(), AVRO_SCHEMA)
           .toString();
       str = "{" + str.substring(str.indexOf("\"ts\":"));
       return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));

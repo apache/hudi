@@ -225,6 +225,17 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Creates a new HoodieSchemaField from an existing field.
+   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   *
+   * @param field the original HoodieSchemaField to create a new field from
+   * @return a new HoodieSchemaField with the same properties but properly formatted default value
+   */
+  public static HoodieSchemaField createNewSchemaField(HoodieSchemaField field) {
+    return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+  }
+
+  /**
    * Gets a field (including nested fields) from the schema using dot notation.
    * This is equivalent to HoodieAvroUtils.getSchemaForField() but operates on HoodieSchema.
    * <p>
