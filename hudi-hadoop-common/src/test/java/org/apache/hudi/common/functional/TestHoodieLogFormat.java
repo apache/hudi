@@ -581,7 +581,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         "Read records size should be equal to the written records size");
     assertEquals(convertAvroToSerializableIndexedRecords(copyOfRecords1), recordsRead1,
         "Both records lists should be the same. (ordering guaranteed)");
-    assertEquals(dataBlockRead.getSchema(), getSimpleSchema().toAvroSchema());
+    assertEquals(dataBlockRead.getSchema(), getSimpleSchema());
 
     reader.hasNext();
     nextBlock = reader.next();
@@ -662,7 +662,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
     assertEquals(3, recordsRead.size(),
         "Read records size should be equal to the written records size");
-    assertEquals(dataBlockRead.getSchema(), cdcSchema);
+    assertEquals(dataBlockRead.getSchema().toAvroSchema(), cdcSchema);
 
     GenericRecord insert = (GenericRecord) recordsRead.stream()
         .filter(record -> record.get(0).toString().equals("i")).findFirst().get();
@@ -2797,7 +2797,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           "Read records size should be equal to the written records size");
       assertEquals(expectedRecords, recordsRead,
           "Both records lists should be the same. (ordering guaranteed)");
-      assertEquals(dataBlockRead.getSchema(), projectedSchema);
+      assertEquals(dataBlockRead.getSchema().toAvroSchema(), projectedSchema);
 
       int bytesRead = (int) BenchmarkCounter.getBytesRead();
 
