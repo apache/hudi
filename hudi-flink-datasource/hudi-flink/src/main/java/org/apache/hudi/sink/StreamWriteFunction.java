@@ -207,32 +207,24 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
-    WriteFunction writeFunctionImpl;
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
-        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.insert(records, bucketInfo, instantTime);
+        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insert(records, bucketInfo, instantTime);
         break;
       case UPSERT:
       case DELETE: // shares the code path with UPSERT
       case DELETE_PREPPED:
-        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.upsert(records, bucketInfo, instantTime);
+        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.upsert(records, bucketInfo, instantTime);
         break;
       case INSERT_OVERWRITE:
-        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwrite(records, bucketInfo, instantTime);
+        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwrite(records, bucketInfo, instantTime);
         break;
       case INSERT_OVERWRITE_TABLE:
-        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwriteTable(records, bucketInfo, instantTime);
+        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwriteTable(records, bucketInfo, instantTime);
         break;
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
     }
-    this.writeFunction = (records, bucketInfo, instant) -> {
-      if (!records.hasNext()) {
-        LOG.info("Empty records with bucket info => {}.", bucketInfo);
-        return Collections.emptyList();
-      }
-      return writeFunctionImpl.write(records, bucketInfo, instant);
-    };
   }
 
   private void initRecordConverter() {
@@ -495,6 +487,14 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    * Write function to trigger the actual write action.
    */
   protected interface WriteFunction extends Serializable {
-    List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
+    List<WriteStatus> writeImpl(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
+
+    default List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant) {
+      if (!records.hasNext()) {
+        LOG.info("Empty records with bucket info => {}.", bucketInfo);
+        return Collections.emptyList();
+      }
+      return writeImpl(records, bucketInfo, instant);
+    }
   }
 }
