@@ -57,7 +57,7 @@ import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
-  private val LOG = LoggerFactory.getLogger(getClass)
+  val LOG = LoggerFactory.getLogger(getClass)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()

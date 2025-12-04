@@ -221,6 +221,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertResult(table3.properties("type"))("mor")
       assertResult(table3.properties("primaryKey"))("id")
       System.out.println("FULL DDL " + table3.schema.toDDL)
+      LOG.error("FULL DDL " + table3.schema.toDDL)
       assertResult(
         HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
           ++ Seq(
