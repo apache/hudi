@@ -72,6 +72,7 @@ import org.apache.hudi.table.lookup.HoodieLookupFunction;
 import org.apache.hudi.table.lookup.HoodieLookupTableReader;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.SerializableSchema;
@@ -97,6 +98,7 @@ import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
+import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
@@ -114,6 +116,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -135,6 +138,7 @@ public class HoodieTableSource implements
     SupportsLimitPushDown,
     SupportsFilterPushDown,
     LookupTableSource,
+    SupportsReadingMetadata,
     Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
@@ -714,5 +718,15 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public Option<Function<Integer, Integer>> getDataBucketFunc() {
     return dataBucketFunc;
+  }
+
+  @Override
+  public Map<String, DataType> listReadableMetadata() {
+    return conf.get(FlinkOptions.CHANGELOG_ENABLED) ? DataTypeUtils.METADATA_COLUMNS_WITH_OPERATION : DataTypeUtils.METADATA_COLUMNS;
+  }
+
+  @Override
+  public void applyReadableMetadata(List<String> metadataCols, DataType producedDataType) {
+    this.requiredPos = DataTypeUtils.projectOrdinals(tableRowType, (RowType) producedDataType.getLogicalType());
   }
 }

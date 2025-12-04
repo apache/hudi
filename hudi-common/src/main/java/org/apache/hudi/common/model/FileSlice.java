@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
@@ -26,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -103,6 +105,15 @@ public class FileSlice implements Serializable {
     } else {
       return new FileSlice(this, false);
     }
+  }
+
+  public FileSlice filterLogFiles(SerializableFunctionUnchecked<HoodieLogFile, Boolean> filter) {
+    List<HoodieLogFile> filtered = logFiles.stream().filter(filter::apply).collect(Collectors.toList());
+    if (filtered.size() == logFiles.size()) {
+      // nothing filtered, returns this directly.
+      return this;
+    }
+    return new FileSlice(fileGroupId, baseInstantTime, baseFile, filtered);
   }
 
   public boolean hasBootstrapBase() {

@@ -103,7 +103,7 @@ public class HoodieStreamerUtils {
     boolean requiresPayload = isChangingRecords(cfg.operation) && !HoodieWriteConfig.isFileGroupReaderBasedMergeHandle(props);
 
     return avroRDDOptional.map(avroRDD -> {
-      SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
+      SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetHoodieSchema().toAvroSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
       JavaRDD<Either<HoodieRecord,String>> records;
       if (recordType == HoodieRecord.HoodieRecordType.AVRO) {

@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -36,7 +37,6 @@ import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroK
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
-import org.apache.avro.Schema
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -107,13 +107,13 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       rawStructSchema
     }
 
-  lazy val rawAvroSchema: Schema = {
+  lazy val rawHoodieSchema: HoodieSchema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    schemaUtil.getTableAvroSchema
+    schemaUtil.getTableSchema
   }
 
   private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
-    AvroConversionUtils.convertAvroSchemaToStructType(rawAvroSchema)
+    AvroConversionUtils.convertAvroSchemaToStructType(rawHoodieSchema.toAvroSchema)
   }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
