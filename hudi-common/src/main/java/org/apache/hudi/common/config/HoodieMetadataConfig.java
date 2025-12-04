@@ -1042,6 +1042,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withEnableRecordLevelIndex(boolean enabled) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withRecordIndexGrowthFactor(float factor) {
       metadataConfig.setValue(RECORD_INDEX_GROWTH_FACTOR_PROP, String.valueOf(factor));
       return this;

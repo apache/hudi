@@ -58,6 +58,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
  * embedded timeline-server if enabled.
@@ -314,8 +316,13 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     return txnManager;
   }
 
-  protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
+  protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table, HoodieWriteConfig writeConfig) {
     return config.isMetadataTableEnabled()
-        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+            // either or RLI or secondary index should be enabled to leverage streaming writes.
+            && (writeConfig.getMetadataConfig().isGlobalRecordLevelIndexEnabled() || writeConfig.getMetadataConfig().isRecordLevelIndexEnabled()
+            || table.getMetaClient().getTableConfig().getMetadataPartitions()
+                    .stream()
+                    .anyMatch(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX)));
   }
 }

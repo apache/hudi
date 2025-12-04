@@ -101,7 +101,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
       String instantTime,
       WriteOperationType writeOperationType) {
-    if (isStreamingWriteToMetadataEnabled(table)) {
+    if (isStreamingWriteToMetadataEnabled(table, config)) {
       boolean enforceCoalesceWithRepartition = writeOperationType == WriteOperationType.CLUSTER; // for other table services, enforceCoalesceWithRepartition will be false.
       if (enforceCoalesceWithRepartition) {
         enforceCoalesceWithRepartition = computeEnforceCoalesceWithRepartitionForClustering(table, instantTime);
@@ -128,7 +128,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> partialMetadataWriteStats) {
-    if (isStreamingWriteToMetadataEnabled(table)) {
+    if (isStreamingWriteToMetadataEnabled(table, config)) {
       streamingMetadataWriteHandler.commitToMetadataTable(table, instantTime, metadata, partialMetadataWriteStats);
     } else {
       writeTableMetadata(table, instantTime, metadata);
