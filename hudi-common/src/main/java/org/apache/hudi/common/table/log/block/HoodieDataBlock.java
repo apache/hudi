@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
@@ -380,10 +381,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         (schemaString) -> {
           try {
             return HoodieSchema.parse(schemaStr);
-          } catch (AvroTypeException e) {
+          } catch (HoodieAvroSchemaException e) {
             // Archived commits from earlier hudi versions fail the schema check
-            // So we retry in this one specific instance.
-            return HoodieSchema.parse(schemaStr, false);
+            // So we retry in this one specific instance with validation disabled
+            if (e.getCause() instanceof AvroTypeException) {
+              return HoodieSchema.parse(schemaStr, false);
+            }
+            throw e;
           }
         });
     return SCHEMA_MAP.get(schemaStr);
