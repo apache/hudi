@@ -104,7 +104,8 @@ public class TestSparkSchemaUtils {
                         HoodieSchemaField.of("nested", HoodieSchema.createNullable(HoodieSchema.createRecord(
                             "double_nested_struct", null, null, false, Collections.singletonList(
                                 HoodieSchemaField.of("double_nested", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null)))), null, null)))))), null, null),
-            HoodieSchemaField.of("f4", HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchemaType.DOUBLE))))), null, null),
+            HoodieSchemaField.of("f4", HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createArray(
+                HoodieSchema.createNullable(HoodieSchemaType.DOUBLE))))), null, null),
             HoodieSchemaField.of("f5", HoodieSchema.createNullable(HoodieSchema.createRecord("struct",
                     null, null, false, Arrays.asList(
                     HoodieSchemaField.of("id", HoodieSchema.createNullable(HoodieSchemaType.INT), null, null),
