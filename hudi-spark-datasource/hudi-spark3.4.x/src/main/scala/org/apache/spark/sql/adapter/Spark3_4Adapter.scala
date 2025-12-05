@@ -90,9 +90,6 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_4AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def getHoodieSchemaConverters: org.apache.hudi.HoodieSchemaConverters =
-    org.apache.hudi.Spark34HoodieSchemaConverters
-
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_4ExtendedSqlParser(spark, delegate)
 

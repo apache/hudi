@@ -201,7 +201,4 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
       getRebaseSpec("CORRECTED"))
   }
 
-  override def getHoodieSchemaConverters: org.apache.hudi.HoodieSchemaConverters =
-    org.apache.hudi.Spark35HoodieSchemaConverters
-
 }

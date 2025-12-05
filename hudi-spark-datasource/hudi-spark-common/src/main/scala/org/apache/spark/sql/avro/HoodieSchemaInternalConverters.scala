@@ -15,22 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.spark.sql.avro
 
+import org.apache.hudi.HoodieSchemaConverters
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 
+import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
 
 /**
- * Base Spark 3.x implementation for converting HoodieSchema to Spark SQL schemas.
+ * This object contains methods that are used to convert HoodieSchema to Spark SQL schemas and vice versa.
  *
- * This implementation works for Spark 3.3+ but does NOT use TimestampNTZType.
- * Local timestamps are mapped to regular TimestampType for compatibility.
- * Spark 3.4+ can override to use TimestampNTZType.
+ * NOTE: This provides direct conversion between HoodieSchema and Spark DataType
+ * without going through Avro Schema intermediary.
  */
-object BaseSpark3HoodieSchemaConverters extends HoodieSchemaConverters {
+
+@DeveloperApi
+private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverters {
 
   /**
    * Internal wrapper for SQL data type and nullability.
@@ -50,6 +53,7 @@ object BaseSpark3HoodieSchemaConverters extends HoodieSchemaConverters {
       case LongType => HoodieSchema.create(HoodieSchemaType.LONG)
       case DateType => HoodieSchema.createDate()
       case TimestampType => HoodieSchema.createTimestampMicros()
+      case TimestampNTZType => HoodieSchema.createLocalTimestampMicros()
       case FloatType => HoodieSchema.create(HoodieSchemaType.FLOAT)
       case DoubleType => HoodieSchema.create(HoodieSchemaType.DOUBLE)
       case StringType | _: CharType | _: VarcharType => HoodieSchema.create(HoodieSchemaType.STRING)
@@ -132,10 +136,13 @@ object BaseSpark3HoodieSchemaConverters extends HoodieSchemaConverters {
       case HoodieSchemaType.TIMESTAMP =>
         hoodieSchema match {
           case ts: HoodieSchema.Timestamp =>
-            // For Spark 3.3: Map both UTC and local timestamps to TimestampType
-            // (Spark 3.4+ will override this to use TimestampNTZType for local)
-            SchemaType(TimestampType, nullable = false)
+            if (ts.isUtcAdjusted) {
+              SchemaType(TimestampType, nullable = false)
+            } else {
+              SchemaType(TimestampNTZType, nullable = false)
+            }
           case _ =>
+            // Fallback for non-specialized timestamp schema
             SchemaType(TimestampType, nullable = false)
         }
 
@@ -227,8 +234,3 @@ object BaseSpark3HoodieSchemaConverters extends HoodieSchemaConverters {
       }
   }
 }
-
-/**
- * Exception thrown when schemas are incompatible during conversion.
- */
-class IncompatibleSchemaException(msg: String, ex: Throwable = null) extends Exception(msg, ex)
