@@ -18,18 +18,9 @@
 
 .card p,
 .card a {
-    color: #1e293b;
+    color: var(--ifm-blue-900);
     font-size: 0.95rem;
     line-height: 1.6;
-}
-
-.card a {
-    color: #0078e7;
-    text-decoration: none;
-}
-
-.card a:hover {
-    text-decoration: underline;
 }
 
 .getInvloved {
