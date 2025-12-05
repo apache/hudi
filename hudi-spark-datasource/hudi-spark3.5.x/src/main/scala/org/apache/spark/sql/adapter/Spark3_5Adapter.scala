@@ -200,5 +200,4 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
       storageConf.getBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis),
       getRebaseSpec("CORRECTED"))
   }
-
 }
