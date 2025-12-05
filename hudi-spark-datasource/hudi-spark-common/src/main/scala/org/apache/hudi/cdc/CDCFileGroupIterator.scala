@@ -23,6 +23,7 @@ import org.apache.hudi.{AvroConversionUtils, HoodieTableSchema, SparkAdapterSupp
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.cdc.CDCFileGroupIterator.{CDC_OPERATION_DELETE, CDC_OPERATION_INSERT, CDC_OPERATION_UPDATE}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRESSION_ENABLED, SPILLABLE_DISK_MAP_TYPE}
 import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
@@ -358,7 +359,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         // no real record is deleted, just ignore.
       } else {
         // there is a real record deleted.
-        recordToLoad.update(0, CDCRelation.CDC_OPERATION_DELETE)
+        recordToLoad.update(0, CDC_OPERATION_DELETE)
         recordToLoad.update(2, convertBufferedRecordToJsonString(existingRecordOpt.get))
         recordToLoad.update(3, null)
         loaded = true
@@ -367,7 +368,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       val existingRecordOpt = beforeImageRecords.get(logRecord.getRecordKey)
       if (existingRecordOpt.isEmpty) {
         // a new record is inserted.
-        recordToLoad.update(0, CDCRelation.CDC_OPERATION_INSERT)
+        recordToLoad.update(0, CDC_OPERATION_INSERT)
         recordToLoad.update(2, null)
         recordToLoad.update(3, convertBufferedRecordToJsonString(logRecord))
         // insert into beforeImageRecords
@@ -378,7 +379,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         val existingRecord = existingRecordOpt.get
         val mergeRecord = merge(existingRecord, logRecord)
         if (existingRecord != mergeRecord) {
-          recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
+          recordToLoad.update(0, CDC_OPERATION_UPDATE)
           recordToLoad.update(2, convertBufferedRecordToJsonString(existingRecord))
           recordToLoad.update(3, convertBufferedRecordToJsonString(mergeRecord))
           // update into beforeImageRecords
@@ -467,11 +468,11 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     recordToLoad = currentCDCFileSplit.getCdcInferCase match {
       case BASE_FILE_INSERT =>
         InternalRow.fromSeq(Seq(
-          CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
+          CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
           null, null))
       case BASE_FILE_DELETE =>
         InternalRow.fromSeq(Seq(
-          CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
+          CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
           null, null))
       case LOG_FILE =>
         InternalRow.fromSeq(Seq(
@@ -483,7 +484,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           null, null))
       case REPLACE_COMMIT =>
         InternalRow.fromSeq(Seq(
-          CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
+          CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
           null, null))
     }
   }
@@ -600,4 +601,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       cdcLogRecordIterator = null
     }
   }
+}
+
+object CDCFileGroupIterator {
+  val CDC_OPERATION_DELETE: UTF8String = UTF8String.fromString(DELETE.getValue)
+  val CDC_OPERATION_INSERT: UTF8String = UTF8String.fromString(INSERT.getValue)
+  val CDC_OPERATION_UPDATE: UTF8String = UTF8String.fromString(UPDATE.getValue)
 }

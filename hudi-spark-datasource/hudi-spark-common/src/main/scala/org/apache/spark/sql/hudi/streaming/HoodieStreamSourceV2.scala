@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hudi.streaming
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, HoodieSparkUtils, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
-import org.apache.hudi.cdc.CDCRelation
+import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.util.SparkConfigUtils
@@ -59,7 +58,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
   private lazy val enableFileGroupReader = SparkConfigUtils
     .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
 
-  private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
+  private val isCDCQuery = HoodieCDCFileIndex.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
 
@@ -82,7 +81,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
   override def schema: StructType = {
     if (isCDCQuery) {
-      CDCRelation.FULL_CDC_SPARK_SCHEMA
+      HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
     } else {
       schemaOption.getOrElse {
         val schemaUtil = new TableSchemaResolver(metaClient)
@@ -137,7 +136,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
           new HoodieMergeOnReadCDCHadoopFsRelationFactory(
             sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable, rangeType).build()
         }
-        sparkAdapter.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+        sparkAdapter.createStreamingDataFrame(sqlContext, relation, HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA)
       } else {
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(

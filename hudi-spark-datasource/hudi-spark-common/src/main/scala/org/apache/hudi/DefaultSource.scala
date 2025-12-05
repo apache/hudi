@@ -19,23 +19,21 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
-import org.apache.hudi.cdc.CDCRelation
+import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.HoodieSchemaNotFoundException
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, WRITE_TABLE_VERSION}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-import org.apache.hudi.util.{SparkConfigUtils}
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -386,11 +384,11 @@ object DefaultSource {
   private def resolveSchema(metaClient: HoodieTableMetaClient,
                             parameters: Map[String, String],
                             schema: Option[StructType]): StructType = {
-    val isCdcQuery = CDCRelation.isCDCEnabled(metaClient) &&
+    val isCdcQuery = HoodieCDCFileIndex.isCDCEnabled(metaClient) &&
       parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
     if (isCdcQuery) {
-      CDCRelation.FULL_CDC_SPARK_SCHEMA
+      HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)
       try {
