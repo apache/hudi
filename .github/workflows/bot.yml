@@ -1199,6 +1199,17 @@ jobs:
           architecture: x64
       - name: Check disk space
         run: df -h
+      - name: Check disk space 2
+        run: df -h /
+      - name: 'Free space'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          docker system prune --all --force --volumes
+      - name: Check disk space 3
+        run: df -h
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1212,13 +1223,6 @@ jobs:
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
-      - name: 'Free space'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          docker system prune --all --force --volumes
       - name: 'IT'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
