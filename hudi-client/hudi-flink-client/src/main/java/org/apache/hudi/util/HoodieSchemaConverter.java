@@ -358,7 +358,7 @@ public class HoodieSchemaConverter {
   }
 
   private static DataType convertTimestamp(HoodieSchema schema) {
-    if (!(schema instanceof HoodieSchema.Timestamp)) {
+    if (!(schema.getType() == HoodieSchemaType.TIMESTAMP)) {
       throw new IllegalStateException("Expected HoodieSchema.Timestamp but got: " + schema.getClass());
     }
     HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
@@ -372,7 +372,7 @@ public class HoodieSchemaConverter {
   }
 
   private static DataType convertTime(HoodieSchema schema) {
-    if (!(schema instanceof HoodieSchema.Time)) {
+    if (!(schema.getType() == HoodieSchemaType.TIME)) {
       throw new IllegalStateException("Expected HoodieSchema.Time but got: " + schema.getClass());
     }
     HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;

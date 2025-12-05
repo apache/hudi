@@ -20,7 +20,6 @@ package org.apache.hudi.table.format.cdc;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
@@ -476,7 +476,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
   }
 
   abstract static class BaseImageIterator implements ClosableIterator<RowData> {
-    private final Schema requiredSchema;
+    private final HoodieSchema requiredSchema;
     private final int[] requiredPos;
     private final GenericRecordBuilder recordBuilder;
     private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
@@ -496,9 +496,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadTableState tableState,
         Schema cdcSchema,
         HoodieCDCFileSplit fileSplit) {
-      this.requiredSchema = HoodieSchema.parse(tableState.getRequiredAvroSchema()).getAvroSchema();
+      this.requiredSchema = HoodieSchema.parse(tableState.getRequiredAvroSchema());
       this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
-      this.recordBuilder = new GenericRecordBuilder(requiredSchema);
+      this.recordBuilder = new GenericRecordBuilder(requiredSchema.getAvroSchema());
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
       StoragePath hadoopTablePath = new StoragePath(tablePath);
       HoodieStorage storage = new HoodieHadoopStorage(tablePath, hadoopConf);
@@ -513,9 +513,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
     }
 
-    private int[] getRequiredPos(String tableSchema, Schema required) {
-      Schema dataSchema = HoodieAvroUtils.removeMetadataFields(HoodieSchema.parse(tableSchema).getAvroSchema());
-      List<String> fields = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    private int[] getRequiredPos(String tableSchema, HoodieSchema required) {
+      HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(HoodieSchema.parse(tableSchema));
+      List<String> fields = dataSchema.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList());
       return required.getFields().stream()
           .map(f -> fields.indexOf(f.name()))
           .mapToInt(i -> i)
@@ -574,7 +574,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     protected RowData resolveAvro(RowKind rowKind, GenericRecord avroRecord) {
       GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
           avroRecord,
-          HoodieSchema.fromAvroSchema(requiredSchema),
+          requiredSchema,
           requiredPos,
           recordBuilder);
       RowData resolved = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);

@@ -18,8 +18,10 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.Schema;
@@ -43,6 +45,9 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public final class HoodieSchemaUtils {
+
+  public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+  public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
@@ -236,4 +241,21 @@ public final class HoodieSchemaUtils {
         name, schema.toAvroSchema(), doc, defaultValue);
     return HoodieSchemaField.fromAvroField(avroField);
   }
+
+  private static HoodieSchema initRecordKeySchema() {
+    HoodieSchemaField recordKeyField =
+            createNewSchemaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    return HoodieSchema.createRecord(
+            "HoodieRecordKey",
+            "",
+            "",
+            false,
+            Collections.singletonList(recordKeyField)
+    );
+  }
+
+  public static HoodieSchema getRecordKeySchema() {
+    return RECORD_KEY_SCHEMA;
+  }
+
 }

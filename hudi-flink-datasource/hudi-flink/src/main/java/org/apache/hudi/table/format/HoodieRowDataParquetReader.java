@@ -18,12 +18,12 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -83,7 +83,6 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    //TODO boundary to follow up in later pr
     ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema, Collections.emptyList());
     readerIterators.add(rowDataItr);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
@@ -91,8 +90,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    //TODO add a util for this in HoodieSchemaUtils
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieAvroUtils.getRecordKeySchema());
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), schema, Collections.emptyList());
     return new CloseableMappingIterator<>(rowDataItr, rowData -> Objects.toString(rowData.getString(0)));
   }
@@ -108,7 +106,6 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   @Override
   public HoodieSchema getSchema() {
     if (fileSchema == null) {
-      //TODO to create a converter for HoodieSchema
       fileSchema = HoodieSchemaConverter.convertToSchema(getRowType().notNull().getLogicalType());
     }
     return fileSchema;

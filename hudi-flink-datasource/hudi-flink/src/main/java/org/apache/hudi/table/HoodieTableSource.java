@@ -440,7 +440,6 @@ public class HoodieTableSource implements
 
   private InputFormat<RowData, ?> getBatchInputFormat() {
     final HoodieSchema tableSchema = getTableSchema();
-    //TODO make a convertor
     final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();

@@ -249,7 +249,7 @@ public class TestStreamReadOperator {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
     final HoodieSchema tableSchema;
     try {
-      tableSchema = HoodieSchema.fromAvroSchema(schemaResolver.getTableAvroSchema());
+      tableSchema = schemaResolver.getTableSchema();
     } catch (Exception e) {
       throw new HoodieException("Get table avro schema error", e);
     }

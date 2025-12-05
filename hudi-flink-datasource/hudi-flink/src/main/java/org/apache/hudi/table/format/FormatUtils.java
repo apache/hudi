@@ -62,7 +62,7 @@ public class FormatUtils {
     List<HoodieSchemaField> requiredFields = requiredSchema.getFields();
     assert (requiredFields.size() == requiredPos.length);
     Iterator<Integer> positionIterator = Arrays.stream(requiredPos).iterator();
-    requiredFields.forEach(f -> recordBuilder.set(f.name(), getVal(record, positionIterator.next())));
+    requiredFields.forEach(f -> recordBuilder.set(f.getAvroField(), getVal(record, positionIterator.next())));
     return recordBuilder.build();
   }
 

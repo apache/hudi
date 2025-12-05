@@ -73,7 +73,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     FileSystem fs = HadoopFSUtils.getFs(sourceSchemaFile, HadoopConfigurations.getHadoopConf(new Configuration()));
     try {
       try (InputStream stream = fs.open(new Path(sourceSchemaFile))) {
-        this.sourceSchema = new HoodieSchema.Parser().parse(stream);
+        this.sourceSchema = HoodieSchema.parse(stream);
       }
       if (containsConfigProperty(props, Config.TARGET_SCHEMA_FILE)) {
         try (InputStream stream = fs.open(new Path(getStringWithAltKeys(props, Config.TARGET_SCHEMA_FILE)))) {
