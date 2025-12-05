@@ -21,10 +21,12 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -36,6 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.sql.Timestamp;
+import java.util.Collections;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
@@ -44,18 +47,19 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTI
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link RowDataKeyGen}.
  */
-public class TestRowDataKeyGen {
+public class TestRowDataKeyGens {
   @Test
   void testSimpleKeyAndPartition() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
-    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen1.getRecordKey(rowData1), is("id1"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1"));
 
@@ -72,7 +76,7 @@ public class TestRowDataKeyGen {
 
     // hive style partitioning
     conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, true);
-    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen2 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen2.getPartitionPath(rowData1), is(String.format("partition=%s", "par1")));
     assertThat(keyGen2.getPartitionPath(rowData2), is(String.format("partition=%s", DEFAULT_PARTITION_PATH)));
     assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s", DEFAULT_PARTITION_PATH)));
@@ -118,7 +122,7 @@ public class TestRowDataKeyGen {
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
     RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
-    RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,name:Danny"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
@@ -134,7 +138,7 @@ public class TestRowDataKeyGen {
 
     // hive style partitioning
     conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, true);
-    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen2 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen2.getPartitionPath(rowData1), is(String.format("partition=%s/ts=%s", "par1", "1970-01-01T00:00:00.001")));
     assertThat(keyGen2.getPartitionPath(rowData2), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)));
     assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, "1970-01-01T00:00:00.001")));
@@ -147,7 +151,7 @@ public class TestRowDataKeyGen {
     HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(7200000), StringData.fromString("par1"));
-    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
 
     assertThat(keyGen1.getRecordKey(rowData1), is("id1"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("1970010102"));
@@ -165,7 +169,7 @@ public class TestRowDataKeyGen {
 
     // hive style partitioning
     conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, true);
-    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen2 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen2.getPartitionPath(rowData1), is("ts=1970010102"));
     assertThat(keyGen2.getPartitionPath(rowData2), is("ts=1970010100"));
     assertThat(keyGen2.getPartitionPath(rowData3), is("ts=1970010100"));
@@ -179,7 +183,7 @@ public class TestRowDataKeyGen {
     conf.setString(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), "yyyy-MM-dd");
     final RowData rowData4 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(7200000), StringData.fromString("2004-02-29 01:02:03"));
-    final RowDataKeyGen keyGen3 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen3 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen3.getPartitionPath(rowData4), is("2004-02-29"));
   }
 
@@ -193,7 +197,7 @@ public class TestRowDataKeyGen {
     HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.DATE());
     final RowData rowData1 = insertRow(TestConfigurations.ROW_TYPE_DATE,
         StringData.fromString("id1"), StringData.fromString("Danny"), 23, 1);
-    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE_DATE);
+    final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE_DATE);
 
     assertThat(keyGen1.getRecordKey(rowData1), is("id1"));
     String expectedPartition1 = dashed ? "1970-01-02" : "19700102";
@@ -213,7 +217,7 @@ public class TestRowDataKeyGen {
 
     // hive style partitioning
     conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, true);
-    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE_DATE);
+    final RowDataKeyGen keyGen2 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE_DATE);
     assertThat(keyGen2.getPartitionPath(rowData1), is("dt=" + expectedPartition1));
     assertThat(keyGen2.getPartitionPath(rowData2), is("dt=" + expectedPartition2));
     assertThat(keyGen2.getPartitionPath(rowData3), is("dt=" + expectedPartition3));
@@ -249,14 +253,42 @@ public class TestRowDataKeyGen {
     Timestamp ts = new Timestamp(1675841687000L);
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromTimestamp(ts), StringData.fromString("par1"));
-    final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
 
     assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,ts:" + ts.toLocalDateTime().toString()));
 
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
-    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    final RowDataKeyGen keyGen2 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
 
     assertThat(keyGen2.getRecordKey(rowData1), is("uuid:id1,ts:1675841687000"));
+  }
 
+  @Test
+  void testAutoKeyGenRecordKey() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+
+    int taskId = 1;
+    String instantTime = "20250716145212986";
+    final AutoRowDataKeyGen autoKeyGen = (AutoRowDataKeyGen) RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(0)), is(instantTime + "_" + taskId + "_0"));
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(1)), is(instantTime + "_" + taskId + "_1"));
+  }
+
+  @Test
+  void testAutoKeyGenNotAllowNulls() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+
+    HoodieValidationException exNullInstant =
+        assertThrows(HoodieValidationException.class, () -> RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, 1, null));
+    assertLinesMatch(Collections.singletonList("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = 1, 'instantTime' = null"),
+        Collections.singletonList(exNullInstant.getMessage()));
+    HoodieValidationException exNullTask =
+        assertThrows(HoodieValidationException.class, () -> RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, null, "20250716145212986"));
+    assertLinesMatch(Collections.singletonList("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = null, 'instantTime' = 20250716145212986"),
+        Collections.singletonList(exNullTask.getMessage()));
   }
 }

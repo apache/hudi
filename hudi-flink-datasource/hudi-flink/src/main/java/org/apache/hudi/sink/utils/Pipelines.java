@@ -38,6 +38,7 @@ import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
@@ -121,7 +122,7 @@ public class Pipelines {
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
       BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeys);
-      RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+      RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
       boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
@@ -146,7 +147,7 @@ public class Pipelines {
         // see BatchExecutionUtils#applyBatchExecutionSettings for details.
         Partitioner<String> partitioner = (key, channels) -> KeyGroupRangeAssignment.assignKeyToParallelOperator(key,
             KeyGroupRangeAssignment.computeDefaultMaxParallelism(PARALLELISM_VALUE), channels);
-        RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+        RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
 
@@ -208,7 +209,7 @@ public class Pipelines {
 
     Option<Partitioner> insertPartitioner = OptionsResolver.getInsertPartitioner(conf);
     if (insertPartitioner.isPresent()) {
-      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+      RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
       dataStream = dataStream.partitionCustom(insertPartitioner.get(), rowDataKeyGen::getHoodieKey);
     }
 
@@ -288,7 +289,7 @@ public class Pipelines {
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream) {
-    final RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+    final RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
     // shuffle by partition keys
     dataStream = dataStream
         .keyBy(rowDataKeyGen::getPartitionPath);
