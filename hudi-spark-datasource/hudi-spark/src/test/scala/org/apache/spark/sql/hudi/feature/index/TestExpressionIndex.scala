@@ -1735,6 +1735,80 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   }
 
   /**
+   * Test expression index with TIMESTAMP type using hour() function. [ENG-27975]
+   * This test reproduces a bug where expression index does not work for TIMESTAMP type with hour().
+   */
+  test("Test Expression Index With TIMESTAMP Type Using Hour Function") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName + s"_timestamp_hour_$tableType"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        withCompactionConfigs(tableType) {
+          withSQLConf("hoodie.fileIndex.dataSkippingFailureMode" -> "strict") {
+            val extraConf = if (HoodieSparkUtils.gteqSpark3_4) {
+              Map("spark.sql.defaultColumn.enabled" -> "false",
+                "hoodie.parquet.small.file.limit" -> "0")
+            } else {
+              Map("hoodie.parquet.small.file.limit" -> "0")
+            }
+            withSQLConf(extraConf.toSeq: _*) {
+              spark.sql(
+                s"""
+                   |CREATE TABLE $tableName (
+                   |    ts TIMESTAMP,
+                   |    uuid STRING,
+                   |    rider STRING,
+                   |    driver STRING,
+                   |    fare DOUBLE,
+                   |    city STRING
+                   |) USING HUDI
+                   |options(
+                   |    primaryKey ='uuid',
+                   |    type = '$tableType',
+                   |    preCombineField = 'ts',
+                   |    hoodie.metadata.enable = 'true',
+                   |    hoodie.enable.data.skipping = 'true',
+                   |    hoodie.metadata.index.column.stats.column.list = 'fare'
+                   |)
+                   |PARTITIONED BY (city)
+                   |location '$basePath'
+                   |""".stripMargin)
+
+              spark.sql(
+                s"""
+                   |INSERT INTO $tableName VALUES
+                   |  (TIMESTAMP('2023-09-19 23:40:49'),'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+                   |  (TIMESTAMP('2023-09-18 21:45:54'),'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70,'san_francisco'),
+                   |  (TIMESTAMP('2023-09-18 19:14:22'),'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90,'san_francisco'),
+                   |  (TIMESTAMP('2023-09-21 16:34:26'),'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+                   |  (TIMESTAMP('2023-09-23 09:42:17'),'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'),
+                   |  (TIMESTAMP('2023-09-22 09:53:40'),'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40,'sao_paulo'),
+                   |  (TIMESTAMP('2023-09-19 02:38:07'),'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06,'chennai'),
+                   |  (TIMESTAMP('2023-09-19 01:33:19'),'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai')
+                   |""".stripMargin)
+
+              // Create expression index using hour() function on TIMESTAMP column
+              spark.sql(s"CREATE INDEX ts_hour ON $tableName USING column_stats(ts) options(expr='hour')")
+
+              // Validate index created successfully
+              val metaClient = createMetaClient(spark, basePath)
+              assertTrue(metaClient.getIndexMetadata.isPresent)
+              val expressionIndexMetadata = metaClient.getIndexMetadata.get()
+              assertEquals(1, expressionIndexMetadata.getIndexDefinitions.size())
+              assertEquals("expr_index_ts_hour", expressionIndexMetadata.getIndexDefinitions.get("expr_index_ts_hour").getIndexName)
+
+              // This query should work but currently fails with the bug
+              // The error occurs when executing mapToPair during data skipping
+              // Error: org.apache.hudi.exception.HoodieException: Error occurs when executing mapToPair
+              spark.sql(s"SELECT city, _hoodie_file_name, fare FROM $tableName WHERE hour(ts) = 16").collect()
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Test expression index with data skipping for string expressions.
    */
   test("Test Expression Index Column Stat Pruning With String Expression") {
