@@ -1199,8 +1199,6 @@ jobs:
           architecture: x64
       - name: Check disk space
         run: df -h
-      - name: Check disk space 2
-        run: df -h /usr/share
       - name: 'Free space'
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -1208,7 +1206,7 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
           docker system prune --all --force --volumes
-      - name: Check disk space 3
+      - name: Check disk space after cleanup
         run: df -h
       - name: Build Project
         env:
