@@ -686,6 +686,17 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Check disk space
+        run: df -h
+      - name: 'Free space'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          docker system prune --all --force --volumes
+      - name: Check disk space after cleanup
+        run: df -h
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
