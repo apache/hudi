@@ -92,16 +92,16 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     return sourceSchema;
   }
 
   @Override
-  public HoodieSchema getTargetSchema() {
+  public HoodieSchema getTargetHoodieSchema() {
     if (targetSchema != null) {
       return targetSchema;
     } else {
-      return super.getTargetSchema();
+      return super.getTargetHoodieSchema();
     }
   }
 }

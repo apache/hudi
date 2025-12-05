@@ -196,7 +196,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatLoadForNonPartitionedAndVirtualKeyedTable() throws IOException {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     File partitionDir = InputFormatTestUtil.prepareCustomizedTable(basePath, baseFileFormat, 10, "100", true, false,
         true, schema);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,

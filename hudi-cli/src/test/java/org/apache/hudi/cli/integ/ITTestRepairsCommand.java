@@ -85,7 +85,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     repairedOutputPath = Paths.get(basePath, "tmp").toString();
 
     HoodieCLI.conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     // generate 200 records
     SchemaTestUtil testUtil = new SchemaTestUtil();

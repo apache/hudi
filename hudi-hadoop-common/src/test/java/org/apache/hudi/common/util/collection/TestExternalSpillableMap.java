@@ -83,7 +83,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void simpleInsertTest(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
@@ -118,7 +118,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testSimpleUpsert(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
@@ -159,7 +159,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAllMapOperations(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
 
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
@@ -218,7 +218,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void simpleTestWithException(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records = new ExternalSpillableMap<>(16L,
         failureOutputPath, new DefaultSizeEstimator(),
@@ -243,7 +243,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
                                                                  boolean isCompressionEnabled) throws IOException,
       URISyntaxException {
 
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
@@ -400,7 +400,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testDataCorrectnessWithRecordExistsInDiskMapAndThenUpsertToMem(ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     SizeEstimator keyEstimator = new DefaultSizeEstimator();
     SizeEstimator valEstimator = new HoodieRecordSizeEstimator(schema.toAvroSchema());

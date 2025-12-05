@@ -199,7 +199,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, INSTANT_TIME, HoodieCLI.conf);
 
     // write to path '2015/03/16'.
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     partitionPath = tablePath + StoragePath.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 

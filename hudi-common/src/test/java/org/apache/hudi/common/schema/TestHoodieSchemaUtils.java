@@ -102,7 +102,7 @@ public class TestHoodieSchemaUtils {
     assertEquals(schemaWithMeta.getFields().size(), baseSchema.getFields().size() + 6);
 
     // Test adding metadata fields without operation field  
-    HoodieSchema schemaWithMetaNoOp = HoodieSchemaUtils.addMetadataFields(baseSchema, false);
+    HoodieSchema schemaWithMetaNoOp = HoodieSchemaUtils.addMetadataFields(baseSchema);
 
     assertNotNull(schemaWithMetaNoOp);
     assertEquals(schemaWithMetaNoOp.getFields().size(), baseSchema.getFields().size() + 5);

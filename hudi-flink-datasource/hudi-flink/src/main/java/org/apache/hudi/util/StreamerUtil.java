@@ -139,7 +139,7 @@ public class StreamerUtil {
 
   public static HoodieSchema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
-      return new FilebasedSchemaProvider(conf).getSourceSchema();
+      return new FilebasedSchemaProvider(conf).getSourceHoodieSchema();
     } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
       final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
       return HoodieSchema.parse(schemaStr);

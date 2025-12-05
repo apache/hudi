@@ -142,7 +142,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimpleUpsert() throws IOException, URISyntaxException {
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
 
     try (RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
       SchemaTestUtil testUtil = new SchemaTestUtil();

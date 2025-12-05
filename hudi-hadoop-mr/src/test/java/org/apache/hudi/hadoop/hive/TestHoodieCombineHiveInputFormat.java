@@ -122,7 +122,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   public void testInternalSchemaCacheForMR() throws Exception {
     // test for HUDI-8182
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     java.nio.file.Path path1 = tempDir.resolve("tblOne");
     java.nio.file.Path path2 = tempDir.resolve("tblTwo");
     HoodieTestUtils.init(conf, path1.toString(), HoodieTableType.MERGE_ON_READ);
@@ -134,7 +134,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     HoodieCommitMetadata commitMetadataOne = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     // mock the latest schema to the commit metadata
-    InternalSchema internalSchema = InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(schema.toAvroSchema()));
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
     commitMetadataOne.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
     // Create 3 parquet files with 10 records each for partition 2
@@ -202,7 +202,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // test for HUDI-1718
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -285,7 +285,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // test for HUDI-1718
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -368,7 +368,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // test for hudi-1722
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -438,7 +438,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;

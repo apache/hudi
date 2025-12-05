@@ -318,7 +318,7 @@ public class InputFormatTestUtil {
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema.toAvroSchema());
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
-        HoodieSchema hoodieFieldsSchema = HoodieSchemaUtils.addMetadataFields(schema, false);
+        HoodieSchema hoodieFieldsSchema = HoodieSchemaUtils.addMetadataFields(schema);
         for (IndexedRecord record : records) {
           GenericRecord p = HoodieAvroUtils.rewriteRecord((GenericRecord) record, hoodieFieldsSchema.toAvroSchema());
           p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());

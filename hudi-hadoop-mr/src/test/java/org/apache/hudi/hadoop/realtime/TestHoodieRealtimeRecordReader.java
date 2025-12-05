@@ -196,7 +196,7 @@ public class TestHoodieRealtimeRecordReader {
                                   boolean isCompressionEnabled,
                                   boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
@@ -308,7 +308,7 @@ public class TestHoodieRealtimeRecordReader {
   @Test
   public void testUnMergedReader() throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     final int numRecords = 1000;
@@ -392,7 +392,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testReaderWithNestedAndComplexSchema(ExternalSpillableMap.DiskMapType diskMapType,
                                                    boolean isCompressionEnabled) throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
@@ -533,7 +533,7 @@ public class TestHoodieRealtimeRecordReader {
                                                                boolean isCompressionEnabled) throws Exception {
     // initial commit
     List<HoodieLogFile> logFiles = new ArrayList<>();
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
@@ -624,7 +624,7 @@ public class TestHoodieRealtimeRecordReader {
     boolean isCompressionEnabled = true;
     // initial commit
     List<HoodieLogFile> logFiles = new ArrayList<>();
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
@@ -639,7 +639,7 @@ public class TestHoodieRealtimeRecordReader {
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
 
     // 2nd commit w/ evolved schema
-    HoodieSchema evolvedSchema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedCompatibleSchema(), false);
+    HoodieSchema evolvedSchema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedCompatibleSchema());
     List<HoodieSchemaField> secondSchemaFields = evolvedSchema.getFields();
     String newCommitTime = "101";
     File partitionDir1 =
@@ -692,7 +692,7 @@ public class TestHoodieRealtimeRecordReader {
   @Test
   public void testIncrementalWithOnlylog() throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     final int numRecords = 1000;
@@ -743,7 +743,7 @@ public class TestHoodieRealtimeRecordReader {
   @Test
   public void testIncrementalWithReplace() throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
@@ -854,7 +854,7 @@ public class TestHoodieRealtimeRecordReader {
   @Test
   public void testLogOnlyReader() throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     URI baseUri = basePath.toUri();
     HoodieTestUtils.init(storageConf, baseUri.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
@@ -937,7 +937,7 @@ public class TestHoodieRealtimeRecordReader {
   @Test
   public void testIncrementalWithCompaction() throws Exception {
     // initial commit
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,

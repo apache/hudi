@@ -57,7 +57,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class HoodieAdaptablePayloadDataGenerator {
 
   public static final HoodieSchema SCHEMA = SchemaTestUtil.getSchemaFromResource(HoodieAdaptablePayloadDataGenerator.class, "/adaptable-payload.avsc");
-  public static final HoodieSchema SCHEMA_WITH_METAFIELDS = HoodieSchemaUtils.addMetadataFields(SCHEMA, false);
+  public static final HoodieSchema SCHEMA_WITH_METAFIELDS = HoodieSchemaUtils.addMetadataFields(SCHEMA);
   public static final String SCHEMA_STR = SCHEMA.toString();
 
   public static Properties getKeyGenProps(Class<?> payloadClass) {

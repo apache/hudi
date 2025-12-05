@@ -230,7 +230,7 @@ public final class SchemaTestUtil {
                                                        String instantTime)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, recordKeyList.size());
-    HoodieSchema hoodieFieldsSchema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema(), false);
+    HoodieSchema hoodieFieldsSchema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     List<IndexedRecord> recordsWithMetaFields = new ArrayList<>();
     for (int i = 0; i < recordKeyList.size(); i++) {
       GenericRecord newRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) records.get(i), hoodieFieldsSchema.toAvroSchema());
@@ -325,7 +325,7 @@ public final class SchemaTestUtil {
   public static HoodieSchema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
     try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
       HoodieSchema schema = new HoodieSchema.Parser().parse(schemaInputStream);
-      return withHoodieMetadata ? HoodieSchemaUtils.addMetadataFields(schema, false) : schema;
+      return withHoodieMetadata ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
     }

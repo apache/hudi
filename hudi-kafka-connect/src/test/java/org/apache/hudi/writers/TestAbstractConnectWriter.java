@@ -75,7 +75,7 @@ public class TestAbstractConnectWriter {
   @ParameterizedTest
   @EnumSource(value = TestInputFormats.class)
   public void testAbstractWriterForAllFormats(TestInputFormats inputFormats) throws Exception {
-    HoodieSchema schema = schemaProvider.getSourceSchema();
+    HoodieSchema schema = schemaProvider.getSourceHoodieSchema();
     List<?> inputRecords;
     List<HoodieRecord> expectedRecords;
 
@@ -194,7 +194,7 @@ public class TestAbstractConnectWriter {
   static class TestSchemaProvider extends SchemaProvider {
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       try {
         return SchemaTestUtil.getSimpleSchema();
       } catch (IOException exception) {
