@@ -39,7 +39,10 @@ public abstract class SchemaProvider implements Serializable {
    * @return Source schema as a HoodieSchema object.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract HoodieSchema getSourceHoodieSchema();
+  public HoodieSchema getSourceHoodieSchema() {
+    Schema schema = getSourceSchema();
+    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+  }
 
   /**
    * Fetches the source schema from the provider.
@@ -58,14 +61,21 @@ public abstract class SchemaProvider implements Serializable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public HoodieSchema getTargetHoodieSchema() {
-    // by default, use source schema as target for hoodie table as well
-    return getSourceHoodieSchema();
+    try {
+      // By default, delegate to legacy getTargetSchema() method
+      Schema schema = getTargetSchema();
+      return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+    } catch (UnsupportedOperationException e) {
+      // If the legacy getTargetSchema() calls getSourceSchema() which is not implemented,
+      // fall back to using getSourceHoodieSchema as target schema
+      return getSourceHoodieSchema();
+    }
   }
 
   /**
    * Fetches the target schema from the provider, defaults to the source schema.
    * @return Target schema as an Avro Schema object.
-   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} ()} instead.
+   * @deprecated since 1.2.0, use {@link #getTargetHoodieSchema()} instead.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   @Deprecated

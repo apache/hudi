@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -110,12 +111,20 @@ public class SchemaRegistryProvider extends SchemaProvider {
     checkRequiredConfigProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL));
   }
 
-  private HoodieSchema getSchema(String registryUrl) throws IOException {
-    return new HoodieSchema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+  private Schema getSchema(String registryUrl) throws IOException {
+    return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
   }
 
   @Override
   public HoodieSchema getSourceHoodieSchema() {
+    // By default, delegate to legacy getSourceSchema() method
+    Schema schema = getSourceSchema();
+    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+  }
+
+  @Override
+  @Deprecated
+  public Schema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     try {
       return getSchema(registryUrl);
@@ -126,6 +135,14 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public HoodieSchema getTargetHoodieSchema() {
+    // By default, delegate to legacy getTargetSchema() method
+    Schema schema = getTargetSchema();
+    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+  }
+
+  @Override
+  @Deprecated
+  public Schema getTargetSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl = getStringWithAltKeys(
         config, Config.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
