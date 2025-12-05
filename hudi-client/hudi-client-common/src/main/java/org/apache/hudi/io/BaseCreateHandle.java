@@ -92,11 +92,11 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    * Perform the actual writing of the given record into the backing file.
    */
   @Override
-  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
+  protected void doWrite(HoodieRecord record, HoodieSchema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = getRecordMetadata(record, schema, props);
     try {
       if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(deleteContext, config.getProps())) {
-        if (record.shouldIgnore(schema, config.getProps())) {
+        if (record.shouldIgnore(schema.toAvroSchema(), config.getProps())) {
           return;
         }
 
@@ -146,26 +146,26 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   /**
    * Write record to file using fileWriter
    */
-  protected void writeRecordToFile(HoodieRecord record, Schema schema) throws IOException {
+  protected void writeRecordToFile(HoodieRecord record, HoodieSchema schema) throws IOException {
     if (preserveMetadata) {
       HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
-      fileWriter.write(record.getRecordKey(), populatedRecord, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), config.getProps());
+      fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, config.getProps());
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
-      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
+      record = record.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), new MetadataValues(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
-      fileWriter.writeWithMetadata(record.getKey(), record, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), config.getProps());
+      fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields, config.getProps());
     }
   }
 
-  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
+  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+    return record.prependMetaFields(schema.toAvroSchema(), targetSchema.toAvroSchema(), metadataValues, prop);
   }
 
   @Override

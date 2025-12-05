@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -65,9 +64,9 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
                                                         HoodieReaderContext<T> readerContext,
                                                         String[] orderingFieldNames) {
     boolean isIndexingGlobal = index.isGlobal();
-    final SerializableSchema schema = new SerializableSchema(schemaStr);
+    final HoodieSchema schema = HoodieSchema.parse(schemaStr);
     RecordContext<T> recordContext = readerContext.getRecordContext();
-    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, HoodieSchema.fromAvroSchema(schema.get()));
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
@@ -77,7 +76,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       //       an instance of [[InternalRow]] pointing into shared, mutable buffer
       return Pair.of(key, record.copy());
     }).reduceByKey(
-        (previous, next) -> reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema.get(), recordContext, deleteContext),
+        (previous, next) -> reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, recordContext, deleteContext),
         parallelism).map(Pair::getRight);
   }
 }

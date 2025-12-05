@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -207,7 +208,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
     int[] partitionFieldPositions = partitionFieldsAndValues.stream()
-        .map(pair -> dataRequiredSchema.getField(pair.getKey()).get().pos()).mapToInt(Integer::intValue).toArray();
+        .map(pair -> dataRequiredSchema.getField(pair.getKey()).orElseThrow(() ->
+            new HoodieSchemaException("Partition field '" + pair.getKey() + "' not found in data required schema")).pos())
+        .mapToInt(Integer::intValue).toArray();
     Writable[] convertedPartitionValues = partitionFieldsAndValues.stream().map(Pair::getValue).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 

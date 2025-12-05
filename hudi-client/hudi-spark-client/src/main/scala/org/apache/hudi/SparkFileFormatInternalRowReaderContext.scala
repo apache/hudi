@@ -76,7 +76,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                      dataSchema: HoodieSchema, // dataSchema refers to table schema in most cases(non log file reads).
                                      requiredSchema: HoodieSchema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
-    val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema.toAvroSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+    val hasRowIndexField = requiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
@@ -142,8 +142,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                dataRequiredSchema: HoodieSchema,
                                partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     if (getRecordContext.supportsParquetRowIndex()) {
-      assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema.toAvroSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
-      assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema.toAvroSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
+      assert(skeletonRequiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent)
+      assert(dataRequiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent)
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column

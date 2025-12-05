@@ -147,13 +147,13 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                        String[] orderingFieldNames);
 
   protected static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
-                                                     HoodieRecord<T> previous, HoodieRecord<T> next, Schema schema, RecordContext<T> recordContext, DeleteContext deleteContext) {
+                                                     HoodieRecord<T> previous, HoodieRecord<T> next, HoodieSchema schema, RecordContext<T> recordContext, DeleteContext deleteContext) {
     try {
       // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
       // If the return value is empty, it means the previous should be chosen.
-      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(next, HoodieSchema.fromAvroSchema(schema), recordContext, props, orderingFieldNames, deleteContext);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(next, schema, recordContext, props, orderingFieldNames, deleteContext);
       // Construct old buffered record.
-      BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(previous, HoodieSchema.fromAvroSchema(schema), recordContext, props, orderingFieldNames, deleteContext);
+      BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(previous, schema, recordContext, props, orderingFieldNames, deleteContext);
       // Run merge.
       Option<BufferedRecord<T>> merged = recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
       // NOTE: For merge mode based merging, it returns non-null.

@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -77,8 +76,7 @@ public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O>
   @VisibleForTesting
   HoodieFileWriter initializeFileWriter() throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
-          //TODO boundary to revisit in follow up to use HoodieSchema directly
-          HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), this.taskContextSupplier, config.getRecordMerger().getRecordType());
+        writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
   }
 
   /**

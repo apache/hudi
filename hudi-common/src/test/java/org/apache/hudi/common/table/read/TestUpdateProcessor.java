@@ -40,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -58,7 +59,7 @@ class TestUpdateProcessor {
   private final RecordContext<IndexedRecord> recordContext = mock(RecordContext.class);
   private static final String KEY = "key";
   private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
-      java.util.Arrays.asList(
+      Arrays.asList(
           HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
           HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.STRING))
       ));

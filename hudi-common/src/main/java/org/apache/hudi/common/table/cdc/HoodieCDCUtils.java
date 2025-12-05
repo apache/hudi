@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.table.cdc;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
@@ -67,12 +68,12 @@ public class HoodieCDCUtils {
       + "{\"name\":\"record_key\",\"type\":[\"string\",\"null\"]}"
       + "]}";
 
-  public static final Schema CDC_SCHEMA_OP_AND_RECORDKEY =
-      new Schema.Parser().parse(CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
+  public static final HoodieSchema CDC_SCHEMA_OP_AND_RECORDKEY =
+      HoodieSchema.parse(CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
 
-  public static Schema schemaBySupplementalLoggingMode(
+  public static HoodieSchema schemaBySupplementalLoggingMode(
       HoodieCDCSupplementalLoggingMode supplementalLoggingMode,
-      Schema tableSchema) {
+      HoodieSchema tableSchema) {
     if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
       return CDC_SCHEMA_OP_AND_RECORDKEY;
     } else if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.DATA_BEFORE) {
@@ -84,36 +85,32 @@ public class HoodieCDCUtils {
     }
   }
 
-  private static Schema createCDCSchema(Schema tableSchema, boolean withAfterImage) {
-    Schema imageSchema = AvroSchemaUtils.createNullableSchema(tableSchema);
-    Schema.Field opField = new Schema.Field(CDC_OPERATION_TYPE,
-        AvroSchemaUtils.createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
-    Schema.Field beforeField = new Schema.Field(
-        CDC_BEFORE_IMAGE, imageSchema, "", JsonProperties.NULL_VALUE);
-    List<Schema.Field> fields;
+  private static HoodieSchema createCDCSchema(HoodieSchema tableSchema, boolean withAfterImage) {
+    HoodieSchema imageSchema = HoodieSchemaUtils.createNullableSchema(tableSchema);
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    HoodieSchemaField opField = HoodieSchemaField.of(CDC_OPERATION_TYPE, nullableString, "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField beforeField = HoodieSchemaField.of(CDC_BEFORE_IMAGE, imageSchema, "", HoodieSchema.NULL_VALUE);
+
+    List<HoodieSchemaField> fields;
     if (withAfterImage) {
-      Schema.Field tsField = new Schema.Field(CDC_COMMIT_TIMESTAMP,
-          AvroSchemaUtils.createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
-      Schema.Field afterField = new Schema.Field(
-          CDC_AFTER_IMAGE, imageSchema, "", JsonProperties.NULL_VALUE);
+      HoodieSchemaField tsField = HoodieSchemaField.of(CDC_COMMIT_TIMESTAMP, nullableString, "", HoodieSchema.NULL_VALUE);
+      HoodieSchemaField afterField = HoodieSchemaField.of(CDC_AFTER_IMAGE, imageSchema, "", HoodieSchema.NULL_VALUE);
       fields = Arrays.asList(opField, tsField, beforeField, afterField);
     } else {
-      Schema.Field keyField = new Schema.Field(CDC_RECORD_KEY,
-          AvroSchemaUtils.createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
+      HoodieSchemaField keyField = HoodieSchemaField.of(CDC_RECORD_KEY, nullableString, "", HoodieSchema.NULL_VALUE);
       fields = Arrays.asList(opField, keyField, beforeField);
     }
 
-    Schema mergedSchema = Schema.createRecord("CDC", null, tableSchema.getNamespace(), false);
-    mergedSchema.setFields(fields);
-    return mergedSchema;
+    return HoodieSchema.createRecord("CDC", tableSchema.getNamespace().orElse(null), "", fields);
   }
 
   /**
    * Build the cdc record which has all the cdc fields when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#DATA_BEFORE_AFTER}.
    */
-  public static GenericData.Record cdcRecord(Schema cdcSchema, String op, String commitTime,
+  public static GenericData.Record cdcRecord(HoodieSchema cdcSchema, String op, String commitTime,
                                              GenericRecord before, GenericRecord after) {
-    GenericData.Record record = new GenericData.Record(cdcSchema);
+    GenericData.Record record = new GenericData.Record(cdcSchema.toAvroSchema());
     record.put(CDC_OPERATION_TYPE, op);
     record.put(CDC_COMMIT_TIMESTAMP, commitTime);
     record.put(CDC_BEFORE_IMAGE, before);
@@ -124,9 +121,9 @@ public class HoodieCDCUtils {
   /**
    * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#DATA_BEFORE}.
    */
-  public static GenericData.Record cdcRecord(Schema cdcSchema, String op,
+  public static GenericData.Record cdcRecord(HoodieSchema cdcSchema, String op,
                                              String recordKey, GenericRecord before) {
-    GenericData.Record record = new GenericData.Record(cdcSchema);
+    GenericData.Record record = new GenericData.Record(cdcSchema.toAvroSchema());
     record.put(CDC_OPERATION_TYPE, op);
     record.put(CDC_RECORD_KEY, recordKey);
     record.put(CDC_BEFORE_IMAGE, before);
@@ -136,8 +133,8 @@ public class HoodieCDCUtils {
   /**
    * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#OP_KEY_ONLY}.
    */
-  public static GenericData.Record cdcRecord(Schema cdcSchema, String op, String recordKey) {
-    GenericData.Record record = new GenericData.Record(cdcSchema);
+  public static GenericData.Record cdcRecord(HoodieSchema cdcSchema, String op, String recordKey) {
+    GenericData.Record record = new GenericData.Record(cdcSchema.toAvroSchema());
     record.put(CDC_OPERATION_TYPE, op);
     record.put(CDC_RECORD_KEY, recordKey);
     return record;

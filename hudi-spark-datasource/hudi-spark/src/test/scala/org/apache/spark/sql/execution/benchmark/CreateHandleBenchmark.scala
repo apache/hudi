@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.{HoodieLocalEngineContext, LocalTaskContextSupplier}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieAvroIndexedRecord, HoodieKey, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.util.HoodieRecordUtils
@@ -150,7 +151,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
       val createHandle = new HoodieCreateHandle(writeConfig, "000000001", hoodieTable, "", UUID.randomUUID().toString, new LocalTaskContextSupplier())
       avroRecords.forEach(record => {
         val newAvroRec = new HoodieAvroIndexedRecord(record.getKey, record.getData.asInstanceOf[IndexedRecord], 0L, record.getOperation)
-        createHandle.write(newAvroRec, avroSchema, writeConfig.getProps)
+        createHandle.write(newAvroRec, HoodieSchema.fromAvroSchema(avroSchema), writeConfig.getProps)
       })
       createHandle.close()
     }

@@ -42,8 +42,7 @@ class TestHoodieAvroIndexedRecord {
     HoodieSchema hoodieSchema = HoodieSchema.createRecord("TestRecord", null, null,
         Arrays.asList(
             HoodieSchemaField.of("_hoodie_is_deleted",
-                HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
-                null, HoodieSchema.NULL_VALUE),
+                HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieSchema.NULL_VALUE),
             HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.STRING))
         ));
     GenericRecord record1 = new GenericRecordBuilder(hoodieSchema.toAvroSchema())
@@ -68,8 +67,7 @@ class TestHoodieAvroIndexedRecord {
     HoodieSchema hoodieSchema = HoodieSchema.createRecord("TestRecord", null, null,
         Arrays.asList(
             HoodieSchemaField.of("custom_is_deleted",
-                HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.STRING)),
-                null, HoodieSchema.NULL_VALUE),
+                HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)), null, HoodieSchema.NULL_VALUE),
             HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.STRING))
         ));
     GenericRecord record1 = new GenericRecordBuilder(hoodieSchema.toAvroSchema())
@@ -97,8 +95,7 @@ class TestHoodieAvroIndexedRecord {
     HoodieSchema hoodieSchema = HoodieSchema.createRecord("TestRecord", null, null,
         Arrays.asList(
             HoodieSchemaField.of("_hoodie_operation",
-                HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.STRING)),
-                null, HoodieSchema.NULL_VALUE),
+                HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)), null, HoodieSchema.NULL_VALUE),
             HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.STRING))
         ));
     GenericRecord record1 = new GenericRecordBuilder(hoodieSchema.toAvroSchema())

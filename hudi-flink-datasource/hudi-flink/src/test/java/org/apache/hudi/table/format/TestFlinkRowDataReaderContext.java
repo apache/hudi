@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ class TestFlinkRowDataReaderContext {
   private final StorageConfiguration<?> storageConfig = mock(StorageConfiguration.class);
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
   private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
-      java.util.Arrays.asList(
+      Arrays.asList(
           HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
           HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
           HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))

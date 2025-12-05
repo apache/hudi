@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -54,7 +53,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.spark.api.java.JavaRDD;
@@ -206,7 +204,8 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     HoodieCreateHandle handle = new HoodieCreateHandle(mdtWriteConfig, newCommitTime, table, COLUMN_STATS.getPartitionPath(), "col-stats-00001-0", new PhoneyTaskContextSupplier());
 
     // write the record to hfile.
-    Schema writeSchema = AvroSchemaCache.intern(new Schema.Parser().parse(mdtWriteConfig.getSchema()));
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
+    HoodieSchema writeSchema = HoodieSchema.parse(mdtWriteConfig.getSchema());
     TypedProperties properties = new TypedProperties();
     columnStatsRecords.forEach(record -> handle.write(record, writeSchema, properties));
     WriteStatus writeStatus = (WriteStatus) handle.close().get(0);

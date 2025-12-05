@@ -32,8 +32,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -76,8 +74,8 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
       return Pair.of(key, record);
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
-    final Schema schema = new Schema.Parser().parse(schemaStr);
-    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, HoodieSchema.fromAvroSchema(schema));
+    final HoodieSchema schema = HoodieSchema.parse(schemaStr);
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((previous, next) ->
         reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)
     ).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());

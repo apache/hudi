@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -358,7 +359,8 @@ public abstract class HoodieReaderContext<T> {
     }
     InstantRange instantRange = getInstantRange().get();
     final Option<HoodieSchemaField> commitTimeFieldOpt = HoodieSchema.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    final int commitTimePos = commitTimeFieldOpt.get().pos();
+    final int commitTimePos = commitTimeFieldOpt.orElseThrow(() ->
+        new HoodieSchemaException("Commit time metadata field '" + HoodieRecord.COMMIT_TIME_METADATA_FIELD + "' not found in required schema")).pos();
     java.util.function.Predicate<T> instantFilter =
         row -> instantRange.isInRange(recordContext.getMetaFieldValue(row, commitTimePos));
     return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);

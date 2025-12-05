@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -34,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -80,8 +80,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   /**
    * Schema used to write records into data files
    */
-  protected final Schema writeSchema;
-  protected final Schema writeSchemaWithMetaFields;
+  protected final HoodieSchema writeSchema;
+  protected final HoodieSchema writeSchemaWithMetaFields;
   protected final HoodieRecordMerger recordMerger;
   protected final DeleteContext deleteContext;
 
@@ -118,8 +118,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writeSchema = AvroSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
-    this.writeSchemaWithMetaFields = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
+    this.writeSchema = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config).toAvroSchema())));
+    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
+    this.writeSchemaWithMetaFields = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()).toAvroSchema()));
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
@@ -144,8 +146,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
     this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
     TypedProperties mergeProps = ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig());
-    Schema deleteContextSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
-    this.deleteContext = new DeleteContext(mergeProps, HoodieSchema.fromAvroSchema(deleteContextSchema)).withReaderSchema(HoodieSchema.fromAvroSchema(deleteContextSchema));
+    HoodieSchema deleteContextSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    this.deleteContext = new DeleteContext(mergeProps, deleteContextSchema).withReaderSchema(deleteContextSchema);
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {
@@ -202,11 +204,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .create(partitionPath, dataFileName, getIOType(), config, fileId, hoodieTable.getMetaClient().getActiveTimeline());
   }
 
-  public Schema getWriterSchemaWithMetaFields() {
+  public HoodieSchema getWriterSchemaWithMetaFields() {
     return writeSchemaWithMetaFields;
   }
 
-  public Schema getWriterSchema() {
+  public HoodieSchema getWriterSchema() {
     return writeSchema;
   }
 
@@ -227,14 +229,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
+  protected void doWrite(HoodieRecord record, HoodieSchema schema, TypedProperties props) {
     // NO_OP
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Schema schema, TypedProperties props) {
+  public void write(HoodieRecord record, HoodieSchema schema, TypedProperties props) {
     doWrite(record, schema, props);
   }
 
@@ -287,8 +289,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return taskContextSupplier.getAttemptIdSupplier().get();
   }
 
-  private static Schema getWriteSchema(HoodieWriteConfig config) {
-    return new Schema.Parser().parse(config.getWriteSchema());
+  private static HoodieSchema getWriteSchema(HoodieWriteConfig config) {
+    return HoodieSchema.parse(config.getWriteSchema());
   }
 
   protected HoodieLogFormat.Writer createLogWriter(String instantTime, Option<FileSlice> fileSliceOpt) {
@@ -351,22 +353,22 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     };
   }
 
-  protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, Schema writerSchema, TypedProperties props) {
+  protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, HoodieSchema writerSchema, TypedProperties props) {
     try {
-      return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
+      return record.toIndexedRecord(writerSchema.toAvroSchema(), props).map(HoodieAvroIndexedRecord::getData);
     } catch (IOException e) {
       LOG.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
     }
   }
 
-  protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, Schema schema, Properties props) {
+  protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, HoodieSchema schema, Properties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     if (isTrackingEventTimeWatermark) {
-      Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
+      Object eventTime = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
       if (eventTime != null) {
         // Append event_time.
-        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema, eventTimeFieldName);
+        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema.toAvroSchema(), eventTimeFieldName);
         // Field should definitely exist.
         eventTime = record.convertColumnValueForLogicalType(
             field.get().schema(), eventTime, keepConsistentLogicalTimestamp);
