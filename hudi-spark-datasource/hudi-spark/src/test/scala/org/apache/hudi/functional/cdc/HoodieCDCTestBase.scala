@@ -145,7 +145,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
                                               op: HoodieCDCOperation): Unit = {
     val cdcRecord = cdcRecords.head.getData.asInstanceOf[GenericRecord]
     // check schema
-    assertEquals(cdcRecord.getSchema, cdcSchema)
+    assertEquals(cdcRecord.getSchema , cdcSchema.toAvroSchema)
     if (loggingMode == OP_KEY_ONLY) {
       // check record key
       assert(cdcRecords.map(_.getData.asInstanceOf[GenericRecord].get(1).toString).sorted == newHoodieRecords.asScala.map(_.getKey.getRecordKey).sorted)

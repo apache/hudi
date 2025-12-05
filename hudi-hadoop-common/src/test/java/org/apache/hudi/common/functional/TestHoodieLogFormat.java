@@ -655,14 +655,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), dataSchema.toAvroSchema());
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), cdcSchema.toAvroSchema());
     assertTrue(reader.hasNext());
     HoodieLogBlock block = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) block;
     List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
     assertEquals(3, recordsRead.size(),
         "Read records size should be equal to the written records size");
-    assertEquals(dataBlockRead.getSchema().toAvroSchema(), cdcSchema);
+    assertEquals(dataBlockRead.getSchema(), cdcSchema);
 
     GenericRecord insert = (GenericRecord) recordsRead.stream()
         .filter(record -> record.get(0).toString().equals("i")).findFirst().get();
