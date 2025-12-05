@@ -194,6 +194,10 @@ public class ExpressionEvaluators {
           "Can not find column " + this.name);
       return columnStats;
     }
+
+    public String getName() {
+      return this.name;
+    }
   }
 
   /**
@@ -242,6 +246,10 @@ public class ExpressionEvaluators {
         return false;
       }
       return compare(maxVal, val, type) >= 0;
+    }
+
+    public Object getVal() {
+      return this.val;
     }
   }
 
@@ -424,6 +432,10 @@ public class ExpressionEvaluators {
     public void bindVals(Object... vals) {
       this.vals = vals;
     }
+
+    public Object[] getVals() {
+      return this.vals;
+    }
   }
 
   /**
@@ -520,6 +532,10 @@ public class ExpressionEvaluators {
     public Evaluator bindEvaluator(Evaluator... evaluators) {
       this.evaluators = evaluators;
       return this;
+    }
+
+    public Evaluator[] getEvaluators() {
+      return this.evaluators;
     }
   }
 

@@ -236,7 +236,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
                                                                                             SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
                                                                                             List<K> keySpace,
                                                                                             boolean preservesPartitioning) {
-    throw new UnsupportedOperationException("processKeyGroups() is not supported in FlinkEngineContext");
+    return super.mapGroupsByKey(data, processFunc, keySpace, preservesPartitioning);
   }
 
   @Override
