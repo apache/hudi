@@ -294,6 +294,85 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
+  test("Test Expression Index Should Not Match Direct Column Queries") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        // Set failure mode to strict to see the exception instead of silently swallowing it
+        withSQLConf("hoodie.fileIndex.dataSkippingFailureMode" -> "strict") {
+          // Also set via SQL to ensure strict mode is enabled
+          spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.enable = 'true',
+               |  hoodie.enable.data.skipping = 'true',
+               |  hoodie.metadata.index.column.stats.enable = 'false',
+               |  hoodie.metadata.record.index.enable = 'false',
+               |  hoodie.bucket.index.enable = 'false',
+               |  hoodie.secondary.index.enable = 'false',
+               |  hoodie.bloom.index.enable = 'false'
+               | )
+               | location '$basePath'
+       """.stripMargin)
+          // Insert data with different ts values to create multiple files
+          // ts=1000 -> from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          // ts=100000 -> from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-02'
+          spark.sql(s"insert into $tableName values(2, 'a2', 20, 100000)")
+          // ts=10000000 -> from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
+          spark.sql(s"insert into $tableName values(3, 'a3', 30, 10000000)")
+          // Insert more data to ensure multiple files exist for data skipping to be useful
+          // Use different ts values that map to different dates
+          // ts=86400 -> from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-02' (same as ts=100000)
+          spark.sql(s"insert into $tableName values(4, 'a4', 40, 86400)")
+          // ts=200000 -> from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-03'
+          spark.sql(s"insert into $tableName values(5, 'a5', 50, 200000)")
+          // ts=20000000 -> from_unixtime(ts, 'yyyy-MM-dd') = '1970-08-20'
+          spark.sql(s"insert into $tableName values(6, 'a6', 60, 20000000)")
+
+          // Create expression index on ts with from_unixtime function
+          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
+          // Verify expression index is created and available
+          val metaClient = createMetaClient(spark, basePath)
+          assertTrue(metaClient.getIndexMetadata.isPresent)
+          val expressionIndexMetadata = metaClient.getIndexMetadata.get()
+          assertTrue(expressionIndexMetadata.getIndexDefinitions.containsKey("expr_index_idx_datestr"))
+          val indexDef = expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr")
+          assertEquals("from_unixtime", indexDef.getIndexFunction)
+          assertEquals("ts", indexDef.getSourceFields.get(0))
+
+          // Test 1: Query with expression should use expression index (this should work)
+          // Only ts=1000 maps to '1970-01-01'
+          checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(
+            Seq(1, "a1")
+          )
+          // Test 2: Query with direct column reference should NOT use expression index
+          checkAnswer(s"select id, name from $tableName where ts = 1000")(
+            Seq(1, "a1")
+          )
+          checkAnswer(s"select id, name from $tableName where ts IN (1000, 100000)")(
+            Seq(1, "a1"),
+            Seq(2, "a2")
+          )
+          checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'")(
+            Seq(3, "a3")
+          )
+        }
+      }
+    }
+  }
+
   test("Test Drop Expression Index") {
     withTempDir { tmp =>
       val databaseName = "default"

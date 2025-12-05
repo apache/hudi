@@ -40,7 +40,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BinaryExpression, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -485,11 +485,40 @@ class ExpressionIndexSupport(spark: SparkSession,
     }
     val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)), attributeFetcher)
     var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
+    val sourceColumnName = indexDefinition.getSourceFields.get(0)
     expressionIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
-      queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
+      if (!isDirectColumnQuery(queryFilters, sourceColumnName)) {
+        queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
+      }
     }
     queryAndLiteralsOpt
+  }
+
+  private def isDirectColumnQuery(queryFilters: Seq[Expression], sourceColumnName: String): Boolean = {
+    queryFilters.exists { filter =>
+      containsDirectColumnReference(filter, sourceColumnName)
+    }
+  }
+
+  /**
+   * Checks if an expression contains a direct AttributeReference to the source column.
+   * A direct reference means the AttributeReference is a direct child of a comparison operator,
+   * not nested inside a function.
+   */
+  private def containsDirectColumnReference(expr: Expression, sourceColumnName: String): Boolean = {
+    def isTargetAttr(e: Expression): Boolean = e.isInstanceOf[AttributeReference] &&
+      e.asInstanceOf[AttributeReference].name.equals(sourceColumnName)
+
+    expr match {
+      case attr: AttributeReference if attr.name.equals(sourceColumnName) => true
+      case and: And =>
+        containsDirectColumnReference(and.left, sourceColumnName) ||
+        containsDirectColumnReference(and.right, sourceColumnName)
+      case binary: BinaryExpression => isTargetAttr(binary.left) || isTargetAttr(binary.right)
+      case in: In => isTargetAttr(in.value)
+      case _ => false
+    }
   }
 
   private def loadExpressionIndexRecords(indexPartition: String,
