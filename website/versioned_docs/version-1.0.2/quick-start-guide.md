@@ -58,11 +58,12 @@ From the extracted directory run spark-shell with Hudi:
 ```shell
 # For Spark versions: 3.3 - 3.5
 export SPARK_VERSION=3.5 # or 3.4, 3.3
-spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --master "local[2]" \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -74,7 +75,12 @@ From the extracted directory run pyspark with Hudi:
 # For Spark versions: 3.3 - 3.5
 export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.5 # or 3.4, 3.3
-pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --master "local[2]" \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -86,11 +92,12 @@ From the extracted directory run Spark SQL with Hudi:
 ```shell
 # For Spark versions: 3.3 - 3.5
 export SPARK_VERSION=3.5 # or 3.4, 3.3
-spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --master "local[2]" \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 </Tabs>
@@ -539,7 +546,7 @@ Notice, instead of `UPDATE SET *`, we are updating only the `fare` column.
 ## Delete data {#deletes}
 
 Delete operation removes the records specified from the table. For example, this code snippet deletes records
-for the HoodieKeys passed in. Check out the [deletion section](/docs/writing_data#deletes) for more details.
+for the HoodieKeys passed in. Check out the [deletion section](writing_data#deletes) for more details.
 
 <Tabs
 groupId="programming-language"
@@ -619,7 +626,7 @@ Hudi supports indexing on columns to speed up queries. Indexes can be created on
 
 :::note
 Please note in order to create secondary index:
-1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger#commit_time_ordering).
 2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
 :::
 
@@ -1086,7 +1093,7 @@ Note that CDC queries are currently only supported on Copy-on-Write tables.
 
 The examples thus far have showcased one of the two table types, that Hudi supports - Copy-on-Write (COW) tables. Hudi also supports
 a more advanced write-optimized table type called Merge-on-Read (MOR) tables, that can balance read and write performance in a more
-flexible manner. See [table types](/docs/table_types) for more details.
+flexible manner. See [table types](table_types) for more details.
 
 Any of these examples can be run on a Merge-on-Read table by simply changing the table type to MOR, while creating the table, as below.
 
@@ -1299,18 +1306,18 @@ For alter table commands, check out [this](sql_ddl#spark-alter-table). Stored pr
 
 Hudi provides industry-leading performance and functionality for streaming data. 
 
-**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
 **Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](writing_tables_streaming_writes#spark-streaming) for more.
 
-Check out more information on [modeling data in Hudi](faq_general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](/docs/writing_data) and [streaming writes](writing_tables_streaming_writes).
+Check out more information on [modeling data in Hudi](faq_general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](writing_data) and [streaming writes](writing_tables_streaming_writes).
 
 ### Dockerized Demo
 Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy
 to get your transactional data lakes up and running quickly, across a variety query engines like Hive, Flink, Spark, Presto, Trino and much more.
 We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following
-steps [here](/docs/next/docker_demo) to get a taste for it. 
+steps [here](docker_demo) to get a taste for it. 
 

@@ -264,7 +264,7 @@ and then ingest it as follows.
   --op BULK_INSERT
 ```
 
-In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide).
+In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](migration_guide).
 
 ### Using `hudi-utilities` bundle jars
 
@@ -302,7 +302,7 @@ A Hudi Streamer job can then be triggered as follows:
   --op BULK_INSERT
 ```
 
-Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section
+Read more in depth about concurrency control in the [concurrency control concepts](concurrency_control) section
 
 ### Checkpointing
 
@@ -467,7 +467,7 @@ this class: https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/j
 
 ### Sources
 
-Hoodie Streamer can read data from a wide variety of sources. The following are a list of supported sources:
+Hudi Streamer can read data from a wide variety of sources. The following are a list of supported sources:
 
 #### Distributed File System (DFS)
 See the storage configurations page to see some examples of DFS applications Hudi can read from. The following are the 
@@ -591,7 +591,7 @@ Users can feel free to implement their own strategy as they see fit.
 
 ### Dynamic configuration updates
 
-When Hoodie Streamer is running in `continuous` mode, the properties can be refreshed/updated before each sync calls.
+When Hudi Streamer is running in `continuous` mode, the properties can be refreshed/updated before each sync calls.
 Interested users can implement `org.apache.hudi.utilities.deltastreamer.ConfigurationHotUpdateStrategy` to leverage this.
 
 ## MultiTableStreamer

@@ -1,0 +1,18 @@
+.lakeOverviewImage {
+    display: block;
+    margin-top: 40px;
+}
+
+.lakeOverviewImageMobile {
+    display: none;
+    margin-top: 60px;
+}
+
+@media only screen and (max-width: 767px) {
+    .lakeOverviewImage {
+        display: none;
+    }
+    .lakeOverviewImageMobile {
+        display: block;
+    }
+}

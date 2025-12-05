@@ -17,6 +17,18 @@ const JoinCommunity = () => {
 
   const communityData = [
     {
+      icon: YoutubeIcon,
+      title: "Youtube",
+      linkText: "Subscribe",
+      url: "https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw",
+    },
+    {
+      icon: LinkedinIcon,
+      title: "Linkedin",
+      linkText: "Join community",
+      url: "https://www.linkedin.com/company/apache-hudi/?viewAsMember=true",
+    },
+    {
       icon: GitHubIcon,
       title: "GitHub",
       linkText: "Join community",
@@ -29,10 +41,10 @@ const JoinCommunity = () => {
       url: slackUrl,
     },
     {
-      icon: LinkedinIcon,
-      title: "Linkedin",
-      linkText: "Join community",
-      url: "https://www.linkedin.com/company/apache-hudi/?viewAsMember=true",
+      icon: MailIcon,
+      title: "Mailing",
+      linkText: "Subscribe",
+      url: "mailto:dev-subscribe@hudi.apache.org?Subject=SubscribeToHudi",
     },
     {
       icon: XIcon,
@@ -40,29 +52,15 @@ const JoinCommunity = () => {
       linkText: "Join community",
       url: "https://x.com/ApacheHudi",
     },
-    {
-      icon: YoutubeIcon,
-      title: "Youtube",
-      linkText: "Subscribe",
-      url: "https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw",
-    },
-    {
-      icon: MailIcon,
-      title: "Mailing",
-      linkText: "Subscribe",
-      url: "mailto:dev-subscribe@hudi.apache.org?Subject=SubscribeToHudi",
-    },
-  ];
 
-  const firstRow = communityData.slice(0, 3);
-  const secondRow = communityData.slice(3, 6);
+  ];
 
   return (
     <div className={styles.joinCommunityWrapper}>
       <div className="container">
         <div className={styles.communityContent}>
           <div className={styles.leftSideWrapper}>
-            <Title primaryText="Join our" secondaryText="Community" />
+            <Title primaryText="Join our Community" />
             <p className={styles.communityDescription}>
               Get technical help, influence the product roadmap & see what’s new
               with Hudi!
@@ -70,12 +68,7 @@ const JoinCommunity = () => {
           </div>
           <div className={styles.communityCardWrapper}>
             <div className={styles.communityCardChildWrapper}>
-              {firstRow.map((media, i) => (
-                <CommunityCard key={i} media={media} />
-              ))}
-            </div>
-            <div className={styles.communityCardChildWrapper}>
-              {secondRow.map((media, i) => (
+              {communityData.map((media, i) => (
                 <CommunityCard key={i} media={media} />
               ))}
             </div>

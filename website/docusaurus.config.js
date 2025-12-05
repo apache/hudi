@@ -1,7 +1,6 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const VersionsArchived = require("./versionsArchived.json");
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -17,7 +16,11 @@ module.exports = {
   url: "https://hudi.apache.org",
   baseUrl: "/",
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "warn",
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: "warn",
+    },
+  },
   favicon: "/assets/images/favicon.ico",
   organizationName: "apache",
   projectName: "hudi",
@@ -27,29 +30,15 @@ module.exports = {
     tagline:
       "Hudi brings transactions, record-level updates/deletes and change streams to data lakes!",
     taglineConfig: {
-      prefix: "Hudi brings ",
-      suffix: " to data lakes!",
+      prefix: "Apache Hudi™ brings",
+      suffix: " to data lakes",
       content: [
         "transactions",
         "row-level updates/deletes",
         "CDC and indexes"
       ],
     },
-    slackUrl: slackUrl,
-  },
-  i18n: {
-    defaultLocale: "en",
-    locales: ["en", "cn"],
-    localeConfigs: {
-      en: {
-        label: "English",
-        direction: "ltr",
-      },
-      cn: {
-        label: "Chinese",
-        direction: "ltr",
-      },
-    },
+    slackUrl: originalSlackUrl,
   },
   plugins: [
     [
@@ -102,6 +91,7 @@ module.exports = {
         id: "learn",
         path: "learn",
         routeBasePath: "learn",
+        sidebarPath: require.resolve("./sidebarsLearn.js"),
         showLastUpdateAuthor: false,
         showLastUpdateTime: false,
       },
@@ -118,6 +108,22 @@ module.exports = {
           }
         },
         redirects: [
+          {
+            from: "/faq",
+            to: "/learn/faq",
+          },
+          {
+            from: "/talks",
+            to: "/learn/talks",
+          },
+          {
+            from: "/tech-specs",
+            to: "/learn/tech-specs",
+          },
+          {
+            from: "/tech-specs-1point0",
+            to: "/learn/tech-specs-1point0",
+          },
           {
             from: [
               "/docs/contribute",
@@ -140,11 +146,11 @@ module.exports = {
           },
           {
             from: ["/docs/releases", "/docs/next/releases"],
-            to: "/releases/release-1.0.2",
+            to: "/releases/release-1.1.0",
           },
           {
             from: ["/releases"],
-            to: "/releases/release-1.0.2",
+            to: "/releases/release-1.1.0",
           },
         ],
       },
@@ -183,28 +189,28 @@ module.exports = {
               to: "/learn/tutorial-series",
             },
             {
-              label: "Talks",
-              to: "talks",
+              label: "Blogs",
+              to: "/learn/blog",
             },
             {
-              label: "Blog",
-              to: "/blog",
+              label: "Talks",
+              to: "/learn/talks",
             },
             {
               label: "Video Guides",
-              to: "videos",
+              to: "/learn/videos",
             },
             {
               label: "FAQ",
-              href: "/docs/faq",
+              to: "/learn/faq",
             },
             {
               label: "Tech Specs",
-              href: "/tech-specs",
+              to: "/learn/tech-specs",
             },
             {
               label: "Tech Specs 1.0",
-              href: "/tech-specs-1point0",
+              to: "/learn/tech-specs-1point0",
             },
           ],
         },
@@ -229,8 +235,8 @@ module.exports = {
               to: "/contribute/rfc-process",
             },
             {
-              label: "Report Issues",
-              to: "/contribute/report-security-issues",
+              label: "Security",
+              to: "/contribute/security",
             },
           ],
         },
@@ -255,63 +261,46 @@ module.exports = {
               to: "/community/team",
             },
             {
-              label: 'Join Our Slack Space',
-              href: slackUrl,
+              label: 'Github',
+              href: 'https://github.com/apache/hudi',
+            },
+            {
+              label: 'Slack',
+              href: originalSlackUrl,
+            },
+            {
+              label: 'LinkedIn',
+              href: 'https://www.linkedin.com/company/apache-hudi/',
+            },
+            {
+              label: 'YouTube',
+              href: 'https://www.youtube.com/@apachehudi',
+            },
+            {
+              label: 'X',
+              href: 'https://x.com/ApacheHudi',
             },
           ],
         },
-        { to: "/ecosystem", label: "Ecosystem", position: "left" },
-        { to: "/powered-by", label: "Who's Using", position: "left" },
-        { to: "/roadmap", label: "Roadmap", position: "left" },
-        { to: "/releases/download", label: "Download", position: "left" },
-        // right
         {
-          type: "docsVersionDropdown",
-          position: "right",
-          dropdownActiveClassDisabled: true,
-          dropdownItemsAfter: [
-            ...Object.entries(VersionsArchived).map(
-              ([versionName, versionUrl]) => ({
-                label: versionName,
-                href: versionUrl,
-              })
-            ),
+          label: "Ecosystem",
+          position: "left",
+          items: [
+            {
+              label: "Adopters",
+              to: "/powered-by",
+            },
+            {
+              label: "Roadmap",
+              to: "/roadmap",
+            },
+            {
+              label: "Integrations",
+              to: "/ecosystem",
+            },
           ],
         },
-        {
-          type: "localeDropdown",
-          position: "right",
-        },
-        {
-          href: "https://github.com/apache/hudi",
-          position: "right",
-          className: "header-github-link",
-          "aria-label": "GitHub repository",
-        },
-        {
-          href: "https://x.com/ApacheHudi",
-          position: "right",
-          className: "header-twitter-link",
-          "aria-label": "Hudi Twitter Handle",
-        },
-        {
-          href: slackUrl,
-          position: "right",
-          className: "header-slack-link",
-          "aria-label": "Hudi Slack Channel",
-        },
-        {
-          href: "https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw",
-          position: "right",
-          className: "header-youtube-link",
-          "aria-label": "Hudi YouTube Channel",
-        },
-        {
-          href: "https://www.linkedin.com/company/apache-hudi/?viewAsMember=true",
-          position: "right",
-          className: "header-linkedin-link",
-          "aria-label": "Hudi Linkedin Page",
-        },
+        { to: "/releases/download", label: "Download", position: "left" },
       ],
     },
     footer: {
@@ -334,14 +323,14 @@ module.exports = {
             },
             {
               label: "Releases",
-              to: "/releases/release-1.0.2",
+              to: "/releases/release-1.1.0",
             },
             {
               label: "Download",
               to: "/releases/download",
             },
             {
-              label: "Who's Using",
+              label: "Adopters",
               to: "powered-by",
             },
           ],
@@ -359,19 +348,19 @@ module.exports = {
             },
             {
               label: "Blog",
-              to: "/blog",
+              to: "/learn/blog",
             },
             {
               label: "Talks",
-              to: "talks",
+              to: "/learn/talks",
             },
             {
               label: "Video Guides",
-              to: "videos",
+              to: "/learn/videos",
             },
             {
               label: "FAQ",
-              href: "/docs/faq",
+              to: "/learn/faq",
             },
           ],
         },
@@ -402,6 +391,10 @@ module.exports = {
               label: "IBM Cloud",
               to: "/docs/ibm_cos_hoodie",
             },
+            {
+              label: "Oracle Cloud",
+              to: "/docs/oci_hoodie",
+            },
           ],
         },
         {
@@ -413,7 +406,7 @@ module.exports = {
             },
             {
               label: "Slack",
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
               label: "GitHub",
@@ -477,11 +470,11 @@ module.exports = {
       ],
       logo: {
         alt: "Apache Hudi™",
-        src: "/assets/images/logo-big.png",
+        src: "/assets/images/hudi.png",
         href: "https://hudi.apache.org/",
       },
       copyright:
-        'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8f594acf-9b77-44fb-9475-3e82ead1910c" /><img referrerpolicy="no-referrer-when-downgrade" src="https://analytics.apache.org/matomo.php?idsite=47&amp;rec=1" />',
+        'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8f594acf-9b77-44fb-9475-3e82ead1910c" /><img referrerpolicy="no-referrer-when-downgrade" src="https://analytics.apache.org/matomo.php?idsite=47&amp;rec=1" />',
     },
     prism: {
       theme: themes.dracula,
@@ -505,13 +498,8 @@ module.exports = {
       {
         docs: {
           sidebarPath: require.resolve("./sidebars.js"),
-          // Please change this to your repo.
-          editUrl: ({ version, versionDocsDirPath, docPath, locale }) => {
-            if (locale != this.defaultLocale) {
+          editUrl: ({ versionDocsDirPath, docPath }) => {
               return `https://github.com/apache/hudi/tree/asf-site/website/${versionDocsDirPath}/${docPath}`;
-            } else {
-              return `https://github.com/apache/hudi/tree/asf-site/website/i18n/${locale}/docusaurus-plugin-content-${versionDocsDirPath}/${version}/${docPath}`;
-            }
           },
           includeCurrentVersion: true,
           versions: {
@@ -520,8 +508,8 @@ module.exports = {
               path: "next",
               banner: "unreleased",
             },
-            "1.0.2": {
-              label: "1.0.2",
+            "1.1.0": {
+              label: "1.1.0",
               path: "",
             },
           },
@@ -565,23 +553,23 @@ module.exports = {
       "data-website-id": "9e4444ba-93cc-45ea-b143-783ae0fbeb6f",
       "data-project-name": "Apache Hudi",
       "data-project-color": "#FFFFFF",
-      "data-project-logo": "https://hudi.apache.org/assets/images/logo-big.png",
+      "data-project-logo": "/assets/images/logo-big.png",
       "data-modal-disclaimer": "This AI assistant answers Apache Hudi questions using your [documentation](https://hudi.apache.org/docs/quick-start-guide/), [dev setup](https://hudi.apache.org/contribute/developer-setup/), the [tech specs](https://hudi.apache.org/tech-specs-1point0/) and open GitHub Issues from the last year.",
       "data-modal-title": "Apache Hudi AI Assistant",
       "data-modal-example-questions-title": "Try asking me...",
       "data-modal-example-questions": "How can I convert an existing COW table to MOR?,How do I set up incremental queries with Hudi tables?",
-      "data-modal-image" : "https://hudi.apache.org/assets/images/logo-big-2.png",
-      "data-modal-image-ask-ai" : "https://hudi.apache.org/assets/images/logo-big-2.png",
+      "data-modal-image" : "/assets/images/logo-small.png",
+      "data-modal-image-ask-ai" : "/assets/images/logo-small.png",
       "data-modal-header-min-height" : "64px",
-      "data-modal-image-height": "40",
-      "data-modal-image-width": "40",
+      "data-modal-image-height": "44",
+      "data-modal-image-width": "64",
       "data-modal-header-bg-color": "#f8f9fa",
       "data-modal-title-color": "#0db1f9",
       "data-button-text-color": "#29557a",
       "data-button-text": "Ask AI",
       "data-consent-required": "true",
       "data-consent-screen-title": "Help us improve our AI assistant",
-      "data-consent-screen-disclaimer" : "By clicking &quot;Allow tracking&quot;, you consent to the use of the AI assistant in accordance with kapa.ai's [Privacy Policy](https://www.kapa.ai/content/privacy-policy). This service uses reCAPTCHA, which requires your consent to Google's [Privacy Policy](https://policies.google.com/privacy) and [Terms of Service](https://policies.google.com/terms). By proceeding, you explicitly agree to both kapa.ai's and Google's privacy policies.", 
+      "data-consent-screen-disclaimer" : "By clicking &quot;Allow tracking&quot;, you consent to the use of the AI assistant in accordance with kapa.ai's [Privacy Policy](https://www.kapa.ai/content/privacy-policy). This service uses reCAPTCHA, which requires your consent to Google's [Privacy Policy](https://policies.google.com/privacy) and [Terms of Service](https://policies.google.com/terms). By proceeding, you explicitly agree to both kapa.ai's and Google's privacy policies.",
       "data-consent-screen-accept-button-text": "Allow tracking",
       "data-modal-disclaimer-font-size" : "0.80rem",
       "data-query-input-placeholder-text-color": "#29557a",
@@ -610,9 +598,5 @@ module.exports = {
       "data-deep-thinking-button-active-text-color": "#FFFFFF",
       async: true,
     }
-  ],
-  stylesheets: [
-    "https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro",
-    "https://at-ui.github.io/feather-font/css/iconfont.css",
-  ],
+  ]
 };

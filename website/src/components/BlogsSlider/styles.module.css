@@ -1,6 +1,6 @@
 .cardBlogWrapper {
     padding: 80px 20px;
-    background: var(--ifm-color-primary-light-grey);
+    background: var(--ifm-background-gray-50);
 }
 .blogsWrapper {
     padding: 10px;
@@ -61,6 +61,7 @@
 
 .authorName {
     color: var(--ifm-color-secondary-text);
+    font-family: var(--ifm-heading-font-family);
 }
 
 .date {
@@ -69,10 +70,12 @@
 }
 
 .blogTitle {
-    font-weight: 500;
+    font-weight: 600;
     font-size: 20px;
     line-height: 24px;
     margin: 0;
+    color: var(--ifm-blue-900);
+    font-family: var(--ifm-heading-font-family);
 }
 .dots {
     margin: 0 7px;

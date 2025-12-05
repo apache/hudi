@@ -46,7 +46,7 @@ is tracked using internal tables. This approach provides the following advantage
 
 Following are the different types of metadata currently supported.
 
-- ***[files listings](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+Improvements)***: 
+- ***[files listings](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=147427331)***: 
   Stored as *files* partition in the metadata table. Contains file information such as file name, size, and active state
   for each partition in the data table, along with list of all partitions in the table. Improves the files listing performance 
   by avoiding direct storage calls such as *exists, listStatus* and *listFiles* on the data table.
@@ -100,7 +100,7 @@ from different engines as shown below:
 | Spark DataSource, Spark SQL, Strucured Streaming | hoodie.metadata.enable | When set to `true` enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.<br /> |
 | Flink DataStream, Flink SQL            | metadata.enabled | When set to `true` from DDL uses the internal metadata table to serves table metadata like level file listings                |
 | Presto                                           | [hudi.metadata-table-enabled](https://prestodb.io/docs/current/connector/hudi.html)             | When set to `true` fetches the list of file names and sizes from Hudi’s metadata table rather than storage.                   |
-| Trino                                            | N/A | Support for reading from the metadata table [has been dropped in Trino 419](https://issues.apache.org/jira/browse/HUDI-7020). |
+| Trino                                            | N/A | Support for reading from the metadata table [has been dropped in Trino 419](https://github.com/apache/hudi/issues/16286). |
 | Athena                                           | [hudi.metadata-listing-enabled](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) | When this table property is set to `TRUE` enables the Hudi metadata table and the related file listing functionality          |
 
 ### column_stats index and data skipping

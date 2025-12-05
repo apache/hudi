@@ -13,7 +13,7 @@ Apache Hudi brings stream processing to big data, providing fresh data while bei
 ## How is compaction different from clustering?
 
 Hudi is modeled like a log-structured storage engine with multiple versions of the data.
-Particularly, [Merge-On-Read](/docs/table_types#merge-on-read-table)
+Particularly, [Merge-On-Read](table_types#merge-on-read-table)
 tables in Hudi store data using a combination of base file in columnar format and row-based delta logs that contain
 updates. Compaction is a way to merge the delta logs with base files to produce the latest file slices with the most
 recent snapshot of data. Compaction helps to keep the query performance in check (larger delta log files would incur
@@ -93,7 +93,7 @@ update strategy.
 
 This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered
 and how many output file groups should the clustering produce. Note that these strategies are easily pluggable using the
-config [hoodie.clustering.plan.strategy.class](/docs/configurations#hoodieclusteringplanstrategyclass).
+config [hoodie.clustering.plan.strategy.class](configurations#hoodieclusteringplanstrategyclass).
 
 Different plan strategies are as follows:
 
@@ -133,7 +133,7 @@ dynamically expanding the buckets for bucket index datasets.
 
 After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
 based on sort columns and size. The strategy can be specified using the
-config [hoodie.clustering.execution.strategy.class](/docs/configurations/#hoodieclusteringexecutionstrategyclass). By
+config [hoodie.clustering.execution.strategy.class](configurations/#hoodieclusteringexecutionstrategyclass). By
 default, Hudi sorts the file groups in the plan by the specified columns, while meeting the configured target file
 sizes.
 
@@ -159,17 +159,17 @@ The available strategies are as follows:
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the config for update strategy - [`hoodie.clustering.updates.strategy`](/docs/configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
+the config for update strategy - [`hoodie.clustering.updates.strategy`](configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
 exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
 simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 
 We discussed the critical strategy configurations. All other configurations related to clustering are
-listed [here](/docs/configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
+listed [here](configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
 for inline or async clustering are shown below with code samples.
 
 ## Inline clustering
 
-Inline clustering happens synchronously with the regular ingestion writer or as part of the data ingestion pipeline. This means the next round of ingestion cannot proceed until the clustering is complete With inline clustering, Hudi will schedule, plan clustering operations after each commit is completed and execute the clustering plans after it’s created. This is the simplest deployment model to run because it’s easier to manage than running different asynchronous Spark jobs. This mode is supported on Spark Datasource, Flink, Spark-SQL and DeltaStreamer in a sync-once mode.
+Inline clustering happens synchronously with the regular ingestion writer or as part of the data ingestion pipeline. This means the next round of ingestion cannot proceed until the clustering is complete With inline clustering, Hudi will schedule, plan clustering operations after each commit is completed and execute the clustering plans after it’s created. This is the simplest deployment model to run because it’s easier to manage than running different asynchronous Spark jobs. This mode is supported on Spark Datasource, Flink, Spark-SQL and Hudi Streamer in a sync-once mode.
 
 For this deployment mode, please enable and set: `hoodie.clustering.inline` 
 
@@ -208,7 +208,7 @@ df.write.format("org.apache.hudi").
 
 Async clustering runs the clustering table service in the background without blocking the regular ingestions writers. There are three different ways to deploy an asynchronous clustering process: 
 
-- **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule and plan the clustering operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the clustering table service. This is supported by Spark Streaming, Flink and DeltaStreamer in continuous mode. For this deployment mode, please enable `hoodie.clustering.async.enabled` and `hoodie.clustering.async.max.commits​`. 
+- **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule and plan the clustering operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the clustering table service. This is supported by Spark Streaming, Flink and Hudi Streamer in continuous mode. For this deployment mode, please enable `hoodie.clustering.async.enabled` and `hoodie.clustering.async.max.commits​`. 
 - **Asynchronous scheduling and execution by a separate process**: In this deployment mode, the application will write data to a Hudi table as part of the ingestion pipeline. A separate clustering job will schedule, plan and execute the clustering operation. By running a different job for the clustering operation, it rebalances how Hudi uses compute resources: fewer compute resources are needed for the ingestion, which makes ingestion latency stable, and an independent set of compute resources are reserved for the clustering process. Please configure the lock providers for the concurrency control among all jobs (both writer and table service jobs). In general, configure lock providers when there are two different jobs or two different processes occurring. All writers support this deployment model. For this deployment mode, no clustering configs should be set for the ingestion writer. 
 - **Scheduling inline and executing async**: In this deployment mode, the application ingests data and schedules the clustering in one job; in another, the application executes the clustering plan. The supported writers (see below) won’t be blocked from ingesting data. If the metadata table is enabled, a lock provider is not needed. However, if the metadata table is enabled, please ensure all jobs have the lock providers configured for concurrency control. All writers support this deployment option. For this deployment mode, please enable, `hoodie.clustering.schedule.inline` and `hoodie.clustering.async.enabled`.
 

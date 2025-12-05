@@ -9,7 +9,7 @@ Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical tab
 
  * **Read Optimized query** - Provides excellent query performance on pure columnar storage, much like plain [Parquet](https://parquet.apache.org/) tables.
  * **Incremental query** - Provides a change stream out of the dataset to feed downstream jobs/ETLs.
- * **Snapshot query** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](http://avro.apache.org/docs/current/mr))
+ * **Snapshot query** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](https://avro.apache.org/docs/++version++/mapreduce-guide/))
 
 <figure>
     <img className="docimage" src={require("/assets/images/hudi_intro_1.png").default} alt="hudi_intro_1.png" />
@@ -17,4 +17,4 @@ Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical tab
 
 By carefully managing how data is laid out in storage & how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like [PrestoDB](https://prestodb.io) & [Spark](https://spark.apache.org/sql/), while at the same time capable of being consumed incrementally from processing/ETL frameworks like [Hive](https://hive.apache.org/) & [Spark](https://spark.apache.org/docs/latest/) to build derived (Hudi) tables.
 
-Hudi broadly consists of a self contained Spark library to build tables and integrations with existing query engines for data access. See [quickstart](/docs/quick-start-guide) for a demo.
+Hudi broadly consists of a self contained Spark library to build tables and integrations with existing query engines for data access. See [quickstart](quick-start-guide) for a demo.

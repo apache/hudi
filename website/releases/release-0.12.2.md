@@ -7,7 +7,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.12.2](https://github.com/apache/hudi/releases/tag/release-0.12.2) ([docs](/docs/quick-start-guide))
+## [Release 0.12.2](https://github.com/apache/hudi/releases/tag/release-0.12.2)
 
 ## Long Term Support
 

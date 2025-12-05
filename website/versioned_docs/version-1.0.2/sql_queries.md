@@ -8,11 +8,11 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Hudi stores and organizes data on storage while providing different ways of [querying](/docs/concepts#query-types), across a wide range of query engines.
+Hudi stores and organizes data on storage while providing different ways of [querying](concepts#query-types), across a wide range of query engines.
 This page will show how to issue different queries and discuss any specific instructions for each query engine.
 
 ## Spark SQL
-The Spark [quickstart](/docs/quick-start-guide) provides a good overview of how to use Spark SQL to query Hudi tables. This section will go into more advanced configurations and functionalities.
+The Spark [quickstart](quick-start-guide) provides a good overview of how to use Spark SQL to query Hudi tables. This section will go into more advanced configurations and functionalities.
 
 ### Snapshot Query
 Snapshot queries are the most common query type for Hudi tables. Spark SQL supports snapshot queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
@@ -90,7 +90,7 @@ show the files scanned as 1 compared to 3 files scanned without index.
 
 :::note
 Please note in order to create secondary index:
-1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger#commit_time_ordering).
 2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
 :::
 
@@ -323,7 +323,7 @@ For e.g the table has received 10 million modifications across 1 million records
 see all changes in a given time window and not just the latest values.
 :::
 
-Please refer to [configurations](/docs/basic_configurations) section for the important configuration options.
+Please refer to [configurations](basic_configurations) section for the important configuration options.
 
 :::note Incremental Query Checkpointing between Hudi 0.x and 1.0.
 In Hudi 1.0, we switch the incremental and CDC query to used completion time, instead of instant time, to determine the
@@ -406,7 +406,7 @@ and the corresponding type column value.
 
 ## Flink SQL
 Once the Flink Hudi tables have been registered to the Flink catalog, they can be queried using the Flink SQL. It supports all query types across both Hudi table types,
-relying on the custom Hudi input formats like Hive. Typically, notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](/docs/flink-quick-start-guide).
+relying on the custom Hudi input formats like Hive. Typically, notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](flink-quick-start-guide).
 
 
 ### Snapshot Query 
@@ -534,10 +534,6 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 It supports [querying Hudi tables](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) using the Hive connector.
 Currently, it supports snapshot queries on COPY_ON_WRITE tables, and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
 
-:::note The most recent release of Athena that supports querying Hudi 0.14.0 tables has a bug that causes _ro query to return 0 records, and occasionally _rt the query to fail with class cast exception.
-The issue is tracked in [HUDI-7362](https://issues.apache.org/jira/browse/HUDI-7362) and is expected to be fixed in the next release.
-:::
-
 ## Presto
 
 [Presto](https://prestodb.io/) is a popular query engine for interactive query performance. Support for querying Hudi tables using PrestoDB is offered
@@ -560,7 +556,7 @@ Please check the below table for query types supported and installation instruct
 :::note
 Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
 connector. However, it is in our roadmap, and you can track the development
-under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
+under [this GitHub issue](https://github.com/apache/hudi/issues/14992).
 :::
 
 To use the Hudi connector, please configure hudi catalog in ` /presto-server-0.2xxx/etc/catalog/hudi.properties` as follows:
@@ -647,7 +643,7 @@ for more details.
 ## Doris
 
 The Doris integration currently support Copy on Write and Merge On Read tables in Hudi since version 0.10.0. You can query Hudi tables via Doris from Doris version 2.0. Doris offers a multi-catalog, which is designed to make it easier to connect to external data catalogs to enhance Doris's data lake analysis and federated data query capabilities. Please refer
-to [Doris Hudi Catalog](https://doris.apache.org/docs/lakehouse/datalake-analytics/hudi/) for more details on the setup.
+to [Doris Hudi Catalog](https://doris.apache.org/docs/3.x/lakehouse/catalogs/hudi-catalog) for more details on the setup.
 
 :::note
 The current default supported version of Hudi is 0.10.0 ~ 0.13.1, and has not been tested in other versions. More versions will be supported in the future.

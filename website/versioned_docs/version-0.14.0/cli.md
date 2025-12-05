@@ -578,7 +578,7 @@ Compaction successfully repaired
 
 ### Savepoint and Restore 
 As the name suggest, "savepoint" saves the table as of the commit time, so that it lets you restore the table to this 
-savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/docs/disaster_recovery)
+savepoint at a later point in time if need be. You can read more about savepoints and restore [here](disaster_recovery)
 
 To trigger savepoint for a hudi table
 ```java
@@ -617,31 +617,32 @@ The following table shows the Hudi table versions corresponding to the Hudi rele
 
 | Hudi Table Version | Hudi Release Version(s) |
 |:-------------------|:------------------------|
-| `FIVE` or `5`      | 0.12.x                  |
+| `SIX` or `6`       | 0.14.x - 0.15.x         |
+| `FIVE` or `5`      | 0.12.x - 0.13.x         |
 | `FOUR` or `4`      | 0.11.x                  |
 | `THREE` or `3`     | 0.10.x                  |
 | `TWO` or `2`       | 0.9.x                   |
 | `ONE` or `1`       | 0.6.x - 0.8.x           |
 | `ZERO` or `0`      | 0.5.x and below         |
 
-For example, to downgrade a table from version `FIVE`(`5`) (current version) to `TWO`(`2`), you should run (use proper Spark master based
+For example, to downgrade a table from version `SIX`(`6`) (current version) to `FIVE`(`5`), you should run (use proper Spark master based
 on your environment)
 
 ```shell
-downgrade table --toVersion TWO --sparkMaster local[2]
+downgrade table --toVersion FIVE --sparkMaster local[2]
 ```
 
 or
 
 ```shell
-downgrade table --toVersion 2 --sparkMaster local[2]
+downgrade table --toVersion 5 --sparkMaster local[2]
 ```
 
 You can verify the table version by looking at the `hoodie.table.version` property in `.hoodie/hoodie.properties` under
 the table path:
 
 ```properties
-hoodie.table.version=2
+hoodie.table.version=5
 ```
 
 Hudi CLI also provides the ability to manually upgrade a Hudi table.  To upgrade a Hudi table through CLI:

@@ -40,7 +40,7 @@ You can increase `hoodie.commits.archival.batch` moving forward to increase the 
 In addition, you can increase the difference between the 2 watermark configurations : `hoodie.keep.max.commits` (default : 30) 
 and `hoodie.keep.min.commits` (default : 20). This way, you can reduce the number of archive files created and also 
 at the same time increase the number of metadata archived per archive file. Note that post 0.7.0 release where we are 
-adding consolidated Hudi metadata ([RFC-15](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+Improvements)), 
+adding consolidated Hudi metadata ([RFC-15](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=147427331)), 
 the follow up work would involve re-organizing archival metadata so that we can do periodic compactions to control 
 file-sizing of these archive files.
 
@@ -109,7 +109,7 @@ val hudiIncQueryDF = spark.read().format("hudi")
      .load(basePath);
 ```
 
-if Hive Sync is enabled in the [deltastreamer](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/docker/demo/sparksql-incremental.commands#L50) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable), the dataset is available in Hive as a couple of tables, that can now be read using HiveQL, Presto or SparkSQL. See [here](https://hudi.apache.org/docs/querying_data/) for more.
+if Hive Sync is enabled in the [Hudi Streamer](https://github.com/apache/hudi/blob/f5f0ef6549fedf93863526a2110fe262a3460432/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java#L337) tool or [datasource](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncenable), the dataset is available in Hive as a couple of tables, that can now be read using HiveQL, Presto or SparkSQL. See [here](https://hudi.apache.org/docs/querying_data/) for more.
 
 ### Data Quality Issues
 

@@ -1,0 +1,94 @@
+.container {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.card {
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px #06376D1A;
+}
+
+.card:hover {
+    box-shadow: 0px 5px 12px 0px #06376D1A;
+}
+
+
+.card p,
+.card a {
+    color: var(--ifm-blue-900);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.getInvloved {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.subTitle {
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--ifm-blue-900);
+    font-family: var(--ifm-heading-font-family);
+    text-align: center;
+}
+
+.cardTitle {
+    color: var(--ifm-blue-900);
+    font-weight: 600;
+    font-size: 18px;
+    border-bottom: 1px solid var(--ifm-gray-500);
+    padding-bottom: 8px;
+}
+
+.cardDesc {
+    color: var(--ifm-blue-900) !important;
+    font-size: 16px;
+    font-weight: 400;
+    font-family: var(--ifm-heading-font-family);
+}
+
+.cardDesc a {
+    color: var(--ifm-blue-900) !important;
+    font-size: 16px;
+    font-weight: 400;
+    text-decoration: underline;
+    font-family: var(--ifm-heading-font-family);
+}
+
+@media screen and (max-width: 1200px) {
+    .container {
+        grid-template-columns: repeat(2,1fr);
+    }
+
+    .subTitle {
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--ifm-blue-900);
+        font-family: var(--ifm-heading-font-family);
+        text-align: center;
+    }
+}
+
+@media screen and (max-width: 1000px) {
+    .container {
+        grid-template-columns: repeat(2,1fr);
+    }
+}
+
+
+@media screen and (max-width: 600px) {
+    .container {
+        grid-template-columns: repeat(1,1fr);
+    }
+}
+
+.docMainContainer {
+    flex-grow: 1;
+    max-width: calc(100% - var(--doc-sidebar-width));
+}

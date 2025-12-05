@@ -13,7 +13,7 @@ not applicable to Copy On Write(COW) tables and only applies to MOR tables.
 
 ### Why MOR tables need compaction?
 To understand the significance of compaction in MOR tables, it is helpful to understand the MOR table layout first. In Hudi, 
-data is organized in terms of [file groups](https://hudi.apache.org/docs/file_layouts/). Each file group in a MOR table 
+data is organized in terms of [file groups](file_layouts). Each file group in a MOR table 
 consists of a base file and one or more log files. Typically, during writes, inserts are stored in the base file, and updates 
 are appended to log files.
 
@@ -181,7 +181,7 @@ This model may need a lock provider **if** metadata table is enabled.
 :::
 
 #### Hudi Compactor Utility
-Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/cli#compactions)
+Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](cli#compactions)
 The compactor utility allows to do scheduling and execution of compaction.
 
 Example:
@@ -198,7 +198,7 @@ Note, the `instant-time` parameter is now optional for the Hudi Compactor Utilit
 the spark-submit will execute the earliest scheduled compaction on the Hudi timeline.  
 
 #### Hudi CLI
-Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](/docs/cli#compactions)
+Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](cli#compactions)
 
 Example:
 ```properties

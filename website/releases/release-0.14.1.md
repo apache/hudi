@@ -1,6 +1,5 @@
 ---
 title: "Release 0.14.1"
-sidebar_position: 5
 layout: releases
 toc: true
 last_modified_at: 2023-05-25T13:00:00-08:00
@@ -8,7 +7,7 @@ last_modified_at: 2023-05-25T13:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.14.1](https://github.com/apache/hudi/releases/tag/release-0.14.1) ([docs](/docs/quick-start-guide))
+## [Release 0.14.1](https://github.com/apache/hudi/releases/tag/release-0.14.1)
 
 ## Migration Guide
 
@@ -23,7 +22,7 @@ import TabItem from '@theme/TabItem';
 
 0.14.1 release is mainly intended for bug fixes and stability. The fixes span across many components, including
 
-* DeltaStreamer
+* Hudi Streamer
 * Spark SQL
 * Spark datasource writer
 * Table services

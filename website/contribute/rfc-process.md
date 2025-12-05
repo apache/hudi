@@ -15,7 +15,7 @@ Any of the following can be considered a major change:
  - Any new component, module or code that introduces a new concept into the project or alters the behavior of an existing one
  - Any large code refactor to address general code re-usability and structure. There is no strong definition for “Large” and whether or not the refactor requires an RFC can be discussed on the @dev mailing list.
  - Any change that impacts the underlying storage layout/format. e.g changes to the HoodieLogFormat, timeline layout version.
- - New indexing schemes, New deltastreamer sources, New platform services.
+ - New indexing schemes, New Hudi Streamer sources, New platform services.
  - Any change that impacts the public interfaces of the project.
 
 It can also be used to describe large direction shifts to the project (e.g. Flink support) or new green field ideas (e.g. Hudi for ML flows)
@@ -33,8 +33,7 @@ Anyone can initiate an RFC. Please note that if you are unsure of whether a feat
 ### Proposing the RFC
 1. First, start a discussion thread on the Apache Hudi dev mailing list, by sending an email to `dev@hudi.apache.org` with subject line `DISCUSS <proposed idea>`. 
 Use this discussion thread to get an agreement from people on the mailing list that your proposed idea necessitates an RFC.
-2. File an umbrella JIRA for the RFC with the label `hudi-umbrellas` added to it. See an [example JIRA](https://issues.apache.org/jira/browse/HUDI-1292).
-3. Raise a PR, adding an entry to the table at `rfc/README.md`, picking the next available RFC number. Hudi committers will help land that.
+2. Raise a PR, adding an entry to the table at `rfc/README.md`, picking the next available RFC number. Hudi committers will help land that.
 
 ### Writing the RFC
 1. Create a folder `rfc-<number>` under `rfc` folder, where `<number>` is replaced by the actual RFC number used.
@@ -49,7 +48,7 @@ Use this discussion thread to get an agreement from people on the mailing list t
 RFC process is by no-means is an attempt at the "waterfall" software development process. 
 We recognize that design can be an iterative process as well, often evolving together with implementation. 
 
-1. Please ensure your code PRs are labelled with a `[RFC-<number>]` title, in addition to the JIRA number.
+1. Please ensure your code PRs are labelled with a `[RFC-<number>]` title.
 2. As your implementation changes over time, you will update the RFCs and keep them in-sync. Project maintainers could point out these opportunities during code reviews.
 3. During the final landing of all goals of the RFC, the status changes to "COMPLETED"
 

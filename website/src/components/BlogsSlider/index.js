@@ -69,7 +69,7 @@ const BlogsSlider = () => {
     <section className={styles.cardBlogWrapper}>
       <div className="container">
         <div className={styles.titleWrapper}>
-          <Title primaryText="Hudi" secondaryText="Blogs" />
+          <Title primaryText="Hudi Blogs"/>
         </div>
 
         <div className={styles.embla} ref={emblaRef}>
@@ -102,7 +102,7 @@ const BlogsSlider = () => {
           />
         </div>
         <div className={styles.blogViewAllBtnWrapper}>
-          <LinkButton to="/blog" className={styles.blogBtn}>
+          <LinkButton to="/learn/blog" className={styles.blogBtn}>
             View All
           </LinkButton>
         </div>

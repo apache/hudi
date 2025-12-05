@@ -1,8 +1,8 @@
 /*@import "../../css/custom.css";*/
 
 .featuresWrapper {
-    background: var(--ifm-color-primary-light-grey);
-    padding: 80px 20px;
+    background: var(--ifm-background-gray-50);
+    padding: 100px 20px;
 }
 .titleWrapper {
     text-align: center;
@@ -17,7 +17,13 @@
     background: var(--ifm-color-white);
     border-radius: 12px;
     padding: 25px;
+}
+.boxWrapper:hover {
+    box-shadow: 0px 5px 12px 0px #06376D1A;
+}
 
+.featuresWrapper > div {
+    padding: 0px !important;
 }
 
 .boxWrapper a {
@@ -44,11 +50,17 @@
     font-weight: 700;
     font-size: 20px;
     line-height: 24px;
-    color: var(--ifm-color-gray-900);
+    color: var(--ifm-blue-900);
     margin: 0 0 10px;
+    font-family: var(--ifm-heading-font-family);
 }
 
-
+.featuresSubTitle{
+    font-weight: 400;
+    font-size: 16px;
+    color: var(--ifm-blue-900);
+    font-family: var(--ifm-heading-font-family);
+}
 
 @media only screen and (max-width: 992px) {
     .wrapperContainer {
@@ -59,6 +71,14 @@
 @media only screen and (max-width: 600px) {
     .wrapperContainer {
         grid-template-columns: auto;
+    }
+
+    .featuresTitle {
+        font-size: 18px !important;
+    }
+
+    .featuresSubTitle{
+        font-size: 14px !important;
     }
 }
 

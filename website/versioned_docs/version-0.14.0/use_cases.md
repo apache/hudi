@@ -22,7 +22,7 @@ more value is created.
 For RDBMS ingestion, Hudi provides __faster loads via Upserts__, as opposed costly & inefficient bulk loads. It's very common to use a change capture solution like
 [Debezium](http://debezium.io/) or [Kafka Connect](https://docs.confluent.io/platform/current/connect/index) or 
 [Sqoop Incremental Import](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide#_incremental_imports) and apply them to an
-equivalent Hudi table on DFS. For NoSQL datastores like [Cassandra](http://cassandra.apache.org/) / [Voldemort](http://www.project-voldemort.com/voldemort/) / [HBase](https://hbase.apache.org/), 
+equivalent Hudi table on DFS. For NoSQL datastores like [Cassandra](http://cassandra.apache.org/) / [HBase](https://hbase.apache.org/), 
 even moderately big installations store billions of rows. It goes without saying that __full bulk loads are simply infeasible__ and more efficient approaches 
 are needed if ingestion is to keep up with the typically high update volumes.
 
@@ -85,7 +85,7 @@ stream processing world to ensure pipelines don't break from non backwards compa
 
 ### ACID Transactions
 Along with a table, Apache Hudi brings ACID transactional guarantees to a data lake.
-Hudi ensures atomic writes, by way of publishing commits atomically to a [timeline](/docs/timeline), stamped with an 
+Hudi ensures atomic writes, by way of publishing commits atomically to a [timeline](timeline), stamped with an 
 instant time that denotes the time at which the action 
 is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between writer processes 
 (that issue user’s upserts/deletes), table services (that write data/metadata to optimize/perform bookkeeping) and readers 
@@ -127,9 +127,9 @@ cost savings for your data lake.
 
 Some examples of the Apache Hudi services that make this performance optimization easy include: 
 
-- [Auto File Sizing](/docs/file_sizing) - to solve the "small files" problem.
-- [Clustering](/docs/clustering) - to co-locate data next to each other.
-- [Compaction](/docs/compaction) - to allow tuning of low latency ingestion and fast read queries. 
+- [Auto File Sizing](file_sizing) - to solve the "small files" problem.
+- [Clustering](clustering) - to co-locate data next to each other.
+- [Compaction](compaction) - to allow tuning of low latency ingestion and fast read queries. 
 - [Indexing](indexing) - for efficient upserts and deletes.
 - Multi-Dimensional Partitioning (Z-Ordering) - Traditional folder style partitioning on low-cardinality, while also 
 Z-Ordering data within files based on high-cardinality

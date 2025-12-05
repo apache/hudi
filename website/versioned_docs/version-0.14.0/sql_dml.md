@@ -12,7 +12,7 @@ import TabItem from '@theme/TabItem';
 SparkSQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update, merge and delete data 
 from your Hudi tables. Let's explore them one by one.
 
-Please refer to [SQL DDL](/docs/sql_ddl) for creating Hudi tables using SQL.
+Please refer to [SQL DDL](sql_ddl) for creating Hudi tables using SQL.
 
 ### Insert Into
 
@@ -25,7 +25,7 @@ SELECT <columns> FROM <source>;
 
 :::note Deprecations
 From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are deprecated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](/docs/configurations#hoodiedatasourceinsertduppolicy).
+To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](configurations#hoodiedatasourceinsertduppolicy).
 :::
 
 Examples: 
@@ -45,7 +45,7 @@ INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000
 ```
 
 :::note Mapping to write operations
-Hudi offers flexibility in choosing the underlying [write operation](/docs/write_operations) of a `INSERT INTO` statement using 
+Hudi offers flexibility in choosing the underlying [write operation](write_operations) of a `INSERT INTO` statement using 
 the `hoodie.spark.sql.insert.into.operation` configuration. Possible options include *"bulk_insert"* (large inserts), *"insert"* (with small file management), 
 and *"upsert"* (with deduplication/merging). If a precombine field is not set, *"insert"* is chosen as the default. For a table with preCombine field set,
 *"upsert"* is chosen as the default operation.
@@ -200,6 +200,6 @@ You can control the behavior of these operations using various configuration opt
 ## Flink 
 
 Flink SQL also provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. All these operations are already 
-showcased in the [Flink Quickstart](/docs/flink-quick-start-guide).
+showcased in the [Flink Quickstart](flink-quick-start-guide).
 
 

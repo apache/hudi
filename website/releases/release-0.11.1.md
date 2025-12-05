@@ -8,7 +8,7 @@ last_modified_at: 2022-06-19T23:30:00-07:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# [Release 0.11.1](https://github.com/apache/hudi/releases/tag/release-0.11.1) ([docs](/docs/quick-start-guide))
+# [Release 0.11.1](https://github.com/apache/hudi/releases/tag/release-0.11.1)
 
 ## Migration Guide
 

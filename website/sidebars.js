@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 module.exports = {
     docs: [
         {
@@ -70,24 +70,25 @@ module.exports = {
             type: 'category',
             label: 'Table Services',
             items: [
-                'cleaning',
                 'compaction',
                 'clustering',
+                'cleaning',
                 'metadata_indexing',
+                'file_sizing',
                 'rollbacks',
                 'markers',
-                'file_sizing',
-                {
-                    type: 'category',
-                    label: 'Syncing to Catalogs',
-                    items: [
-                         'syncing_aws_glue_data_catalog',
-                         'syncing_datahub',
-                         'syncing_metastore',
-                         'gcp_bigquery',
-                         'syncing_xtable'
-                    ],
-                }
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Data Catalogs',
+            items: [
+                 'syncing_aws_glue_data_catalog',
+                 'gcp_bigquery',
+                 'syncing_datahub',
+                 'syncing_metastore',
+                 'syncing_xtable',
+                 'catalog_polaris',
             ],
         },
         {
@@ -135,7 +136,8 @@ module.exports = {
                         'ibm_cos_hoodie',
                         'bos_hoodie',
                         'jfs_hoodie',
-                        'oci_hoodie'
+                        'oci_hoodie',
+                        'ks3_hoodie',
                     ],
                 },
             ],
@@ -150,7 +152,7 @@ module.exports = {
         {
             type: 'link',
             label: 'Chat with us on Slack',
-            href: slackUrl
+            href: originalSlackUrl
         },
     ],
 };

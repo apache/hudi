@@ -10,7 +10,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 This page is no longer maintained. Please refer to Hudi [SQL DDL](sql_ddl), [SQL DML](sql_dml), [SQL Queries](sql_queries) and [Procedures](procedures) for the latest documentation.
 :::
 
-Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts#query-types). 
+Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](concepts#query-types). 
 Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi's custom inputformats. Once the proper hudi
 bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Flink, Trino and PrestoDB.
 
@@ -19,7 +19,7 @@ In sections, below we will discuss specific setup to access different query type
 ## Spark Datasource
 
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
-See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
+See the [Spark Quick Start](quick-start-guide) for more examples of Spark datasource reading queries. 
 
 **Setup**
 
@@ -56,8 +56,8 @@ hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ```
 
-For examples, refer to [Incremental Queries](/docs/quick-start-guide#incremental-query) in the Spark quickstart. 
-Please refer to [configurations](/docs/configurations#SPARK_DATASOURCE) section, to view all datasource options.
+For examples, refer to [Incremental Queries](quick-start-guide#incremental-query) in the Spark quickstart. 
+Please refer to [configurations](configurations#SPARK_DATASOURCE) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 

@@ -10,7 +10,7 @@ In this page, we explain how to use Hudi on Microsoft Azure.
 
 This page is maintained by the Hudi community.
 If the information is inaccurate or you have additional information to add.
-Please feel free to create a JIRA ticket. Contribution is highly appreciated.
+Please feel free to create a GitHub issue. Contribution is highly appreciated.
 
 ## Supported Storage System
 

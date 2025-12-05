@@ -1,6 +1,5 @@
 ---
 title: "Release 1.0.0"
-sidebar_position: 3
 layout: releases
 toc: true
 ---
@@ -8,7 +7,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) ([docs](/docs/quick-start-guide))
+## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0)
 
 Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features 
 as we will see below.
@@ -42,8 +41,7 @@ and [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#sup
 
 ### Format changes
 
-The main epic covering all the format changes is [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242), which is also 
-covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following are the main highlights with respect to format changes:
+The main epic covering all the format changes is [this GitHub issue](https://github.com/apache/hudi/issues/15964), which is also covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main highlights with respect to format changes:
 
 #### Timeline
 
@@ -61,7 +59,7 @@ covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following
 #### Log File Format
 
 - In addition to the keys in the log file header, we also store record positions. Refer to the
-  latest [spec](/tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
+  latest [spec](/learn/tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
   from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 - The new log file format also enables fast partial updates with low storage overhead.
@@ -123,7 +121,7 @@ To learn more about partial updates, refer to the [SQL DML](/docs/sql_dml#merge-
   format to another, e.g. from ORC to Parquet, without rewriting the whole table.
 - **Configuration:** Enable with `hoodie.table.multiple.base.file.formats.enable`.
 
-To learn more about the format changes, refer to the [Hudi 1.0 tech specification](/tech-specs-1point0).
+To learn more about the format changes, refer to the [Hudi 1.0 tech specification](/learn/tech-specs-1point0).
 
 ### API Changes
 

@@ -22,7 +22,7 @@ cargo add hudi
 
 > [!NOTE]
 > These examples expect a Hudi table exists at `/tmp/trips_table`, created using
-> the [quick start guide](/docs/quick-start-guide).
+> the [quick start guide](quick-start-guide).
 
 ### Snapshot Query
 

@@ -116,7 +116,7 @@ This post introduced a log-based approach to ingest data from S3 into Hudi table
 - Another stream of work is to add resource manager that allows users to setup notifications and delete resources when no longer needed.
 - Another interesting piece of work is to support **asynchronous backfills**. Notification systems are evntually consistent and typically do not guarantee perfect delivery of all files right away. The log-based approach provides enough flexibility to trigger automatic backfills at a configurable interval e.g. once a day or once a week.
 
-Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1896) to learn more about active development on this issue. 
+Please follow this [GitHub issue](https://github.com/apache/hudi/issues/14794) to learn more about active development on this issue. 
 We look forward to contributions from the community. Hope you enjoyed this post. 
 
 Put your Hudi on and keep streaming!

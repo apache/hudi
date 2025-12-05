@@ -1,13 +1,12 @@
 ---
 title: "Release 0.14.0"
-sidebar_position: 8
 layout: releases
 toc: true
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.14.0](https://github.com/apache/hudi/releases/tag/release-0.14.0) ([docs](/docs/quick-start-guide))
+## [Release 0.14.0](https://github.com/apache/hudi/releases/tag/release-0.14.0)
 Apache Hudi 0.14.0 marks a significant milestone with a range of new functionalities and enhancements. 
 These include the introduction of Record Level Index, automatic generation of record keys, the `hudi_table_changes` 
 function for incremental reads, and more. Notably, this release also incorporates support for Spark 3.4. On the Flink 
@@ -94,13 +93,13 @@ In case users do not override this configuration, compaction may be triggered fo
 5 delta commits (the default value for 
 [`hoodie.compact.inline.max.delta.commits`](https://hudi.apache.org/docs/configurations#hoodiecompactinlinemaxdeltacommits)).
 
+#### `HoodieDeltaStreamer` renamed to `HoodieStreamer` (Hudi Streamer)
 
-#### HoodieDeltaStreamer renamed to HoodieStreamer
 Starting from version 0.14.0, we have renamed [HoodieDeltaStreamer](https://github.com/apache/hudi/blob/84a80e21b5f0cdc1f4a33957293272431b221aa9/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java)
-to [HoodieStreamer](https://github.com/apache/hudi/blob/84a80e21b5f0cdc1f4a33957293272431b221aa9/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java). 
+to [`HoodieStreamer`](https://github.com/apache/hudi/blob/84a80e21b5f0cdc1f4a33957293272431b221aa9/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java). 
 We have ensured backward compatibility so that existing user jobs remain unaffected. However, in upcoming 
 releases, support for Deltastreamer might be discontinued. Hence, we strongly advise users to transition to using 
-HoodieStreamer instead.
+`HoodieStreamer` instead.
 
 
 #### MERGE INTO JOIN condition 
@@ -156,7 +155,7 @@ cannot be altered for existing ones.
 
 
 This functionality is available in all spark writers with certain limitations. For append only type of use cases, Inserts and 
-bulk_inserts are allowed with all four writers - Spark Datasource, Spark SQL, Spark Streaming, Hoodie Streamer. Updates and 
+bulk_inserts are allowed with all four writers - Spark Datasource, Spark SQL, Spark Streaming, Hudi Streamer. Updates and 
 Deletes are supported only using spark-sql `MERGE INTO` , `UPDATE` and `DELETE` statements. With Spark Datasource, `UPDATE` 
 and `DELETE` are supported only when the source dataframe contains Hudi's meta fields. Please check out our 
 [quick start guide](https://hudi.apache.org/docs/quick-start-guide) for code snippets on Hudi table CRUD operations where 
@@ -260,7 +259,7 @@ significantly reduce read latencies by 20 to 40% when compared to the older file
 bootstrap queries. The goal is to bring the latencies closer to those of the COW (Copy On Write) file format. To utilize 
 this new file format, users need to set `hoodie.datasource.read.use.new.parquet.file.format=true`. It's important to note
 that this feature is still experimental and comes with a few limitations. For more details and if you're interested in 
-contributing, please refer to [HUDI-6568](https://issues.apache.org/jira/browse/HUDI-6568).
+contributing, please refer to [this GitHub issue](https://github.com/apache/hudi/issues/16112).
 
 ### Spark write side improvements
 
@@ -271,15 +270,15 @@ and `INSERT OVERWRITE PARTITION`. To enable bulk insert, set config
 to value `bulk_insert`. Bulk insert has better write performance compared to insert operation. Row writer support is 
 also added for Simple bucket index.
 
-### Hoodie Streamer enhancements
+### Hudi Streamer enhancements
 
 #### Dynamic configuration updates
-When Hoodie Streamer is run in continuous mode, the properties can be refreshed/updated before each sync calls. 
-Interested users can implement `org.apache.hudi.utilities.deltastreamer.ConfigurationHotUpdateStrategy` to leverage this.
+When Hudi Streamer is run in continuous mode, the properties can be refreshed/updated before each sync calls. 
+Interested users can implement `org.apache.hudi.utilities.streamer.ConfigurationHotUpdateStrategy` to leverage this.
 
-#### SQL File based source for HoodieStreamer
+#### SQL File based source for Hudi Streamer
 A new source - [SqlFileBasedSource](https://github.com/apache/hudi/blob/30146d61f5544f06e2100234b9bf9c5e4bc2a97f/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/SqlFileBasedSource.java), 
-has been added to HoodieStreamer designed to facilitate one-time backfill scenarios.
+has been added to Hudi Streamer designed to facilitate one-time backfill scenarios.
 
 ### Flink Enhancements
 Below are the Flink Engine based enhancements in the 0.14.0 release.
@@ -333,7 +332,7 @@ compaction, clustering, and metadata table support has been added to Java Engine
 In Hudi 0.14.0, when querying a table that uses ComplexKeyGenerator or CustomKeyGenerator, partition values are returned
 as string. Note that there is no type change on the storage i.e. partition fields are written in the user-defined type 
 on storage. However, this is a breaking change for the aforementioned key generators and will be fixed in 0.14.1 -
-[HUDI-6914](https://issues.apache.org/jira/browse/HUDI-6914)
+[tracking issue](https://github.com/apache/hudi/issues/16251)
 
 ## Raw Release Notes
 

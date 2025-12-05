@@ -84,7 +84,7 @@ mvn clean package -DskipTests
 Default profile is spark2 and scala2.11
 
 - For continuous development, you may want to build only the modules of interest. for eg, if you have been working with 
-deltastreamer, you can build using this command instead of entire project. Majority of time goes into building all different bundles we have 
+Hudi Streamer, you can build using this command instead of entire project. Majority of time goes into building all different bundles we have 
 like flink bundle, presto bundle, trino bundle etc. But if you are developing something confined to hudi-utilties, you can achieve faster 
 build times.
 
@@ -148,7 +148,7 @@ Use `alt use` to use v1 version of docker-compose while running integration test
   * `hudi-hive` : Manage hive tables off Hudi datasets and houses the HiveSyncTool
   * `hudi-integ-test` : Longer running integration test processes
   * `hudi-spark` : Spark datasource for writing and reading Hudi datasets. Streaming sink.
-  * `hudi-utilities` : Houses tools like DeltaStreamer, SnapshotCopier
+  * `hudi-utilities` : Houses tools like Hudi streamer, snapshot exporter, etc
   * `packaging` : Poms for building out bundles for easier drop in to Spark, Hive, Presto, Utilities
   * `style`  : Code formatting, checkstyle files
 
@@ -180,12 +180,12 @@ We encourage you to test your code on docker cluster please follow this for [doc
 
 if your code fails on docker cluster you can remotely debug your code please follow the below steps.
 
-Step 1 :- Run your Delta Streamer Job with --conf as defined this will ensure to wait till you attach your intellij with Remote Debugging on port 4044
+Step 1 :- Run your Hudi Streamer Job with --conf as defined this will ensure to wait till you attach your intellij with Remote Debugging on port 4044
 
 ```scala
 spark-submit \
   --conf spark.driver.extraJavaOptions="-Dconfig.resource=myapp.conf  -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=4044" \
-  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer $HUDI_UTILITIES_BUNDLE \
   --table-type COPY_ON_WRITE \
   --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
   --source-ordering-field ts  \

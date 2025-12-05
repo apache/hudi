@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### Does Hudi support cloud storage/object stores?
 
-Yes. Generally speaking, Hudi is able to provide its functionality on any Hadoop FileSystem implementation and thus can read and write tables on [Cloud stores](/docs/cloud) (Amazon S3 or Microsoft Azure or Google Cloud Storage). Over time, Hudi has also incorporated specific design aspects that make building Hudi tables on the cloud easy, such as [consistency checks for s3](/docs/configurations#hoodieconsistencycheckenabled), Zero moves/renames involved for data files.
+Yes. Generally speaking, Hudi is able to provide its functionality on any Hadoop FileSystem implementation and thus can read and write tables on [Cloud stores](cloud) (Amazon S3 or Microsoft Azure or Google Cloud Storage). Over time, Hudi has also incorporated specific design aspects that make building Hudi tables on the cloud easy, such as [consistency checks for s3](configurations#hoodieconsistencycheckenabled), Zero moves/renames involved for data files.
 
 ### What is the difference between copy-on-write (COW) vs merge-on-read (MOR) table types?
 
@@ -14,11 +14,11 @@ Yes. Generally speaking, Hudi is able to provide its functionality on any Hadoop
 
 **Merge On Read** - This storage type enables clients to ingest data quickly onto row based data format such as avro. Any new data that is written to the Hudi table using MOR table type, will write new log/delta files that internally store the data as avro encoded bytes. A compaction process (configured as inline or asynchronous) will convert log file format to columnar file format (parquet). Two different InputFormats expose 2 different views of this data, Read Optimized view exposes columnar parquet reading performance while Realtime View exposes columnar and/or log reading performance respectively. Updating an existing set of rows will result in either a) a companion log/delta file for an existing base parquet file generated from a previous compaction or b) an update written to a log/delta file in case no compaction ever happened for it. Hence, all writes to such tables are limited by avro/log file writing performance, much faster than parquet. Although, there is a higher cost to pay to read log/delta files vs columnar (parquet) files.
 
-More details can be found [here](/docs/concepts/) and also [Design And Architecture](https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture).
+More details can be found [here](concepts/) and also [Design And Architecture](https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture).
 
 ### How do I migrate my data to Hudi?
 
-Hudi provides built in support for rewriting your entire table into Hudi one-time using the HDFSParquetImporter tool available from the hudi-cli . You could also do this via a simple read and write of the dataset using the Spark datasource APIs. Once migrated, writes can be performed using normal means discussed [here](faq_writing_tables#what-are-some-ways-to-write-a-hudi-table). This topic is discussed in detail [here](/docs/migration_guide/), including ways to doing partial migrations.
+Hudi provides built in support for rewriting your entire table into Hudi one-time using the HDFSParquetImporter tool available from the hudi-cli . You could also do this via a simple read and write of the dataset using the Spark datasource APIs. Once migrated, writes can be performed using normal means discussed [here](faq_writing_tables#what-are-some-ways-to-write-a-hudi-table). This topic is discussed in detail [here](migration_guide/), including ways to doing partial migrations.
 
 ### How to convert an existing COW table to MOR?
 
@@ -34,7 +34,7 @@ But manually changing it will result in checksum errors. So, we have to go via h
 
 ### How can I find the average record size in a commit?
 
-The `commit showpartitons` command in [HUDI CLI](/docs/cli) will show both "bytes written" and
+The `commit showpartitons` command in [HUDI CLI](cli) will show both "bytes written" and
 
 "records inserted." Divide the bytes written by records inserted to find the average size. Note that this answer assumes
 
@@ -47,7 +47,7 @@ The indexing component is a key part of the Hudi writing and it maps a given rec
 Hudi supports a few options for indexing as below
 
 *   _HoodieBloomIndex_ : Uses a bloom filter and ranges information placed in the footer of parquet/base files (and soon log files as well)
-*   _HoodieGlobalBloomIndex_ : The non global indexing only enforces uniqueness of a key inside a single partition i.e the user is expected to know the partition under which a given record key is stored. This helps the indexing scale very well for even [very large datasets](https://eng.uber.com/uber-big-data-platform/). However, in some cases, it might be necessary instead to do the de-duping/enforce uniqueness across all partitions and the global bloom index does exactly that. If this is used, incoming records are compared to files across the entire table and ensure a recordKey is only present in one partition.
+*   _HoodieGlobalBloomIndex_ : The non global indexing only enforces uniqueness of a key inside a single partition i.e the user is expected to know the partition under which a given record key is stored. This helps the indexing scale very well for even [very large datasets](https://www.uber.com/en-IN/blog/uber-big-data-platform/). However, in some cases, it might be necessary instead to do the de-duping/enforce uniqueness across all partitions and the global bloom index does exactly that. If this is used, incoming records are compared to files across the entire table and ensure a recordKey is only present in one partition.
 *   _HBaseIndex_ : Apache HBase is a key value store, typically found in close proximity to HDFS. You can also store the index inside HBase, which could be handy if you are already operating HBase.
 *   _HoodieSimpleIndex (default)_ : A simple index which reads interested fields (record key and partition path) from base files and joins with incoming records to find the tagged location.
 *   _HoodieGlobalSimpleIndex_ : Global version of Simple Index, where in uniqueness is on record key across entire table.
@@ -91,11 +91,11 @@ spark.read.parquet("your_data_set/path/to/month").limit(n) // Limit n records
      .save(basePath);
 ```
 
-For merge on read table, you may want to also try scheduling and running compaction jobs. You can run compaction directly using spark submit on org.apache.hudi.utilities.HoodieCompactor or by using [HUDI CLI](/docs/cli).
+For merge on read table, you may want to also try scheduling and running compaction jobs. You can run compaction directly using spark submit on org.apache.hudi.utilities.HoodieCompactor or by using [HUDI CLI](cli).
 
 ### Why does maintain record level commit metadata? Isn't tracking table version at file level good enough? 
 
-By generating a commit time ahead of time, Hudi is able to stamp each record with effectively a transaction id that it's part of that commit enabling record level change tracking. This means, that even if that file is compacted/clustered ([they mean different things in Hudi](/docs/clustering#how-is-compaction-different-from-clustering)) many times, in between incremental queries, we are able to [preserve history of the records](/blog/2023/05/19/hudi-metafields-demystified). Further more, Hudi is able to leverage compaction to amortize the cost of "catching up" for incremental readers by handing latest state of a record after a point in time - which is orders of magnitude efficient than processing each record. Other similar systems lack such decoupling of change streams from physical files the records were part of and core table management services being aware of the history of records. Such similar approaches of record level metadata fields for efficient incremental processing has been also applied in other leading industry [data warehouses](https://twitter.com/apachehudi/status/1676021143697002496?s=20).
+By generating a commit time ahead of time, Hudi is able to stamp each record with effectively a transaction id that it's part of that commit enabling record level change tracking. This means, that even if that file is compacted/clustered ([they mean different things in Hudi](clustering#how-is-compaction-different-from-clustering)) many times, in between incremental queries, we are able to [preserve history of the records](/blog/2023/05/19/hudi-metafields-demystified). Further more, Hudi is able to leverage compaction to amortize the cost of "catching up" for incremental readers by handing latest state of a record after a point in time - which is orders of magnitude efficient than processing each record. Other similar systems lack such decoupling of change streams from physical files the records were part of and core table management services being aware of the history of records. Such similar approaches of record level metadata fields for efficient incremental processing has been also applied in other leading industry [data warehouses](https://twitter.com/apachehudi/status/1676021143697002496?s=20).
 
 ### Why partition fields are also stored in parquet files in addition to the partition path ?
 
@@ -129,7 +129,7 @@ This is an advanced version of the bloom filter which grows dynamically as the n
 
 ### How do I verify datasource schema reconciliation in Hudi?
 
-With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](/docs/configurations/#hoodiedatasourcewritereconcileschema) config.
+With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](configurations/#hoodiedatasourcewritereconcileschema) config.
 
 Example how schema reconciliation works with Spark:
 
@@ -188,6 +188,6 @@ validate the properties.
 
 Hudi was not originally designed as a database layer that would fit under the various big data query engines, that were painfully hard to integrate with (Spark did not have DataSet/DataSource APIs, Trino was still Presto, Presto SPI was still budding, Hive storage handlers were just out). Popular engines including Spark, Flink, Presto, Trino, and Athena do not have issues integrating with Hudi as they are all based on JVM, and access access to Timeline, Metadata table are well-abstracted by Hudi APIs. Even non-jvm engines like Redshift have successfully integrated with Hudi.
 
-Since it was not thought of as a "format", the focus on the APIs for such lower level integrations and documenting the serialized bytes has been historically inadequate. However, with some understanding of the serialization, looking beyond the APIs used and focus on what the serialized bytes are, its possible to integrate Hudi from outside the JVM. For e.g Bloom filters are serialized as hex strings, from byte arrays/primitive types, and should be **readable cross language**. The Hudi Log Format bytes and layout are clearly defined as well, the header/footers are also binary serialized only with primitive types/byte arrays. So with the right endianity information and documentation of these bytes, **cross jvm clients can read this**. The Hudi metadata table uses [HFile format](https://hbase.apache.org/book.html#_hfile_format_2) as the base file format, which while being a well-documented open file format with clear protobuf specifications, does not have native readers. Community has taken efforts towards improving the docs on [tech specs](/tech-specs). Going forward, Hudi community plans on improving the [table APIs](https://github.com/apache/hudi/pull/7080) to facilitate faster engine integrations, including native language support, as a big part of the [Hudi 1.0](https://github.com/apache/hudi/blob/master/rfc/rfc-69/rfc-69.md) format changes to generalize Hudi more.
+Since it was not thought of as a "format", the focus on the APIs for such lower level integrations and documenting the serialized bytes has been historically inadequate. However, with some understanding of the serialization, looking beyond the APIs used and focus on what the serialized bytes are, its possible to integrate Hudi from outside the JVM. For e.g Bloom filters are serialized as hex strings, from byte arrays/primitive types, and should be **readable cross language**. The Hudi Log Format bytes and layout are clearly defined as well, the header/footers are also binary serialized only with primitive types/byte arrays. So with the right endianity information and documentation of these bytes, **cross jvm clients can read this**. The Hudi metadata table uses [HFile format](https://hbase.apache.org/book.html#_hfile_format_2) as the base file format, which while being a well-documented open file format with clear protobuf specifications, does not have native readers. Community has taken efforts towards improving the docs on [tech specs](/learn/tech-specs). Going forward, Hudi community plans on improving the [table APIs](https://github.com/apache/hudi/pull/7080) to facilitate faster engine integrations, including native language support, as a big part of the [Hudi 1.0](https://github.com/apache/hudi/blob/master/rfc/rfc-69/rfc-69.md) format changes to generalize Hudi more.
 
 **_Note_**: _In a recent release the delete block keys were unintentionally serialized as kryo, and is being fixed in the 0.14 release. Thankfully, since Hudi’s log blocks and format are versioned, when the file slice is compacted things return to normal._

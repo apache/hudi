@@ -1,13 +1,12 @@
 ---
 title: "Release 1.0.0-beta2"
-sidebar_position: 6
 layout: releases
 toc: true
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0-beta2](https://github.com/apache/hudi/releases/tag/release-1.0.0-beta2) ([docs](/docs/next/quick-start-guide))
+## [Release 1.0.0-beta2](https://github.com/apache/hudi/releases/tag/release-1.0.0-beta2)
 
 Apache Hudi 1.0.0-beta2 is the second beta release of Apache Hudi. This release is meant for early adopters to try
 out the new features and provide feedback. The release is not meant for production use.
@@ -28,8 +27,8 @@ rolling upgrades from older versions to this release.
 
 ### Format changes
 
-[HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242) is the main epic covering all the format changes proposals,
-which are also partly covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following are the main
+[This GitHub issue](https://github.com/apache/hudi/issues/15964) is the main epic covering all the format changes proposals,
+which are also partly covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main
 changes in this release:
 
 #### Timeline

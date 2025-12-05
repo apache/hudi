@@ -5,17 +5,16 @@
     padding: 100px 0;
 }
 .communityContent {
-    display: grid;
-    grid-template-columns: 50% 50%;
     align-items: center;
     gap: 2%;
     margin: 0 auto;
 }
 .communityDescription {
+    color: var(--ifm-blue-900);
     font-weight: 400;
-    font-size: 20px;
+    font-size: 16px;
     line-height: 26px;
-    max-width: 480px;
+    margin-top: 10px;
 }
 
 .communityCardWrapper {
@@ -26,21 +25,14 @@
 }
 
 .communityCardChildWrapper {
-    display: flex;
-    justify-content: center;
-}
-
-.communityCardChildWrapper > div {
-    margin-right: 25px;
-    width: calc(33% - 16px);
-}
-
-.communityCardChildWrapper :last-child {
-    margin-right: 0;
+    display: grid;
+    grid-template-columns: repeat(6,1fr);
+    width: 100%;
+    align-items: center;
+    gap:20px;
 }
 
 .communityCard {
-    background: var(--ifm-color-primary-light-grey);
     padding: 20px;
     text-align: center;
     cursor: pointer;
@@ -49,15 +41,23 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap:16px;
 }
+
+.communityCard:hover{
+    box-shadow: 0px 8px 18px 0px #082C541A;
+    border-radius: 10px;
+}
+
 .mediaTitle {
     padding-top: 5px;
 }
 .title {
     font-weight: 400;
-    font-size: 20px;
-    line-height: 26px;
-    margin-bottom: 10px;
+    font-size: 14px;
+    margin-bottom: 0px;
+    color: var(--ifm-blue-900);
+    font-family: var(--ifm-font-family-base);
 }
 .linkText {
     display: flex;
@@ -72,6 +72,7 @@
 .leftSideWrapper {
     width: fit-content;
     margin: 0 auto;
+    text-align: center;
 }
 
 @media only screen and (max-width: 992px) {
@@ -82,32 +83,35 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        text-align: center;
     }
     .communityDescription {
         text-align: center;
+        font-family: var(--ifm-heading-font-family);
+    }
+    .communityCardChildWrapper {
+        grid-template-columns: repeat(3,1fr) !important;
     }
 }
 
 @media only screen and (max-width: 600px) {
     .communityCardWrapper {
         gap: 0;
+        padding: 15px;
     }
 
     .communityCardChildWrapper {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+        grid-template-columns: repeat(2,1fr) !important;
     }
 
-    .communityCardChildWrapper > div {
-        margin-right: 0;
-        margin-bottom: 25px;
-        width: 100%;
+    .communityCard{
+        box-shadow: 0px 8px 18px 0px #082C541A;
+        border-radius: 10px;
     }
+}
 
-    .communityCardChildWrapper :last-child {
-        margin-bottom: 25px;
-    }
+.socialLogo {
+    height: 50px !important;
+    width: 50px !important;
 }
 

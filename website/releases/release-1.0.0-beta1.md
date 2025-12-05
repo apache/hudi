@@ -1,13 +1,12 @@
 ---
 title: "Release 1.0.0-beta1"
-sidebar_position: 7
 layout: releases
 toc: true
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0-beta1](https://github.com/apache/hudi/releases/tag/release-1.0.0-beta1) ([docs](/docs/next/quick-start-guide))
+## [Release 1.0.0-beta1](https://github.com/apache/hudi/releases/tag/release-1.0.0-beta1)
 
 Apache Hudi 1.0.0-beta1 is the first beta release of Apache Hudi. This release is meant for early adopters to try
 out the new features and provide feedback. The release is not meant for production use.
@@ -29,8 +28,8 @@ rolling upgrades from older versions to this release.
 
 ### Format changes
 
-[HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242) is the main epic covering all the format changes proposals,
-which are also partly covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following are the main
+[This GitHub issue](https://github.com/apache/hudi/issues/15964) is the main epic covering all the format changes proposals,
+which are also partly covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main
 changes in this release:
 
 #### Timeline
@@ -50,7 +49,7 @@ changes in this release:
 #### Log File Format
 
 - In addition to the fields in the log file header, we also store record positions. Refer to the
-  latest [spec](/tech-specs-1point0#log-format) for more details. This allows us to do
+  latest [spec](/learn/tech-specs-1point0#log-format) for more details. This allows us to do
   position-based merging (apart from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 
@@ -130,12 +129,13 @@ hoodie.merge.use.record.positions=true
 ```
 
 Few things to note for the new reader:
+
 - It is only applicable to COW or MOR tables with base files in Parquet format.
 - Only snapshot queries for COW table, and snapshot queries and read-optimized queries for MOR table are supported.
 - Currently, the reader will not be able to push down the data filters to scan. It is recommended to use key-based
   merging for now.
 
-You can follow [HUDI-6243](https://issues.apache.org/jira/browse/HUDI-6243)
+You can follow [this GitHub issue](https://github.com/apache/hudi/issues/15965)
 and [HUDI-6722](https://issues.apache.org/jira/browse/HUDI-6722) to keep track of ongoing work related to reader/writer
 API changes and performance improvements.
 

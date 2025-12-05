@@ -171,7 +171,7 @@ and then ingest it as follows.
   --op BULK_INSERT
 ```
 
-In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide).
+In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](migration_guide).
 
 ### Note on hudi utilities bundle usage for different spark versions
 From 0.11.0 release, we start to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can
@@ -237,7 +237,7 @@ A Hudi Streamer job can then be triggered as follows:
   --op BULK_INSERT
 ```
 
-Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section
+Read more in depth about concurrency control in the [concurrency control concepts](concurrency_control) section
 
 ## Checkpointing
 `HoodieStreamer` uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
@@ -312,7 +312,7 @@ then will apply a post processor to change the schema before it is used. You can
 this class: https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/SchemaPostProcessor.java
 
 ## Sources
-Hoodie Streamer can read data from a wide variety of sources. The following are a list of supported sources:
+Hudi Streamer can read data from a wide variety of sources. The following are a list of supported sources:
 
 ### Distributed File System (DFS)
 See the storage configurations page to see some examples of DFS applications Hudi can read from. The following are the 
@@ -603,7 +603,7 @@ frequent `file handle` switching.
 :::note  
 The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism will affect the number of small files.
 In theory, the parallelism of `bulk_insert` is the number of `bucket`s (In particular, when each bucket writes to maximum file size, it
-will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](/docs/configurations#writebucket_assigntasks).
+will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks).
 :::
 
 #### Options
@@ -611,7 +611,7 @@ will rollover to the new file handle. Finally, `the number of files` >= [`write.
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `write.operation` | `true` | `upsert` | Setting as `bulk_insert` to open this function  |
-| `write.tasks`  |  `false`  | `4` | The parallelism of `bulk_insert`, `the number of files` >= [`write.bucket_assign.tasks`](/docs/configurations#writebucket_assigntasks) |
+| `write.tasks`  |  `false`  | `4` | The parallelism of `bulk_insert`, `the number of files` >= [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks) |
 | `write.bulk_insert.shuffle_input` | `false` | `true` | Whether to shuffle data according to the input field before writing. Enabling this option will reduce the number of small files, but there may be a risk of data skew |
 | `write.bulk_insert.sort_input` | `false`  | `true` | Whether to sort data according to the input field before writing. Enabling this option will reduce the number of small files when a write task writes multiple partitions |
 | `write.sort.memory` | `false` | `128` | Available managed memory of sort operator. default  `128` MB |

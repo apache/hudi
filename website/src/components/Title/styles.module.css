@@ -1,11 +1,20 @@
 .titleWrapper {
   display: block;
-  font-size: 2.5em;
+  font-size: 44px;
   font-weight: bold;
+  margin: 0 !important;
 }
 .primaryTxt {
-  color: var(--ifm-color-secondary-text);
+  color: var(--ifm-blue-800);
+  font-family: var(--ifm-font-family-base);
 }
 .secondaryTxt {
   color: var(--ifm-color-primary-text);
+  font-family: var(--ifm-font-family-base);
+}
+
+@media(max-width:600px) {
+  .titleWrapper {
+    font-size: 34px !important;
+  }
 }

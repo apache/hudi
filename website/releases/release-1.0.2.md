@@ -1,6 +1,5 @@
 ---
 title: "Release 1.0.2"
-sidebar_position: 1
 layout: releases
 toc: true
 last_modified_at: 2024-05-02T18:00:00-08:00
@@ -8,7 +7,7 @@ last_modified_at: 2024-05-02T18:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.2](https://github.com/apache/hudi/releases/tag/release-1.0.2) ([docs](/docs/quick-start-guide))
+## [Release 1.0.2](https://github.com/apache/hudi/releases/tag/release-1.0.2)
 
 ## Migration Guide
 

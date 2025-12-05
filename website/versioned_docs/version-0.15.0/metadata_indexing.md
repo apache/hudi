@@ -5,7 +5,7 @@ toc: true
 last_modified_at:
 ---
 
-Hudi maintains a scalable [metadata](/docs/metadata) that has some auxiliary data about the table.
+Hudi maintains a scalable [metadata](metadata) that has some auxiliary data about the table.
 The [pluggable indexing subsystem](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
 of Hudi depends on the metadata table. Different types of index, from `files` index for locating records efficiently
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
@@ -25,7 +25,7 @@ feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-
 
 ## Setup Async Indexing
 
-First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
+First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:
 <details>
   <summary>Ingestion write config</summary>
@@ -208,7 +208,7 @@ Asynchronous indexing feature is still evolving. Few points to note from deploym
   For example, if async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
 
 Some of these limitations will be removed in the upcoming releases. Please
-follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
+follow [this GitHub issue](https://github.com/apache/hudi/issues/14870) for developments on this feature.
 
 ## Related Resources
 <h3>Videos</h3>
