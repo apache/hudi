@@ -1200,7 +1200,7 @@ jobs:
       - name: Check disk space
         run: df -h
       - name: Check disk space 2
-        run: df -h /
+        run: df -h /usr/*
       - name: 'Free space'
         run: |
           sudo rm -rf /usr/share/dotnet
