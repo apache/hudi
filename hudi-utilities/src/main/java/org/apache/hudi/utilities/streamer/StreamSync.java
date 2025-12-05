@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -797,9 +798,12 @@ public class StreamSync implements Serializable, Closeable {
             HoodieStreamer.Config.getProps(conf, cfg), metaClient));
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
-    HoodieSchema targetSchema = HoodieSchema.fromAvroSchema(HoodieSchemaUtils.deduceWriterSchema(
-        incomingSchema == null ? null : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema).toAvroSchema(),
-          latestTableSchemaOpt, internalSchemaOpt, props));
+
+    HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
+            incomingSchema == null ? HoodieSchema.create(HoodieSchemaType.NULL) : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
+            latestTableSchemaOpt.map(HoodieSchema::fromAvroSchema),
+            internalSchemaOpt,
+            props);
 
     // Override schema provider with the reconciled target schema
     return new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), sourceSchemaProvider,
@@ -823,7 +827,7 @@ public class StreamSync implements Serializable, Closeable {
     }
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
-    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema).map(HoodieSchema::toAvroSchema) : Option.empty(),
+    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
         hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
   }
 

@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{AvroConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.internal.Logging
@@ -115,7 +116,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(catalogTable.tableName)
     val schema = convertStructTypeToAvroSchema(catalogTable.tableSchema, structName, namespace)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df,
-      schemaFromCatalog = Option.apply(schema))
+      schemaFromCatalog = Option.apply(HoodieSchema.fromAvroSchema(schema)))
 
     if (!success) {
       throw new HoodieException("Insert Into to Hudi table failed")

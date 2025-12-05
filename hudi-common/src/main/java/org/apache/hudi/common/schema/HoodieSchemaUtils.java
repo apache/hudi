@@ -26,8 +26,13 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -141,6 +146,52 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Removes specified fields from a RECORD schema.
+   * This is equivalent to HoodieAvroUtils.removeFields() but operates on HoodieSchema.
+   *
+   * @param schema original schema (must be RECORD type)
+   * @param fieldNamesToRemove set of field names to remove
+   * @return new HoodieSchema without the specified fields
+   * @throws IllegalArgumentException if schema is null or not a RECORD type
+   */
+  public static HoodieSchema removeFields(HoodieSchema schema, Set<String> fieldNamesToRemove) {
+    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+    ValidationUtils.checkArgument(schema.getType() == HoodieSchemaType.RECORD,
+        () -> "Only RECORD schemas can have fields removed, got: " + schema.getType());
+
+    if (fieldNamesToRemove == null || fieldNamesToRemove.isEmpty()) {
+      return schema;
+    }
+
+    // Filter and copy fields (must create new instances, can't reuse Avro fields)
+    List<HoodieSchemaField> filteredFields = schema.getFields().stream()
+        .filter(field -> !fieldNamesToRemove.contains(field.name()))
+        .map(HoodieSchemaUtils::createNewSchemaField)
+        .collect(Collectors.toList());
+
+    if (filteredFields.size() == schema.getFields().size()) {
+      return schema; // No fields were removed
+    }
+
+    // Create record with isError flag preserved
+    HoodieSchema newSchema = HoodieSchema.createRecord(
+        schema.getName(),
+        schema.getDoc().orElse(null),
+        schema.getNamespace().orElse(null),
+        schema.isError(),
+        filteredFields
+    );
+
+    // Copy custom properties
+    Map<String, Object> props = schema.getObjectProps();
+    for (Map.Entry<String, Object> prop : props.entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
+
+    return newSchema;
+  }
+
+  /**
    * Extracts the non-null type from a union schema.
    * This is equivalent to AvroSchemaUtils.getNonNullTypeFromUnion() but operates on HoodieSchema.
    *
@@ -233,6 +284,36 @@ public final class HoodieSchemaUtils {
    */
   public static HoodieSchemaField createNewSchemaField(HoodieSchemaField field) {
     return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+  }
+
+  /**
+   * Converts a byte array to a BigDecimal using the given decimal schema.
+   *
+   * @param value         the byte array to convert
+   * @param decimalSchema the decimal schema containing precision and scale
+   * @return the resulting BigDecimal
+   * @throws IllegalArgumentException if the schema is not a DECIMAL type
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, HoodieSchema decimalSchema) {
+    ValidationUtils.checkArgument(decimalSchema != null, "Decimal schema cannot be null");
+    ValidationUtils.checkArgument(decimalSchema.getType() == HoodieSchemaType.DECIMAL,
+        () -> "Schema must be of DECIMAL type, but is " + decimalSchema.getType());
+
+    HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) decimalSchema;
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
+  }
+
+  /**
+   * Converts a byte array to a BigDecimal with the specified precision and scale.
+   *
+   * @param value     the byte array to convert
+   * @param precision the precision of the decimal
+   * @param scale     the scale of the decimal
+   * @return the resulting BigDecimal
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
+    return new BigDecimal(new BigInteger(value),
+        scale, new MathContext(precision, RoundingMode.HALF_UP));
   }
 
   /**
