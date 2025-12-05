@@ -154,7 +154,7 @@ class TestTableSchemaResolver {
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
     HoodieSchema expectedSchema = getSimpleSchema();
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
-    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
+    assertEquals(expectedSchema.toAvroSchema(), TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
         logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
   }
 
