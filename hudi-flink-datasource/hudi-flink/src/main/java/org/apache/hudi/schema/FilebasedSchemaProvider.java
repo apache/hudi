@@ -20,17 +20,18 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 
 import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
@@ -61,9 +62,9 @@ public class FilebasedSchemaProvider extends SchemaProvider {
         .withDocumentation("The schema of the target you are writing to");
   }
 
-  private final Schema sourceSchema;
+  private final HoodieSchema sourceSchema;
 
-  private Schema targetSchema;
+  private HoodieSchema targetSchema;
 
   @Deprecated
   public FilebasedSchemaProvider(TypedProperties props) {
@@ -71,10 +72,13 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     String sourceSchemaFile = getStringWithAltKeys(props, Config.SOURCE_SCHEMA_FILE);
     FileSystem fs = HadoopFSUtils.getFs(sourceSchemaFile, HadoopConfigurations.getHadoopConf(new Configuration()));
     try {
-      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(sourceSchemaFile)));
+      try (InputStream stream = fs.open(new Path(sourceSchemaFile))) {
+        this.sourceSchema = HoodieSchema.parse(stream);
+      }
       if (containsConfigProperty(props, Config.TARGET_SCHEMA_FILE)) {
-        this.targetSchema =
-            new Schema.Parser().parse(fs.open(new Path(getStringWithAltKeys(props, Config.TARGET_SCHEMA_FILE))));
+        try (InputStream stream = fs.open(new Path(getStringWithAltKeys(props, Config.TARGET_SCHEMA_FILE)))) {
+          this.targetSchema = new HoodieSchema.Parser().parse(stream);
+        }
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema", ioe);
@@ -85,19 +89,21 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     final String sourceSchemaPath = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
     final FileSystem fs = HadoopFSUtils.getFs(sourceSchemaPath, HadoopConfigurations.getHadoopConf(conf));
     try {
-      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(sourceSchemaPath)));
+      try (InputStream stream = fs.open(new Path(sourceSchemaPath))) {
+        this.sourceSchema = new HoodieSchema.Parser().parse(stream);
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema", ioe);
     }
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceSchema() {
     return sourceSchema;
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetSchema() {
     if (targetSchema != null) {
       return targetSchema;
     } else {

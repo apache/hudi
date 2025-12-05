@@ -21,6 +21,7 @@ package org.apache.hudi.sink.clustering;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -32,14 +33,13 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
 import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
@@ -319,8 +319,8 @@ public class HoodieFlinkClusteringJob {
       // Mark instant as clustering inflight
       ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
+      final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();

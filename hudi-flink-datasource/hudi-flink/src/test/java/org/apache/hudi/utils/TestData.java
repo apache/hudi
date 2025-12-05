@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -969,6 +970,7 @@ public class TestData {
     HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
 
     String latestInstant = metaClient.getActiveTimeline().filterCompletedInstants()
         .lastInstant().map(HoodieInstant::requestedTime).orElse(null);
@@ -983,7 +985,7 @@ public class TestData {
       List<String> readBuffer = new ArrayList<>();
       List<FileSlice> fileSlices = table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionDir.getName(), latestInstant).collect(Collectors.toList());
       for (FileSlice fileSlice : fileSlices) {
-        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, schema, metaClient, config)) {
+        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, hoodieSchema, metaClient, config)) {
           while (rowIterator.hasNext()) {
             RowData rowData = rowIterator.next();
             readBuffer.add(filterOutVariables(schema, rowData));
@@ -1014,7 +1016,7 @@ public class TestData {
 
   private static ClosableIterator<RowData> getRecordIterator(
       FileSlice fileSlice,
-      Schema tableSchema,
+      HoodieSchema tableSchema,
       HoodieTableMetaClient metaClient,
       HoodieWriteConfig writeConfig) throws IOException {
     HoodieFileGroupReader<RowData> fileGroupReader =

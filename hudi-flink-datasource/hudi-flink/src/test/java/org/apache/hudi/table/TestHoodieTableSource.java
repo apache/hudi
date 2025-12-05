@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -32,7 +33,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
-import org.apache.avro.Schema;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
@@ -145,8 +145,8 @@ public class TestHoodieTableSource {
   void testGetTableAvroSchema() {
     HoodieTableSource tableSource = getEmptyStreamingSource();
     assertNull(tableSource.getMetaClient(), "Streaming source with empty table path is allowed");
-    final String schemaFields = tableSource.getTableAvroSchema().getFields().stream()
-        .map(Schema.Field::name)
+    final String schemaFields = tableSource.getTableSchema().getFields().stream()
+        .map(HoodieSchemaField::name)
         .collect(Collectors.joining(","));
     final String expected = "_hoodie_commit_time,"
         + "_hoodie_commit_seqno,"

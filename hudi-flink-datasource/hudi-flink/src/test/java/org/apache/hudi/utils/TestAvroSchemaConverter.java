@@ -19,10 +19,10 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.util.AvroSchemaConverter;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.junit.jupiter.api.Test;
@@ -37,8 +37,8 @@ public class TestAvroSchemaConverter {
 
   @Test
   void testUnionSchemaWithMultipleRecordTypes() {
-    Schema schema = HoodieMetadataRecord.SCHEMA$;
-    DataType dataType = AvroSchemaConverter.convertToDataType(schema);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieMetadataRecord.SCHEMA$);
+    DataType dataType = AvroSchemaConverter.convertToDataType(schema.getAvroSchema());
     int pos = HoodieMetadataRecord.SCHEMA$.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).pos();
     final String expected = "ROW<"
         + "`fileName` STRING, "
@@ -62,7 +62,7 @@ public class TestAvroSchemaConverter {
         DataTypes.FIELD("f_localtimestamp_micros", DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(6))
     );
     // convert to avro schema
-    Schema schema = AvroSchemaConverter.convertToSchema(dataType.getLogicalType());
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(dataType.getLogicalType()));
     final String expectedSchema = ""
         + "[ \"null\", {\n"
         + "  \"type\" : \"record\",\n"
@@ -85,7 +85,7 @@ public class TestAvroSchemaConverter {
         + "} ]";
     assertThat(schema.toString(true), is(expectedSchema));
     // convert it back
-    DataType convertedDataType = AvroSchemaConverter.convertToDataType(schema);
+    DataType convertedDataType = AvroSchemaConverter.convertToDataType(schema.getAvroSchema());
     final String expectedDataType = "ROW<"
         + "`f_localtimestamp_millis` TIMESTAMP_LTZ(3), "
         + "`f_localtimestamp_micros` TIMESTAMP_LTZ(6)>";

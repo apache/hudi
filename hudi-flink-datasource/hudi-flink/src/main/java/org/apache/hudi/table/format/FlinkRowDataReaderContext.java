@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -107,7 +108,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
+    //TODO revisit once HoodieEngineContext takes in HoodieSchema
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, HoodieSchema.fromAvroSchema(requiredSchema), getSafePredicates(requiredSchema));
   }
 
   @Override
@@ -137,6 +139,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       ClosableIterator<RowData> dataFileIterator,
       Schema dataRequiredSchema,
       List<Pair<String, Object>> partitionFieldAndValues) {
+    //TODO revisit once HoodieEngineContext takes in HoodieSchema
     Map<Integer, Object> partitionOrdinalToValues = partitionFieldAndValues.stream()
         .collect(Collectors.toMap(
             pair -> dataRequiredSchema.getField(pair.getKey()).pos(),
