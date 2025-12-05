@@ -231,7 +231,7 @@ public class UtilHelpers {
     return null;
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<Schema>> sourceSchemaSupplier,
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<HoodieSchema>> sourceSchemaSupplier,
                                                       boolean isErrorTableWriterEnabled) throws IOException {
 
     try {

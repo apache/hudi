@@ -26,8 +26,6 @@ import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -51,6 +49,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -118,7 +117,6 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -339,7 +337,7 @@ public class StreamSync implements Serializable, Closeable {
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
-    Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceHoodieSchema()).map(HoodieSchema::toAvroSchema);
+    Supplier<Option<HoodieSchema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceHoodieSchema());
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
   }
 
@@ -541,18 +539,18 @@ public class StreamSync implements Serializable, Closeable {
     } else {
       HoodieSchema newSourceSchema = inputBatch.getSchemaProvider().getSourceHoodieSchema();
       HoodieSchema newTargetSchema = inputBatch.getSchemaProvider().getTargetHoodieSchema();
-      if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema.toAvroSchema()))
-          || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema.toAvroSchema()))) {
+      if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
+          || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
         String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
         String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
         LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
         // We need to recreate write client with new schema and register them.
         reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch(), metaClient);
         if (newSourceSchema != null) {
-          processedSchema.addSchema(newSourceSchema.toAvroSchema());
+          processedSchema.addSchema(newSourceSchema);
         }
         if (newTargetSchema != null) {
-          processedSchema.addSchema(newTargetSchema.toAvroSchema());
+          processedSchema.addSchema(newTargetSchema);
         }
       }
     }
@@ -1089,7 +1087,7 @@ public class StreamSync implements Serializable, Closeable {
   private void reInitWriteClient(HoodieSchema sourceSchema, HoodieSchema targetSchema, Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieTableMetaClient metaClient) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (HoodieStreamerUtils.isDropPartitionColumns(props)) {
-      targetSchema = HoodieSchema.fromAvroSchema(HoodieAvroUtils.removeFields(targetSchema.toAvroSchema(), HoodieStreamerUtils.getPartitionColumns(props)));
+      targetSchema = org.apache.hudi.common.schema.HoodieSchemaUtils.removeFields(targetSchema, HoodieStreamerUtils.getPartitionColumns(props));
     }
     final Pair<HoodieWriteConfig, HoodieSchema> initialWriteConfigAndSchema = getHoodieClientConfigAndWriterSchema(targetSchema, true, metaClient);
     final HoodieWriteConfig initialWriteConfig = initialWriteConfigAndSchema.getLeft();
@@ -1223,16 +1221,15 @@ public class StreamSync implements Serializable, Closeable {
     HoodieSchema newWriteSchema = targetSchema;
     try {
       // check if targetSchema is equal to NULL schema
-      Schema nullSchema = InputBatch.NULL_SCHEMA.toAvroSchema();
-      if (targetSchema == null || (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema.toAvroSchema(), nullSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
-          && SchemaCompatibility.checkReaderWriterCompatibility(nullSchema, targetSchema.toAvroSchema()).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE)) {
+      HoodieSchema nullSchema = InputBatch.NULL_SCHEMA;
+      if (targetSchema == null || (HoodieSchemaCompatibility.areSchemasCompatible(targetSchema, nullSchema) && HoodieSchemaCompatibility.areSchemasCompatible(nullSchema, targetSchema))) {
         // target schema is null. fetch schema from commit metadata and use it
         int totalCompleted = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
         if (totalCompleted > 0) {
           TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-          Option<Schema> tableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
+          Option<HoodieSchema> tableSchema = schemaResolver.getTableSchemaIfPresent(false);
           if (tableSchema.isPresent()) {
-            newWriteSchema = HoodieSchema.fromAvroSchema(tableSchema.get());
+            newWriteSchema = tableSchema.get();
           } else {
             LOG.warn("Could not fetch schema from table. Falling back to using target schema from schema provider");
           }

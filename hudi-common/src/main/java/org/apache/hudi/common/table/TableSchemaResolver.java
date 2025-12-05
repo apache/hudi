@@ -233,6 +233,10 @@ public class TableSchemaResolver {
     return getTableAvroSchemaInternal(false, Option.empty()).orElseThrow(schemaNotFoundError());
   }
 
+  public Option<HoodieSchema> getTableSchemaIfPresent(boolean includeMetadataFields) {
+    return getTableAvroSchemaIfPresent(includeMetadataFields).map(HoodieSchema::fromAvroSchema);
+  }
+
   public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields) {
     return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
   }
