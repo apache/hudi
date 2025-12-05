@@ -51,7 +51,6 @@ import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import io.datahubproject.schematron.converters.avro.AvroSchemaConverter;
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -325,10 +324,10 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private MetadataChangeProposalWrapper createSchemaMetadataAspect(String tableName) {
-    Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
+    HoodieSchema tableSchema = getAvroSchemaWithoutMetadataFields(metaClient);
     AvroSchemaConverter avroSchemaConverter = AvroSchemaConverter.builder().build();
     com.linkedin.schema.SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
-            avroSchema,
+            tableSchema.toAvroSchema(),
             false,
             false,
             datasetUrn.getPlatformEntity(),
@@ -368,9 +367,9 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return result;
   }
 
-  Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+  HoodieSchema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
+      return new TableSchemaResolver(metaClient).getTableSchema(true);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read avro schema", e);
     }
