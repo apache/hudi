@@ -74,98 +74,96 @@ public class HoodieSchemaConverter {
   public static HoodieSchema convertToSchema(LogicalType logicalType, String rowName) {
     int precision;
     boolean nullable = logicalType.isNullable();
+    HoodieSchema schema;
 
     switch (logicalType.getTypeRoot()) {
       case NULL:
         return HoodieSchema.create(HoodieSchemaType.NULL);
 
       case BOOLEAN:
-        HoodieSchema bool = HoodieSchema.create(HoodieSchemaType.BOOLEAN);
-        return nullable ? HoodieSchema.createNullable(bool) : bool;
+        schema = HoodieSchema.create(HoodieSchemaType.BOOLEAN);
+        break;
 
       case TINYINT:
       case SMALLINT:
       case INTEGER:
-        HoodieSchema integer = HoodieSchema.create(HoodieSchemaType.INT);
-        return nullable ? HoodieSchema.createNullable(integer) : integer;
+        schema = HoodieSchema.create(HoodieSchemaType.INT);
+        break;
 
       case BIGINT:
-        HoodieSchema bigint = HoodieSchema.create(HoodieSchemaType.LONG);
-        return nullable ? HoodieSchema.createNullable(bigint) : bigint;
+        schema = HoodieSchema.create(HoodieSchemaType.LONG);
+        break;
 
       case FLOAT:
-        HoodieSchema f = HoodieSchema.create(HoodieSchemaType.FLOAT);
-        return nullable ? HoodieSchema.createNullable(f) : f;
+        schema = HoodieSchema.create(HoodieSchemaType.FLOAT);
+        break;
 
       case DOUBLE:
-        HoodieSchema d = HoodieSchema.create(HoodieSchemaType.DOUBLE);
-        return nullable ? HoodieSchema.createNullable(d) : d;
+        schema = HoodieSchema.create(HoodieSchemaType.DOUBLE);
+        break;
 
       case CHAR:
       case VARCHAR:
-        HoodieSchema str = HoodieSchema.create(HoodieSchemaType.STRING);
-        return nullable ? HoodieSchema.createNullable(str) : str;
+        schema = HoodieSchema.create(HoodieSchemaType.STRING);
+        break;
 
       case BINARY:
       case VARBINARY:
-        HoodieSchema binary = HoodieSchema.create(HoodieSchemaType.BYTES);
-        return nullable ? HoodieSchema.createNullable(binary) : binary;
+        schema = HoodieSchema.create(HoodieSchemaType.BYTES);
+        break;
 
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         final TimestampType timestampType = (TimestampType) logicalType;
         precision = timestampType.getPrecision();
-        HoodieSchema timestamp;
         if (precision <= 3) {
-          timestamp = HoodieSchema.createTimestampMillis();
+          schema = HoodieSchema.createTimestampMillis();
         } else if (precision <= 6) {
-          timestamp = HoodieSchema.createTimestampMicros();
+          schema = HoodieSchema.createTimestampMicros();
         } else {
           throw new IllegalArgumentException(
               "HoodieSchema does not support TIMESTAMP type with precision: "
                   + precision
                   + ", it only supports precisions <= 6.");
         }
-        return nullable ? HoodieSchema.createNullable(timestamp) : timestamp;
+        break;
 
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         final LocalZonedTimestampType localZonedTimestampType = (LocalZonedTimestampType) logicalType;
         precision = localZonedTimestampType.getPrecision();
-        HoodieSchema localTimestamp;
         if (precision <= 3) {
-          localTimestamp = HoodieSchema.createLocalTimestampMillis();
+          schema = HoodieSchema.createLocalTimestampMillis();
         } else if (precision <= 6) {
-          localTimestamp = HoodieSchema.createLocalTimestampMicros();
+          schema = HoodieSchema.createLocalTimestampMicros();
         } else {
           throw new IllegalArgumentException(
               "HoodieSchema does not support LOCAL TIMESTAMP type with precision: "
                   + precision
                   + ", it only supports precisions <= 6.");
         }
-        return nullable ? HoodieSchema.createNullable(localTimestamp) : localTimestamp;
+        break;
 
       case DATE:
-        HoodieSchema date = HoodieSchema.createDate();
-        return nullable ? HoodieSchema.createNullable(date) : date;
+        schema = HoodieSchema.createDate();
+        break;
 
       case TIME_WITHOUT_TIME_ZONE:
         precision = ((TimeType) logicalType).getPrecision();
-        HoodieSchema time;
         if (precision <= 3) {
-          time = HoodieSchema.createTimeMillis();
+          schema = HoodieSchema.createTimeMillis();
         } else if (precision <= 6) {
-          time = HoodieSchema.createTimeMicros();
+          schema = HoodieSchema.createTimeMicros();
         } else {
           throw new IllegalArgumentException(
               "HoodieSchema does not support TIME type with precision: "
                   + precision
                   + ", maximum precision is 6 (microseconds).");
         }
-        return nullable ? HoodieSchema.createNullable(time) : time;
+        break;
 
       case DECIMAL:
         DecimalType decimalType = (DecimalType) logicalType;
         int fixedSize = computeMinBytesForDecimalPrecision(decimalType.getPrecision());
-        HoodieSchema decimal = HoodieSchema.createDecimal(
+        schema = HoodieSchema.createDecimal(
             String.format("%s.fixed", rowName),
             null,
             null,
@@ -173,7 +171,7 @@ public class HoodieSchemaConverter {
             decimalType.getScale(),
             fixedSize
         );
-        return nullable ? HoodieSchema.createNullable(decimal) : decimal;
+        break;
 
       case ROW:
         RowType rowType = (RowType) logicalType;
@@ -197,27 +195,29 @@ public class HoodieSchemaConverter {
           hoodieFields.add(field);
         }
 
-        HoodieSchema record = HoodieSchema.createRecord(rowName, null, null, hoodieFields);
-        return nullable ? HoodieSchema.createNullable(record) : record;
+        schema = HoodieSchema.createRecord(rowName, null, null, hoodieFields);
+        break;
 
       case MULTISET:
       case MAP:
         LogicalType valueType = extractValueTypeForMap(logicalType);
         HoodieSchema valueSchema = convertToSchema(valueType, rowName);
-        HoodieSchema map = HoodieSchema.createMap(valueSchema);
-        return nullable ? HoodieSchema.createNullable(map) : map;
+        schema = HoodieSchema.createMap(valueSchema);
+        break;
 
       case ARRAY:
         ArrayType arrayType = (ArrayType) logicalType;
         HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName);
-        HoodieSchema array = HoodieSchema.createArray(elementSchema);
-        return nullable ? HoodieSchema.createNullable(array) : array;
+        schema = HoodieSchema.createArray(elementSchema);
+        break;
 
       case RAW:
       default:
         throw new UnsupportedOperationException(
             "Unsupported type for HoodieSchema conversion: " + logicalType);
     }
+
+    return nullable ? HoodieSchema.createNullable(schema) : schema;
   }
 
   /**
