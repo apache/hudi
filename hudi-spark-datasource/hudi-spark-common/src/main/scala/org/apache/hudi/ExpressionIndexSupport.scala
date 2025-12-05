@@ -501,11 +501,6 @@ class ExpressionIndexSupport(spark: SparkSession,
     }
   }
 
-  /**
-   * Checks if an expression contains a direct AttributeReference to the source column.
-   * A direct reference means the AttributeReference is a direct child of a comparison operator,
-   * not nested inside a function.
-   */
   private def containsDirectColumnReference(expr: Expression, sourceColumnName: String): Boolean = {
     def isTargetAttr(e: Expression): Boolean = e.isInstanceOf[AttributeReference] &&
       e.asInstanceOf[AttributeReference].name.equals(sourceColumnName)
