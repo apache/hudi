@@ -487,14 +487,14 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    * Write function to trigger the actual write action.
    */
   protected interface WriteFunction extends Serializable {
-    List<WriteStatus> writeImpl(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
+    List<WriteStatus> doWrite(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
 
     default List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant) {
       if (!records.hasNext()) {
         LOG.info("Empty records with bucket info => {}.", bucketInfo);
         return Collections.emptyList();
       }
-      return writeImpl(records, bucketInfo, instant);
+      return doWrite(records, bucketInfo, instant);
     }
   }
 }
