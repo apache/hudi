@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -799,7 +800,7 @@ public class StreamSync implements Serializable, Closeable {
     // schema w/ the table's one
 
     HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
-            incomingSchema == null ? null : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
+            incomingSchema == null ? HoodieSchema.create(HoodieSchemaType.NULL) : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
             latestTableSchemaOpt.map(HoodieSchema::fromAvroSchema),
             internalSchemaOpt,
             props);
