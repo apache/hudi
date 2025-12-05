@@ -106,7 +106,7 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
     final HoodieSchema schema = HoodieSchema.parse(schemaStr);
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((previous, next) ->
-      reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema.toAvroSchema(), readerContext.getRecordContext(), deleteContext)
+      reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)
     ).orElse(null)).filter(Objects::nonNull).iterator();
   }
 }

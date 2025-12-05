@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -177,7 +178,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
         handle = writeHandleFactory.create(config, instantTime, hoodieTable, record.getPartitionPath(), fileIdPrefix, taskContextSupplier);
         writeHandles.put(fileIdPrefix, handle);
       }
-      handle.write(record, schema, config.getProps());
+      handle.write(record, HoodieSchema.fromAvroSchema(schema), config.getProps());
     }
 
     @Override

@@ -805,58 +805,54 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   }
 
   private static HoodieSchema getSchema1() {
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
     HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
 
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("name", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("age", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
-        HoodieSchemaField.of("city", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("timestamp", HoodieSchema.createUnion(longSchema, nullSchema), null, 0L)
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("age", HoodieSchema.createNullable(intSchema), null, 0),
+        HoodieSchemaField.of("city", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createNullable(longSchema), null, 0L)
     );
     return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }
 
   private static HoodieSchema getSchema2() {
     // Create a partial schema with only some fields
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
 
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("precombine", HoodieSchema.createUnion(longSchema, nullSchema), null, 0),
-        HoodieSchemaField.of("id", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("name", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE)
+        HoodieSchemaField.of("precombine", HoodieSchema.createNullable(longSchema), null, 0),
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE)
     );
     return HoodieSchema.createRecord("PartialRecord", null, null, fields);
   }
 
   private static HoodieSchema getSchema3() {
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
 
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("name", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("age", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
-        HoodieSchemaField.of("city", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE)
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("age", HoodieSchema.createNullable(intSchema), null, 0),
+        HoodieSchemaField.of("city", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE)
     );
     return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }
 
   private static HoodieSchema getSchema4() {
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
 
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("name", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("timestamp", HoodieSchema.createUnion(longSchema, nullSchema), null, 0L)
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createNullable(longSchema), null, 0L)
     );
     return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }
@@ -890,18 +886,17 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   }
 
   private static HoodieSchema getSchema6() {
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
     HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
 
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("precombine", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
-        HoodieSchemaField.of("id", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("name", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("age", HoodieSchema.createUnion(intSchema, nullSchema), null, 0),
-        HoodieSchemaField.of("city", HoodieSchema.createUnion(nullSchema, stringSchema), null, HoodieSchema.NULL_VALUE),
-        HoodieSchemaField.of("timestamp", HoodieSchema.createUnion(longSchema, nullSchema), null, 0L)
+        HoodieSchemaField.of("precombine", HoodieSchema.createNullable(intSchema), null, 0),
+        HoodieSchemaField.of("id", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("name", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("age", HoodieSchema.createNullable(intSchema), null, 0),
+        HoodieSchemaField.of("city", HoodieSchema.createNullable(stringSchema), null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createNullable(longSchema), null, 0L)
     );
     return HoodieSchema.createRecord("TestRecord", null, null, fields);
   }

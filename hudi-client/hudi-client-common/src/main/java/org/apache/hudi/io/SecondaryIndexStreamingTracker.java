@@ -37,8 +37,6 @@ import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-
 import javax.annotation.Nullable;
 
 import java.io.IOException;
@@ -138,11 +136,11 @@ public class SecondaryIndexStreamingTracker {
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    * @param config                    Hoodie write config
    */
-  static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
+  static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, HoodieSchema writeSchemaWithMetaFields,
                                        List<HoodieIndexDefinition> secondaryIndexDefns, HoodieWriteConfig config) {
     // Add secondary index records for all the inserted records (including null values)
     secondaryIndexDefns.forEach(def -> {
-      Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields, def.getSourceFieldsKey(), config.getProps());
+      Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields.toAvroSchema(), def.getSourceFieldsKey(), config.getProps());
       addSecondaryIndexStat(writeStatus, def.getIndexName(), record.getRecordKey(), secondaryKey, false);
     });
   }
@@ -164,7 +162,7 @@ public class SecondaryIndexStreamingTracker {
    * @param config                    Hoodie write config
    */
   static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, HoodieRecord combinedRecord, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
-                                           WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
+                                           WriteStatus writeStatus, HoodieSchema writeSchemaWithMetaFields, Supplier<HoodieSchema> newSchemaSupplier,
                                            List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieWriteConfig config) {
 
     secondaryIndexDefns.forEach(def -> {
@@ -179,7 +177,7 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
+        oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields.toAvroSchema(), secondaryIndexSourceField, config.getProps());
       }
 
       // For new/combined record
@@ -187,8 +185,8 @@ public class SecondaryIndexStreamingTracker {
       Object newSecondaryKey = null;
 
       if (!isDelete) {
-        Schema newSchema = newSchemaSupplier.get();
-        newSecondaryKey = combinedRecord.getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+        HoodieSchema newSchema = newSchemaSupplier.get();
+        newSecondaryKey = combinedRecord.getColumnValueAsJava(newSchema.toAvroSchema(), secondaryIndexSourceField, config.getProps());
         hasNewValue = true;
       }
 
@@ -212,7 +210,7 @@ public class SecondaryIndexStreamingTracker {
       // 4. Old record does not exist, new record does not exist - do nothing
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
-            .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
+            .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields.toAvroSchema(), keyGeneratorOpt)))
             .orElseGet(combinedRecord::getRecordKey);
 
         // Delete old secondary index entry if old record exists.

@@ -619,24 +619,24 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         + "{\"name\":\"name\",\"type\":[\"string\",\"null\"]},"
         + "{\"name\":\"ts\",\"type\":[\"long\",\"null\"]}"
         + "]}";
-    Schema dataSchema = new Schema.Parser().parse(dataSchemaString);
-    Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+    HoodieSchema dataSchema = HoodieSchema.parse(dataSchemaString);
+    HoodieSchema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
         HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER, dataSchema);
-    GenericRecord insertedRecord = new GenericData.Record(dataSchema);
+    GenericRecord insertedRecord = new GenericData.Record(dataSchema.toAvroSchema());
     insertedRecord.put("uuid", 1);
     insertedRecord.put("name", "apple");
     insertedRecord.put("ts", 1100L);
 
-    GenericRecord updateBeforeImageRecord = new GenericData.Record(dataSchema);
+    GenericRecord updateBeforeImageRecord = new GenericData.Record(dataSchema.toAvroSchema());
     updateBeforeImageRecord.put("uuid", 2);
     updateBeforeImageRecord.put("name", "banana");
     updateBeforeImageRecord.put("ts", 1000L);
-    GenericRecord updateAfterImageRecord = new GenericData.Record(dataSchema);
+    GenericRecord updateAfterImageRecord = new GenericData.Record(dataSchema.toAvroSchema());
     updateAfterImageRecord.put("uuid", 2);
     updateAfterImageRecord.put("name", "blueberry");
     updateAfterImageRecord.put("ts", 1100L);
 
-    GenericRecord deletedRecord = new GenericData.Record(dataSchema);
+    GenericRecord deletedRecord = new GenericData.Record(dataSchema.toAvroSchema());
     deletedRecord.put("uuid", 3);
     deletedRecord.put("name", "cherry");
     deletedRecord.put("ts", 1000L);
@@ -655,7 +655,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), cdcSchema);
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), dataSchema.toAvroSchema());
     assertTrue(reader.hasNext());
     HoodieLogBlock block = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) block;

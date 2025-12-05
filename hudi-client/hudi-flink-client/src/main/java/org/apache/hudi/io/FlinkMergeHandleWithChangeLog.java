@@ -23,12 +23,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
@@ -66,7 +66,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
   }
 
   @Override
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema)
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, HoodieSchema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
     HoodieRecord savedCombineRecord = combineRecord.newInstance();
@@ -83,7 +83,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
 
   @Override
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);
