@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 
+import org.apache.avro.JsonProperties
 import org.apache.spark.sql.avro.SchemaConverters.SchemaType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -36,6 +38,13 @@ class TestSchemaConverters {
     //       transformations, but since it's not an easy endeavor to match Avro schemas, we match
     //       derived Catalyst schemas instead
     assertEquals(convertedStructType, SchemaConverters.toSqlType(convertedAvroSchema).dataType)
+    // validate that the doc string and default null value are set
+    originalAvroSchema.getFields.forEach { field =>
+      val convertedField = convertedAvroSchema.getField(field.name())
+      assertEquals(field.doc(), convertedField.doc())
+      if (AvroSchemaUtils.isNullable(field.schema())) {
+        assertEquals(JsonProperties.NULL_VALUE, convertedField.defaultVal())
+      }
+    }
   }
-
 }

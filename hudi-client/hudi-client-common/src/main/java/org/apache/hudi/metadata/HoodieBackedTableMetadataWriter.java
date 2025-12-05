@@ -52,6 +52,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -455,7 +456,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
       String relativePartitionPath;
       Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
-      Lazy<Option<Schema>> tableSchema = Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient));
+      Lazy<Option<HoodieSchema>> tableSchema = Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient));
       try {
         switch (partitionType) {
           case FILES:
@@ -558,7 +559,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex(
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList,
-      Lazy<Option<Schema>> tableSchemaOpt) {
+      Lazy<Option<HoodieSchema>> tableSchemaOpt) {
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext, lazyLatestMergedPartitionFileSliceList.get(), dataWriteConfig.getMetadataConfig(),
         dataMetaClient, tableSchemaOpt, Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
@@ -567,7 +568,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private Pair<List<String>, Pair<Integer, HoodieData<HoodieRecord>>> initializeColumnStatsPartition(Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-                                                                                                     Lazy<Option<Schema>> tableSchema) {
+                                                                                                     Lazy<Option<HoodieSchema>> tableSchema) {
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     if (partitionIdToAllFilesMap.isEmpty()) {
       return Pair.of(Collections.emptyList(), Pair.of(fileGroupCount, engineContext.emptyHoodieData()));
@@ -620,7 +621,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected abstract HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                         HoodieIndexDefinition indexDefinition,
                                                                         HoodieTableMetaClient metaClient,
-                                                                        int parallelism, Schema tableSchema, Schema readerSchema,
+                                                                        int parallelism, HoodieSchema tableSchema, HoodieSchema readerSchema,
                                                                         StorageConfiguration<?> storageConf,
                                                                         String instantTime);
 
@@ -628,7 +629,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(
       String indexName, String dataTableInstantTime, Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList,
-      Lazy<Option<Schema>> tableSchemaOpt) {
+      Lazy<Option<HoodieSchema>> tableSchemaOpt) {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
@@ -646,8 +647,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       return Pair.of(fileGroupCount, engineContext.emptyHoodieData());
     }
     int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
-    Schema tableSchema = tableSchemaOpt.get().orElseThrow(() -> new HoodieMetadataException("Table schema is not available for expression index initialization"));
-    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
+    HoodieSchema tableSchema = tableSchemaOpt.get().orElseThrow(() -> new HoodieMetadataException("Table schema is not available for expression index initialization"));
+    HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
     return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, tableSchema, readerSchema, storageConf, dataTableInstantTime));
   }
 
@@ -1655,7 +1656,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (partitionFilesToDelete.isEmpty() && partitionFilesToAdd.isEmpty()) {
       return Collections.emptyMap();
     }
-    Lazy<Option<Schema>> tableSchema =
+    Lazy<Option<HoodieSchema>> tableSchema =
         Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient));
     final List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(
         dataMetaClient.getTableConfig(),

@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -62,7 +63,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
@@ -523,7 +523,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     // lets test only deletes and also test both validat and deleted keys for log files.
     // we have disabled small file handling. And so, updates and deletes will definitely go into log files.
     String latestCommitTimestamp = metaClient.reloadActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime();
-    Option<Schema> writerSchemaOpt = tryResolveSchemaForTable(metaClient);
+    Option<HoodieSchema> writerSchemaOpt = tryResolveSchemaForTable(metaClient);
     List<String> finalActualDeletes = actualDeletes;
     writeStatuses3.stream().filter(writeStatus -> FSUtils.isLogFile(FSUtils.getFileName(writeStatus.getStat().getPath(), writeStatus.getPartitionPath())))
         .forEach(writeStatus -> {
@@ -632,14 +632,14 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     assertEquals(list1, list2);
   }
 
-  private static Option<Schema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {
+  private static Option<HoodieSchema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {
     if (dataTableMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       return Option.empty();
     }
 
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
-      return Option.of(schemaResolver.getTableAvroSchema());
+      return Option.of(schemaResolver.getTableSchema());
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
@@ -706,7 +706,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   }
 
   Set<String> getRecordKeys(String partition, String baseInstantTime, String fileId, List<StoragePath> logFilePaths, HoodieTableMetaClient datasetMetaClient,
-                                   Option<Schema> writerSchemaOpt, String latestCommitTimestamp, HoodieWriteConfig writeConfig) throws IOException {
+                                   Option<HoodieSchema> writerSchemaOpt, String latestCommitTimestamp, HoodieWriteConfig writeConfig) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       // read log file records without merging
       TypedProperties properties = new TypedProperties();
@@ -714,8 +714,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
       HoodieFileGroupReader reader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
-          .withDataSchema(writerSchemaOpt.get())
-          .withRequestedSchema(writerSchemaOpt.get())
+          .withDataSchema(writerSchemaOpt.get().toAvroSchema())
+          .withRequestedSchema(writerSchemaOpt.get().toAvroSchema())
           .withEmitDelete(true)
           .withPartitionPath(partition)
           .withLogFiles(logFilePaths.stream().map(HoodieLogFile::new))

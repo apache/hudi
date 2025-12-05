@@ -19,14 +19,18 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,19 +82,13 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testCreateHoodieWriteSchemaValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createHoodieWriteSchema(null, true);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema(null, true));
 
     // Should throw on empty schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createHoodieWriteSchema("", true);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema("", true));
 
     // Should throw on whitespace-only schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createHoodieWriteSchema("   ", true);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema("   ", true));
   }
 
   @Test
@@ -113,9 +111,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testAddMetadataFieldsValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.addMetadataFields(null, true);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.addMetadataFields(null, true));
   }
 
   @Test
@@ -134,9 +130,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testRemoveMetadataFieldsValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.removeMetadataFields(null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.removeMetadataFields(null));
   }
 
   @Test
@@ -160,14 +154,10 @@ public class TestHoodieSchemaUtils {
     HoodieSchema schema = HoodieSchema.parse(SIMPLE_SCHEMA);
 
     // Should throw on null source schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.mergeSchemas(null, schema);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.mergeSchemas(null, schema));
 
     // Should throw on null target schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.mergeSchemas(schema, null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.mergeSchemas(schema, null));
   }
 
   @Test
@@ -185,9 +175,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testCreateNullableSchemaValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createNullableSchema(null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNullableSchema(null));
   }
 
   @Test
@@ -205,9 +193,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testGetNonNullTypeFromUnionValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.getNonNullTypeFromUnion(null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.getNonNullTypeFromUnion(null));
   }
 
   @Test
@@ -243,14 +229,10 @@ public class TestHoodieSchemaUtils {
     HoodieSchema schema = HoodieSchema.parse(SIMPLE_SCHEMA);
 
     // Should throw on null table schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.findMissingFields(null, schema);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.findMissingFields(null, schema));
 
     // Should throw on null writer schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.findMissingFields(schema, null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.findMissingFields(schema, null));
   }
 
   @Test
@@ -274,19 +256,13 @@ public class TestHoodieSchemaUtils {
     HoodieSchema schema = HoodieSchema.create(HoodieSchemaType.STRING);
 
     // Should throw on null name
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createNewSchemaField(null, schema, "doc", null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaField(null, schema, "doc", null));
 
     // Should throw on empty name
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createNewSchemaField("", schema, "doc", null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaField("", schema, "doc", null));
 
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.createNewSchemaField("name", null, "doc", null);
-    });
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaField("name", null, "doc", null));
   }
 
   @Test
@@ -300,5 +276,262 @@ public class TestHoodieSchemaUtils {
 
     // Should produce equivalent schemas
     assertEquals(avroResult.toString(), hoodieResult.toString());
+  }
+
+  @Test
+  public void testGetNestedFieldTopLevel() {
+    // Create simple schema
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test getting top-level field
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "id");
+
+    assertTrue(result.isPresent());
+    assertEquals("id", result.get().getLeft());
+    assertEquals("id", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldSingleLevel() {
+    // Create schema with nested record
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)
+        )
+    );
+
+    // Test getting nested field
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "address.city");
+
+    assertTrue(result.isPresent());
+    assertEquals("address.city", result.get().getLeft());
+    assertEquals("city", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldMultiLevel() {
+    // Create 3-level nested schema
+    HoodieSchema profileSchema = HoodieSchema.createRecord(
+        "Profile",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("bio", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("ts_millis", HoodieSchema.createTimestampMillis())
+        )
+    );
+
+    HoodieSchema userSchema = HoodieSchema.createRecord(
+        "User",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("profile", profileSchema),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    HoodieSchema rootSchema = HoodieSchema.createRecord(
+        "Root",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("user", userSchema),
+            HoodieSchemaField.of("event_id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test getting deeply nested field
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(rootSchema, "user.profile.ts_millis");
+
+    assertTrue(result.isPresent());
+    assertEquals("user.profile.ts_millis", result.get().getLeft());
+    assertEquals("ts_millis", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.TIMESTAMP, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithTimestampTypes() {
+    // Create schema with different timestamp types
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TimestampRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("ts_millis", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("ts_micros", HoodieSchema.createTimestampMicros()),
+            HoodieSchemaField.of("date_field", HoodieSchema.createDate())
+        )
+    );
+
+    // Test timestamp-millis field
+    Option<Pair<String, HoodieSchemaField>> millisResult = HoodieSchemaUtils.getNestedField(schema, "ts_millis");
+    assertTrue(millisResult.isPresent());
+    assertEquals("ts_millis", millisResult.get().getLeft());
+    assertEquals("ts_millis", millisResult.get().getRight().name());
+    assertEquals(HoodieSchemaType.TIMESTAMP, millisResult.get().getRight().schema().getType());
+
+    // Test timestamp-micros field
+    Option<Pair<String, HoodieSchemaField>> microsResult = HoodieSchemaUtils.getNestedField(schema, "ts_micros");
+    assertTrue(microsResult.isPresent());
+    assertEquals("ts_micros", microsResult.get().getLeft());
+    assertEquals("ts_micros", microsResult.get().getRight().name());
+    assertEquals(HoodieSchemaType.TIMESTAMP, microsResult.get().getRight().schema().getType());
+
+    // Test date field
+    Option<Pair<String, HoodieSchemaField>> dateResult = HoodieSchemaUtils.getNestedField(schema, "date_field");
+    assertTrue(dateResult.isPresent());
+    assertEquals("date_field", dateResult.get().getLeft());
+    assertEquals("date_field", dateResult.get().getRight().name());
+    assertEquals(HoodieSchemaType.DATE, dateResult.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldNonExistent() {
+    // Create simple schema
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test getting non-existent field
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "nonexistent");
+
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldNonExistentNestedPath() {
+    // Create schema with nested record
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)
+        )
+    );
+
+    // Test getting non-existent nested field path
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "address.country");
+
+    assertFalse(result.isPresent());
+
+    // Test getting field from non-existent parent
+    result = HoodieSchemaUtils.getNestedField(schema, "contact.email");
+
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldInvalidPathNonRecordType() {
+    // Create schema where field is not a record type
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("count", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    // Test trying to get nested field from non-record type
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "count.nested");
+
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldValidation() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Should throw on null schema
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.getNestedField(null, "id"));
+
+    // Should throw on null field name
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.getNestedField(schema, null));
+
+    // Should throw on empty field name
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.getNestedField(schema, ""));
+  }
+
+  @Test
+  public void testGetNestedFieldWithNullableTypes() {
+    // Create schema with nullable nested record
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("zipcode", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", HoodieSchema.createNullable(addressSchema))
+        )
+    );
+
+    // Test getting nested field through nullable parent
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "address.street");
+
+    assertTrue(result.isPresent());
+    assertEquals("address.street", result.get().getLeft());
+    assertEquals("street", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
   }
 }

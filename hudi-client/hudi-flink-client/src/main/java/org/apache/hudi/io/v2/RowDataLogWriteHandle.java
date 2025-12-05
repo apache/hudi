@@ -21,6 +21,7 @@ package org.apache.hudi.io.v2;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -112,7 +113,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
       HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
+              config.getMetadataConfig(), Lazy.eagerly(Option.of(HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields))),
               Option.of(HoodieRecord.HoodieRecordType.FLINK), indexVersion).keySet());
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata;
