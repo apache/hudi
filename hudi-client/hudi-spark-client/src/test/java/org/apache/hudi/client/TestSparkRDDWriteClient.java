@@ -66,6 +66,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -284,6 +285,44 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     }
   }
 
+  private static Stream<Arguments> enablingStreamingMetadataWritesTestArgs() {
+    return Arrays.stream(new Object[][] {
+            {false, false, false},
+            {true, false, false},
+            {false, true, false},
+            {false, false, true},
+            {true, true, false},
+            {true, false, true},
+            {false, true, true}
+    }).map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("enablingStreamingMetadataWritesTestArgs")
+  public void testEnablingStreamingMetadataWrites(boolean enableGlobalRLI, boolean enableRLI, boolean enableSecondaryIndex) throws IOException {
+    HoodieTableMetaClient metaClient =
+            getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    if (enableSecondaryIndex) {
+      metaClient.getTableConfig().setMetadataPartitionState(metaClient, PARTITION_NAME_SECONDARY_INDEX_PREFIX + "_rider_idx", true);
+    }
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableGlobalRecordLevelIndex(enableGlobalRLI)
+                    .withEnableRecordLevelIndex(enableRLI).withStreamingWriteEnabled(true).build())
+            .withPath(metaClient.getBasePath())
+            .build();
+
+    MockStreamingMetadataWriteHandler mockMetadataWriteHandler = new MockStreamingMetadataWriteHandler();
+    SparkRDDTableServiceClient tableServiceClient = new SparkRDDTableServiceClient(context(), writeConfig, Option.empty(), mockMetadataWriteHandler);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = mock(HoodieWriteMetadata.class);
+    HoodieData<WriteStatus> hoodieData = mock(HoodieData.class);
+    when(writeMetadata.getWriteStatuses()).thenReturn(hoodieData);
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    tableServiceClient.partialUpdateTableMetadata(table, writeMetadata, "00001", WriteOperationType.INSERT);
+    assertEquals(enableRLI || enableGlobalRLI || enableSecondaryIndex, mockMetadataWriteHandler.invoked);
+  }
+
   private void testAndAssertCompletionIsEarlierThanRequested(String basePath, Properties properties) throws IOException {
     HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath, properties);
 
@@ -308,12 +347,14 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
     boolean enforceCoalesceWithRepartition;
     int coalesceDivisorForDataTableWrites;
+    boolean invoked = false;
 
     @Override
     public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
                                                               boolean enforceCoalesceWithRepartition, int coalesceDivisorForDataTableWrites) {
       this.enforceCoalesceWithRepartition = enforceCoalesceWithRepartition;
       this.coalesceDivisorForDataTableWrites = coalesceDivisorForDataTableWrites;
+      this.invoked = true;
       return dataTableWriteStatuses;
     }
   }
