@@ -1,5 +1,6 @@
 ---
-title: "Release 0.15.0"
+title: "Release 0.15"
+slug: release-0.15
 layout: releases
 toc: true
 ---
@@ -18,7 +19,7 @@ relevant [module and API changes](#module-and-api-changes) and
 
 ## Migration Guide
 
-This release keeps the same table version (`6`) as [0.14.0 release](/releases/release-0.14.0), and there is no need for
+This release keeps the same table version (`6`) as [0.14.0 release](/releases/release-0.14), and there is no need for
 a table version upgrade if you are upgrading from 0.14.0. There are a
 few [module and API changes](#module-and-api-changes)
 and [behavior changes](#behavior-changes) as
@@ -43,13 +44,13 @@ We have expanded Hudi support to Spark 3.5 with two new bundles:
 #### New Utilities Bundles for Scala 2.13
 
 Besides adding a bundle for Spark 3.5 and Scala 2.13, we have added new utilities bundles to use with Scala
-2.13, [hudi-utilities-bundle_2.13](https://mvnrepository.com/artifact/org.apache.hudi/hudi-utilities-bundle_2.13)
-and [hudi-utilities-slim-bundle_2.13](https://mvnrepository.com/artifact/org.apache.hudi/hudi-utilities-slim-bundle_2.13).
+2.13, [hudi-utilities-bundle_2.13](https://mvnrepository.com/artifact/org/apache/hudi/hudi-utilities-bundle_2.13)
+and [hudi-utilities-slim-bundle_2.13](https://mvnrepository.com/artifact/org/apache/hudi/hudi-utilities-slim-bundle_2.13).
 
 #### New and Deprecated Flink Bundles
 
 We have expanded Hudi support to Flink 1.18 with a new
-bundle, [hudi-flink1.18-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-flink1.18-bundle). This release
+bundle, [hudi-flink1.18-bundle](https://mvnrepository.com/artifact/org/apache/hudi/hudi-flink1.18-bundle). This release
 removes Hudi support on Flink 1.13.
 
 ### Module and API Changes
@@ -63,7 +64,7 @@ including [`HoodieTableMetaClient`](https://github.com/apache/hudi/blob/38832854
 [`HoodieLogFile`](https://github.com/apache/hudi/blob/38832854be37cb78ad1edd87f515f01ca5ea6a8a/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieLogFile.java),
 [`HoodieEngineContext`](https://github.com/apache/hudi/blob/38832854be37cb78ad1edd87f515f01ca5ea6a8a/hudi-common/src/main/java/org/apache/hudi/common/engine/HoodieEngineContext.java),
 etc., now depend on new
-storage and I/O classes. If you’re using these classes directly in your applications, you need to change your
+storage and I/O classes. If you're using these classes directly in your applications, you need to change your
 integration code and usage. For more details, check out [this section](#hudi-storage-and-io-abstractions-1).
 
 #### Module Changes
@@ -151,9 +152,9 @@ of [`read.streaming.skip_clustering`](/docs/configurations#readstreamingskip_clu
 and [`read.streaming.skip_compaction`](/docs/configurations#readstreamingskip_compaction)
 from `false` to `true`.
 
-## Release Highlights
+## Release Highlights {#release-highlights}
 
-### Hudi Storage and I/O Abstractions
+### Hudi Storage and I/O Abstractions {#hudi-storage-and-io-abstractions-1}
 
 To provide better integration experience with query engines including [Trino](https://trino.io/) which uses its own
 native File System APIs, this release introduces new storage and I/O abstractions that are Hadoop-agnostic.
@@ -163,8 +164,8 @@ abstraction [`HoodieStorage`](https://github.com/apache/hudi/blob/38832854be37cb
 which provides all I/O APIs to read and write files and directories on storage, such as `open`, `read`, etc. This class
 can be extended to implement storage layer optimizations like caching, federated storage layout, hot/cold storage
 separation, etc. This class needs to be implemented based on particular systems, such as
-Hadoop’s [`FileSystem`](https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/fs/FileSystem.html) and
-Trino’s [`TrinoFileSystem`](https://github.com/trinodb/trino/blob/450/lib/trino-filesystem/src/main/java/io/trino/filesystem/TrinoFileSystem.java).
+Hadoop's [`FileSystem`](https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/fs/FileSystem.html) and
+Trino's [`TrinoFileSystem`](https://github.com/trinodb/trino/blob/450/lib/trino-filesystem/src/main/java/io/trino/filesystem/TrinoFileSystem.java).
 Core classes are introduced for accessing file systems:
 
 - [`StoragePath`](https://github.com/apache/hudi/blob/38832854be37cb78ad1edd87f515f01ca5ea6a8a/hudi-io/src/main/java/org/apache/hudi/storage/StoragePath.java):
@@ -189,7 +190,7 @@ which contains
 the implementation
 of [`HoodieStorage`](https://github.com/apache/hudi/blob/38832854be37cb78ad1edd87f515f01ca5ea6a8a/hudi-io/src/main/java/org/apache/hudi/storage/HoodieStorage.java)
 and [`HoodieIOFactory`](https://github.com/apache/hudi/blob/38832854be37cb78ad1edd87f515f01ca5ea6a8a/hudi-common/src/main/java/org/apache/hudi/io/storage/HoodieIOFactory.java)
-based on Hadoop’s file system APIs and implementation, and
+based on Hadoop's file system APIs and implementation, and
 existing reader and writer logic that depends on Hadoop-dependent APIs.
 The [`hudi-hadoop-common` module](https://github.com/apache/hudi/tree/38832854be37cb78ad1edd87f515f01ca5ea6a8a/hudi-hadoop-common)
 is used by
@@ -212,14 +213,14 @@ and [`hoodie.io.factory.class`](/docs/configurations#hoodieiofactoryclass) throu
 This release has added the Spark 3.5 support and Scala 2.13 support; users who are on Spark 3.5 can use the new Spark
 bundle based on the Scala
 version: [hudi-spark3.5-bundle_2.12](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark3.5-bundle_2.12) and
-[hudi-spark3.5-bundle_2.13](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark3.5-bundle_2.13). Spark 3.4,
+[hudi-spark3.5-bundle_2.13](https://mvnrepository.com/artifact/org/apache/hudi/hudi-spark3.5-bundle_2.13). Spark 3.4,
 3.3, 3.2, 3.1, 3.0 and 2.4 continue to be supported in this release. To quickly get started with Hudi and Spark 3.5, you
 can explore our [quick start guide](/docs/quick-start-guide).
 
 #### Flink 1.18 Support
 
 This release has added the Flink 1.18 support with a new compile maven profile `flink1.18` and new Flink
-bundle [hudi-flink1.18-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-flink1.18-bundle).
+bundle [hudi-flink1.18-bundle](https://mvnrepository.com/artifact/org/apache/hudi/hudi-flink1.18-bundle).
 
 ### Hudi-Native HFile Reader
 
@@ -329,3 +330,4 @@ Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version i
 
 The raw release notes are
 available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12353381).
+

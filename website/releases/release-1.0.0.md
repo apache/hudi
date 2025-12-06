@@ -33,7 +33,7 @@ and [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#sup
 
 ## Bundle Updates
 
- - Same bundles supported in the [0.15.0 release](release-0.15.0#new-spark-bundles) are still supported.
+ - Same bundles supported in the [0.15.0 release](release-0.15#new-spark-bundles) are still supported.
  - New Flink Bundles to support Flink 1.19 and Flink 1.20.
  - In this release, we have deprecated support for Spark 3.2 or lower version in Spark 3.
 

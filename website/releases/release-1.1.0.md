@@ -1,5 +1,6 @@
 ---
-title: "Release 1.1.0"
+title: "Release 1.1"
+slug: release-1.1
 layout: releases
 toc: true
 ---
@@ -375,3 +376,4 @@ For more details, see the [community discussion](https://github.com/apache/hudi/
 ## Contributors
 
 Hudi 1.1.0 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.
+
