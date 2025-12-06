@@ -20,7 +20,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.HoodieMergeOnReadRDDV2.CONFIG_INSTANTIATION_LOCK
-import org.apache.hudi.LogFileIterator.getPartitionPath
 import org.apache.hudi.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE
@@ -36,6 +35,7 @@ import org.apache.hudi.expression.{Predicate => HPredicate}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.avro.Schema
@@ -254,6 +254,16 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
       override def close(): Unit = closeableFileGroupRecordIterator.close()
     }
+  }
+
+  private def getPartitionPath(split: HoodieMergeOnReadFileSplit): StoragePath = {
+    // Determine partition path as an immediate parent folder of either
+    //    - The base file
+    //    - Some log file
+    split.dataFile.map(baseFile =>
+        sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(baseFile))
+      .getOrElse(split.logFiles.head.getPath)
+      .getParent
   }
 }
 

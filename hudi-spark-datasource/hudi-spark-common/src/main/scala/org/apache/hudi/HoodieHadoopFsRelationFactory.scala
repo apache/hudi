@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -348,7 +349,7 @@ class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
-  override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema
+  override def buildDataSchema(): StructType = HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 
@@ -448,7 +449,7 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
     sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, rangeType)
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
-  override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema
+  override def buildDataSchema(): StructType = HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 
