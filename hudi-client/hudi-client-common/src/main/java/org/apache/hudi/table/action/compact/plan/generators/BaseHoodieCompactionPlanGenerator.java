@@ -159,6 +159,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+    engineContext.clearJobStatus();
 
     LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
     LOG.info("Total number of log files {} for table {}", totalLogFiles.value(), hoodieTable.getConfig().getBasePath());

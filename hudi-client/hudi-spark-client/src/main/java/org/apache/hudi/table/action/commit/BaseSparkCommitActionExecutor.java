@@ -115,7 +115,6 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
         table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
     // Skip processing if there is no inflight clustering
@@ -132,8 +131,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (updateStrategy instanceof SparkAllowUpdateStrategy && !config.isRollbackPendingClustering()) {
       return inputRecords;
     }
+
+    context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
         updateStrategy.handleUpdate(inputRecords);
+    context.clearJobStatus();
 
     Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
     if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
@@ -197,6 +199,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
+    context.clearJobStatus();
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     if (sourceReadAndIndexTimer.isPresent()) {
@@ -214,6 +217,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+    context.clearJobStatus();
     LOG.debug("Input workload profile :{}", workloadProfile);
     return workloadProfile;
   }
@@ -338,6 +342,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
     commit(result, result.getWriteStats().isPresent()
         ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+    context.clearJobStatus();
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {

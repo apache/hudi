@@ -515,6 +515,7 @@ public class HadoopFSUtils {
       result = hoodieEngineContext.mapToPair(subPaths,
           subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
           actualParallelism);
+      hoodieEngineContext.clearJobStatus();
     }
     return result;
   }
