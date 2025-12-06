@@ -116,13 +116,6 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceHoodieSchema() {
-    // By default, delegate to legacy getSourceSchema() method
-    Schema schema = getSourceSchema();
-    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
-  }
-
-  @Override
   @Deprecated
   public Schema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
