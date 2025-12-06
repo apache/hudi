@@ -20,7 +20,7 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.ParquetTableSchemaResolver;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -30,7 +30,6 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
@@ -38,7 +37,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -202,19 +200,17 @@ public class TableOptionProperties {
 
   public static Map<String, String> translateFlinkTableProperties2Spark(
       CatalogTable catalogTable,
-      Configuration hadoopConf,
       Map<String, String> properties,
       List<String> partitionKeys,
       boolean withOperationField) {
     RowType rowType = supplementMetaFields(DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()), withOperationField);
-    Schema schema = AvroSchemaConverter.convertToSchema(rowType);
-    MessageType messageType = ParquetTableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(rowType));
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
         partitionKeys,
         sparkVersion,
         4000,
-        messageType);
+        schema);
     properties.putAll(sparkTableProperties);
     return properties.entrySet().stream()
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))

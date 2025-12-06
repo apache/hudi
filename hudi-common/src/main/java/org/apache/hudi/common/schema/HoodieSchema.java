@@ -631,6 +631,20 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Returns the key schema for map types.
+   *
+   * @return the key schema
+   * @throws IllegalStateException if this is not a map schema
+   */
+  public HoodieSchema getKeyType() {
+    if (type != HoodieSchemaType.MAP) {
+      throw new IllegalStateException("Cannot get key type from non-map schema: " + type);
+    }
+
+    return new HoodieSchema(Schema.create(Schema.Type.STRING));
+  }
+
+  /**
    * Returns the value schema for map types.
    *
    * @return the value schema

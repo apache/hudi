@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -44,7 +45,6 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,10 +101,10 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+  public void createTable(String tableName, HoodieSchema storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                           Map<String, String> tableProperties) {
     try {
-      LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.parquetSchemaToMapSchema(storageSchema, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
+      LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.hoodieSchemaToMapSchema(storageSchema, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
 
       List<FieldSchema> fieldSchema = HiveSchemaUtil.convertMapSchemaToHiveFieldSchema(mapSchema, syncConfig);
 
@@ -143,10 +143,10 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void updateTableDefinition(String tableName, MessageType newSchema) {
+  public void updateTableDefinition(String tableName, HoodieSchema newSchema) {
     try {
       boolean cascade = syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0;
-      List<FieldSchema> fieldSchema = HiveSchemaUtil.convertParquetSchemaToHiveFieldSchema(newSchema, syncConfig);
+      List<FieldSchema> fieldSchema = HiveSchemaUtil.convertSchemaToHiveFieldSchema(newSchema, syncConfig);
       Table table = client.getTable(databaseName, tableName);
       StorageDescriptor sd = table.getSd();
       sd.setCols(fieldSchema);

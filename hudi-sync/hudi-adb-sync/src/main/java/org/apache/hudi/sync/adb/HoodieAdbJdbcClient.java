@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sync.adb;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -31,7 +32,6 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,9 +105,9 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
-      String outputFormatClass, String serdeClass,
-      Map<String, String> serdeProperties, Map<String, String> tableProperties) {
+  public void createTable(String tableName, HoodieSchema storageSchema, String inputFormatClass,
+                          String outputFormatClass, String serdeClass,
+                          Map<String, String> serdeProperties, Map<String, String> tableProperties) {
     try {
       LOG.info("Creating table:{}", tableName);
       String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema,
