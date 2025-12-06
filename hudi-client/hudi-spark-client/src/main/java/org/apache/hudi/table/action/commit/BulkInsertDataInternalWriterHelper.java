@@ -61,6 +61,7 @@ public class BulkInsertDataInternalWriterHelper {
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final StructType structType;
+  protected final boolean isPartitioned;
   protected final Boolean arePartitionRecordsSorted;
   protected final List<WriteStatus> writeStatusList = new ArrayList<>();
   protected final String fileIdPrefix;
@@ -100,6 +101,7 @@ public class BulkInsertDataInternalWriterHelper {
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
+    this.isPartitioned = hoodieTable.isPartitioned();
 
     if (!populateMetaFields) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(writeConfig.getProps());
@@ -120,12 +122,19 @@ public class BulkInsertDataInternalWriterHelper {
 
   public void write(InternalRow row) throws IOException {
     try {
-      UTF8String partitionPath = extractPartitionPath(row);
-      if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
-        handle = getRowCreateHandle(partitionPath.toString());
-        // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
-        //       a mutable underlying buffer
-        lastKnownPartitionPath = partitionPath.clone();
+      if (isPartitioned) {
+        UTF8String partitionPath = extractPartitionPath(row);
+        if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
+          handle = getRowCreateHandle(partitionPath.toString());
+          // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
+          //       a mutable underlying buffer
+          lastKnownPartitionPath = partitionPath.clone();
+        }
+      } else {
+        // For non-partitioned tables, only check if handle can write (file size limit)
+        if (handle == null || !handle.canWrite()) {
+          handle = getRowCreateHandle("");
+        }
       }
 
       boolean shouldDropPartitionColumns = writeConfig.shouldDropPartitionColumns();
