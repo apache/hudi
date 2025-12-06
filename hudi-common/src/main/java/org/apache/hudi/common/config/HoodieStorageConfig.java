@@ -168,6 +168,13 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Use UTC timezone or local timezone to the conversion between epoch"
               + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
 
+  public static final ConfigProperty<Boolean> HFILE_WITH_BLOOM_FILTER_ENABLED = ConfigProperty
+      .key("hoodie.hfile.bloom.filter.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.1")
+      .withDocumentation("Control whether to write bloom filter or not to HFile.");
+
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
@@ -476,6 +483,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetBloomFilterEnable(boolean parquetBloomFilterEnable) {
       storageConfig.setValue(PARQUET_WITH_BLOOM_FILTER_ENABLED, String.valueOf(parquetBloomFilterEnable));
+      return this;
+    }
+
+    public Builder hfileBloomFilterEnable(boolean hfileBloomFilterEnable) {
+      storageConfig.setValue(HFILE_WITH_BLOOM_FILTER_ENABLED, String.valueOf(hfileBloomFilterEnable));
       return this;
     }
 

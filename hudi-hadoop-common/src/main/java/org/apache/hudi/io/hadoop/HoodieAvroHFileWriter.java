@@ -151,11 +151,11 @@ public class HoodieAvroHFileWriter
     writer.append(recordKey, value);
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
-      if (minRecordKey == null) {
-        minRecordKey = recordKey;
-      }
-      maxRecordKey = recordKey;
     }
+    if (minRecordKey == null) {
+      minRecordKey = recordKey;
+    }
+    maxRecordKey = recordKey;
     prevRecordKey = recordKey;
   }
 
@@ -163,16 +163,6 @@ public class HoodieAvroHFileWriter
   public void close() throws IOException {
     if (hfileConfig.useBloomFilter()) {
       final BloomFilter bloomFilter = hfileConfig.getBloomFilter();
-      if (minRecordKey == null) {
-        minRecordKey = "";
-      }
-      if (maxRecordKey == null) {
-        maxRecordKey = "";
-      }
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
       writer.appendFileInfo(
           HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
           getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
@@ -180,6 +170,16 @@ public class HoodieAvroHFileWriter
           HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
           getUTF8Bytes(bloomFilter.serializeToString()));
     }
+    if (minRecordKey == null) {
+      minRecordKey = "";
+    }
+    if (maxRecordKey == null) {
+      maxRecordKey = "";
+    }
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
     writer.close();
     writer = null;
   }
