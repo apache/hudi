@@ -20,13 +20,13 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -66,7 +66,7 @@ public class TestHoodieLogBlock {
         true,
         new HoodieLogBlock.HoodieLogBlockContentLocation(
             mock(HoodieStorage.class), new HoodieLogFile("log_file"), position, blockSize, position + blockSize),
-        Option.of(SchemaBuilder.builder().record("test_schema").fields().endRecord()),
+        Option.of(HoodieSchema.createRecord("test_schema", null, null, Collections.emptyList())),
         Collections.emptyMap(),
         Collections.emptyMap(),
         "key"

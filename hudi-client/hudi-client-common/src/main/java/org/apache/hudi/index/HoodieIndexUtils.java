@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -40,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -543,10 +543,8 @@ public class HoodieIndexUtils {
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
     HoodieSchema writerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(writerSchema, updatedConfig.allowOperationMetadataField());
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    AvroSchemaCache.intern(writerSchema.toAvroSchema());
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    AvroSchemaCache.intern(writerSchemaWithMetaFields.toAvroSchema());
+    HoodieSchemaCache.intern(writerSchema);
+    HoodieSchemaCache.intern(writerSchemaWithMetaFields);
     // Read the existing records with the meta fields and current writer schema as the output schema
     HoodieData<HoodieRecord<R>> existingRecords =
         getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable, readerContextFactoryForExistingRecords, writerSchemaWithMetaFields);

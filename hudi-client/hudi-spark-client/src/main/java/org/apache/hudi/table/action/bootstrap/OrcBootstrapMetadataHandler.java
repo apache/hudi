@@ -82,7 +82,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
       executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
           new BootstrapRecordConsumer(bootstrapHandle), inp -> {
             String recKey = keyGenerator.getKey(inp).getRecordKey();
-            GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+            GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());
             gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
             HoodieRecord rec = new HoodieAvroIndexedRecord(new HoodieKey(recKey, partitionPath), gr);
             return rec;

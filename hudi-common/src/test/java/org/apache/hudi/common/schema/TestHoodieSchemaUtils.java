@@ -34,6 +34,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -749,8 +750,8 @@ public class TestHoodieSchemaUtils {
     // Should throw on null schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.removeFields(null, Collections.emptySet()));
 
-    // Should throw on null fieldsToRemove
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.removeFields(schema, null));
+    // Null fieldsToRemove should return original schema unchanged
+    assertSame(schema, HoodieSchemaUtils.removeFields(schema, null));
   }
 
   @Test

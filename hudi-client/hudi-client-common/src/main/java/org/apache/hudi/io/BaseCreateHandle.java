@@ -36,7 +36,6 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +58,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected boolean useWriterSchema = false;
 
   public BaseCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                          String partitionPath, String fileId, Option<Schema> overriddenSchema,
+                          String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,
                           TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier, preserveMetadata);

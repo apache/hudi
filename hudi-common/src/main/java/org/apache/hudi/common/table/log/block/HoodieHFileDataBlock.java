@@ -36,7 +36,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +68,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Option<byte[]> content,
                               boolean readBlockLazily,
                               HoodieLogBlockContentLocation logBlockContentLocation,
-                              Option<Schema> readerSchema,
+                              Option<HoodieSchema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<FooterMetadataType, String> footer,
                               boolean enablePointLookups,

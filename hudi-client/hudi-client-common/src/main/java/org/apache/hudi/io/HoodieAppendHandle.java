@@ -67,7 +67,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -165,7 +164,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // When enabling writing partial updates to the data blocks in log files,
             // i.e., partial update schema is set, the writer schema is the partial
             // schema containing the updated fields only
-            ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
+            ? Option.of(HoodieSchema.parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier,
         preserveMetadata);

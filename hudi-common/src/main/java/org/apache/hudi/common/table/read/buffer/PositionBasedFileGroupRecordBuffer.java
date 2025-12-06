@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -127,8 +128,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged (this schema is interned originally)
-    HoodieSchema schema = schemaTransformerWithEvolvedSchema.getRight();
+    HoodieSchema schema = HoodieSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight());
 
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
