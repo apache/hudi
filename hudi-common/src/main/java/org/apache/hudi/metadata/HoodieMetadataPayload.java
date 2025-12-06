@@ -789,4 +789,26 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     sb.append('}');
     return sb.toString();
   }
+
+  private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    if (type == METADATA_TYPE_FILE_LIST) {
+      filesystemMetadata.forEach((fileName, fileInfo) -> {
+        checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0");
+      });
+    }
+  }
+
+  private static <T> T getNestedFieldValue(GenericRecord record, String fieldName) {
+    // NOTE: This routine is more lightweight than {@code HoodieAvroUtils.getNestedFieldVal}
+    if (record.getSchema().getField(fieldName) == null) {
+      return null;
+    }
+
+    return unsafeCast(record.get(fieldName));
+  }
+
+  @Override
+  public boolean hasInsertValue(Schema schema, Properties properties) throws IOException {
+    return key != null && !this.isDeletedRecord;
+  }
 }
