@@ -159,7 +159,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
           stopEmbeddedServerView(false);
         }
       } else {
-        LOG.info("Timeline Server already running. Not restarting the service");
+        LOG.debug("Timeline Server already running. Not restarting the service");
       }
     } else {
       LOG.info("Embedded Timeline Server is disabled. Not starting timeline service");
