@@ -410,7 +410,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    if (schema == null || HOODIE_METADATA_SCHEMA == schema) {
+    // TODO: feature(schema): HoodieSchema change, we removed caching in a few areas, during the migration of Avro.Schema -> HoodieSchema.
+    // The schema objects might have been the same reference (due to caching), but now after converting from HoodieSchema to Avro Schema using .toAvroSchema(),
+    // it creates a new Schema object that's not the same reference as HOODIE_METADATA_SCHEMA
+    if (schema == null || HOODIE_METADATA_SCHEMA.equals(schema)) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);

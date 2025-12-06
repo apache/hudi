@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.OrderingValues;
 
 import javax.annotation.Nullable;
@@ -90,7 +91,11 @@ public class BufferedRecord<T> implements Serializable {
 
   public BufferedRecord<T> toBinary(RecordContext<T> recordContext) {
     if (record != null) {
-      record = recordContext.seal(recordContext.toBinaryRow(recordContext.getSchemaFromBufferRecord(this), record));
+      HoodieSchema schema = recordContext.getSchemaFromBufferRecord(this);
+      // Schema can be null in test scenarios where schemas are not registered in the RecordContext (e.g. in tests)
+      if (schema != null) {
+        record = recordContext.seal(recordContext.toBinaryRow(schema, record));
+      }
     }
     return this;
   }

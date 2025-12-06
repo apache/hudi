@@ -197,11 +197,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       return true;
     }
     if (this.data instanceof BaseAvroPayload) {
-      return ((BaseAvroPayload) this.data).isDeleted(deleteContext.getReaderSchema(), props);
+      return ((BaseAvroPayload) this.data).isDeleted(deleteContext.getReaderSchema().toAvroSchema(), props);
     } else if (this.data instanceof HoodieMetadataPayload) {
       return ((HoodieMetadataPayload) this.data).isDeleted();
     } else {
-      return !this.data.getInsertValue(deleteContext.getReaderSchema(), props).isPresent();
+      return !this.data.getInsertValue(deleteContext.getReaderSchema().toAvroSchema(), props).isPresent();
     }
   }
 

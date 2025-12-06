@@ -21,6 +21,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
@@ -49,9 +50,9 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
     if (newer.isDelete()) {
       return newer;
     }
-    Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-    Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema,
-        (BufferedRecord<InternalRow>) newer, newSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
+    HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+    HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema.toAvroSchema(),
+        (BufferedRecord<InternalRow>) newer, newSchema.toAvroSchema(), readerSchema, (RecordContext<InternalRow>) recordContext);
   }
 }

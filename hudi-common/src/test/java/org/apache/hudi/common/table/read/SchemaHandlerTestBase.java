@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -323,7 +324,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public GenericRecord convertToAvroRecord(String record, Schema schema) {
+        public GenericRecord convertToAvroRecord(String record, HoodieSchema schema) {
           return null;
         }
 
@@ -333,7 +334,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public Object getValue(String record, Schema schema, String fieldName) {
+        public Object getValue(String record, HoodieSchema schema, String fieldName) {
           return null;
         }
 
@@ -348,12 +349,12 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
+        public String mergeWithEngineRecord(HoodieSchema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
           return "";
         }
 
         @Override
-        public String constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+        public String constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
           return "";
         }
 
@@ -363,19 +364,20 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String toBinaryRow(Schema avroSchema, String record) {
+        public String toBinaryRow(HoodieSchema avroSchema, String record) {
           return "";
         }
 
         @Override
-        public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+        public UnaryOperator<String> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
           return null;
         }
       });
     }
 
     @Override
-    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length,
+                                                          HoodieSchema dataSchema, HoodieSchema requiredSchema, HoodieStorage storage) throws IOException {
       return null;
     }
 
@@ -385,8 +387,8 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
-                                                          Schema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
+    public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, HoodieSchema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
+                                                          HoodieSchema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
       return null;
     }
   }

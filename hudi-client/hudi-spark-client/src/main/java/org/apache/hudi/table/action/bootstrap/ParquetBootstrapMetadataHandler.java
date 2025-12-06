@@ -119,12 +119,12 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
     switch (recordType) {
       case AVRO:
-        GenericRecord avroRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+        GenericRecord avroRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());
         avroRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
         return new HoodieAvroIndexedRecord(hoodieKey, avroRecord);
 
       case SPARK:
-        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());
         UnsafeProjection unsafeProjection = HoodieInternalRowUtils$.MODULE$.getCachedUnsafeProjection(schema, schema);
 
         GenericInternalRow row = new GenericInternalRow(METADATA_BOOTSTRAP_RECORD_SCHEMA.getFields().size());

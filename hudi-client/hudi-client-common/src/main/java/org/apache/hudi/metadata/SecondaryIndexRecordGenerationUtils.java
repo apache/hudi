@@ -318,9 +318,9 @@ public class SecondaryIndexRecordGenerationUtils {
 
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
-          Object secondaryKey = readerContext.getRecordContext().getValue(record, requestedSchema, secondaryKeyField);
+          Object secondaryKey = readerContext.getRecordContext().getValue(record, HoodieSchema.fromAvroSchema(requestedSchema), secondaryKeyField);
             nextValidRecord = Pair.of(
-                readerContext.getRecordContext().getRecordKey(record, requestedSchema),
+                readerContext.getRecordContext().getRecordKey(record, HoodieSchema.fromAvroSchema(requestedSchema)),
                 secondaryKey == null ? null : secondaryKey.toString()
             );
           return true;

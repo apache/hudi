@@ -132,7 +132,7 @@ object HoodieCreateRecordUtils {
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
           val requiresPayload = isChangingRecords(operation) && !config.isFileGroupReaderBasedMergeHandle
           val mergeProps = ConfigUtils.getMergeProps(config.getProps, args.tableConfig)
-          val deleteContext = new DeleteContext(mergeProps, writerSchema.getAvroSchema).withReaderSchema(writerSchema.getAvroSchema);
+          val deleteContext = new DeleteContext(mergeProps, writerSchema).withReaderSchema(writerSchema);
 
           // handle dropping partition columns
           it.map { avroRec =>

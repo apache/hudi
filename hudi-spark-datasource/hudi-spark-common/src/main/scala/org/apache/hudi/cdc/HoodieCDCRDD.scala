@@ -22,9 +22,9 @@ import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, Ho
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
@@ -158,7 +158,10 @@ class HoodieCDCRDD(
       )
     }
 
-    protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)
+    private val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
+
+    // TODO: This can be removed, it involves interfaces changes
+    protected override val avroSchema: Schema = schema.toAvroSchema
 
     protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
@@ -167,12 +170,12 @@ class HoodieCDCRDD(
 
     private lazy val avroProjection = AvroProjection.create(avroSchema)
 
-    private lazy val cdcAvroSchema: Schema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+    private lazy val cdcHoodieSchema: HoodieSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
       cdcSupplementalLoggingMode,
-      HoodieAvroUtils.removeMetadataFields(avroSchema)
+      HoodieSchemaUtils.removeMetadataFields(schema)
     )
 
-    private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcAvroSchema)
+    private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcHoodieSchema.toAvroSchema)
 
     private lazy val sparkPartitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
 
@@ -180,7 +183,7 @@ class HoodieCDCRDD(
      * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
      */
     private lazy val cdcRecordDeserializer: HoodieAvroDeserializer = {
-      sparkAdapter.createAvroDeserializer(cdcAvroSchema, cdcSparkSchema)
+      sparkAdapter.createAvroDeserializer(cdcHoodieSchema.toAvroSchema, cdcSparkSchema)
     }
 
     private lazy val projection: Projection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
@@ -448,7 +451,7 @@ class HoodieCDCRDD(
             val cdcLogFiles = currentCDCFileSplit.getCdcFiles.asScala.map { cdcFile =>
               new HoodieLogFile(storage.getPathInfo(new StoragePath(basePath, cdcFile)))
             }.toArray
-            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcAvroSchema)
+            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcHoodieSchema.toAvroSchema)
           case REPLACE_COMMIT =>
             if (currentCDCFileSplit.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)

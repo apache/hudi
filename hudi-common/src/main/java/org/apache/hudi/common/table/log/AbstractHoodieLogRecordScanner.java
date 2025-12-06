@@ -819,7 +819,7 @@ public abstract class AbstractHoodieLogRecordScanner {
             .orElse(Function.identity());
 
     Schema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(dataBlock::getSchema);
+        .orElseGet(() -> dataBlock.getSchema().toAvroSchema());
 
     return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, transformer), schema);
   }
@@ -847,7 +847,7 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(
-          dataBlock.getSchema(),
+          dataBlock.getSchema().toAvroSchema(),
           this.hoodieTableMetaClient.getTableConfig().getProps(),
           mergedAvroSchema,
           Collections.emptyMap());

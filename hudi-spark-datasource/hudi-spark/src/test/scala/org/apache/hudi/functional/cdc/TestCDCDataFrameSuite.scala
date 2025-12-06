@@ -81,7 +81,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val dataSchema = schemaResolver.getTableSchema(false)
     val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     totalInsertedCnt += 100
@@ -278,7 +278,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val dataSchema = schemaResolver.getTableSchema(false)
     val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     totalInsertedCnt += 100
@@ -618,7 +618,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     metaClient = createMetaClient(spark, basePath)
 
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val dataSchema = schemaResolver.getTableAvroSchema(false)
+    val dataSchema = schemaResolver.getTableSchema(false)
     val cdcSchema = schemaBySupplementalLoggingMode(loggingMode, dataSchema)
 
     // Upsert Operation

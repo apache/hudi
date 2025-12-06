@@ -93,7 +93,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord2, testRecord3, testRecord5).iterator()));
 
     HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
-    when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
+    when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(dataBlock.getEngineRecordIterator(mockReaderContext)).thenReturn(
         ClosableIterator.wrap(Arrays.asList(testRecord6, testRecord4, testRecord1, testRecord6Update, testRecord2Update).iterator()));
 
@@ -124,7 +124,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA.toAvroSchema(), SCHEMA.toAvroSchema(), Option.empty(),
         properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
@@ -167,11 +167,11 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Collections.emptyIterator()));
 
     HoodieDataBlock dataBlock1 = mock(HoodieDataBlock.class);
-    when(dataBlock1.getSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
+    when(dataBlock1.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(dataBlock1.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord6, testRecord4, testRecord6Update, testRecord2).iterator()));
 
     HoodieDataBlock dataBlock2 = mock(HoodieDataBlock.class);
-    when(dataBlock2.getSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
+    when(dataBlock2.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(dataBlock2.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord5, testRecord3, testRecord1).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
@@ -197,6 +197,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
     when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
+    when(mockReaderContext.getRecordContext().getSchemaFromBufferRecord(any())).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
     when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);

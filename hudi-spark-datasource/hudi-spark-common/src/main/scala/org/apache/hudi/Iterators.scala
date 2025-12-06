@@ -28,6 +28,7 @@ import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext, Reco
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecords, DeleteContext}
 import org.apache.hudi.common.util.{FileIOUtils, HoodieRecordUtils}
@@ -35,8 +36,6 @@ import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
-import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
 
@@ -101,7 +100,8 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
 
   protected val logFileReaderAvroSchema: Schema = AvroSchemaCache.intern(new Schema.Parser().parse(tableSchema.avroSchemaStr))
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
-  protected val deleteContext: DeleteContext = new DeleteContext(payloadProps, logFileReaderAvroSchema).withReaderSchema(logFileReaderAvroSchema);
+  val logFileReaderHoodieSchema = HoodieSchema.fromAvroSchema(logFileReaderAvroSchema)
+  protected val deleteContext: DeleteContext = new DeleteContext(payloadProps, logFileReaderHoodieSchema).withReaderSchema(logFileReaderHoodieSchema);
 
   private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
   private val requiredSchemaRowProjection: Projection = generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
@@ -311,19 +311,19 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
     //       on the record from the Delta Log
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
-        val curRecord = BufferedRecords.fromEngineRecord(curRow, baseFileReaderAvroSchema, rowRecordContext, orderingFields, newRecord.getRecordKey, false)
-        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, logFileReaderAvroSchema, rowRecordContext, payloadProps, orderingFields, deleteContext)
+        val curRecord = BufferedRecords.fromEngineRecord(curRow, HoodieSchema.fromAvroSchema(baseFileReaderAvroSchema), rowRecordContext, orderingFields, newRecord.getRecordKey, false)
+        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(logFileReaderAvroSchema), rowRecordContext, payloadProps, orderingFields, deleteContext)
         val result = recordMerger.merge(curRecord, newBufferedRecord, rowRecordContext, payloadProps).asInstanceOf[BufferedRecord[InternalRow]]
         if (result.isDelete) {
           None
         } else {
-          val schema = HoodieInternalRowUtils.getCachedSchema(rowRecordContext.getSchemaFromBufferRecord(result))
+          val schema = HoodieInternalRowUtils.getCachedSchema(rowRecordContext.getSchemaFromBufferRecord(result).toAvroSchema)
           val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
           Some(projection.apply(result.getRecord))
         }
       case _ =>
-        val curRecord = BufferedRecords.fromEngineRecord(serialize(curRow), baseFileReaderAvroSchema, avroRecordContext, orderingFields, newRecord.getRecordKey, false)
-        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, logFileReaderAvroSchema, avroRecordContext, payloadProps, orderingFields, deleteContext)
+        val curRecord = BufferedRecords.fromEngineRecord(serialize(curRow), HoodieSchema.fromAvroSchema(baseFileReaderAvroSchema), avroRecordContext, orderingFields, newRecord.getRecordKey, false)
+        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(logFileReaderAvroSchema), avroRecordContext, payloadProps, orderingFields, deleteContext)
         val result = recordMerger.merge(curRecord, newBufferedRecord, avroRecordContext, payloadProps).asInstanceOf[BufferedRecord[IndexedRecord]]
         if (result.isDelete) {
           None
