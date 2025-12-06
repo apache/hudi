@@ -113,7 +113,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   @Override
   public HoodieSchema getSchema() {
     // return merged schema (meta fields + data file schema)
-    return HoodieSchemaUtils.addMetadataFields(dataFileReader.getSchema(), false);
+    return HoodieSchemaUtils.addMetadataFields(dataFileReader.getSchema());
   }
 
   @Override

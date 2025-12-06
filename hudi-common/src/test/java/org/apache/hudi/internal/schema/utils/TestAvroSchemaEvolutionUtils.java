@@ -251,15 +251,15 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testFixNullOrdering() {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc"));
-    HoodieSchema expectedSchema = HoodieSchema.fromAvroSchema(SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc"));
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc");
+    HoodieSchema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc");
     Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(schema));
     Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(expectedSchema));
   }
 
   @Test
   public void testFixNullOrderingSameSchemaCheck() {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc"));
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
     Assertions.assertEquals(schema, InternalSchemaConverter.fixNullOrdering(schema));
   }
 

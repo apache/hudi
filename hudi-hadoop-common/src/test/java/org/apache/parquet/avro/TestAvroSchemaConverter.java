@@ -19,6 +19,8 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -151,10 +153,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testAllTypes() throws Exception {
-    Schema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/all.avsc");
+    HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/all.avsc");
     testAvroToParquetConversion(
         NEW_BEHAVIOR,
-        schema,
+        schema.toAvroSchema(),
         "message org.apache.parquet.avro.myrecord {\n"
             // Avro nulls are not encoded, unless they are null unions
             + "  required boolean myboolean;\n"
@@ -206,9 +208,9 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testAllTypesOldListBehavior() throws Exception {
-    Schema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/all.avsc");
+    HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/all.avsc");
     testAvroToParquetConversion(
-        schema,
+        schema.toAvroSchema(),
         "message org.apache.parquet.avro.myrecord {\n"
             // Avro nulls are not encoded, unless they are null unions
             + "  required boolean myboolean;\n"
@@ -252,16 +254,16 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testAllTypesParquetToAvro() throws Exception {
-    Schema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/allFromParquetNewBehavior.avsc");
+    HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/allFromParquetNewBehavior.avsc");
     // Cannot use round-trip assertion because enum is lost
-    testParquetToAvroConversion(NEW_BEHAVIOR, schema, ALL_PARQUET_SCHEMA);
+    testParquetToAvroConversion(NEW_BEHAVIOR, schema.toAvroSchema(), ALL_PARQUET_SCHEMA);
   }
 
   @Test
   public void testAllTypesParquetToAvroOldBehavior() throws Exception {
-    Schema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/allFromParquetOldBehavior.avsc");
+    HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/allFromParquetOldBehavior.avsc");
     // Cannot use round-trip assertion because enum is lost
-    testParquetToAvroConversion(schema, ALL_PARQUET_SCHEMA);
+    testParquetToAvroConversion(schema.toAvroSchema(), ALL_PARQUET_SCHEMA);
   }
 
   @Test
@@ -853,7 +855,7 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testAvroFixed12AsParquetInt96Type() throws Exception {
-    Schema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/fixedToInt96.avsc");
+    HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/fixedToInt96.avsc");
 
     Configuration conf = new Configuration();
     conf.setStrings(
@@ -864,7 +866,7 @@ public class TestAvroSchemaConverter {
         "mynestedrecord.mymap");
     testAvroToParquetConversion(
         conf,
-        schema,
+        schema.toAvroSchema(),
         "message org.apache.parquet.avro.fixedToInt96 {\n"
             + "  required int96 int96;\n"
             + "  required fixed_len_byte_array(12) notanint96;\n"
@@ -887,7 +889,7 @@ public class TestAvroSchemaConverter {
     assertThrows(
         "Exception should be thrown for fixed types to be converted to INT96 where the size is not 12 bytes",
         IllegalArgumentException.class,
-        () -> getAvroSchemaConverter(conf).convert(schema));
+        () -> getAvroSchemaConverter(conf).convert(schema.toAvroSchema()));
   }
 
   public static Schema optional(Schema original) {

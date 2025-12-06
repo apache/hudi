@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -34,7 +35,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -66,7 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieGlobalBloomIndex.class, "/exampleSchema.avsc", true);
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestHoodieGlobalBloomIndex.class, "/exampleSchema.avsc", true);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -92,7 +92,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -225,7 +225,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         .build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -296,7 +296,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
-      IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA, CollectionUtils.emptyProps()).get().getData();
+      IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA.toAvroSchema(), CollectionUtils.emptyProps()).get().getData();
       switch (record.getRecordKey()) {
         case "000":
           assertEquals(record.getCurrentLocation().getFileId(), fileId1);

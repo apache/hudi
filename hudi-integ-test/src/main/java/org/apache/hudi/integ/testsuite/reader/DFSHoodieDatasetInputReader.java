@@ -274,7 +274,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   private Iterator<IndexedRecord> readColumnarOrLogFiles(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
       // Read the base files using the latest writer schema.
-      HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(new HoodieSchema.Parser().parse(schemaStr), false);
+      HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(new HoodieSchema.Parser().parse(schemaStr));
       HoodieAvroFileReader reader = TypeUtils.unsafeCast(HoodieIOFactory.getIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(

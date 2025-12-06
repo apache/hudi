@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -35,7 +37,6 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,11 +83,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void simpleInsertTest(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -117,11 +118,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testSimpleUpsert(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -146,7 +147,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       updatedRecords.forEach(record -> {
         HoodieRecord rec = records.get(((GenericRecord) record).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
         try {
-          assertEquals(((HoodieAvroRecord) rec).getData().getInsertValue(schema).get(), record);
+          assertEquals(((HoodieAvroRecord) rec).getData().getInsertValue(schema.toAvroSchema()).get(), record);
         } catch (IOException io) {
           throw new UncheckedIOException(io);
         }
@@ -158,12 +159,12 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testAllMapOperations(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
 
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -217,11 +218,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void simpleTestWithException(ExternalSpillableMap.DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records = new ExternalSpillableMap<>(16L,
         failureOutputPath, new DefaultSizeEstimator(),
-        new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
+        new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -242,11 +243,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
                                                                  boolean isCompressionEnabled) throws IOException,
       URISyntaxException {
 
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       List<String> recordKeys = new ArrayList<>();
       // Ensure we spill to disk
@@ -260,7 +261,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       String key = recordKeys.get(0);
       HoodieAvroRecord record = (HoodieAvroRecord) records.get(key);
       List<IndexedRecord> recordsToUpdate = new ArrayList<>();
-      recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
+      recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema.toAvroSchema()).get());
 
       String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
       List<String> keysToBeUpdated = new ArrayList<>();
@@ -270,7 +271,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
           SchemaTestUtil.updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
       // Upsert this updated record
       SpillableMapTestUtils.upsertRecords(updatedRecords, records);
-      GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
+      GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema.toAvroSchema()).get();
       // The record returned for this key should have the updated commitTime
       assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
 
@@ -278,7 +279,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       key = recordKeys.get(recordKeys.size() - 1);
       record = (HoodieAvroRecord) records.get(key);
       recordsToUpdate = new ArrayList<>();
-      recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
+      recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema.toAvroSchema()).get());
 
       newCommitTime = InProcessTimeGenerator.createNewInstantTime();
       keysToBeUpdated = new ArrayList<>();
@@ -287,7 +288,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       updatedRecords = SchemaTestUtil.updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
       // Upsert this updated record
       SpillableMapTestUtils.upsertRecords(updatedRecords, records);
-      gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
+      gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema.toAvroSchema()).get();
       // The record returned for this key should have the updated instantTime
       assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
     }
@@ -299,11 +300,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
                                                        boolean isCompressionEnabled) throws IOException,
       URISyntaxException {
 
-    Schema schema = SchemaTestUtil.getSimpleSchema();
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<String> recordKeys = new ArrayList<>();
@@ -321,7 +322,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       String key = recordKeys.get(0);
       HoodieRecord record = records.get(key);
       // Get the field we want to update
-      String fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING)
+      String fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == HoodieSchemaType.STRING)
           .findAny().get().name();
       // Use a new value to update this field
       String newValue = "update1";
@@ -335,7 +336,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       updatedRecords.forEach(r -> {
         records.put(r.getRecordKey(), r);
       });
-      GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
+      GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema.toAvroSchema()).get();
       // The record returned for this key should have the updated value for the field name
       assertEquals(gRecord.get(fieldName).toString(), newValue);
 
@@ -343,7 +344,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       key = recordKeys.get(recordKeys.size() - 1);
       record = records.get(key);
       // Get the field we want to update
-      fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING).findAny()
+      fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == HoodieSchemaType.STRING).findAny()
           .get().name();
       // Use a new value to update this field
       newValue = "update2";
@@ -357,7 +358,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       updatedRecords.forEach(r -> {
         records.put(r.getRecordKey(), r);
       });
-      gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
+      gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema.toAvroSchema()).get();
       // The record returned for this key should have the updated value for the field name
       assertEquals(gRecord.get(fieldName).toString(), newValue);
     }
@@ -367,11 +368,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testEstimationWithEmptyMap() throws IOException, URISyntaxException {
     final ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.BITCASK;
     final boolean isCompressionEnabled = false;
-    final Schema schema = SchemaTestUtil.getSimpleSchema();
+    final HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) {
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) {
 
       List<String> recordKeys = new ArrayList<>();
       SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -399,10 +400,10 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @MethodSource("testArguments")
   public void testDataCorrectnessWithRecordExistsInDiskMapAndThenUpsertToMem(ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     SizeEstimator keyEstimator = new DefaultSizeEstimator();
-    SizeEstimator valEstimator = new HoodieRecordSizeEstimator(schema);
+    SizeEstimator valEstimator = new HoodieRecordSizeEstimator(schema.toAvroSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
 
@@ -420,7 +421,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     long totalEstimatedSizeWith100Records = (long) ((estimatedPayloadSize * 100) / 0.8);
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(totalEstimatedSizeWith100Records, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) {
+            new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) {
 
       // Insert 100 records and then in-memory map will contain 100 records.
       SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -430,7 +431,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       List<String> singleRecordKey = SpillableMapTestUtils.upsertRecords(singleRecord, records);
 
       // Get the field we want to update
-      String fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING).findAny()
+      String fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == HoodieSchemaType.STRING).findAny()
           .get().name();
       HoodieRecord hoodieRecord = records.get(singleRecordKey.get(0));
       // Use a new value to update this field, the estimate size of this record will be less than the first record.

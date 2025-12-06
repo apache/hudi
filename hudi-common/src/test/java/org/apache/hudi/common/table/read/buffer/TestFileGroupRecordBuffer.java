@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -112,7 +113,7 @@ class TestFileGroupRecordBuffer {
         HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
         "colA", "colB", "colC", "colD"));
 
-    Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
+    HoodieSchema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
 
     TypedProperties props = new TypedProperties();
     if (configureCustomDeleteKey) {
@@ -122,7 +123,7 @@ class TestFileGroupRecordBuffer {
       props.setProperty(DELETE_MARKER, customDeleteValue);
     }
     Throwable exception = assertThrows(IllegalArgumentException.class,
-        () -> new DeleteContext(props, dataSchema));
+        () -> new DeleteContext(props, dataSchema.toAvroSchema()));
     assertEquals("Either custom delete key or marker is not specified",
         exception.getMessage());
   }

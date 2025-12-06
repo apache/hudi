@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -39,7 +40,6 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestBloomIndexTagWithColStats.class, "/exampleSchema.avsc", true);
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestBloomIndexTagWithColStats.class, "/exampleSchema.avsc", true);
 
   @AfterEach
   public void tearDown() throws Exception {
@@ -165,7 +165,7 @@ public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
   }
 
   private GenericRecord generateGenericRecord(String rowKey, String time, int number) {
-    GenericRecord rec = new GenericData.Record(SCHEMA);
+    GenericRecord rec = new GenericData.Record(SCHEMA.toAvroSchema());
     rec.put("_row_key", rowKey);
     rec.put("time", time);
     rec.put("number", number);

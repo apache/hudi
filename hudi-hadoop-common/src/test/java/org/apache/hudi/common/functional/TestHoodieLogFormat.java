@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -435,10 +436,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .withTableVersion(HoodieTableVersion.fromVersionCode(tableVersion))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords = records.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -446,7 +447,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema().toAvroSchema());
     assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
     HoodieLogBlock nextBlock = reader.next();
     assertEquals(DEFAULT_DATA_BLOCK_TYPE, nextBlock.getBlockType(), "The next block should be a data block");
@@ -471,10 +472,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .withFileId("test-fileid1").withInstantTime("100").withStorage(storage)
             .withSizeThreshold(3L * 1024 * 1024 * 1024)
             .build();
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 1000);
     List<IndexedRecord> copyOfRecords = records.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -482,7 +483,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc = new HoodieLogBlock.HoodieLogBlockContentLocation(
         HoodieTestUtils.getStorage(basePath), null, 0, dataBlockContentBytes.length, 0);
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, Option.ofNullable(dataBlockContentBytes), false,
-        logBlockContentLoc, Option.ofNullable(getSimpleSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        logBlockContentLoc, Option.ofNullable(getSimpleSchema().toAvroSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
     long writtenSize = 0;
     int logBlockWrittenNum = 0;
     while (writtenSize < Integer.MAX_VALUE) {
@@ -493,7 +494,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema().toAvroSchema(), true);
     assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
     HoodieLogBlock nextBlock = reader.next();
     assertEquals(DEFAULT_DATA_BLOCK_TYPE, nextBlock.getBlockType(), "The next block should be a data block");
@@ -523,9 +524,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withStorage(storage)
         .build();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> copyOfRecords1 = records1.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -544,7 +545,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords2 = records2.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema()))
         .collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = getDataBlock(dataBlockType, records2, header);
@@ -563,7 +564,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords3 = records3.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema()))
         .collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = getDataBlock(dataBlockType, records3, header);
@@ -571,7 +572,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     Reader reader =
-        HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+        HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema().toAvroSchema());
     assertTrue(reader.hasNext(), "First block should be available");
     HoodieLogBlock nextBlock = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) nextBlock;
@@ -580,7 +581,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         "Read records size should be equal to the written records size");
     assertEquals(convertAvroToSerializableIndexedRecords(copyOfRecords1), recordsRead1,
         "Both records lists should be the same. (ordering guaranteed)");
-    assertEquals(dataBlockRead.getSchema(), getSimpleSchema());
+    assertEquals(dataBlockRead.getSchema(), getSimpleSchema().toAvroSchema());
 
     reader.hasNext();
     nextBlock = reader.next();
@@ -714,7 +715,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                    boolean preTableVersion8)
       throws IOException, URISyntaxException, InterruptedException {
     // Generate 4 delta-log files w/ random records
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 400);
 
@@ -770,7 +771,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                 boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     // Generate 3 delta-log files w/ random records
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 300);
 
@@ -858,7 +859,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                              boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     // Generate 3 delta-log files w/ random records
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 300);
 
@@ -959,7 +960,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     logFile = appendValidBlock(logFile.getPath(), "test-fileId1", "100", 10);
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat.newReader(storage, logFile, SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(storage, logFile, SchemaTestUtil.getSimpleSchema().toAvroSchema());
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should have corrupted block next");
@@ -990,7 +991,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     logFile = appendValidBlock(logFile.getPath(), "test-fileId1", "100", 100);
 
     // Second round of reads - we should be able to read the first and last block
-    reader = HoodieLogFormat.newReader(storage, logFile, SchemaTestUtil.getSimpleSchema());
+    reader = HoodieLogFormat.newReader(storage, logFile, SchemaTestUtil.getSimpleSchema().toAvroSchema());
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should get the 1st corrupted block next");
@@ -1046,7 +1047,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     logFile = appendValidBlock(logFile.getPath(), "test-fileId1", "100", 10);
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat.newReader(storage, logFile, SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(storage, logFile, SchemaTestUtil.getSimpleSchema().toAvroSchema());
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should have corrupted block next");
@@ -1129,7 +1130,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     appendValidBlock(writer.getLogFile().getPath(), "test-fileid1", "100", 10);
 
     // Read data and corrupt block
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema().toAvroSchema());
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
     assertTrue(reader.hasNext(), "We should have corrupted block next");
@@ -1150,7 +1151,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                            boolean isCompressionEnabled,
                                            boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1195,7 +1196,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                            boolean isCompressionEnabled,
                                                            boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1259,7 +1260,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                             boolean isCompressionEnabled,
                                                             boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1330,7 +1331,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                            boolean isCompressionEnabled,
                                                            boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1473,7 +1474,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                                       boolean isCompressionEnabled,
                                                                       boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     String fileId = "test-fileid111";
     Writer writer =
@@ -1583,7 +1584,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   public void testAvroLogRecordReaderWithDisorderDelete(ExternalSpillableMap.DiskMapType diskMapType,
                                                         boolean isCompressionEnabled)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1717,7 +1718,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a Data block and Delete block with same InstantTime (written in same batch)
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1787,7 +1788,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a Data block and Delete block with same InstantTime (written in same batch)
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1840,7 +1841,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                          boolean isCompressionEnabled,
                                                          boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1878,7 +1879,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a 3 Data blocs with same InstantTime (written in same batch)
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -1933,7 +1934,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                         boolean isCompressionEnabled,
                                                         boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -2057,7 +2058,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @Test
   public void testAvroLogRecordReaderWithRollbackOlderBlocks()
       throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -2118,7 +2119,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a 3 Data blocs with same InstantTime (written in same batch)
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -2213,7 +2214,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // CRPB implies a corrupt block and CB implies a compacted block.
 
     // Write a 3 Data blocks with same InstantTime (written in same batch)
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -2414,7 +2415,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                               boolean enableOptimizedLogBlocksScan) {
     try {
       // Write one Data block with same InstantTime (written in same batch)
-      Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+      Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> records = testUtil.generateHoodieTestRecords(0, 101);
       List<IndexedRecord> records2 = new ArrayList<>(records);
@@ -2521,10 +2522,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords1 = records1.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -2534,14 +2535,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // append 100 more records
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords2 = records2.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records2, header);
     writer.appendBlock(dataBlock);
 
     // append 100 more records
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords3 = records3.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema()))
         .collect(Collectors.toList());
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records3, header);
     writer.appendBlock(dataBlock);
@@ -2550,7 +2551,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), storage.getPathInfo(writer.getLogFile().getPath()).getLength());
-    try (HoodieLogFileReader reader = new HoodieLogFileReader(storage, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, true)) {
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(storage, logFile, SchemaTestUtil.getSimpleSchema().toAvroSchema(), BUFFER_SIZE, true)) {
 
       assertTrue(reader.hasPrev(), "Last block should be available");
       HoodieLogBlock prevBlock = reader.prev();
@@ -2591,7 +2592,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -2635,7 +2636,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(),
         storage.getPathInfo(writer.getLogFile().getPath()).getLength());
 
-    try (HoodieLogFileReader reader = new HoodieLogFileReader(storage, logFile, schema, BUFFER_SIZE, true)) {
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(storage, logFile, schema.toAvroSchema(), BUFFER_SIZE, true)) {
 
       assertTrue(reader.hasPrev(), "Last block should be available");
       HoodieLogBlock block = reader.prev();
@@ -2653,10 +2654,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords1 = records1.stream()
-        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -2677,7 +2678,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(),
         storage.getPathInfo(writer.getLogFile().getPath()).getLength());
     try (HoodieLogFileReader reader =
-             new HoodieLogFileReader(storage, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, true)) {
+             new HoodieLogFileReader(storage, logFile, SchemaTestUtil.getSimpleSchema().toAvroSchema(), BUFFER_SIZE, true)) {
 
       assertTrue(reader.hasPrev(), "Third block should be available");
       reader.moveToPrev();
@@ -2704,16 +2705,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // HoodieLogFormatVersion.DEFAULT_VERSION has been deprecated so we cannot
     // create a writer for it. So these tests are only for the HoodieAvroDataBlock
     // of older version.
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> recordsCopy = convertAvroToSerializableIndexedRecords(new ArrayList<>(records));
     assertEquals(100, records.size());
     assertEquals(100, recordsCopy.size());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), schema);
-    byte[] content = dataBlock.getBytes(schema);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), schema.toAvroSchema());
+    byte[] content = dataBlock.getBytes(schema.toAvroSchema());
     assertTrue(content.length > 0);
 
-    HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema);
+    HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema.toAvroSchema());
     assertEquals(HoodieLogBlockType.AVRO_DATA_BLOCK, logBlock.getBlockType());
     List<IndexedRecord> readRecords = getRecords((HoodieAvroDataBlock) logBlock);
     assertEquals(readRecords.size(), recordsCopy.size());
@@ -2746,7 +2747,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     List<GenericRecord> records = SchemaTestUtil.generateTestGenericRecords(0, 1000);
 
-    Schema schema = getSimpleSchema();
+    HoodieSchema schema = getSimpleSchema();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header =
         new HashMap<HoodieLogBlock.HeaderMetadataType, String>() {
@@ -2766,7 +2767,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Schema projectedSchema = HoodieAvroUtils.generateProjectionSchema(schema, Collections.singletonList("name"));
+    Schema projectedSchema = HoodieAvroUtils.generateProjectionSchema(schema.toAvroSchema(), Collections.singletonList("name"));
 
     List<GenericRecord> projectedRecords = HoodieAvroUtils.rewriteRecords(records, projectedSchema);
 
@@ -2925,7 +2926,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.close();
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), SchemaTestUtil.getSimpleSchema().toAvroSchema());
 
     assertTrue(reader.hasNext(), "First block should be available");
     reader.next();

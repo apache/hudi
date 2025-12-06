@@ -317,7 +317,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     initMetaClient(tableType, props);
     String partition = "partA";
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(
-        metaClient, addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA));
+        metaClient, addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA.toAvroSchema()));
     String fileId = UUID.randomUUID().toString();
     HoodieRecord tripRecord = createSimpleRecord("key1", "2016-01-31T03:16:41.415Z", 123);
     String instantTime1 = "001";

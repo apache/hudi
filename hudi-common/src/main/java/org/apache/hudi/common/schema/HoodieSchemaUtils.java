@@ -75,6 +75,18 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Adds Hudi metadata fields to the given schema with the withOperationField flag set as false.
+   * This is equivalent to HoodieAvroUtils#.addMetadataFields() but operates on HoodieSchema.
+   *
+   * @param schema             the input schema
+   * @return new HoodieSchema with metadata fields added
+   * @throws IllegalArgumentException if schema is null
+   */
+  public static HoodieSchema addMetadataFields(HoodieSchema schema) {
+    return addMetadataFields(schema, false);
+  }
+
+  /**
    * Adds Hudi metadata fields to the given schema.
    * This is equivalent to HoodieAvroUtils.addMetadataFields() but operates on HoodieSchema.
    *

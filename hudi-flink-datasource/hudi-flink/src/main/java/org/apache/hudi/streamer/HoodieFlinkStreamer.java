@@ -73,7 +73,7 @@ public class HoodieFlinkStreamer {
     Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     // Read from kafka source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf).toAvroSchema())
             .getLogicalType();
 
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();

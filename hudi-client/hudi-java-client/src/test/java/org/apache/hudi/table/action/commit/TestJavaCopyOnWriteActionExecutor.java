@@ -28,6 +28,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -47,7 +48,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -83,7 +83,7 @@ import static org.mockito.Mockito.when;
 public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarness {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestJavaCopyOnWriteActionExecutor.class);
-  private static final Schema SCHEMA = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
 
   @Test
   public void testMakeNewPath() {

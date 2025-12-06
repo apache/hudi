@@ -19,13 +19,13 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;
 import com.twitter.bijection.avro.GenericAvroCodecs;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -51,12 +51,17 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 public class AvroConvertor implements Serializable {
 
   private static final long serialVersionUID = 1L;
+
+  /**
+   * Serializable string representation of the schema.
+   */
+  private final String schemaStr;
+
   /**
    * To be lazily initialized on executors.
    */
-  private transient Schema schema;
+  private transient HoodieSchema schema;
 
-  private final String schemaStr;
   private final String invalidCharMask;
   private final boolean shouldSanitize;
 
@@ -64,7 +69,6 @@ public class AvroConvertor implements Serializable {
    * To be lazily initialized on executors.
    */
   private transient MercifulJsonConverter jsonConverter;
-
 
   /**
    * To be lazily initialized on executors.
@@ -81,27 +85,25 @@ public class AvroConvertor implements Serializable {
     this.invalidCharMask = invalidCharMask;
   }
 
-  public AvroConvertor(Schema schema) {
-    this(schema, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
+  public AvroConvertor(HoodieSchema hoodieSchema) {
+    this(hoodieSchema, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
   }
 
-  public AvroConvertor(Schema schema, boolean shouldSanitize, String invalidCharMask) {
-    this.schemaStr = schema.toString();
-    this.schema = schema;
+  public AvroConvertor(HoodieSchema hoodieSchema, boolean shouldSanitize, String invalidCharMask) {
+    this.schemaStr = hoodieSchema.toString();
     this.shouldSanitize = shouldSanitize;
     this.invalidCharMask = invalidCharMask;
   }
 
   private void initSchema() {
     if (schema == null) {
-      Schema.Parser parser = new Schema.Parser();
-      schema = parser.parse(schemaStr);
+      schema = HoodieSchema.parse(schemaStr);
     }
   }
 
   private void initInjection() {
     if (recordInjection == null) {
-      recordInjection = GenericAvroCodecs.toBinary(schema);
+      recordInjection = GenericAvroCodecs.toBinary(schema.toAvroSchema());
     }
   }
 
@@ -115,11 +117,11 @@ public class AvroConvertor implements Serializable {
     try {
       initSchema();
       initJsonConvertor();
-      return jsonConverter.convert(json, schema);
+      return jsonConverter.convert(json, schema.toAvroSchema());
     } catch (Exception e) {
       String errorMessage = "Failed to convert JSON string to Avro record: ";
       if (json != null) {
-        throw new HoodieSchemaException(errorMessage + json + "; schema: " + schemaStr, e);
+        throw new HoodieSchemaException(errorMessage + json + "; schema: " + schema, e);
       } else {
         throw new HoodieSchemaException(errorMessage + "JSON string was null.", e);
       }
@@ -136,12 +138,9 @@ public class AvroConvertor implements Serializable {
     return new Left(genericRecord);
   }
 
-  public Schema getSchema() {
-    try {
-      return new Schema.Parser().parse(schemaStr);
-    } catch (Exception e) {
-      throw new HoodieSchemaException("Failed to parse json schema: " + schemaStr, e);
-    }
+  public HoodieSchema getSchema() {
+    initSchema();
+    return schema;
   }
 
   public GenericRecord fromAvroBinary(byte[] avroBinary) {
@@ -174,10 +173,10 @@ public class AvroConvertor implements Serializable {
   public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
     initSchema();
     GenericRecord recordValue = (GenericRecord) consumerRecord.value();
-    GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema);
-    for (Schema.Field field :  recordValue.getSchema().getFields()) {
+    GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema.toAvroSchema());
+    recordValue.getSchema().getFields().forEach(field -> {
       recordBuilder.set(field, recordValue.get(field.name()));
-    }
+    });
     String recordKey = StringUtils.objToString(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());

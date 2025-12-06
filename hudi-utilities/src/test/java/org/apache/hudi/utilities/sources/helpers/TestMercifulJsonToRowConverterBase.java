@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.stats.ValueType;
@@ -29,7 +30,6 @@ import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -81,7 +81,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
 
   @Test
   void basicConversion() throws IOException {
-    Schema simpleSchema = SchemaTestUtil.getSchema(SIMPLE_AVRO_WITH_DEFAULT);
+    HoodieSchema simpleSchema = SchemaTestUtil.getSchema(SIMPLE_AVRO_WITH_DEFAULT);
     String name = "John Smith";
     int number = 1337;
     String color = "Blue. No yellow!";
@@ -104,7 +104,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @ParameterizedTest
   @MethodSource("dataNestedJsonAsString")
   void nestedJsonAsString(String nameInput) throws IOException {
-    Schema simpleSchema = SchemaTestUtil.getSimpleSchema();
+    HoodieSchema simpleSchema = SchemaTestUtil.getSimpleSchema();
     int number = 1337;
     String color = "Blue. No yellow!";
 
@@ -140,7 +140,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     data.put("decimalField", num);
     String json = MAPPER.writeValueAsString(data);
 
-    Schema schema = SchemaTestUtil.getSchema(DECIMAL_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(DECIMAL_AVRO_FILE_PATH);
 
     Row expectRow = RowFactory.create(bigDecimal);
     Row realRow = getConverter().convertToRow(json, schema);
@@ -156,7 +156,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @ParameterizedTest
   @MethodSource("decimalBadCases")
   void decimalLogicalTypeInvalidCaseTest(String avroFile, String strInput, Double numInput, boolean testFixedByteArray) throws IOException {
-    Schema schema = SchemaTestUtil.getSchema(avroFile);
+    HoodieSchema schema = SchemaTestUtil.getSchema(avroFile);
 
     Map<String, Object> data = new HashMap<>();
     if (strInput != null) {
@@ -190,7 +190,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     BigDecimal bigDecimal = new BigDecimal(groundTruth);
     Map<String, Object> data = new HashMap<>();
 
-    Schema schema = SchemaTestUtil.getSchema(avroFilePath);
+    HoodieSchema schema = SchemaTestUtil.getSchema(avroFilePath);
 
     // Decide the decimal field input according to the test dimension.
     if (strInput != null) {
@@ -200,9 +200,9 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     } else if (testFixedByteArray) {
       // Fixed byte array input.
       // Example: 123.45 - byte array [0, 0, 48, 57].
-      Schema fieldSchema = schema.getField("decimalField").schema();
+      HoodieSchema fieldSchema = schema.getField("decimalField").get().schema();
       GenericFixed fixedValue = new Conversions.DecimalConversion().toFixed(
-          bigDecimal, fieldSchema, fieldSchema.getLogicalType());
+          bigDecimal, fieldSchema.toAvroSchema(), fieldSchema.toAvroSchema().getLogicalType());
       // Convert the fixed value to int array, which is used as json value literals.
       byte[] byteArray = fixedValue.bytes();
       int[] intArray = new int[byteArray.length];
@@ -226,7 +226,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @ParameterizedTest
   @MethodSource("zeroScaleDecimalCases")
   void zeroScaleDecimalConversion(String inputValue, String expected, boolean shouldConvert) {
-    Schema schema = new Schema.Parser().parse(
+    HoodieSchema schema = HoodieSchema.parse(
         "{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\","
             + "\"fields\": [{\"name\": \"decimalField\", \"type\": {\"type\": \"bytes\", "
             + "\"logicalType\": \"decimal\", \"precision\": 38, \"scale\": 0}}]}");
@@ -267,7 +267,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     buffer.putInt(days); // days
     buffer.putInt(milliseconds); // milliseconds
     buffer.flip();
-    Schema schema = SchemaTestUtil.getSchema(DURATION_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(DURATION_AVRO_FILE_PATH);
 
     // Duration type is not supported in Row object.
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
@@ -284,7 +284,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     data.put("duration", input);
     String json = MAPPER.writeValueAsString(data);
 
-    Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(schemaFile);
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResourceFilePath(schemaFile);
     // Schedule with timestamp same as that of committed instant
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
       getConverter().convertToRow(json, schema);
@@ -305,7 +305,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @MethodSource("dateProviderForRow")
   void dateLogicalTypeTest(String groundTruthRow, Object dateInput) throws IOException {
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(DATE_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(DATE_AVRO_FILE_PATH);
 
     Map<String, Object> data = new HashMap<>();
     data.put("dateField", dateInput);
@@ -338,7 +338,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @Test
   void dateLogicalTypeTest() throws IOException {
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(DATE_AVRO_INVALID_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(DATE_AVRO_INVALID_FILE_PATH);
 
     Map<String, Object> data = new HashMap<>();
     data.put("dateField", 1);
@@ -394,7 +394,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
       long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
 
       // Define the schema for the date logical type
-      Schema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
+      HoodieSchema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
 
       Map<String, Object> data = new HashMap<>();
       data.put("localTimestampMillisField", timeMilli);
@@ -413,7 +413,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   void localTimestampLogicalTypeBadTest(
       String schemaFile, Object input) throws IOException {
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(schemaFile);
+    HoodieSchema schema = SchemaTestUtil.getSchema(schemaFile);
     Map<String, Object> data = new HashMap<>();
     data.put("timestamp", input);
     String json = MAPPER.writeValueAsString(data);
@@ -441,7 +441,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     long milliSecOfDay = expectedMicroSecOfDay / 1000;
 
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
 
     Map<String, Object> data = new HashMap<>();
     data.put("timestampMillisField", timeMilli);
@@ -464,7 +464,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @MethodSource("timestampBadCaseProvider")
   void timestampLogicalTypeBadTest(Object input) throws IOException {
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
     Map<String, Object> data = new HashMap<>();
     data.put("timestampMillisField", input);
     data.put("timestampMicrosField", input);
@@ -493,7 +493,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     int milliSecOfDay = (int) (expectedMicroSecOfDay / 1000); // Represents 12h 30 min since the start of the day
 
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(TIME_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(TIME_AVRO_FILE_PATH);
 
     Map<String, Object> data = new HashMap<>();
     data.put("timeMicroField", timeMicro);
@@ -512,7 +512,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   void timeLogicalTypeBadCaseTest(Object invalidInput) throws IOException {
     String validInput = "00:00:00";
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(TIME_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResourceFilePath(TIME_AVRO_FILE_PATH);
 
     // Only give one of the field invalid value at a time so that both processor type can have coverage.
     Map<String, Object> data = new HashMap<>();
@@ -545,7 +545,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   @MethodSource("uuidDimension")
   void uuidLogicalTypeTest(String uuid) throws IOException {
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(UUID_AVRO_FILE_PATH);
+    HoodieSchema schema = SchemaTestUtil.getSchema(UUID_AVRO_FILE_PATH);
 
     Map<String, Object> data = new HashMap<>();
     data.put("uuidField", uuid);
@@ -566,7 +566,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
             "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\",\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
     String json = isString ? String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":\"%s\"}}", contactInput)
         : String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":%s}}", contactInput);
-    Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
+    HoodieSchema nestedSchema = HoodieSchema.parse(nestedSchemaStr);
 
     Row expected = RowFactory.create("Jane Smith", RowFactory.create(contactInput));
     Row real = getConverter().convertToRow(json, nestedSchema);
@@ -580,7 +580,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
         "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"__name\", \"type\": \"string\"}, "
             +
             "{\"name\": \"favorite__number\", \"type\": \"int\"}, {\"name\": \"favorite__color__\", \"type\": \"string\"}]}";
-    Schema sanitizedSchema = Schema.parse(sanitizedSchemaString);
+    HoodieSchema sanitizedSchema = HoodieSchema.parse(sanitizedSchemaString);
     String name = "John Smith";
     int number = 1337;
     String color = "Blue. No yellow!";
@@ -605,7 +605,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     String schemaStringWithAliases = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"name\", \"type\": \"string\", \"aliases\": [\"$name\"]}, "
         + "{\"name\": \"favorite_number\",  \"type\": \"int\", \"aliases\": [\"unused\", \"favorite-number\"]}, {\"name\": \"favorite_color\", \"type\": \"string\", \"aliases\": "
         + "[\"favorite.color!\"]}, {\"name\": \"unmatched\", \"type\": \"string\", \"default\": \"default_value\"}]}";
-    Schema sanitizedSchema = new Schema.Parser().parse(schemaStringWithAliases);
+    HoodieSchema sanitizedSchema = HoodieSchema.parse(schemaStringWithAliases);
     String name = "John Smith";
     int number = 1337;
     String color = "Blue. No yellow!";
@@ -646,11 +646,11 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     data.put("fare", rand.nextDouble() * 100);
     data.put("_hoodie_is_deleted", false);
     String json = MAPPER.writeValueAsString(data);
-    Schema tripSchema = new Schema.Parser().parse(
+    HoodieSchema tripSchema = HoodieSchema.parse(
         TRIP_ENCODED_DECIMAL_SCHEMA.replace("6", Integer.toString(scale)).replace("10", Integer.toString(precision)));
     Row rec = getConverter().convertToRow(json, tripSchema);
     validateSchemaCompatibility(Collections.singletonList(rec), tripSchema);
-    BigDecimal actualField = rec.getDecimal(tripSchema.getField("decfield").pos());
+    BigDecimal actualField = rec.getDecimal(tripSchema.getField("decfield").get().pos());
     assertEquals(decfield, actualField);
   }
 
@@ -666,7 +666,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
         + "\"precision\":%d,\"scale\":%d},\"doc\":\"\"},{\"name\":\"driver\",\"type\":\"string\","
         + "\"doc\":\"\"},{\"name\":\"fare\",\"type\":\"double\",\"doc\":\"\"},{\"name\":\"_hoodie_is_deleted\","
         + "\"type\":\"boolean\",\"doc\":\"\"}]}", size, precision, scale);
-    Schema postProcessSchema = new Schema.Parser().parse(postProcessSchemaString);
+    HoodieSchema postProcessSchema = HoodieSchema.parse(postProcessSchemaString);
     BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
         .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
     Map<String, Object> data = new HashMap<>();
@@ -680,13 +680,13 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
     data.put("_hoodie_is_deleted", false);
     String json = MAPPER.writeValueAsString(data);
     Row rec = getConverter().convertToRow(json, postProcessSchema);
-    BigDecimal actualField = rec.getDecimal(postProcessSchema.getField("decfield").pos());
+    BigDecimal actualField = rec.getDecimal(postProcessSchema.getField("decfield").get().pos());
     validateSchemaCompatibility(Collections.singletonList(rec), postProcessSchema);
     assertEquals(decfield, actualField);
   }
 
-  private void validateSchemaCompatibility(List<Row> rows, Schema schema) {
-    StructType rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+  private void validateSchemaCompatibility(List<Row> rows, HoodieSchema schema) {
+    StructType rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema());
     Dataset<Row> dataset = spark.createDataFrame(rows, rowSchema);
     assertDoesNotThrow(dataset::collect, "Schema validation and dataset creation should not throw any exceptions.");
   }
