@@ -116,6 +116,16 @@ public enum MetadataPartitionType {
 
     @Override
     public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+      if (older.indexedRecord != null) {
+        constructMetadataPayload(older, older.indexedRecord);
+        older.indexedRecord = null;
+      }
+
+      if (newer.indexedRecord != null) {
+        constructMetadataPayload(newer, newer.indexedRecord);
+        newer.indexedRecord = null;
+      }
+
       checkArgument(older.getColumnStatMetadata().isPresent());
       checkArgument(newer.getColumnStatMetadata().isPresent());
 
@@ -141,19 +151,13 @@ public enum MetadataPartitionType {
         checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
             String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
       } else {
-        payload.bloomFilterMetadata = new HoodieMetadataBloomFilter(
+        payload.setBloomFilterMetadata(new HoodieMetadataBloomFilter(
             (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
             (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
             (ByteBuffer) bloomFilterRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
-            (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
+            (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED))
         );
       }
-    }
-
-    @Override
-    public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
-      // Bloom filters are always additive. No need to merge with previous bloom filter
-      return new HoodieMetadataPayload(newer.key, newer.bloomFilterMetadata);
     }
   },
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
@@ -169,14 +173,14 @@ public enum MetadataPartitionType {
       if (recordIndexRecord.hasField(RECORD_INDEX_FIELD_POSITION)) {
         recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
       }
-      payload.recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
+      payload.setRecordIndexMetadata(new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
           Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
           recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
           Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
-          recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
+          recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null));
     }
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
@@ -220,7 +224,7 @@ public enum MetadataPartitionType {
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
       checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
-      payload.secondaryIndexMetadata = new HoodieSecondaryIndexInfo((Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
+      payload.setSecondaryIndexMetadata(new HoodieSecondaryIndexInfo((Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED)));
     }
 
     @Override
@@ -248,6 +252,16 @@ public enum MetadataPartitionType {
 
     @Override
     public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+      if (older.indexedRecord != null) {
+        constructMetadataPayload(older, older.indexedRecord);
+        older.indexedRecord = null;
+      }
+
+      if (newer.indexedRecord != null) {
+        constructMetadataPayload(newer, newer.indexedRecord);
+        newer.indexedRecord = null;
+      }
+
       checkArgument(older.getColumnStatMetadata().isPresent());
       checkArgument(newer.getColumnStatMetadata().isPresent());
 
@@ -287,7 +301,7 @@ public enum MetadataPartitionType {
   private static void constructFilesMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
     Map<String, HoodieMetadataFileInfo> metadata = getNestedFieldValue(record, SCHEMA_FIELD_NAME_METADATA);
     if (metadata != null) {
-      payload.filesystemMetadata = metadata;
+      payload.setFilesystemMetadata(metadata);
       payload.filesystemMetadata.keySet().forEach(k -> {
         GenericRecord v = payload.filesystemMetadata.get(k);
         payload.filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
@@ -322,7 +336,7 @@ public enum MetadataPartitionType {
       if (columnStatsRecord.hasField(COLUMN_STATS_FIELD_IS_TIGHT_BOUND)) {
         columnStatsBuilder.setIsTightBound((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_TIGHT_BOUND));
       }
-      payload.columnStatMetadata = columnStatsBuilder.build();
+      payload.setColumnStatMetadata(columnStatsBuilder.build());
     }
   }
 

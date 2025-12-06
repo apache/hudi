@@ -2905,6 +2905,16 @@ public class HoodieTableMetadataUtil {
   }
 
   public static Map<String, HoodieMetadataFileInfo> combineFileSystemMetadata(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+    if (older.indexedRecord != null) {
+      MetadataPartitionType.FILES.constructMetadataPayload(older, older.indexedRecord);
+      older.indexedRecord = null;
+    }
+
+    if (newer.indexedRecord != null) {
+      MetadataPartitionType.FILES.constructMetadataPayload(newer, newer.indexedRecord);
+      newer.indexedRecord = null;
+    }
+
     Map<String, HoodieMetadataFileInfo> combinedFileInfo = new HashMap<>();
     // First, add all files listed in the previous record
     if (older.filesystemMetadata != null) {

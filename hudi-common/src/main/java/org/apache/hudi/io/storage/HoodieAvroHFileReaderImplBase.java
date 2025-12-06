@@ -37,7 +37,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getBinaryDecoder;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     implements HoodieSeekingFileReader<IndexedRecord> {
@@ -87,7 +86,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     }
   }
 
-  protected static GenericRecord deserialize(final byte[] keyBytes, int keyOffset, int keyLength,
+  public static GenericRecord deserialize(String key,
                                              final byte[] valueBytes, int valueOffset, int valueLength,
                                              GenericDatumReader<GenericRecord> datumReader,
                                              HoodieSchemaField keyFieldSchema) throws IOException {
@@ -98,12 +97,12 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     }
     final Object keyObject = avroRecord.get(keyFieldSchema.pos());
     if (keyObject != null && keyObject.toString().isEmpty()) {
-      avroRecord.put(keyFieldSchema.pos(), fromUTF8Bytes(keyBytes, keyOffset, keyLength));
+      avroRecord.put(keyFieldSchema.pos(), key);
     }
     return avroRecord;
   }
 
-  static Option<HoodieSchemaField> getKeySchema(HoodieSchema schema) {
+  public static Option<HoodieSchemaField> getKeySchema(HoodieSchema schema) {
     return schema.getType() != HoodieSchemaType.RECORD ? Option.empty() : schema.getField(KEY_FIELD_NAME);
   }
 }
