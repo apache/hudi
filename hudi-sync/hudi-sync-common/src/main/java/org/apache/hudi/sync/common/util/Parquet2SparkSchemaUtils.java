@@ -21,6 +21,7 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
@@ -78,7 +79,9 @@ public class Parquet2SparkSchemaUtils {
         switch (originalType) {
           case INT_8: return "byte";
           case INT_16: return "short";
-          case INT_32: return "integer";
+          case INT_32:
+          case TIME_MILLIS:
+            return "integer";
           case DATE: return "date";
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","
@@ -90,13 +93,19 @@ public class Parquet2SparkSchemaUtils {
           return "long";
         }
         switch (originalType)  {
-          case INT_64: return "long";
+          case INT_64:
+          case TIME_MICROS:
+            return "long";
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","
                     + field.getDecimalMetadata().getScale() + ")";
           case TIMESTAMP_MICROS:
           case TIMESTAMP_MILLIS:
-            return "timestamp";
+            if (((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) field.getLogicalTypeAnnotation()).isAdjustedToUTC()) {
+              return "timestamp";
+            } else {
+              return "timestamp_ntz";
+            }
           default:
             throw new UnsupportedOperationException("Unsupport convert " + typeName + " to spark sql type");
         }
@@ -120,6 +129,9 @@ public class Parquet2SparkSchemaUtils {
         }
 
       case FIXED_LEN_BYTE_ARRAY:
+        if (originalType == null) {
+          return "binary";
+        }
         switch (originalType) {
           case DECIMAL:
             return "decimal(" + field.getDecimalMetadata().getPrecision() + ","

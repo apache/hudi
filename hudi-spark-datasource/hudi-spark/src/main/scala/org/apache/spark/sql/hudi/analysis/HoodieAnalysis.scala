@@ -195,22 +195,24 @@ object HoodieAnalysis extends SparkAdapterSupport {
           // NOTE: In case of [[MergeIntoTable]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
           case mit@MatchMergeIntoTable(targetTable, query, _) =>
-            val updatedTargetTable = targetTable match {
-              //Do not remove the meta cols here anymore
-              case ResolvesToHudiTable(_) => Some(targetTable)
-              case _ => None
-            }
-
-            val updatedQuery = query match {
-              // In the producing side of the MIT, we simply check whether the query will be yielding
-              // Hudi meta-fields attributes. In cases when it does we simply project them out
-              //
-              // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
-              //       since, unfortunately, there's no reliable way for us to control the ordering of the
-              //       application of the rules (during next iteration we might not even reach this rule again),
-              //       therefore we have to make sure projection is handled in a single pass
-              case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
-              case _ => None
+            val (updatedTargetTable, updatedQuery) = targetTable match {
+              case ResolvesToHudiTable(_) => {
+                // Do not remove the meta cols here anymore
+                val updatedTarget = Some(targetTable)
+                val updatedQuery = query match {
+                  // In the producing side of the MIT, we simply check whether the query will be yielding
+                  // Hudi meta-fields attributes. In cases when it does we simply project them out
+                  //
+                  // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
+                  //       since, unfortunately, there's no reliable way for us to control the ordering of the
+                  //       application of the rules (during next iteration we might not even reach this rule again),
+                  //       therefore we have to make sure projection is handled in a single pass
+                  case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
+                  case _ => None
+                }
+                (updatedTarget, updatedQuery)
+              }
+              case _ => (None, None)
             }
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
@@ -225,23 +227,25 @@ object HoodieAnalysis extends SparkAdapterSupport {
           // NOTE: In case of [[InsertIntoStatement]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
           case iis @ MatchInsertIntoStatement(targetTable, _, _, query, _, _) =>
-            val updatedTargetTable = targetTable match {
+            val (updatedTargetTable, updatedQuery) = targetTable match {
               // In the receiving side of the IIS, we can't project meta-field attributes out,
               // and instead have to explicitly remove them
-              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
-              case _ => None
-            }
-
-            val updatedQuery = query match {
-              // In the producing side of the MIT, we simply check whether the query will be yielding
-              // Hudi meta-fields attributes. In cases when it does we simply project them out
-              //
-              // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
-              //       since, unfortunately, there's no reliable way for us to control the ordering of the
-              //       application of the rules (during next iteration we might not even reach this rule again),
-              //       therefore we have to make sure projection is handled in a single pass
-              case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
-              case _ => None
+              case ResolvesToHudiTable(_) => {
+                val updatedTarget = Some(stripMetaFieldsAttributes(targetTable))
+                val updatedQuery = query match {
+                  // In the producing side of the IIS, we simply check whether the query will be yielding
+                  // Hudi meta-fields attributes. In cases when it does we simply project them out
+                  //
+                  // NOTE: We have to handle both cases when [[query]] is fully resolved and when it's not,
+                  //       since, unfortunately, there's no reliable way for us to control the ordering of the
+                  //       application of the rules (during next iteration we might not even reach this rule again),
+                  //       therefore we have to make sure projection is handled in a single pass
+                  case ProducesHudiMetaFields(output) => Some(projectOutMetaFieldsAttributes(query, output))
+                  case _ => None
+                }
+                (updatedTarget, updatedQuery)
+              }
+              case _ => (None, None)
             }
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
