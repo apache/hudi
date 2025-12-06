@@ -84,7 +84,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
                              Option<byte[]> content,
                              boolean readBlockLazily,
                              HoodieLogBlockContentLocation logBlockContentLocation,
-                             Option<Schema> readerSchema,
+                             Option<HoodieSchema> readerSchema,
                              Map<HeaderMetadataType, String> header,
                              Map<FooterMetadataType, String> footer,
                              String keyField) {

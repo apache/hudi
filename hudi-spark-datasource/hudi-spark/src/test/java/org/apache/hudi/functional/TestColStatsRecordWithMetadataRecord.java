@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -204,8 +205,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     HoodieCreateHandle handle = new HoodieCreateHandle(mdtWriteConfig, newCommitTime, table, COLUMN_STATS.getPartitionPath(), "col-stats-00001-0", new PhoneyTaskContextSupplier());
 
     // write the record to hfile.
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    HoodieSchema writeSchema = HoodieSchema.parse(mdtWriteConfig.getSchema());
+    HoodieSchema writeSchema = HoodieSchemaCache.intern(HoodieSchema.parse(mdtWriteConfig.getSchema()));
     TypedProperties properties = new TypedProperties();
     columnStatsRecords.forEach(record -> handle.write(record, writeSchema, properties));
     WriteStatus writeStatus = (WriteStatus) handle.close().get(0);

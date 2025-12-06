@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -113,15 +113,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
-                              HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
+                              HoodieTable<T, I, K, O> hoodieTable, Option<HoodieSchema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    this.writeSchema = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config).toAvroSchema())));
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged
-    this.writeSchemaWithMetaFields = HoodieSchema.fromAvroSchema(AvroSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()).toAvroSchema()));
+    this.writeSchema = HoodieSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
+    this.writeSchemaWithMetaFields = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;

@@ -42,7 +42,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.TestBaseHoodieTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,7 +131,7 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
   @Test
   public void testConstructorWithOverriddenSchema() {
-    Schema overridenSchema = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
+    HoodieSchema overridenSchema = HoodieSchema.parse(TRIP_FLATTENED_SCHEMA);
 
     HoodieCreateHandle handleWithOverridenSchema = new HoodieCreateHandle<>(
         writeConfig, TEST_INSTANT_TIME, hoodieTable, TEST_PARTITION_PATH,

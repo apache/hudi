@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -87,8 +88,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           partialUpdateModeOpt);
     }
 
-    // TODO: Add HoodieSchemaCache#intern after #14374 is merged (this schema is interned originaly)
-    HoodieSchema schema = recordsIteratorSchemaPair.getRight();
+    HoodieSchema schema = HoodieSchemaCache.intern(recordsIteratorSchemaPair.getRight());
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {

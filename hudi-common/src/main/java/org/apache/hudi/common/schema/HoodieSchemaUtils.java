@@ -536,26 +536,4 @@ public final class HoodieSchemaUtils {
     HoodieSchema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
     return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
   }
-
-  /**
-   * Removes specified fields from the schema.
-   * This is equivalent to HoodieAvroUtils.removeFields() but operates on HoodieSchema.
-   *
-   * <p>This method creates a new schema with only the fields that are not in the fieldsToRemove set.
-   * All other schema metadata (name, namespace, doc, properties) is preserved from the original schema.</p>
-   *
-   * @param schema         the input schema
-   * @param fieldsToRemove set of field names to remove from the schema
-   * @return new HoodieSchema with specified fields removed
-   * @throws IllegalArgumentException if schema is null or fieldsToRemove is null
-   * @since 1.2.0
-   */
-  public static HoodieSchema removeFields(HoodieSchema schema, Set<String> fieldsToRemove) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-    ValidationUtils.checkArgument(fieldsToRemove != null, "Fields to remove cannot be null");
-
-    // Delegate to HoodieAvroUtils
-    Schema resultAvro = HoodieAvroUtils.removeFields(schema.toAvroSchema(), fieldsToRemove);
-    return HoodieSchema.fromAvroSchema(resultAvro);
-  }
 }
