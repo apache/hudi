@@ -20,7 +20,6 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
@@ -93,21 +92,9 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceHoodieSchema() {
-    Schema schema = getSourceSchema();
-    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
-  }
-
-  @Override
   @Deprecated
   public Schema getSourceSchema() {
     return sourceSchema;
-  }
-
-  @Override
-  public HoodieSchema getTargetHoodieSchema() {
-    Schema schema = targetSchema;
-    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
   }
 
   @Override
