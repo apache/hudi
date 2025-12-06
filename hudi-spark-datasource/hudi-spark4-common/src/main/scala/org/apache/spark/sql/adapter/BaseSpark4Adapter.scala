@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConverters, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -34,7 +34,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
-import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
+import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters, HoodieSparkSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -72,6 +72,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
+
+  override def getHoodieSchemaConverters: HoodieSchemaConverters = HoodieSparkSchemaConverters
 
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
     cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
