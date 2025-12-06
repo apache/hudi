@@ -89,16 +89,10 @@ case class CreateHoodieTableLikeCommand(targetTable: TableIdentifier,
     CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
 
     val queryAsProp = hoodieCatalogTable.catalogProperties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
-    if (queryAsProp.isEmpty) {
+    if (!hoodieCatalogTable.hoodieTableExists) {
       // init hoodie table for a normal table (not a ro/rt table)
+      // TODO: Find a way to block ro/rt table creation
       hoodieCatalogTable.initHoodieTable()
-    } else {
-      if (!hoodieCatalogTable.hoodieTableExists) {
-        throw new HoodieAnalysisException("Creating ro/rt table need the existence of the base table.")
-      }
-      if (HoodieTableType.MERGE_ON_READ != hoodieCatalogTable.tableType) {
-        throw new HoodieAnalysisException("Creating ro/rt table should only apply to a mor table.")
-      }
     }
 
     try {
