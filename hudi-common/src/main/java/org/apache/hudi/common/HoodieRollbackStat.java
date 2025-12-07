@@ -20,6 +20,8 @@ package org.apache.hudi.common;
 
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 /**
  * Collects stats about a single partition clean operation.
  */
+@Getter
 public class HoodieRollbackStat implements Serializable {
 
   // Partition path
@@ -48,26 +51,6 @@ public class HoodieRollbackStat implements Serializable {
     this.failedDeleteFiles = failedDeleteFiles;
     this.commandBlocksCount = commandBlocksCount;
     this.logFilesFromFailedCommit = logFilesFromFailedCommit;
-  }
-
-  public Map<StoragePathInfo, Long> getCommandBlocksCount() {
-    return commandBlocksCount;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public List<String> getSuccessDeleteFiles() {
-    return successDeleteFiles;
-  }
-
-  public List<String> getFailedDeleteFiles() {
-    return failedDeleteFiles;
-  }
-
-  public Map<String, Long> getLogFilesFromFailedCommit() {
-    return logFilesFromFailedCommit;
   }
 
   public static HoodieRollbackStat.Builder newBuilder() {

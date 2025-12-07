@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,8 +128,11 @@ public class TimelineDiffHelper {
    */
   public static class TimelineDiffResult {
 
+    @Getter
     private final List<HoodieInstant> newlySeenInstants;
+    @Getter
     private final List<HoodieInstant> finishedCompactionInstants;
+    @Getter
     private final List<HoodieInstant> finishedOrRemovedLogCompactionInstants;
     private final boolean canSyncIncrementally;
 
@@ -141,18 +145,6 @@ public class TimelineDiffHelper {
       this.finishedCompactionInstants = finishedCompactionInstants;
       this.finishedOrRemovedLogCompactionInstants = finishedOrRemovedLogCompactionInstants;
       this.canSyncIncrementally = canSyncIncrementally;
-    }
-
-    public List<HoodieInstant> getNewlySeenInstants() {
-      return newlySeenInstants;
-    }
-
-    public List<HoodieInstant> getFinishedCompactionInstants() {
-      return finishedCompactionInstants;
-    }
-
-    public List<HoodieInstant> getFinishedOrRemovedLogCompactionInstants() {
-      return finishedOrRemovedLogCompactionInstants;
     }
 
     public boolean canSyncIncrementally() {

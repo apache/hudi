@@ -19,11 +19,14 @@
 
 package org.apache.hudi.metadata;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
 /**
  * Represents a record index key that requires no encoding (identity encoding).
  */
+@Getter
 public class RecordIndexRawKey implements RawKey {
   private final String recordKey;
 
@@ -34,10 +37,6 @@ public class RecordIndexRawKey implements RawKey {
   @Override
   public String encode() {
     // Identity encoding - return the key as-is
-    return recordKey;
-  }
-
-  public String getRecordKey() {
     return recordKey;
   }
 

@@ -25,10 +25,13 @@ import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import lombok.Getter;
+
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_TYPE;
 
+@Getter
 @EnumDescription("Bootstrap index type to use for mapping between skeleton and actual data files.")
 public enum BootstrapIndexType {
   @EnumFieldDescription("Maintains mapping in HFile format.")
@@ -40,10 +43,6 @@ public enum BootstrapIndexType {
 
   BootstrapIndexType(String className) {
     this.className = className;
-  }
-
-  public String getClassName() {
-    return className;
   }
 
   public static BootstrapIndexType fromClassName(String className) {

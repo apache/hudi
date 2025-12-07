@@ -20,12 +20,15 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Value stored in the bootstrap index.
  */
+@Getter
 public class BootstrapFileMapping implements Serializable, Comparable<BootstrapFileMapping> {
 
   private final String bootstrapBasePath;
@@ -74,26 +77,6 @@ public class BootstrapFileMapping implements Serializable, Comparable<BootstrapF
   @Override
   public int hashCode() {
     return Objects.hash(bootstrapBasePath, bootstrapPartitionPath, partitionPath, bootstrapFileStatus, fileId);
-  }
-
-  public String getBootstrapBasePath() {
-    return bootstrapBasePath;
-  }
-
-  public String getBootstrapPartitionPath() {
-    return bootstrapPartitionPath;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public HoodieFileStatus getBootstrapFileStatus() {
-    return bootstrapFileStatus;
-  }
-
-  public String getFileId() {
-    return fileId;
   }
 
   public HoodieFileGroupId getFileGroupId() {

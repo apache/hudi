@@ -20,9 +20,12 @@ package org.apache.hudi.common.table.cdc;
 
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import lombok.Getter;
+
 /**
  * Enumeration of change log operation.
  */
+@Getter
 public enum HoodieCDCOperation {
   INSERT("i"),
   UPDATE("u"),
@@ -32,10 +35,6 @@ public enum HoodieCDCOperation {
 
   HoodieCDCOperation(String value) {
     this.value = value;
-  }
-
-  public String getValue() {
-    return this.value;
   }
 
   public static HoodieCDCOperation parse(String value) {

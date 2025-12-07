@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import lombok.Getter;
+
 import java.util.List;
 
 /**
@@ -31,13 +33,18 @@ import java.util.List;
  */
 public class DataGenerationPlan {
   // The values for "_row_key" field.
+  @Getter
   private final List<String> recordKeys;
   // The partition path for all records.
+  @Getter
   private final String partitionPath;
   // The ordering field.
+  @Getter
   private final long timestamp;
   // The operation type of the record.
+  @Getter
   private final OperationType operationType;
+  @Getter
   private final String instantTime;
   private final boolean writePositions;
 
@@ -59,26 +66,6 @@ public class DataGenerationPlan {
     this.operationType = operationType;
     this.instantTime = instantTime;
     this.writePositions = writePositions;
-  }
-
-  public List<String> getRecordKeys() {
-    return recordKeys;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public long getTimestamp() {
-    return timestamp;
-  }
-
-  public OperationType getOperationType() {
-    return operationType;
-  }
-
-  public String getInstantTime() {
-    return instantTime;
   }
 
   public boolean getWritePositions() {

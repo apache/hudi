@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +42,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
+@Getter
 @EnumDescription("Key generator type, indicating the key generator class to use, that implements "
     + "`org.apache.hudi.keygen.KeyGenerator`.")
 public enum KeyGeneratorType {
@@ -108,10 +110,6 @@ public enum KeyGeneratorType {
 
   KeyGeneratorType(String className) {
     this.className = className;
-  }
-
-  public String getClassName() {
-    return className;
   }
 
   public static KeyGeneratorType fromClassName(String className) {

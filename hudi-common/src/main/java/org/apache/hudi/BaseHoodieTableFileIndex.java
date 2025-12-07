@@ -54,6 +54,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,8 +95,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final String[] partitionColumns;
 
+  @Getter
   protected final HoodieMetadataConfig metadataConfig;
   private final TypedProperties configProperties;
+  @Getter
   private final HoodieTableQueryType queryType;
   private final Option<String> specifiedQueryInstant;
   private final Option<String> incrementalQueryStartTime;
@@ -114,6 +117,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
   private final boolean shouldListLazily;
 
+  @Getter
   private final StoragePath basePath;
 
   private final HoodieTableMetaClient metaClient;
@@ -195,13 +199,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return getActiveTimeline().filterCompletedInstants().lastInstant();
   }
 
-  /**
-   * Returns table's base-path
-   */
-  public StoragePath getBasePath() {
-    return basePath;
-  }
-
   public int getFileSlicesCount() {
     return getAllInputFileSlices().values().stream()
         .mapToInt(List::size).sum();
@@ -210,17 +207,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   @Override
   public void close() throws Exception {
     resetTableMetadata(null);
-  }
-
-  public HoodieTableQueryType getQueryType() {
-    return queryType;
-  }
-
-  /**
-   * Returns the configuration properties
-   */
-  public HoodieMetadataConfig getMetadataConfig() {
-    return metadataConfig;
   }
 
   protected String[] getPartitionColumns() {
@@ -577,16 +563,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    */
   public static final class PartitionPath implements Serializable {
 
+    @Getter
     final String path;
     final Object[] values;
 
     public PartitionPath(String path, Object[] values) {
       this.path = path;
       this.values = values;
-    }
-
-    public String getPath() {
-      return path;
     }
 
     @Override

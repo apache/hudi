@@ -72,6 +72,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -115,6 +116,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private final String metadataBasePath;
   private final HoodieDataCleanupManager dataCleanupManager = new HoodieDataCleanupManager();
 
+  @Getter
   private HoodieTableMetaClient metadataMetaClient;
   private Set<String> validInstantTimestamps = null;
   private HoodieTableFileSystemView metadataFileSystemView;
@@ -716,10 +718,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public boolean enabled() {
     return isMetadataTableInitialized;
-  }
-
-  public HoodieTableMetaClient getMetadataMetaClient() {
-    return metadataMetaClient;
   }
 
   public HoodieTableFileSystemView getMetadataFileSystemView() {

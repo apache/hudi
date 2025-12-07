@@ -21,6 +21,8 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,6 +39,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * An instant range used for incremental reader filtering.
  */
+@Getter
 public abstract class InstantRange implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -53,14 +56,6 @@ public abstract class InstantRange implements Serializable {
    */
   public static Builder builder() {
     return new Builder();
-  }
-
-  public Option<String> getStartInstant() {
-    return startInstant;
-  }
-
-  public Option<String> getEndInstant() {
-    return endInstant;
   }
 
   public abstract boolean isInRange(String instant);

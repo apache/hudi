@@ -22,6 +22,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -55,16 +57,13 @@ public enum HoodieTableVersion {
 
   private final List<String> releaseVersions;
 
+  @Getter
   private final TimelineLayoutVersion timelineLayoutVersion;
 
   HoodieTableVersion(int versionCode, List<String> releaseVersions, TimelineLayoutVersion timelineLayoutVersion) {
     this.versionCode = versionCode;
     this.releaseVersions = releaseVersions;
     this.timelineLayoutVersion = timelineLayoutVersion;
-  }
-
-  public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return timelineLayoutVersion;
   }
 
   public int versionCode() {

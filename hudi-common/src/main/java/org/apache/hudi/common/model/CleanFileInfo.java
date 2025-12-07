@@ -20,12 +20,15 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * File info for clean action.
  */
+@Getter
 public class CleanFileInfo implements Serializable {
 
   private final String filePath;
@@ -34,14 +37,6 @@ public class CleanFileInfo implements Serializable {
   public CleanFileInfo(String filePath, boolean isBootstrapBaseFile) {
     this.filePath = filePath;
     this.isBootstrapBaseFile = isBootstrapBaseFile;
-  }
-
-  public String getFilePath() {
-    return filePath;
-  }
-
-  public boolean isBootstrapBaseFile() {
-    return isBootstrapBaseFile;
   }
 
   public HoodieCleanFileInfo toHoodieFileCleanInfo() {

@@ -48,6 +48,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,8 +101,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected CompletionTimeQueryView completionTimeQueryView;
 
+  /**
+   * -- GETTER --
+   *  Return Only Commits and Compaction timeline for building file-groups.*
+   */
   // This is the commits timeline that will be visible for all views extending this view
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
+  @Getter
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
 
   // Used to concurrently load and populate partition views
@@ -1716,12 +1722,4 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
-  /**
-   * Return Only Commits and Compaction timeline for building file-groups.
-   *
-   * @return {@code HoodieTimeline}
-   */
-  public HoodieTimeline getVisibleCommitsAndCompactionTimeline() {
-    return visibleCommitsAndCompactionTimeline;
-  }
 }

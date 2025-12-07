@@ -23,12 +23,15 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.List;
 
 /**
  * Collects stats about a single partition clean operation.
  */
+@Getter
 public class HoodieCleanStat implements Serializable {
 
   // Policy used
@@ -77,50 +80,6 @@ public class HoodieCleanStat implements Serializable {
     this.successDeleteBootstrapBaseFiles = successDeleteBootstrapBaseFiles;
     this.failedDeleteBootstrapBaseFiles = failedDeleteBootstrapBaseFiles;
     this.isPartitionDeleted = isPartitionDeleted;
-  }
-
-  public HoodieCleaningPolicy getPolicy() {
-    return policy;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public List<String> getDeletePathPatterns() {
-    return deletePathPatterns;
-  }
-
-  public List<String> getSuccessDeleteFiles() {
-    return successDeleteFiles;
-  }
-
-  public List<String> getFailedDeleteFiles() {
-    return failedDeleteFiles;
-  }
-
-  public List<String> getDeleteBootstrapBasePathPatterns() {
-    return deleteBootstrapBasePathPatterns;
-  }
-
-  public List<String> getSuccessDeleteBootstrapBaseFiles() {
-    return successDeleteBootstrapBaseFiles;
-  }
-
-  public List<String> getFailedDeleteBootstrapBaseFiles() {
-    return failedDeleteBootstrapBaseFiles;
-  }
-
-  public String getEarliestCommitToRetain() {
-    return earliestCommitToRetain;
-  }
-
-  public String getLastCompletedCommitTimestamp() {
-    return lastCompletedCommitTimestamp;
-  }
-
-  public boolean isPartitionDeleted() {
-    return isPartitionDeleted;
   }
 
   public static Builder newBuilder() {

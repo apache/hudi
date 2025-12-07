@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -33,8 +34,10 @@ import java.io.IOException;
  */
 public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload> {
 
+  // for examples
   // Store the GenericRecord converted to bytes - 1) Doesn't store schema hence memory efficient 2) Makes the payload
   // java serializable
+  @Getter
   private final byte[] recordBytes;
   private final Comparable<?> orderingVal;
 
@@ -64,11 +67,6 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
       return Option.empty();
     }
     return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
-  }
-
-  // for examples
-  public byte[] getRecordBytes() {
-    return recordBytes;
   }
 
   @Override

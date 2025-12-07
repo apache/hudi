@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 /**
  * Manifest entry for a version snapshot of the archived timeline.
  */
+@Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieLSMTimelineManifest implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLSMTimelineManifest.class);
@@ -56,10 +58,6 @@ public class HoodieLSMTimelineManifest implements Serializable {
 
   public void addFile(LSMFileEntry fileEntry) {
     this.files.add(fileEntry);
-  }
-
-  public List<LSMFileEntry> getFiles() {
-    return files;
   }
 
   public List<String> getFileNames() {
@@ -97,6 +95,7 @@ public class HoodieLSMTimelineManifest implements Serializable {
   /**
    * A file entry.
    */
+  @Getter
   public static class LSMFileEntry implements Serializable, Comparable<LSMFileEntry> {
     private String fileName;
     private long fileLen;
@@ -112,14 +111,6 @@ public class HoodieLSMTimelineManifest implements Serializable {
 
     public static LSMFileEntry getInstance(String fileName, long fileLen) {
       return new LSMFileEntry(fileName, fileLen);
-    }
-
-    public String getFileName() {
-      return fileName;
-    }
-
-    public long getFileLen() {
-      return fileLen;
     }
 
     @Override

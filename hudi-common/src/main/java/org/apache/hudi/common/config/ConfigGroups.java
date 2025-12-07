@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import lombok.Getter;
+
 /**
  * In Hudi, we have multiple superclasses, aka Config Classes of {@link HoodieConfig} that maintain
  * several configs. This class group one or more of these superclasses into higher
@@ -80,6 +82,7 @@ public class ConfigGroups {
         "No subgroup. This description should be hidden.");
 
     public final String name;
+    @Getter
     private final String description;
 
     SubGroupNames(String name, String description) {
@@ -87,9 +90,6 @@ public class ConfigGroups {
       this.description = description;
     }
 
-    public String getDescription() {
-      return description;
-    }
   }
 
   public static String getDescription(Names names) {

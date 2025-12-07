@@ -21,6 +21,8 @@ package org.apache.hudi.index.secondary;
 
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 
+import lombok.Getter;
+
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,11 +31,14 @@ import java.util.Map;
  * Represents a single secondary index.
  */
 public class HoodieSecondaryIndex {
+  @Getter
   private String indexName;
+  @Getter
   private SecondaryIndexType indexType;
 
   // The index fields need to be in order
   private LinkedHashMap<String, Map<String, String>> columns;
+  @Getter
   private Map<String, String> options;
 
   public HoodieSecondaryIndex() {
@@ -52,20 +57,8 @@ public class HoodieSecondaryIndex {
     validate();
   }
 
-  public String getIndexName() {
-    return indexName;
-  }
-
-  public SecondaryIndexType getIndexType() {
-    return indexType;
-  }
-
   public Map<String, Map<String, String>> getColumns() {
     return columns;
-  }
-
-  public Map<String, String> getOptions() {
-    return options;
   }
 
   public static Builder builder() {

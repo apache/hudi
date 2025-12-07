@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -60,6 +62,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 
+  @Getter
   protected transient HoodieInstantReader instantReader;
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
@@ -652,10 +655,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
       throw new HoodieException(nse);
     }
     return StringUtils.toHexString(md.digest());
-  }
-
-  public HoodieInstantReader getInstantReader() {
-    return instantReader;
   }
 
   /**

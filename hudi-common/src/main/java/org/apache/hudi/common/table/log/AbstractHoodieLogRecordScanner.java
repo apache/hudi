@@ -47,6 +47,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,6 +118,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   // optional instant range for incremental block filtering
   private final Option<InstantRange> instantRange;
   // Read the operation metadata field from the avro record
+  @Getter
   private final boolean withOperationField;
   private final HoodieStorage storage;
   // Total log files read - for metrics
@@ -132,16 +134,23 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Total number of corrupt blocks written across all log files
   private AtomicLong totalCorruptBlocks = new AtomicLong(0);
   // Store the last instant log blocks (needed to implement rollback)
+  @Getter
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
   protected final boolean forceFullScan;
+  /**
+   * -- GETTER --
+   *  Return progress of scanning as a float between 0.0 to 1.0.
+   */
   // Progress
+  @Getter
   private float progress = 0.0f;
   // Populate meta fields for the records
   private final boolean populateMetaFields;
   // Record type read from log block
   protected final HoodieRecordType recordType;
   // Collect all the block instants after scanning all the log files.
+  @Getter
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
@@ -695,13 +704,6 @@ public abstract class AbstractHoodieLogRecordScanner {
     return !forceFullScan;
   }
 
-  /**
-   * Return progress of scanning as a float between 0.0 to 1.0.
-   */
-  public float getProgress() {
-    return progress;
-  }
-
   public long getTotalLogFiles() {
     return totalLogFiles.get();
   }
@@ -728,10 +730,6 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   public long getTotalCorruptBlocks() {
     return totalCorruptBlocks.get();
-  }
-
-  public boolean isWithOperationField() {
-    return withOperationField;
   }
 
   protected TypedProperties getPayloadProps() {
@@ -788,14 +786,6 @@ public abstract class AbstractHoodieLogRecordScanner {
     public boolean isFullKey() {
       return false;
     }
-  }
-
-  public Deque<HoodieLogBlock> getCurrentInstantLogBlocks() {
-    return currentInstantLogBlocks;
-  }
-
-  public List<String> getValidBlockInstants() {
-    return validBlockInstants;
   }
 
   private Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(

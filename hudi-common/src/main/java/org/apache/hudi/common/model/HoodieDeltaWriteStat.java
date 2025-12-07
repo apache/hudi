@@ -19,6 +19,8 @@
 package org.apache.hudi.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +28,8 @@ import java.util.List;
 /**
  * Statistics about a single Hoodie delta log operation.
  */
+@Getter
+@Setter
 @JsonIgnoreProperties(ignoreUnknown = true)
 @SuppressWarnings("rawtypes")
 public class HoodieDeltaWriteStat extends HoodieWriteStat {
@@ -35,40 +39,8 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
   private String baseFile;
   private List<String> logFiles = new ArrayList<>();
 
-  public void setLogVersion(int logVersion) {
-    this.logVersion = logVersion;
-  }
-
-  public int getLogVersion() {
-    return logVersion;
-  }
-
-  public void setLogOffset(long logOffset) {
-    this.logOffset = logOffset;
-  }
-
-  public long getLogOffset() {
-    return logOffset;
-  }
-
-  public void setBaseFile(String baseFile) {
-    this.baseFile = baseFile;
-  }
-
-  public String getBaseFile() {
-    return baseFile;
-  }
-
-  public void setLogFiles(List<String> logFiles) {
-    this.logFiles = logFiles;
-  }
-
   public void addLogFiles(String logFile) {
     logFiles.add(logFile);
-  }
-
-  public List<String> getLogFiles() {
-    return logFiles;
   }
 
   /**

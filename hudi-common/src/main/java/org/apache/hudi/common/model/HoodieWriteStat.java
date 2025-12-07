@@ -25,6 +25,8 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.reflect.AvroIgnore;
 
 import javax.annotation.Nullable;
@@ -43,47 +45,63 @@ public class HoodieWriteStat extends HoodieReadStats {
   /**
    * Id of the file being written.
    */
+  @Getter
+  @Setter
   private String fileId;
 
   /**
    * Relative path to the file from the base path.
    */
+  @Getter
   private String path;
 
   /**
    * Relative CDC file path that store the CDC data and its size.
    */
+  @Setter
   private Map<String, Long> cdcStats;
 
   /**
    * The previous version of the file. (null if this is the first version. i.e insert)
    */
+  @Getter
+  @Setter
   private String prevCommit;
 
   /**
    * Total number of records written for this file. - for updates, its the entire number of records in the file - for
    * inserts, it's the actual number of records inserted.
    */
+  @Getter
+  @Setter
   private long numWrites;
 
   /**
    * Total number of records actually changed. (0 for inserts)
    */
+  @Getter
+  @Setter
   private long numUpdateWrites;
 
   /**
    * Total number of bytes written.
    */
+  @Setter
+  @Getter
   private long totalWriteBytes;
 
   /**
    * Total number of records, that were n't able to be written due to errors.
    */
+  @Setter
+  @Getter
   private long totalWriteErrors;
 
   /**
    * Relative path to the temporary file from the base path.
    */
+  @Getter
+  @Setter
   @Nullable
   private String tempPath;
 
@@ -94,17 +112,22 @@ public class HoodieWriteStat extends HoodieReadStats {
   /**
    * Partition Path associated with this writeStat.
    */
+  @Setter
+  @Getter
   @Nullable
   private String partitionPath;
 
   /**
    * File Size as of close.
    */
+  @Setter
+  @Getter
   private long fileSizeInBytes;
 
   /**
    * The earliest of incoming records' event times (Epoch ms) for calculating latency.
    */
+  @Getter
   @Nullable
   private Long minEventTime;
 
@@ -114,6 +137,8 @@ public class HoodieWriteStat extends HoodieReadStats {
   @Nullable
   private Long maxEventTime;
 
+  @Setter
+  @Getter
   @Nullable
   private String prevBaseFile;
 
@@ -128,113 +153,21 @@ public class HoodieWriteStat extends HoodieReadStats {
     // called by jackson json lib
   }
 
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
   public void setPath(String path) {
     this.path = path;
-  }
-
-  public void setPrevCommit(String prevCommit) {
-    this.prevCommit = prevCommit;
-  }
-
-  public void setNumWrites(long numWrites) {
-    this.numWrites = numWrites;
   }
 
   public void setNumDeletes(long numDeletes) {
     this.numDeletes = numDeletes;
   }
 
-  public void setNumUpdateWrites(long numUpdateWrites) {
-    this.numUpdateWrites = numUpdateWrites;
-  }
-
   public void setNumInserts(long numInserts) {
     this.numInserts = numInserts;
-  }
-
-  public long getTotalWriteBytes() {
-    return totalWriteBytes;
-  }
-
-  public void setTotalWriteBytes(long totalWriteBytes) {
-    this.totalWriteBytes = totalWriteBytes;
-  }
-
-  public long getTotalWriteErrors() {
-    return totalWriteErrors;
-  }
-
-  public void setTotalWriteErrors(long totalWriteErrors) {
-    this.totalWriteErrors = totalWriteErrors;
-  }
-
-  public String getPrevCommit() {
-    return prevCommit;
-  }
-
-  public long getNumWrites() {
-    return numWrites;
-  }
-
-  public long getNumUpdateWrites() {
-    return numUpdateWrites;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getPath() {
-    return path;
   }
 
   @Nullable
   public Map<String, Long> getCdcStats() {
     return cdcStats;
-  }
-
-  public void setCdcStats(Map<String, Long> cdcStats) {
-    this.cdcStats = cdcStats;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public void setTempPath(String tempPath) {
-    this.tempPath = tempPath;
-  }
-
-  public String getTempPath() {
-    return this.tempPath;
-  }
-  
-  public long getFileSizeInBytes() {
-    return fileSizeInBytes;
-  }
-
-  public void setFileSizeInBytes(long fileSizeInBytes) {
-    this.fileSizeInBytes = fileSizeInBytes;
-  }
-
-  public String getPrevBaseFile() {
-    return prevBaseFile;
-  }
-
-  public void setPrevBaseFile(String prevBaseFile) {
-    this.prevBaseFile = prevBaseFile;
-  }
-
-  public Long getMinEventTime() {
-    return minEventTime;
   }
 
   public void setMinEventTime(Long minEventTime) {
@@ -245,6 +178,7 @@ public class HoodieWriteStat extends HoodieReadStats {
     }
   }
 
+  @Nullable
   public Long getMaxEventTime() {
     return maxEventTime;
   }
@@ -335,6 +269,8 @@ public class HoodieWriteStat extends HoodieReadStats {
   /**
    * The runtime stats for writing operation.
    */
+  @Setter
+  @Getter
   public static class RuntimeStats implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -353,29 +289,6 @@ public class HoodieWriteStat extends HoodieReadStats {
      */
     private long totalCreateTime;
 
-    public long getTotalScanTime() {
-      return totalScanTime;
-    }
-
-    public void setTotalScanTime(long totalScanTime) {
-      this.totalScanTime = totalScanTime;
-    }
-
-    public long getTotalUpsertTime() {
-      return totalUpsertTime;
-    }
-
-    public void setTotalUpsertTime(long totalUpsertTime) {
-      this.totalUpsertTime = totalUpsertTime;
-    }
-
-    public long getTotalCreateTime() {
-      return totalCreateTime;
-    }
-
-    public void setTotalCreateTime(long totalCreateTime) {
-      this.totalCreateTime = totalCreateTime;
-    }
   }
 
   private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(

@@ -20,12 +20,15 @@ package org.apache.hudi.common.table.timeline.versioning;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Metadata Layout Version. Add new version when timeline format changes
  */
+@Getter
 public class TimelineLayoutVersion implements Serializable, Comparable<TimelineLayoutVersion> {
 
   public static final Integer VERSION_0 = 0; // pre 0.5.1  version format
@@ -54,10 +57,6 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
    */
   public boolean isNullVersion() {
     return Objects.equals(version, VERSION_0);
-  }
-
-  public Integer getVersion() {
-    return version;
   }
 
   @Override

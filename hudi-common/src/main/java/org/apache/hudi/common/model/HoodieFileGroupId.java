@@ -18,12 +18,15 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Unique ID to identify a file-group in a data-set.
  */
+@Getter
 public class HoodieFileGroupId implements Serializable, Comparable<HoodieFileGroupId> {
 
   private final String partitionPath;
@@ -33,14 +36,6 @@ public class HoodieFileGroupId implements Serializable, Comparable<HoodieFileGro
   public HoodieFileGroupId(String partitionPath, String fileId) {
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getFileId() {
-    return fileId;
   }
 
   @Override

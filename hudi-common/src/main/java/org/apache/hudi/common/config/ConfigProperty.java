@@ -22,6 +22,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -51,19 +53,24 @@ public class ConfigProperty<T> implements Serializable {
 
   private final String doc;
 
+  @Getter
   private final Option<String> sinceVersion;
 
+  @Getter
   private final Option<String> deprecatedVersion;
 
+  @Getter
   private final List<String> supportedVersions;
 
   private final Set<String> validValues;
 
+  @Getter
   private final boolean advanced;
 
   private final String[] alternatives;
 
   // provide the ability to infer config value based on other configs
+  @Getter
   private final Option<Function<HoodieConfig, Option<T>>> inferFunction;
 
   ConfigProperty(String key, T defaultValue, String docOnDefaultValue, String doc,
@@ -108,24 +115,8 @@ public class ConfigProperty<T> implements Serializable {
     return StringUtils.isNullOrEmpty(doc) ? StringUtils.EMPTY_STRING : doc;
   }
 
-  public Option<String> getSinceVersion() {
-    return sinceVersion;
-  }
-
-  public Option<String> getDeprecatedVersion() {
-    return deprecatedVersion;
-  }
-
-  public List<String> getSupportedVersions() {
-    return supportedVersions;
-  }
-
   public boolean hasInferFunction() {
     return getInferFunction().isPresent();
-  }
-
-  public Option<Function<HoodieConfig, Option<T>>> getInferFunction() {
-    return inferFunction;
   }
 
   public void checkValues(String value) {
@@ -142,10 +133,6 @@ public class ConfigProperty<T> implements Serializable {
 
   public List<String> getAlternatives() {
     return Arrays.asList(alternatives);
-  }
-
-  public boolean isAdvanced() {
-    return advanced;
   }
 
   public ConfigProperty<T> withDocumentation(String doc) {

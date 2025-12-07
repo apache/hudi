@@ -44,6 +44,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,8 +69,10 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
+  @Getter
   protected final HoodieMetadataConfig metadataConfig;
 
+  @Getter
   protected boolean isMetadataTableInitialized;
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
@@ -472,10 +475,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   public abstract HoodiePairData<String, String> readSecondaryIndexDataTableRecordKeysWithKeys(HoodieData<String> keys, String partitionName);
 
-  public HoodieMetadataConfig getMetadataConfig() {
-    return metadataConfig;
-  }
-
   protected StorageConfiguration<?> getStorageConf() {
     return dataMetaClient.getStorageConf();
   }
@@ -485,7 +484,4 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
   }
 
-  public boolean isMetadataTableInitialized() {
-    return isMetadataTableInitialized;
-  }
 }

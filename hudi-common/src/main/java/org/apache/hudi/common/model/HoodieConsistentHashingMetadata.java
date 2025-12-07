@@ -25,6 +25,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +43,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * All the metadata that is used for consistent hashing bucket index
  */
+@Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieConsistentHashingMetadata implements Serializable {
 
@@ -58,6 +61,7 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   private final int numBuckets;
   private final int seqNo;
   private final List<ConsistentHashingNode> nodes;
+  @Setter
   @JsonIgnore
   protected List<ConsistentHashingNode> childrenNodes = new ArrayList<>();
   /**
@@ -111,42 +115,6 @@ public class HoodieConsistentHashingMetadata implements Serializable {
     System.arraycopy(longBytes, 0, combinedBytes, 0, longBytes.length);
     System.arraycopy(partitionPathBytes, 0, combinedBytes, longBytes.length, partitionPathBytes.length);
     return UUID.nameUUIDFromBytes(combinedBytes).toString();
-  }
-
-  public short getVersion() {
-    return version;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getInstant() {
-    return instant;
-  }
-
-  public int getNumBuckets() {
-    return numBuckets;
-  }
-
-  public int getSeqNo() {
-    return seqNo;
-  }
-
-  public boolean isFirstCreated() {
-    return firstCreated;
-  }
-
-  public List<ConsistentHashingNode> getNodes() {
-    return nodes;
-  }
-
-  public List<ConsistentHashingNode> getChildrenNodes() {
-    return childrenNodes;
-  }
-
-  public void setChildrenNodes(List<ConsistentHashingNode> childrenNodes) {
-    this.childrenNodes = childrenNodes;
   }
 
   public String getFilename() {

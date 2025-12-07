@@ -22,6 +22,8 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -29,6 +31,8 @@ import java.util.Objects;
 /**
  * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an actual file on disk
  */
+@Getter
+@Setter
 public class HoodieRecordLocation implements Serializable, KryoSerializable {
   public static final long INVALID_POSITION = -1L;
 
@@ -77,32 +81,8 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
         + '}';
   }
 
-  public String getInstantTime() {
-    return instantTime;
-  }
-
-  public void setInstantTime(String instantTime) {
-    this.instantTime = instantTime;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
   public static boolean isPositionValid(long position) {
     return position > INVALID_POSITION;
-  }
-
-  public long getPosition() {
-    return position;
-  }
-
-  public void setPosition(long position) {
-    this.position = position;
   }
 
   @Override

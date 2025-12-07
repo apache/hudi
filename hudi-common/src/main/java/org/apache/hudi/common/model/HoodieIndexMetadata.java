@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PA
 /**
  * Represents the metadata for all functional and secondary indexes in Hudi.
  */
+@Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieIndexMetadata implements Serializable {
 
@@ -55,10 +57,6 @@ public class HoodieIndexMetadata implements Serializable {
   public HoodieIndexMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
     validateIndexMetadata(this);
-  }
-
-  public Map<String, HoodieIndexDefinition> getIndexDefinitions() {
-    return indexDefinitions;
   }
 
   public void setIndexDefinitions(Map<String, HoodieIndexDefinition> indexDefinitions) {

@@ -20,6 +20,9 @@ package org.apache.hudi.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.hudi.common.util.JsonUtils;
+
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +42,8 @@ import java.util.Map;
  * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
  * ***************************
  */
+@Getter
+@Setter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);
@@ -54,19 +59,11 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     partitionToReplaceFileIds = new HashMap<>();
   }
 
-  public void setPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
-    this.partitionToReplaceFileIds = partitionToReplaceFileIds;
-  }
-
   public void addReplaceFileId(String partitionPath, String fileId) {
     if (!partitionToReplaceFileIds.containsKey(partitionPath)) {
       partitionToReplaceFileIds.put(partitionPath, new ArrayList<>());
     }
     partitionToReplaceFileIds.get(partitionPath).add(fileId);
-  }
-
-  public Map<String, List<String>> getPartitionToReplaceFileIds() {
-    return partitionToReplaceFileIds;
   }
 
   @Override

@@ -23,12 +23,15 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
 /**
  * Represents a raw key for column stats indexed by partition, file and column.
  * This is different from ColumnStatsIndexPrefixRawKey which is used for prefix lookups.
  */
+@Getter
 public class ColumnStatsIndexRawKey implements RawKey {
   private final String partitionName;
   private final String fileName;
@@ -46,18 +49,6 @@ public class ColumnStatsIndexRawKey implements RawKey {
         new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionName)),
         new FileIndexID(fileName),
         new ColumnIndexID(columnName));
-  }
-
-  public String getPartitionName() {
-    return partitionName;
-  }
-
-  public String getFileName() {
-    return fileName;
-  }
-
-  public String getColumnName() {
-    return columnName;
   }
 
   @Override

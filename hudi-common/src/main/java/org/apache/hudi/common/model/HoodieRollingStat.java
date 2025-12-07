@@ -19,6 +19,8 @@
 package org.apache.hudi.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.Getter;
+import lombok.Setter;
 
 import javax.annotation.Nullable;
 
@@ -30,13 +32,22 @@ import java.io.Serializable;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieRollingStat implements Serializable {
 
+  @Setter
+  @Getter
   private String fileId;
+  @Setter
+  @Getter
   private long inserts;
+  @Setter
+  @Getter
   private long upserts;
+  @Setter
+  @Getter
   private long deletes;
   // TODO
   @Nullable
   private long totalInputWriteBytesToDisk;
+  @Getter
   @Nullable
   private long totalInputWriteBytesOnDisk;
 
@@ -50,38 +61,6 @@ public class HoodieRollingStat implements Serializable {
     this.upserts = upserts;
     this.deletes = deletes;
     this.totalInputWriteBytesOnDisk = totalInputWriteBytesOnDisk;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public long getInserts() {
-    return inserts;
-  }
-
-  public void setInserts(long inserts) {
-    this.inserts = inserts;
-  }
-
-  public long getUpserts() {
-    return upserts;
-  }
-
-  public void setUpserts(long upserts) {
-    this.upserts = upserts;
-  }
-
-  public long getDeletes() {
-    return deletes;
-  }
-
-  public void setDeletes(long deletes) {
-    this.deletes = deletes;
   }
 
   public long addInserts(long inserts) {
@@ -99,7 +78,4 @@ public class HoodieRollingStat implements Serializable {
     return this.deletes;
   }
 
-  public long getTotalInputWriteBytesOnDisk() {
-    return totalInputWriteBytesOnDisk;
-  }
 }

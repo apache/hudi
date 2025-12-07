@@ -18,44 +18,28 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.Getter;
+
 public class MetadataValues {
 
   // NOTE: These fields are laid out in the same order as they are encoded in
   //       each record and that should be preserved
+  @Getter
   private String commitTime;
+  @Getter
   private String commitSeqNo;
+  @Getter
   private String recordKey;
+  @Getter
   private String partitionPath;
+  @Getter
   private String fileName;
+  @Getter
   private String operation;
 
   private boolean set = false;
 
   public MetadataValues() {
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public String getCommitSeqNo() {
-    return commitSeqNo;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getFileName() {
-    return fileName;
-  }
-
-  public String getOperation() {
-    return operation;
   }
 
   public MetadataValues setCommitTime(String value) {

@@ -50,6 +50,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -75,13 +77,20 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
+  @Getter
   private final StorageConfiguration<?> storageConfiguration;
   protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
+  @Getter
   protected final Option<Predicate> keyFilterOpt;
   protected final HoodieTableConfig tableConfig;
+  @Setter
   private String tablePath = null;
+  @Setter
+  @Getter
   private String latestCommitTime = null;
+  @Setter
+  @Getter
   private Option<HoodieRecordMerger> recordMerger = null;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
@@ -90,12 +99,19 @@ public abstract class HoodieReaderContext<T> {
   // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
+  @Getter
   private RecordMergeMode mergeMode;
+  @Getter
   protected RecordContext<T> recordContext;
+  @Getter
+  @Setter
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   // the default iterator mode is engine-specific record mode
+  @Setter
   private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
+  @Getter
   protected final HoodieConfig hoodieReaderConfig;
+  @Setter
   private boolean enableLogicalTimestampFieldRepair = true;
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
@@ -121,19 +137,6 @@ public abstract class HoodieReaderContext<T> {
     this.hoodieReaderConfig = hoodieReaderConfig;
   }
 
-  // Getter and Setter for schemaHandler
-  public FileGroupReaderSchemaHandler<T> getSchemaHandler() {
-    return schemaHandler;
-  }
-
-  public void setSchemaHandler(FileGroupReaderSchemaHandler<T> schemaHandler) {
-    this.schemaHandler = schemaHandler;
-  }
-
-  public void setIteratorMode(IteratorMode iteratorMode) {
-    this.iteratorMode = iteratorMode;
-  }
-
   public IteratorMode getIteratorMode() {
     ValidationUtils.checkArgument(iteratorMode != null, "iterator mode should not be null!");
     return this.iteratorMode;
@@ -144,30 +147,6 @@ public abstract class HoodieReaderContext<T> {
       throw new IllegalStateException("Table path not set in reader context.");
     }
     return tablePath;
-  }
-
-  public void setEnableLogicalTimestampFieldRepair(boolean enableLogicalTimestampFieldRepair) {
-    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
-  }
-
-  public void setTablePath(String tablePath) {
-    this.tablePath = tablePath;
-  }
-
-  public String getLatestCommitTime() {
-    return latestCommitTime;
-  }
-
-  public void setLatestCommitTime(String latestCommitTime) {
-    this.latestCommitTime = latestCommitTime;
-  }
-
-  public Option<HoodieRecordMerger> getRecordMerger() {
-    return recordMerger;
-  }
-
-  public void setRecordMerger(Option<HoodieRecordMerger> recordMerger) {
-    this.recordMerger = recordMerger;
   }
 
   // Getter and Setter for hasLogFiles
@@ -210,16 +189,8 @@ public abstract class HoodieReaderContext<T> {
     this.shouldMergeUseRecordPosition = shouldMergeUseRecordPosition;
   }
 
-  public StorageConfiguration<?> getStorageConfiguration() {
-    return storageConfiguration;
-  }
-
   public TypedProperties getMergeProps(TypedProperties props) {
     return ConfigUtils.getMergeProps(props, this.tableConfig);
-  }
-
-  public Option<Predicate> getKeyFilterOpt() {
-    return keyFilterOpt;
   }
 
   public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
@@ -228,14 +199,6 @@ public abstract class HoodieReaderContext<T> {
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
     return new DefaultSerializer<>();
-  }
-
-  public RecordContext<T> getRecordContext() {
-    return recordContext;
-  }
-
-  public HoodieConfig getHoodieReaderConfig() {
-    return hoodieReaderConfig;
   }
 
   /**
@@ -331,10 +294,6 @@ public abstract class HoodieReaderContext<T> {
     this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
         properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
-  }
-
-  public RecordMergeMode getMergeMode() {
-    return mergeMode;
   }
 
   /**

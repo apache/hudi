@@ -22,6 +22,7 @@ import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   private final DiskMapType diskMapType;
   // Enables compression of values stored in disc
   private final boolean isCompressionEnabled;
-  // current space occupied by this map in-memory
+  // Current approximate memory footprint of the in-memory map.
+  @Getter
   private long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
   private volatile long estimatedPayloadSize = 0;
@@ -168,13 +170,6 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
    */
   public int getInMemoryMapNumEntries() {
     return inMemoryMap.size();
-  }
-
-  /**
-   * Approximate memory footprint of the in-memory map.
-   */
-  public long getCurrentInMemoryMapSize() {
-    return currentInMemoryMapSize;
   }
 
   @Override

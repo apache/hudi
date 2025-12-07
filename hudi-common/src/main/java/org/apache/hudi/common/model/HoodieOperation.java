@@ -20,9 +20,12 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 /**
  * Represents the changes that a row can describe in a changelog.
  */
+@Getter
 public enum HoodieOperation {
   /**
    * Insert operation.
@@ -48,14 +51,6 @@ public enum HoodieOperation {
   HoodieOperation(String name, byte value) {
     this.name = name;
     this.value = value;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public byte getValue() {
-    return value;
   }
 
   public static HoodieOperation fromValue(byte value) {

@@ -21,8 +21,10 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
 import org.apache.orc.CompressionKind;
 
+@Getter
 public class HoodieOrcConfig {
   public static final String AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
 
@@ -43,31 +45,8 @@ public class HoodieOrcConfig {
     this.bloomFilter = bloomFilter;
   }
 
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
-  }
-
-  public CompressionKind getCompressionKind() {
-    return compressionKind;
-  }
-
-  public int getStripeSize() {
-    return stripeSize;
-  }
-
-  public int getBlockSize() {
-    return blockSize;
-  }
-
-  public long getMaxFileSize() {
-    return maxFileSize;
-  }
-
   public boolean useBloomFilter() {
     return bloomFilter != null;
   }
 
-  public BloomFilter getBloomFilter() {
-    return bloomFilter;
-  }
 }

@@ -36,6 +36,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +48,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class PartitionBucketIndexHashingConfig implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -81,10 +83,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
-  public String getInstant() {
-    return this.instant;
-  }
-
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
       // For empty commit file (no data or somethings bad happen).
@@ -99,22 +97,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     } catch (Exception e) {
       throw new IOException("unable to load hashing config", e);
     }
-  }
-
-  public int getVersion() {
-    return version;
-  }
-
-  public String getRule() {
-    return rule;
-  }
-
-  public int getDefaultBucketNumber() {
-    return defaultBucketNumber;
-  }
-
-  public String getExpressions() {
-    return expressions;
   }
 
   /**

@@ -20,16 +20,15 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
+import lombok.Getter;
+
+@Getter
 public class NameReference extends LeafExpression {
 
   private final String name;
 
   public NameReference(String name) {
     this.name = name;
-  }
-
-  public String getName() {
-    return name;
   }
 
   @Override

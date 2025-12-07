@@ -28,6 +28,8 @@ import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.Getter;
+
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -39,13 +41,17 @@ import java.util.stream.Stream;
  * If there is only a base file, it is possible for the reader to specify a particular range of the file with the start and length parameters.
  */
 public class InputSplit {
+  @Getter
   private final Option<HoodieBaseFile> baseFileOption;
   private final List<HoodieLogFile> logFiles;
   private final Option<Iterator<HoodieRecord>> recordIterator;
+  @Getter
   private final String partitionPath;
   // Byte offset to start reading from the base file
+  @Getter
   private final long start;
   // Length of bytes to read from the base file
+  @Getter
   private final long length;
 
   InputSplit(Option<HoodieBaseFile> baseFileOption,
@@ -66,10 +72,6 @@ public class InputSplit {
     this.length = length;
   }
 
-  public Option<HoodieBaseFile> getBaseFileOption() {
-    return baseFileOption;
-  }
-
   public List<HoodieLogFile> getLogFiles() {
     ValidationUtils.checkArgument(recordIterator.isEmpty(), "Log files are not initialized");
     return logFiles;
@@ -77,18 +79,6 @@ public class InputSplit {
 
   public boolean hasLogFiles() {
     return !logFiles.isEmpty();
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public long getStart() {
-    return start;
-  }
-
-  public long getLength() {
-    return length;
   }
 
   public boolean isParquetBaseFile() {

@@ -30,6 +30,7 @@ import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.dropwizard.samplebuilder.DefaultSampleBuilder;
 import io.prometheus.client.dropwizard.samplebuilder.SampleBuilder;
 import io.prometheus.client.exporter.HTTPServer;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +54,7 @@ public class PrometheusReporter extends MetricsReporter {
   private static final Logger LOG = LoggerFactory.getLogger(PrometheusReporter.class);
   private static final Map<Integer, PrometheusServerState> PORT_TO_SERVER_STATE = new ConcurrentHashMap<>();
 
+  @Getter
   private static class PrometheusServerState {
     private final HTTPServer httpServer;
     private final CollectorRegistry collectorRegistry;
@@ -66,21 +68,6 @@ public class PrometheusReporter extends MetricsReporter {
       this.exports = ConcurrentHashMap.newKeySet();
     }
 
-    public HTTPServer getHttpServer() {
-      return httpServer;
-    }
-
-    public CollectorRegistry getCollectorRegistry() {
-      return collectorRegistry;
-    }
-
-    public AtomicInteger getReferenceCount() {
-      return referenceCount;
-    }
-
-    public Set<DropwizardExports> getExports() {
-      return exports;
-    }
   }
 
   private final DropwizardExports metricExports;

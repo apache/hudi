@@ -22,6 +22,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
  * For `cdcInferCase` = {@link HoodieCDCInferenceCase#REPLACE_COMMIT}, `cdcFile` is null,
  * `beforeFileSlice` is the current version of the file slice.
  */
+@Getter
 public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFileSplit> {
   /**
    * The instant time at which the changes happened.
@@ -101,26 +104,6 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
         .collect(Collectors.toList());
     this.beforeFileSlice = beforeFileSlice;
     this.afterFileSlice = afterFileSlice;
-  }
-
-  public String getInstant() {
-    return this.instant;
-  }
-
-  public HoodieCDCInferenceCase getCdcInferCase() {
-    return this.cdcInferCase;
-  }
-
-  public List<String> getCdcFiles() {
-    return this.cdcFiles;
-  }
-
-  public Option<FileSlice> getBeforeFileSlice() {
-    return this.beforeFileSlice;
-  }
-
-  public Option<FileSlice> getAfterFileSlice() {
-    return this.afterFileSlice;
   }
 
   @Override

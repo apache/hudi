@@ -21,6 +21,9 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -32,9 +35,16 @@ public class BaseFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  @Getter
   private transient StoragePathInfo pathInfo;
+
   private final String fullPath;
+
+  @Getter
   protected final String fileName;
+
+  @Setter
+  @Getter
   private long fileLen;
 
   public BaseFile(BaseFile dataFile) {
@@ -73,23 +83,7 @@ public class BaseFile implements Serializable {
     return new StoragePath(fullPath);
   }
 
-  public String getFileName() {
-    return fileName;
-  }
-
-  public StoragePathInfo getPathInfo() {
-    return pathInfo;
-  }
-
   public long getFileSize() {
-    return fileLen;
-  }
-
-  public void setFileLen(long fileLen) {
-    this.fileLen = fileLen;
-  }
-
-  public long getFileLen() {
     return fileLen;
   }
 

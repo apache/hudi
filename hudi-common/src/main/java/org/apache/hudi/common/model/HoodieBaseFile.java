@@ -23,10 +23,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+
 /**
  * Hoodie base file - Represents metadata about Hudi file in DFS.
  * Supports APIs to get Hudi FileId, Commit Time and bootstrap file (if any).
  */
+@Getter
 public class HoodieBaseFile extends BaseFile {
   private static final long serialVersionUID = 1L;
   private static final char UNDERSCORE = '_';
@@ -149,18 +152,6 @@ public class HoodieBaseFile extends BaseFile {
     } else {
       return pathInfo;
     }
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public Option<BaseFile> getBootstrapBaseFile() {
-    return bootstrapBaseFile;
   }
 
   public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {

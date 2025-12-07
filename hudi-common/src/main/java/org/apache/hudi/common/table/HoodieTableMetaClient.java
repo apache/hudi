@@ -74,6 +74,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -160,24 +162,38 @@ public class HoodieTableMetaClient implements Serializable {
   // Only one entry should be present in this map
   private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
 
+  // this invocation is cached
+  @Getter
   protected StoragePath basePath;
+  @Getter
   protected StoragePath metaPath;
 
+  @Setter
   private transient HoodieStorage storage;
   private boolean loadActiveTimelineOnLoad;
+  @Getter
   protected StorageConfiguration<?> storageConf;
+  @Getter
   private HoodieTableType tableType;
+  @Getter
   private TimelineLayoutVersion timelineLayoutVersion;
+  @Getter
   private TimelineLayout timelineLayout;
+  @Getter
   private StoragePath timelinePath;
   private StoragePath timelineHistoryPath;
+  @Getter
   protected HoodieTableConfig tableConfig;
   protected HoodieActiveTimeline activeTimeline;
+  @Getter
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
+  @Getter
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
+  @Getter
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private Option<HoodieIndexMetadata> indexMetadataOpt;
+  @Getter
   private HoodieTableFormat tableFormat;
 
   /**
@@ -387,35 +403,6 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Returns base path of the table
-   */
-  public StoragePath getBasePath() {
-    return basePath; // this invocation is cached
-  }
-
-  /**
-   * @return Hoodie Table Type
-   */
-  public HoodieTableType getTableType() {
-    return tableType;
-  }
-
-  /**
-   * @return Meta path
-   */
-  public StoragePath getMetaPath() {
-    return metaPath;
-  }
-
-  public StoragePath getTimelinePath() {
-    return timelinePath;
-  }
-
-  public HoodieTableFormat getTableFormat() {
-    return tableFormat;
-  }
-
-  /**
    * @return schema folder path
    */
   public String getSchemaFolderName() {
@@ -438,6 +425,13 @@ public class HoodieTableMetaClient implements Serializable {
 
   public String getArchiveHashingMetadataConfigPath() {
     return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER).toString();
+  }
+
+  /**
+   * @return path where archived timeline is stored
+   */
+  public StoragePath getArchivePath() {
+    return timelineHistoryPath;
   }
 
   /**
@@ -485,28 +479,6 @@ public class HoodieTableMetaClient implements Serializable {
     return basePath + StoragePath.SEPARATOR + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
   }
 
-  /**
-   * @return path where archived timeline is stored
-   */
-  public StoragePath getArchivePath() {
-    return timelineHistoryPath;
-  }
-
-  /**
-   * @return Table Config
-   */
-  public HoodieTableConfig getTableConfig() {
-    return tableConfig;
-  }
-
-  public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return timelineLayoutVersion;
-  }
-
-  public TimelineLayout getTimelineLayout() {
-    return timelineLayout;
-  }
-
   public boolean isMetadataTable() {
     return HoodieTableMetadata.isMetadataTable(getBasePath());
   }
@@ -540,16 +512,8 @@ public class HoodieTableMetaClient implements Serializable {
         consistencyGuard);
   }
 
-  public void setStorage(HoodieStorage storage) {
-    this.storage = storage;
-  }
-
   public HoodieStorage getRawStorage() {
     return getStorage().getRawStorage();
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
   }
 
   /**
@@ -619,18 +583,6 @@ public class HoodieTableMetaClient implements Serializable {
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(timeGeneratorConfig, storageConf);
     return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
-  }
-
-  public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
-    return timeGeneratorConfig;
-  }
-
-  public ConsistencyGuardConfig getConsistencyGuardConfig() {
-    return consistencyGuardConfig;
-  }
-
-  public FileSystemRetryConfig getFileSystemRetryConfig() {
-    return fileSystemRetryConfig;
   }
 
   /**

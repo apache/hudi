@@ -34,6 +34,7 @@ import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,8 +59,10 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // count of merged records in log
+  @Getter
   private long numMergedRecordsInLog;
   // Stores the total time taken to perform reading and merging of log blocks
+  @Getter
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
@@ -134,19 +137,11 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     return recordBuffer.getLogRecords();
   }
 
-  public long getNumMergedRecordsInLog() {
-    return numMergedRecordsInLog;
-  }
-
   /**
    * Returns the builder for {@code HoodieMergedLogRecordReader}.
    */
   public static <T> Builder<T> newBuilder() {
     return new Builder<>();
-  }
-
-  public long getTotalTimeTakenToReadAndMergeBlocks() {
-    return totalTimeTakenToReadAndMergeBlocks;
   }
 
   @Override

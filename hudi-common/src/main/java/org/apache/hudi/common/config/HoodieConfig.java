@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,7 @@ import static org.apache.hudi.common.util.ConfigUtils.loadGlobalProperties;
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
  */
+@Getter
 public class HoodieConfig implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
@@ -244,10 +246,6 @@ public class HoodieConfig implements Serializable {
 
   public String getStringOrDefault(String key, String defaultVal) {
     return Option.ofNullable(props.getProperty(key)).orElse(defaultVal);
-  }
-
-  public TypedProperties getProps() {
-    return props;
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {

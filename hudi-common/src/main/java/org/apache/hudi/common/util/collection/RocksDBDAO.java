@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.rocksdb.AbstractImmutableNativeReference;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
@@ -74,6 +75,7 @@ public class RocksDBDAO {
   private boolean closed = false;
   private final String rocksDBBasePath;
   private final transient Map<String, CustomSerializer<?>> columnFamilySerializers;
+  @Getter
   private long totalBytesWritten;
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
@@ -495,10 +497,6 @@ public class RocksDBDAO {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
-  }
-
-  public long getTotalBytesWritten() {
-    return totalBytesWritten;
   }
 
   private <T> byte[] serializePayload(String columnFamily, T value) throws IOException {

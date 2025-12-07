@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.checkpoint;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,8 +32,11 @@ import java.util.Objects;
 public abstract class Checkpoint implements Serializable {
   public static final String CHECKPOINT_IGNORE_KEY = "deltastreamer.checkpoint.ignore_key";
 
+  @Getter
   protected String checkpointKey;
+  @Getter
   protected String checkpointResetKey;
+  @Getter
   protected String checkpointIgnoreKey;
   // These are extra props to be written to the commit metadata
   protected Map<String, String> extraProps = new HashMap<>();
@@ -39,18 +44,6 @@ public abstract class Checkpoint implements Serializable {
   public Checkpoint setCheckpointKey(String newKey) {
     checkpointKey = newKey;
     return this;
-  }
-
-  public String getCheckpointKey() {
-    return checkpointKey;
-  }
-
-  public String getCheckpointResetKey() {
-    return checkpointResetKey;
-  }
-
-  public String getCheckpointIgnoreKey() {
-    return checkpointIgnoreKey;
   }
 
   public abstract Map<String, String> getCheckpointCommitMetadata(String overrideResetKey,

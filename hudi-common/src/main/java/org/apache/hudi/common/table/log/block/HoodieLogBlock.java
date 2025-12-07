@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,12 +66,16 @@ public abstract class HoodieLogBlock {
    */
   public static int version = 3;
   // Header for each log block
+  @Getter
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
+  @Getter
   private final Map<FooterMetadataType, String> logBlockFooter;
   // Location of a log block on disk
+  @Getter
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
+  @Getter
   private Option<byte[]> content;
   private final Supplier<SeekableDataInputStream> inputStreamSupplier;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
@@ -108,22 +113,6 @@ public abstract class HoodieLogBlock {
 
   public long getLogBlockLength() {
     throw new HoodieException("No implementation was provided");
-  }
-
-  public Option<HoodieLogBlockContentLocation> getBlockContentLocation() {
-    return this.blockContentLocation;
-  }
-
-  public Map<HeaderMetadataType, String> getLogBlockHeader() {
-    return logBlockHeader;
-  }
-
-  public Map<FooterMetadataType, String> getLogBlockFooter() {
-    return logBlockFooter;
-  }
-
-  public Option<byte[]> getContent() {
-    return content;
   }
 
   /**
@@ -252,6 +241,7 @@ public abstract class HoodieLogBlock {
    * This class is used to store the Location of the Content of a Log Block. It's used when a client chooses for a IO
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
+  @Getter
   public static final class HoodieLogBlockContentLocation {
     // Storage Config required to access the file
     private final HoodieStorage storage;
@@ -276,25 +266,6 @@ public abstract class HoodieLogBlock {
       this.blockEndPos = blockEndPos;
     }
 
-    public HoodieStorage getStorage() {
-      return storage;
-    }
-
-    public HoodieLogFile getLogFile() {
-      return logFile;
-    }
-
-    public long getContentPositionInLogFile() {
-      return contentPositionInLogFile;
-    }
-
-    public long getBlockSize() {
-      return blockSize;
-    }
-
-    public long getBlockEndPos() {
-      return blockEndPos;
-    }
   }
 
   /**

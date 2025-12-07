@@ -47,6 +47,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 
 import java.io.Closeable;
@@ -85,6 +86,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // Callback to run custom logic on updates to the base files for the file group
   private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
+  @Getter
   private List<String> validBlockInstants = Collections.emptyList();
   private BufferedRecordConverter<T> bufferedRecordConverter;
 
@@ -263,10 +265,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return nextVal.project(outputConverter.get());
     }
     return nextVal;
-  }
-
-  public List<String> getValidBlockInstants() {
-    return validBlockInstants;
   }
 
   /**

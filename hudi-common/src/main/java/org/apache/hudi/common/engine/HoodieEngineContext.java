@@ -39,6 +39,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -49,6 +51,7 @@ import java.util.stream.Stream;
  * Base class contains the context information needed by the engine at runtime. It will be extended by different
  * engine implementation if needed.
  */
+@Getter
 public abstract class HoodieEngineContext {
 
   /**
@@ -61,14 +64,6 @@ public abstract class HoodieEngineContext {
   public HoodieEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
     this.storageConf = storageConf;
     this.taskContextSupplier = taskContextSupplier;
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
-  }
-
-  public TaskContextSupplier getTaskContextSupplier() {
-    return taskContextSupplier;
   }
 
   public abstract HoodieAccumulator newAccumulator();

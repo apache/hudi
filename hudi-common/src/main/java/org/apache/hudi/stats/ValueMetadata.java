@@ -26,6 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.parquet.schema.PrimitiveType;
 
@@ -40,6 +41,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
  * Used for wrapping and unwrapping col stat values
  * as well as for type promotion
  */
+@Getter
 public class ValueMetadata implements Serializable {
 
   private static final ParquetAdapter PARQUET_ADAPTER = ParquetAdapter.getAdapter();
@@ -48,10 +50,6 @@ public class ValueMetadata implements Serializable {
 
   protected ValueMetadata(ValueType valueType) {
     this.valueType = valueType;
-  }
-
-  public ValueType getValueType() {
-    return valueType;
   }
 
   public HoodieValueTypeInfo getValueTypeInfo() {

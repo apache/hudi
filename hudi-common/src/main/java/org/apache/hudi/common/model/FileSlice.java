@@ -22,6 +22,9 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,16 +42,19 @@ public class FileSlice implements Serializable {
   /**
    * File Group Id of the Slice.
    */
+  @Getter
   private final HoodieFileGroupId fileGroupId;
 
   /**
    * Point in the timeline, at which the slice was created.
    */
+  @Getter
   private final String baseInstantTime;
 
   /**
    * data file, with the compacted data, for this slice.
    */
+  @Setter
   private HoodieBaseFile baseFile;
 
   /**
@@ -91,10 +97,6 @@ public class FileSlice implements Serializable {
     this.logFiles.addAll(logFiles);
   }
 
-  public void setBaseFile(HoodieBaseFile baseFile) {
-    this.baseFile = baseFile;
-  }
-
   public void addLogFile(HoodieLogFile logFile) {
     this.logFiles.add(logFile);
   }
@@ -128,20 +130,12 @@ public class FileSlice implements Serializable {
     return logFiles.stream();
   }
 
-  public String getBaseInstantTime() {
-    return baseInstantTime;
-  }
-
   public String getPartitionPath() {
     return fileGroupId.getPartitionPath();
   }
 
   public String getFileId() {
     return fileGroupId.getFileId();
-  }
-
-  public HoodieFileGroupId getFileGroupId() {
-    return fileGroupId;
   }
 
   public Option<HoodieBaseFile> getBaseFile() {

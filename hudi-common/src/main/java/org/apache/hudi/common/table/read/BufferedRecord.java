@@ -22,6 +22,9 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.OrderingValues;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
@@ -33,11 +36,13 @@ import java.util.function.UnaryOperator;
  *
  * @param <T> The type of the engine specific row.
  */
+@Getter
 public class BufferedRecord<T> implements Serializable {
   private String recordKey;
   private T record;
   private final Comparable orderingValue;
   private final Integer schemaId;
+  @Setter
   @Nullable private HoodieOperation hoodieOperation;
 
   public BufferedRecord() {
@@ -52,22 +57,6 @@ public class BufferedRecord<T> implements Serializable {
     this.hoodieOperation = hoodieOperation;
   }
 
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public Comparable getOrderingValue() {
-    return orderingValue;
-  }
-
-  public T getRecord() {
-    return record;
-  }
-
-  public Integer getSchemaId() {
-    return schemaId;
-  }
-
   public boolean isDelete() {
     return HoodieOperation.isDelete(hoodieOperation) || HoodieOperation.isUpdateBefore(hoodieOperation);
   }
@@ -78,14 +67,6 @@ public class BufferedRecord<T> implements Serializable {
 
   public boolean isCommitTimeOrderingDelete() {
     return isDelete() && OrderingValues.isDefault(orderingValue);
-  }
-
-  public void setHoodieOperation(HoodieOperation hoodieOperation) {
-    this.hoodieOperation = hoodieOperation;
-  }
-
-  public HoodieOperation getHoodieOperation() {
-    return this.hoodieOperation;
   }
 
   public BufferedRecord<T> toBinary(RecordContext<T> recordContext) {

@@ -18,12 +18,15 @@
 
 package org.apache.hudi.expression;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * The expression that accept two child expressions.
  */
+@Getter
 public abstract class BinaryExpression implements Expression {
 
   private final Operator operator;
@@ -34,18 +37,6 @@ public abstract class BinaryExpression implements Expression {
     this.left = left;
     this.operator = operator;
     this.right = right;
-  }
-
-  public Operator getOperator() {
-    return operator;
-  }
-
-  public Expression getLeft() {
-    return left;
-  }
-
-  public Expression getRight() {
-    return right;
   }
 
   @Override

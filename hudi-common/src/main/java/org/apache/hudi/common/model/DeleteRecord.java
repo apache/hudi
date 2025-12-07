@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -44,6 +46,7 @@ public class DeleteRecord implements Serializable {
   /**
    * The record key and partition path.
    */
+  @Getter
   private final HoodieKey hoodieKey;
 
   /**
@@ -78,10 +81,6 @@ public class DeleteRecord implements Serializable {
 
   public String getPartitionPath() {
     return hoodieKey.getPartitionPath();
-  }
-
-  public HoodieKey getHoodieKey() {
-    return hoodieKey;
   }
 
   public Comparable<?> getOrderingValue() {

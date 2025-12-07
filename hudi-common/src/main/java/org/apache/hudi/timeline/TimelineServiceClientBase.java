@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.RetryHelper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import lombok.Getter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,6 +58,7 @@ public abstract class TimelineServiceClientBase implements Serializable {
     return  (retryHelper != null) ? retryHelper.start(() -> executeRequest(request)) : executeRequest(request);
   }
 
+  @Getter
   public static class Request {
     private final TimelineServiceClient.RequestMethod method;
     private final String path;
@@ -66,18 +68,6 @@ public abstract class TimelineServiceClientBase implements Serializable {
       this.method = method;
       this.path = path;
       this.queryParameters = queryParameters;
-    }
-
-    public RequestMethod getMethod() {
-      return method;
-    }
-
-    public String getPath() {
-      return path;
-    }
-
-    public Option<Map<String, String>> getQueryParameters() {
-      return queryParameters;
     }
 
     public static TimelineServiceClient.Request.Builder newBuilder(TimelineServiceClient.RequestMethod method, String path) {

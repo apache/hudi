@@ -21,12 +21,16 @@ package org.apache.hudi.common.model;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Objects;
 
 /**
  * Similar with {@link org.apache.hudi.common.model.HoodieRecordLocation} but with partition path.
  */
+@Getter
+@Setter
 public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
   private static final long serialVersionUID = 1L;
 
@@ -71,14 +75,6 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
   @Override
   public int hashCode() {
     return Objects.hash(partitionPath, instantTime, fileId);
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
   }
 
   /**

@@ -17,6 +17,7 @@
 
 package org.apache.hudi.common.util.collection;
 
+import lombok.Getter;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -318,6 +319,7 @@ public class TestClosableSortedDedupingIterator {
   private static class AutoCloseableIterator implements Iterator<String>, AutoCloseable {
     private final List<String> data;
     private int index = 0;
+    @Getter
     private boolean closed = false;
     
     public AutoCloseableIterator(List<String> data) {
@@ -341,10 +343,7 @@ public class TestClosableSortedDedupingIterator {
     public void close() throws Exception {
       closed = true;
     }
-    
-    public boolean isClosed() {
-      return closed;
-    }
+
   }
 
   @Test

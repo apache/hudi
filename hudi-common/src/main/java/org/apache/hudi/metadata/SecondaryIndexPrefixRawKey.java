@@ -19,11 +19,14 @@
 
 package org.apache.hudi.metadata;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
 /**
  * Represents a secondary index key, whose raw content is the column value of the data table.
  */
+@Getter
 public class SecondaryIndexPrefixRawKey implements RawKey {
   private final String secondaryKey;
 
@@ -34,10 +37,6 @@ public class SecondaryIndexPrefixRawKey implements RawKey {
   @Override
   public String encode() {
     return SecondaryIndexKeyUtils.getEscapedSecondaryKeyPrefixFromSecondaryKey(secondaryKey);
-  }
-
-  public String getSecondaryKey() {
-    return secondaryKey;
   }
 
   @Override

@@ -18,15 +18,14 @@
 
 package org.apache.hudi.exception;
 
+import lombok.Getter;
+
 import java.util.Map;
 
+@Getter
 public class HoodieMetaSyncException extends HoodieException {
 
   private Map<String,HoodieException> failedMetaSyncs;
-
-  public Map<String,HoodieException> getFailedMetaSyncs() {
-    return failedMetaSyncs;
-  }
 
   public HoodieMetaSyncException(String msg, Throwable e) {
     super(msg, e);

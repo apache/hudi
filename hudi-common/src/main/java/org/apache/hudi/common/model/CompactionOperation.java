@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,12 +40,18 @@ import java.util.stream.Collectors;
  */
 public class CompactionOperation implements Serializable {
 
+  @Getter
   private String baseInstantTime;
+  @Getter
   private Option<String> dataFileCommitTime;
+  @Getter
   private List<String> deltaFileNames;
+  @Getter
   private Option<String> dataFileName;
   private HoodieFileGroupId id;
+  @Getter
   private Map<String, Double> metrics;
+  @Getter
   private Option<String> bootstrapFilePath;
 
   // Only for serialization/de-serialization
@@ -83,22 +91,6 @@ public class CompactionOperation implements Serializable {
     this.metrics = metrics;
   }
 
-  public String getBaseInstantTime() {
-    return baseInstantTime;
-  }
-
-  public Option<String> getDataFileCommitTime() {
-    return dataFileCommitTime;
-  }
-
-  public List<String> getDeltaFileNames() {
-    return deltaFileNames;
-  }
-
-  public Option<String> getDataFileName() {
-    return dataFileName;
-  }
-
   public String getFileId() {
     return id.getFileId();
   }
@@ -107,16 +99,8 @@ public class CompactionOperation implements Serializable {
     return id.getPartitionPath();
   }
 
-  public Map<String, Double> getMetrics() {
-    return metrics;
-  }
-
   public HoodieFileGroupId getFileGroupId() {
     return id;
-  }
-
-  public Option<String> getBootstrapFilePath() {
-    return bootstrapFilePath;
   }
 
   public Option<HoodieBaseFile> getBaseFile(String basePath, String partitionPath) {

@@ -28,6 +28,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,16 +56,19 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
  * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
  * ***************************
  */
+@Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
 
   public static final String SCHEMA_KEY = "schema";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
+  @Setter
   protected Boolean compacted;
 
   protected Map<String, String> extraMetadata;
 
+  @Setter
   protected WriteOperationType operationType = WriteOperationType.UNKNOWN;
 
   // for ser/deser
@@ -92,28 +97,12 @@ public class HoodieCommitMetadata implements Serializable {
     return partitionToWriteStats.get(partitionPath);
   }
 
-  public Map<String, String> getExtraMetadata() {
-    return extraMetadata;
-  }
-
-  public Map<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
-    return partitionToWriteStats;
-  }
-
   public List<HoodieWriteStat> getWriteStats() {
     return partitionToWriteStats.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
   }
 
   public String getMetadata(String metaKey) {
     return extraMetadata.get(metaKey);
-  }
-
-  public Boolean getCompacted() {
-    return compacted;
-  }
-
-  public void setCompacted(Boolean compacted) {
-    this.compacted = compacted;
   }
 
   public HashMap<String, String> getFileIdAndRelativePaths() {
@@ -125,14 +114,6 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return filePaths;
-  }
-
-  public void setOperationType(WriteOperationType type) {
-    this.operationType = type;
-  }
-
-  public WriteOperationType getOperationType() {
-    return this.operationType;
   }
 
   public HashMap<String, String> getFileIdAndFullPaths(StoragePath basePath) {

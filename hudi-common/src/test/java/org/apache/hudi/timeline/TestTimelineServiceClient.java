@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.ParseException;
 import org.eclipse.jetty.server.Server;
@@ -182,10 +183,12 @@ class TestTimelineServiceClient {
       this.maxInducedFailures = maxInducedFailures;
     }
 
+    @Getter
     public enum ExceptionType {
       NO_HTTP_RESPONSE_EXCEPTION(NoHttpResponseException.class),
       PARSE_EXCEPTION(ParseException.class);
 
+      // Method to get the float value for an enum constant
       private final Class<? extends Exception> exceptionType;
 
       // Constructor to set the float value for each enum constant
@@ -193,10 +196,6 @@ class TestTimelineServiceClient {
         this.exceptionType = exceptionType;
       }
 
-      // Method to get the float value for an enum constant
-      public Class<? extends Exception> getExceptionType() {
-        return this.exceptionType;
-      }
     }
   }
 

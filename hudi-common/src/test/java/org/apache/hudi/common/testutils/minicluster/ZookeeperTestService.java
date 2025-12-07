@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.zookeeper.server.NIOServerCnxnFactory;
@@ -63,6 +64,7 @@ public class ZookeeperTestService {
   /**
    * Configuration settings.
    */
+  @Getter
   private Configuration hadoopConf;
   private String workDir;
   private Integer clientPort = 2828;
@@ -80,10 +82,6 @@ public class ZookeeperTestService {
   public ZookeeperTestService(Configuration config) throws IOException {
     this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
     this.hadoopConf = config;
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
   }
 
   public ZooKeeperServer start() throws IOException, InterruptedException {

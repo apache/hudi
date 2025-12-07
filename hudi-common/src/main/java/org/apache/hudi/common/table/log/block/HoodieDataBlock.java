@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -67,6 +68,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Key field's name w/in the record's schema
    */
+  @Getter
   private final String keyFieldName;
 
   private final boolean enablePointLookups;
@@ -130,10 +132,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     return serializeRecords(records.get(), storage);
-  }
-
-  public String getKeyFieldName() {
-    return keyFieldName;
   }
 
   public boolean containsPartialUpdates() {

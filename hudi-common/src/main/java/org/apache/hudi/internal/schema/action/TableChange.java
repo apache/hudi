@@ -25,6 +25,8 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Types;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -40,6 +42,7 @@ public interface TableChange {
   /**
    * The action Type of schema change.
    */
+  @Getter
   enum ColumnChangeID {
     ADD, UPDATE, DELETE, PROPERTY_CHANGE, REPLACE;
     private final String name;
@@ -48,9 +51,6 @@ public interface TableChange {
       this.name = this.name().toLowerCase(Locale.ROOT);
     }
 
-    public String getName() {
-      return name;
-    }
   }
 
   static ColumnChangeID fromValue(String value) {
@@ -209,7 +209,9 @@ public interface TableChange {
       }
     }
 
+    @Getter
     private final int srcId;
+    @Getter
     private final int dsrId;
     private final ColumnPositionType type;
 
@@ -246,14 +248,6 @@ public interface TableChange {
       this.srcId = srcId;
       this.dsrId = dsrId;
       this.type = type;
-    }
-
-    public int getSrcId() {
-      return srcId;
-    }
-
-    public int getDsrId() {
-      return dsrId;
     }
 
     public ColumnPositionType type() {

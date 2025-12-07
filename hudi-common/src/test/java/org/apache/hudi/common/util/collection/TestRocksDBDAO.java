@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
+import lombok.Getter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -274,6 +275,7 @@ public class TestRocksDBDAO {
   /**
    * A payload definition for {@link TestRocksDBDAO}.
    */
+  @Getter
   public static class Payload<T> implements Serializable {
 
     private final String prefix;
@@ -286,22 +288,6 @@ public class TestRocksDBDAO {
       this.key = key;
       this.val = val;
       this.family = family;
-    }
-
-    public String getPrefix() {
-      return prefix;
-    }
-
-    public T getKey() {
-      return key;
-    }
-
-    public String getVal() {
-      return val;
-    }
-
-    public String getFamily() {
-      return family;
     }
 
     @Override

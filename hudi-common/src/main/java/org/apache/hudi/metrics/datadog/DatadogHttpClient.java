@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.Getter;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.config.RequestConfig;
@@ -117,6 +118,7 @@ public class DatadogHttpClient implements Closeable {
     client.close();
   }
 
+  @Getter
   public enum ApiSite {
     US("com"), EU("eu");
 
@@ -126,8 +128,5 @@ public class DatadogHttpClient implements Closeable {
       this.domain = domain;
     }
 
-    public String getDomain() {
-      return domain;
-    }
   }
 }

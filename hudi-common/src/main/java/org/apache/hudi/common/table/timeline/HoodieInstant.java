@@ -20,6 +20,8 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Objects;
@@ -34,11 +36,15 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   public static final String UNDERSCORE = "_";
   public static final String EMPTY_FILE_EXTENSION = "";
 
+  @Getter
   private final State state;
+  @Getter
   private final String action;
   private final String requestedTime;
+  @Getter
   private final String completionTime;
   // Marker for older formats, we need the state transition time (pre table version 7)
+  @Getter
   private boolean isLegacy = false;
   private final Comparator<HoodieInstant> comparator;
 
@@ -71,16 +77,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return state == State.REQUESTED;
   }
 
-  public String getAction() {
-    return action;
-  }
-
   public String requestedTime() {
     return requestedTime;
-  }
-
-  public boolean isLegacy() {
-    return isLegacy;
   }
 
   @Override
@@ -93,14 +91,6 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     }
     HoodieInstant that = (HoodieInstant) o;
     return state == that.state && Objects.equals(action, that.action) && Objects.equals(requestedTime, that.requestedTime);
-  }
-
-  public State getState() {
-    return state;
-  }
-
-  public String getCompletionTime() {
-    return completionTime;
   }
 
   @Override

@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.util;
 
+import lombok.Getter;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -222,6 +224,7 @@ public class DateTimeUtils {
   /**
    * Enum which defines time unit, mostly used to parse value from configuration file.
    */
+  @Getter
   private enum TimeUnit {
     DAYS(ChronoUnit.DAYS, singular("d"), plural("day")),
     HOURS(ChronoUnit.HOURS, singular("h"), plural("hour")),
@@ -259,14 +262,6 @@ public class DateTimeUtils {
      */
     private static String[] plural(String label) {
       return new String[] {label, label + PLURAL_SUFFIX};
-    }
-
-    public List<String> getLabels() {
-      return labels;
-    }
-
-    public ChronoUnit getUnit() {
-      return unit;
     }
 
     public static String getAllUnits() {

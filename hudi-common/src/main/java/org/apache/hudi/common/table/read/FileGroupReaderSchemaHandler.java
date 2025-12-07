@@ -42,6 +42,8 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
@@ -67,20 +69,27 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
  */
 public class FileGroupReaderSchemaHandler<T> {
 
+  @Getter
   protected final Schema tableSchema;
 
   // requestedSchema: the schema that the caller requests
+  @Getter
   protected final Schema requestedSchema;
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
+  @Getter
   protected final Schema requiredSchema;
 
+  @Getter
   // the schema for updates, usually it equals with the requiredSchema,
   // the only exception is for incoming records, which do not include the metadata fields.
+  @Setter
   protected Schema schemaForUpdates;
 
+  @Getter
   protected final InternalSchema internalSchema;
 
+  @Getter
   protected final Option<InternalSchema> internalSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
@@ -88,6 +97,7 @@ public class FileGroupReaderSchemaHandler<T> {
   protected final HoodieReaderContext<T> readerContext;
 
   protected final TypedProperties properties;
+  @Getter
   private final DeleteContext deleteContext;
   private final HoodieTableMetaClient metaClient;
 
@@ -110,46 +120,11 @@ public class FileGroupReaderSchemaHandler<T> {
     this.metaClient = metaClient;
   }
 
-  public Schema getTableSchema() {
-    return this.tableSchema;
-  }
-
-  public Schema getRequestedSchema() {
-    return this.requestedSchema;
-  }
-
-  public Schema getRequiredSchema() {
-    return this.requiredSchema;
-  }
-
-  public Schema getSchemaForUpdates() {
-    return this.schemaForUpdates;
-  }
-
-  /**
-   * This is a special case for incoming records, which do not have metadata fields in schema.
-   */
-  public void setSchemaForUpdates(Schema schema) {
-    this.schemaForUpdates = schema;
-  }
-
-  public InternalSchema getInternalSchema() {
-    return this.internalSchema;
-  }
-
-  public Option<InternalSchema> getInternalSchemaOpt() {
-    return this.internalSchemaOpt;
-  }
-
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
       return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));
     }
     return Option.empty();
-  }
-
-  public DeleteContext getDeleteContext() {
-    return deleteContext;
   }
 
   public Pair<Schema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {

@@ -23,6 +23,8 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
+import lombok.Getter;
+
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
@@ -39,16 +41,23 @@ import static org.apache.hudi.stats.ValueMetadata.getEmptyValueMetadata;
  */
 @SuppressWarnings("rawtype")
 public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializable {
+  @Getter
   private final String filePath;
+  @Getter
   private final String columnName;
   @Nullable
   private final T minValue;
   @Nullable
   private final T maxValue;
+  @Getter
   private final long nullCount;
+  @Getter
   private final long valueCount;
+  @Getter
   private final long totalSize;
+  @Getter
   private final long totalUncompressedSize;
+  @Getter
   private final ValueMetadata valueMetadata;
 
   private HoodieColumnRangeMetadata(String filePath,
@@ -71,14 +80,6 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     this.valueMetadata = valueMetadata;
   }
 
-  public String getFilePath() {
-    return this.filePath;
-  }
-
-  public String getColumnName() {
-    return this.columnName;
-  }
-
   @Nullable
   public T getMinValue() {
     return this.minValue;
@@ -95,26 +96,6 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
   public Object getMaxValueWrapped() {
     return getValueMetadata().wrapValue(getMaxValue());
-  }
-
-  public long getNullCount() {
-    return nullCount;
-  }
-
-  public long getValueCount() {
-    return valueCount;
-  }
-
-  public long getTotalSize() {
-    return totalSize;
-  }
-
-  public long getTotalUncompressedSize() {
-    return totalUncompressedSize;
-  }
-
-  public ValueMetadata getValueMetadata() {
-    return valueMetadata;
   }
 
   @Override

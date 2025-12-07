@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -36,6 +39,8 @@ import java.util.Objects;
  *
  *       Check out HUDI-5760 for more details
  */
+@Getter
+@Setter
 public class HoodieKey implements Serializable {
 
   private String recordKey;
@@ -48,22 +53,6 @@ public class HoodieKey implements Serializable {
   public HoodieKey(String recordKey, String partitionPath) {
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
-  }
-
-  public void setRecordKey(String recordKey) {
-    this.recordKey = recordKey;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
   }
 
   @Override

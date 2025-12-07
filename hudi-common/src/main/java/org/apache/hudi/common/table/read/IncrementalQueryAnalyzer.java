@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,6 +114,7 @@ public class IncrementalQueryAnalyzer {
   private static final Logger LOG = LoggerFactory.getLogger(IncrementalQueryAnalyzer.class);
 
   private final HoodieTableMetaClient metaClient;
+  @Getter
   private final Option<String> startCompletionTime;
   private final Option<String> endCompletionTime;
   private final InstantRange.RangeType rangeType;
@@ -141,10 +143,6 @@ public class IncrementalQueryAnalyzer {
     this.skipInsertOverwrite = skipInsertOverwrite;
     this.readCdcFromChangelog = readCdcFromChangelog;
     this.limit = limit;
-  }
-
-  public Option<String> getStartCompletionTime() {
-    return startCompletionTime;
   }
 
   /**
@@ -368,16 +366,21 @@ public class IncrementalQueryAnalyzer {
     /**
      * An empty option indicates consumption from the earliest instant.
      */
+    @Getter
     private final Option<String> startInstant;
     /**
      * An empty option indicates consumption to the latest instant.
      */
+    @Getter
     private final Option<String> endInstant;
+    @Getter
     private final List<HoodieInstant> archivedInstants;
+    @Getter
     private final List<HoodieInstant> activeInstants;
     /**
      * The active timeline to read filtered by given configurations.
      */
+    @Getter
     private final HoodieTimeline activeTimeline;
     /**
      * The archived timeline to read filtered by given configurations.
@@ -421,14 +424,6 @@ public class IncrementalQueryAnalyzer {
       return this.instants;
     }
 
-    public Option<String> getStartInstant() {
-      return startInstant;
-    }
-
-    public Option<String> getEndInstant() {
-      return endInstant;
-    }
-
     /**
      * Returns the latest instant time which should be included physically in reading.
      */
@@ -439,14 +434,6 @@ public class IncrementalQueryAnalyzer {
 
     public List<HoodieInstant> getInstants() {
       return Stream.concat(archivedInstants.stream(), activeInstants.stream()).collect(Collectors.toList());
-    }
-
-    public List<HoodieInstant> getArchivedInstants() {
-      return archivedInstants;
-    }
-
-    public List<HoodieInstant> getActiveInstants() {
-      return activeInstants;
     }
 
     public boolean isConsumingFromEarliest() {
@@ -487,10 +474,6 @@ public class IncrementalQueryAnalyzer {
                 .explicitInstants(new HashSet<>(instants))
                 .build());
       }
-    }
-
-    public HoodieTimeline getActiveTimeline() {
-      return this.activeTimeline;
     }
 
     public @Nullable HoodieTimeline getArchivedTimeline() {

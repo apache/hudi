@@ -21,6 +21,8 @@ package org.apache.hudi.internal.schema;
 import org.apache.hudi.internal.schema.Type.NestedType;
 import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
@@ -583,12 +585,14 @@ public class Types {
       return new Field(true, id, name, type, null, null);
     }
 
+    @Getter
     private final boolean isOptional;
     private final int id;
     private final String name;
     private final Type type;
     private final String doc;
     // Experimental properties
+    @Getter
     private final Object defaultValue;
 
     private Field(boolean isOptional, int id, String name, Type type, String doc, Object defaultValue) {
@@ -598,14 +602,6 @@ public class Types {
       this.type = type;
       this.doc = doc;
       this.defaultValue = defaultValue;
-    }
-
-    public Object getDefaultValue() {
-      return defaultValue;
-    }
-
-    public boolean isOptional() {
-      return isOptional;
     }
 
     public int fieldId() {

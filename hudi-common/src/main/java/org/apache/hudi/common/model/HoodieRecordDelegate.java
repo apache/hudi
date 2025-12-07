@@ -26,6 +26,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.Getter;
 
 import javax.annotation.Nullable;
 
@@ -40,16 +41,19 @@ import java.io.Serializable;
  */
 public class HoodieRecordDelegate implements Serializable, KryoSerializable {
 
+  @Getter
   private HoodieKey hoodieKey;
 
   /**
    * Current location of record on storage. Filled in by looking up index
    */
+  @Getter
   private Option<HoodieRecordLocation> currentLocation;
 
   /**
    * New location of record on storage, after written.
    */
+  @Getter
   private Option<HoodieRecordLocation> newLocation;
 
   /**
@@ -113,18 +117,6 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
 
   public String getPartitionPath() {
     return hoodieKey.getPartitionPath();
-  }
-
-  public HoodieKey getHoodieKey() {
-    return hoodieKey;
-  }
-
-  public Option<HoodieRecordLocation> getCurrentLocation() {
-    return currentLocation;
-  }
-
-  public Option<HoodieRecordLocation> getNewLocation() {
-    return newLocation;
   }
 
   public boolean getIgnoreIndexUpdate() {

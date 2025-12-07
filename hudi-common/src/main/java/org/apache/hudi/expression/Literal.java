@@ -21,6 +21,8 @@ package org.apache.hudi.expression;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
+import lombok.Getter;
+
 import javax.xml.bind.DatatypeConverter;
 
 import java.math.BigDecimal;
@@ -80,16 +82,13 @@ public class Literal<T> extends LeafExpression {
         + value.getClass().getName() + " to Literal");
   }
 
+  @Getter
   private final T value;
   private final Type type;
 
   public Literal(T value, Type type) {
     this.value = value;
     this.type = type;
-  }
-
-  public T getValue() {
-    return value;
   }
 
   @Override

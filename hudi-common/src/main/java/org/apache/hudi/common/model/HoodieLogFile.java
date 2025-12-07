@@ -24,6 +24,9 @@ import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Objects;
@@ -47,6 +50,8 @@ public class HoodieLogFile implements Serializable {
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
 
+  @Setter
+  @Getter
   private transient StoragePathInfo pathInfo;
   private transient StoragePath path;
   private final String pathStr;
@@ -56,6 +61,7 @@ public class HoodieLogFile implements Serializable {
   private String logWriteToken;
   private String fileExtension;
   private String suffix;
+  @Setter
   private long fileLen;
 
   public HoodieLogFile(HoodieLogFile logFile) {
@@ -165,20 +171,8 @@ public class HoodieLogFile implements Serializable {
     return getPath().getName();
   }
 
-  public void setFileLen(long fileLen) {
-    this.fileLen = fileLen;
-  }
-
   public long getFileSize() {
     return fileLen;
-  }
-
-  public StoragePathInfo getPathInfo() {
-    return pathInfo;
-  }
-
-  public void setPathInfo(StoragePathInfo pathInfo) {
-    this.pathInfo = pathInfo;
   }
 
   public HoodieLogFile rollOver(String logWriteToken) {

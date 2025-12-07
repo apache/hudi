@@ -46,6 +46,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,9 +93,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
+  @Getter
   private long numMergedRecordsInLog;
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
+  @Getter
   private long totalTimeTakenToReadAndMergeBlocks;
   private final String[] orderingFields;
   private final DeleteContext deleteContext;
@@ -240,10 +243,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     return recordMerger.getRecordType();
   }
 
-  public long getNumMergedRecordsInLog() {
-    return numMergedRecordsInLog;
-  }
-
   /**
    * Returns the builder for {@code HoodieMergedLogRecordScanner}.
    */
@@ -309,10 +308,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
       records.put(key, record);
     }
-  }
-
-  public long getTotalTimeTakenToReadAndMergeBlocks() {
-    return totalTimeTakenToReadAndMergeBlocks;
   }
 
   @Override

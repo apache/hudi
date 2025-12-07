@@ -19,8 +19,11 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
+@Getter
 class TestRecord {
   private final String recordKey;
   private final int value;
@@ -44,11 +47,4 @@ class TestRecord {
     return Objects.hash(recordKey, value);
   }
 
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public int getValue() {
-    return value;
-  }
 }

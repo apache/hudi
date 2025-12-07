@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -342,8 +343,10 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     // Size (numberOfBytes) of the value written to disk
     private final Integer sizeOfValue;
     // Actual key
+    @Getter
     private final byte[] key;
     // Actual value
+    @Getter
     private final byte[] value;
     // Current timestamp when the value was written to disk
     private final Long timestamp;
@@ -369,14 +372,6 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       return sizeOfValue;
     }
 
-    public byte[] getKey() {
-      return key;
-    }
-
-    public byte[] getValue() {
-      return value;
-    }
-
     public long getTimestamp() {
       return timestamp;
     }
@@ -388,10 +383,12 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
   public static final class ValueMetadata implements Comparable<ValueMetadata> {
 
     // FilePath to store the spilled data
+    @Getter
     private final String filePath;
     // Size (numberOfBytes) of the value written to disk
     private final Integer sizeOfValue;
     // FilePosition of the value written to disk
+    @Getter
     private final Long offsetOfValue;
     // Current timestamp when the value was written to disk
     private final Long timestamp;
@@ -403,16 +400,8 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       this.timestamp = timestamp;
     }
 
-    public String getFilePath() {
-      return filePath;
-    }
-
     public int getSizeOfValue() {
       return sizeOfValue;
-    }
-
-    public Long getOffsetOfValue() {
-      return offsetOfValue;
     }
 
     public long getTimestamp() {

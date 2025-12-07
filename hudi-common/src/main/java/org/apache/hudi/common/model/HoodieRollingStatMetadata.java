@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,7 @@ import java.util.Map;
 /**
  * This class holds statistics about files belonging to a table.
  */
+@Getter
 public class HoodieRollingStatMetadata implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRollingStatMetadata.class);
@@ -92,11 +94,4 @@ public class HoodieRollingStatMetadata implements Serializable {
     return this;
   }
 
-  public Map<String, Map<String, HoodieRollingStat>> getPartitionToRollingStats() {
-    return partitionToRollingStats;
-  }
-
-  public String getActionType() {
-    return actionType;
-  }
 }

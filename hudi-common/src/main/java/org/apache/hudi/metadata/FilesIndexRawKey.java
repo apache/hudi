@@ -19,12 +19,15 @@
 
 package org.apache.hudi.metadata;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
 /**
  * Represents a raw key for the FILES partition in the metadata table.
  * This uses identity encoding - the key is used as-is without transformation.
  */
+@Getter
 public class FilesIndexRawKey implements RawKey {
   private final String key;
 
@@ -35,10 +38,6 @@ public class FilesIndexRawKey implements RawKey {
   @Override
   public String encode() {
     // Identity encoding - return the key as-is
-    return key;
-  }
-
-  public String getKey() {
     return key;
   }
 

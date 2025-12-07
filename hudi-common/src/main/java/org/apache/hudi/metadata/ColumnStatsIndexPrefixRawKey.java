@@ -22,11 +22,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
 /**
  * Represents a raw key for column stats index consisting of column name and optional partition name.
  */
+@Getter
 public class ColumnStatsIndexPrefixRawKey implements RawKey {
   private static final long serialVersionUID = 1L;
   
@@ -45,15 +48,7 @@ public class ColumnStatsIndexPrefixRawKey implements RawKey {
     this.columnName = Objects.requireNonNull(columnName, "Column name cannot be null");
     this.partitionName = Objects.requireNonNull(partitionName, "Partition name option cannot be null");
   }
-  
-  public String getColumnName() {
-    return columnName;
-  }
-  
-  public Option<String> getPartitionName() {
-    return partitionName;
-  }
-  
+
   @Override
   public String encode() {
     ColumnIndexID columnIndexID = new ColumnIndexID(columnName);

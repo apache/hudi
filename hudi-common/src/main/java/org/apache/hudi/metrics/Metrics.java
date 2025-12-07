@@ -27,6 +27,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.codahale.metrics.MetricRegistry;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +46,7 @@ public class Metrics {
 
   private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
 
+  @Getter
   private final MetricRegistry registry;
   private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
@@ -174,10 +176,6 @@ public class Metrics {
 
   public Option<HoodieGauge<Long>> registerGauge(String metricName) {
     return registerGauge(metricName, 0);
-  }
-
-  public MetricRegistry getRegistry() {
-    return registry;
   }
 
   public static boolean isInitialized(String basePath) {

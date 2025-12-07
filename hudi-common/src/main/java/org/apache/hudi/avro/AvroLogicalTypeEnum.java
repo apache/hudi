@@ -18,11 +18,14 @@
 
 package org.apache.hudi.avro;
 
+import lombok.Getter;
+
 /**
  * Enum of Avro logical types that merciful json convertor are aware of.
  * Currently, all logical types offered by Avro 1.10 is supported here.
  * Check https://avro.apache.org/docs/1.10.0/spec.html#Logical+Types for more details.
  */
+@Getter
 public enum AvroLogicalTypeEnum {
   DECIMAL("decimal"),
   UUID("uuid"),
@@ -41,7 +44,4 @@ public enum AvroLogicalTypeEnum {
     this.value = value;
   }
 
-  public String getValue() {
-    return value;
-  }
 }

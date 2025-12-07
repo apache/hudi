@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,6 +104,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // optional instant range for incremental block filtering
   private final Option<InstantRange> instantRange;
   // Read the operation metadata field from the avro record
+  @Getter
   private final boolean withOperationField;
   // FileSystem
   private final HoodieStorage storage;
@@ -119,13 +121,20 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Total number of corrupt blocks written across all log files
   private AtomicLong totalCorruptBlocks = new AtomicLong(0);
   // Store the last instant log blocks (needed to implement rollback)
+  @Getter
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
   protected final boolean forceFullScan;
+  /**
+   * -- GETTER --
+   *  Return progress of scanning as a float between 0.0 to 1.0.
+   */
   // Progress
+  @Getter
   private float progress = 0.0f;
   // Record type read from log block
   // Collect all the block instants after scanning all the log files.
+  @Getter
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
@@ -604,13 +613,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     return !forceFullScan;
   }
 
-  /**
-   * Return progress of scanning as a float between 0.0 to 1.0.
-   */
-  public float getProgress() {
-    return progress;
-  }
-
   public long getTotalLogFiles() {
     return totalLogFiles.get();
   }
@@ -639,20 +641,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     return totalCorruptBlocks.get();
   }
 
-  public boolean isWithOperationField() {
-    return withOperationField;
-  }
-
   protected TypedProperties getPayloadProps() {
     return payloadProps;
-  }
-
-  public Deque<HoodieLogBlock> getCurrentInstantLogBlocks() {
-    return currentInstantLogBlocks;
-  }
-
-  public List<String> getValidBlockInstants() {
-    return validBlockInstants;
   }
 
   private Pair<ClosableIterator<T>, Schema> getRecordsIterator(

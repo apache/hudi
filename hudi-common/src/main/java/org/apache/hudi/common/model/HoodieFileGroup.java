@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
@@ -48,6 +50,7 @@ public class HoodieFileGroup implements Serializable {
   /**
    * file group id.
    */
+  @Getter
   private final HoodieFileGroupId fileGroupId;
 
   /**
@@ -58,6 +61,7 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Timeline, based on which all getter work.
    */
+  @Getter
   private final HoodieTimeline timeline;
 
   /**
@@ -140,10 +144,6 @@ public class HoodieFileGroup implements Serializable {
 
   public String getPartitionPath() {
     return fileGroupId.getPartitionPath();
-  }
-
-  public HoodieFileGroupId getFileGroupId() {
-    return fileGroupId;
   }
 
   /**
@@ -248,10 +248,6 @@ public class HoodieFileGroup implements Serializable {
 
   public Stream<FileSlice> getAllRawFileSlices() {
     return fileSlices.values().stream();
-  }
-
-  public HoodieTimeline getTimeline() {
-    return timeline;
   }
 
   @Override

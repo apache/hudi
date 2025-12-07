@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -65,7 +67,9 @@ public abstract class RecordContext<T> implements Serializable {
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
+  @Getter
   protected final JavaTypeConverter typeConverter;
+  @Setter
   protected String partitionPath;
 
   protected RecordContext(HoodieTableConfig tableConfig, JavaTypeConverter typeConverter) {
@@ -82,10 +86,6 @@ public abstract class RecordContext<T> implements Serializable {
       throw new UnsupportedOperationException("Record key extractor is not initialized");
     };
     this.typeConverter = typeConverter;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
   }
 
   public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
@@ -169,10 +169,6 @@ public abstract class RecordContext<T> implements Serializable {
    * @return A new instance of Engine record.
    */
   public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
-
-  public JavaTypeConverter getTypeConverter() {
-    return typeConverter;
-  }
 
   /**
    * Gets the record key in String.
