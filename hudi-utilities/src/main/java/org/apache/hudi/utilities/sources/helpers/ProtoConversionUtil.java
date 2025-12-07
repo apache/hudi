@@ -440,6 +440,7 @@ public class ProtoConversionUtil {
             return getWrappedValue(value);
           }
           return value; // immutable
+        case TIMESTAMP:
         case LONG:
           Object tmpValue = value;
           if (value instanceof Message) {
