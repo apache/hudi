@@ -25,6 +25,7 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
+import lombok.Getter;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -375,6 +376,7 @@ public class TestConfigurations {
    * Tool to build hoodie table DDL with schema {@link #TABLE_SCHEMA}.
    */
   public static class Sql {
+    @Getter
     private final Map<String, String> options;
     private final String tableName;
     private List<String> fields = new ArrayList<>();
@@ -428,10 +430,6 @@ public class TestConfigurations {
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
-    }
-
-    public Map<String, String> getOptions() {
-      return this.options;
     }
   }
 

@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,10 +34,15 @@ import java.util.Map;
  */
 public class SerializableHoodieRollbackRequest implements Serializable {
 
+  @Getter
   private final String partitionPath;
+  @Getter
   private final String fileId;
+  @Getter
   private final String latestBaseInstant;
+  @Getter
   private final List<String> filesToBeDeleted = new ArrayList<>();
+  @Getter
   private final Map<String, Long> logBlocksToBeDeleted = new HashMap<>();
 
   public SerializableHoodieRollbackRequest(HoodieRollbackRequest rollbackRequest) {
@@ -44,25 +51,5 @@ public class SerializableHoodieRollbackRequest implements Serializable {
     this.latestBaseInstant = rollbackRequest.getLatestBaseInstant();
     this.filesToBeDeleted.addAll(rollbackRequest.getFilesToBeDeleted());
     this.logBlocksToBeDeleted.putAll(rollbackRequest.getLogBlocksToBeDeleted());
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getLatestBaseInstant() {
-    return latestBaseInstant;
-  }
-
-  public List<String> getFilesToBeDeleted() {
-    return filesToBeDeleted;
-  }
-
-  public Map<String, Long> getLogBlocksToBeDeleted() {
-    return logBlocksToBeDeleted;
   }
 }

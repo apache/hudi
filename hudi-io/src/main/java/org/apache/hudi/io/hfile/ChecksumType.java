@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
+import lombok.Getter;
+
 /**
  * Type of checksum used to validate the integrity of data block.
  * It determines the number of bytes used for checksum.
@@ -46,6 +48,7 @@ public enum ChecksumType {
     }
   };
 
+  @Getter
   private final byte code;
 
   public static ChecksumType getDefaultChecksumType() {
@@ -57,10 +60,6 @@ public enum ChecksumType {
 
   private ChecksumType(final byte c) {
     this.code = c;
-  }
-
-  public byte getCode() {
-    return this.code;
   }
 
   /**

@@ -20,6 +20,7 @@ package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -217,7 +218,9 @@ public class ParquetBinaryCopyChecker {
 
   public static class ParquetFileInfo implements Serializable {
     private final boolean canBinaryCopy;
+    @Getter
     private final String bloomFilterTypeCode;
+    @Getter
     private final String schema;
 
     public ParquetFileInfo(boolean canBinaryCopy, String hoodieBloomFilterTypeCode, String schema) {
@@ -237,14 +240,6 @@ public class ParquetBinaryCopyChecker {
      */
     public boolean canBinaryCopy() {
       return canBinaryCopy;
-    }
-
-    public String getBloomFilterTypeCode() {
-      return bloomFilterTypeCode;
-    }
-
-    public String getSchema() {
-      return schema;
     }
   }
 

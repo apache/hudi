@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   private static final Logger LOG = LoggerFactory.getLogger(InProcessLockProvider.class);
   private static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
+  @Getter
   private final ReentrantReadWriteLock lock;
   private final String basePath;
   private final long maxWaitTimeMillis;
@@ -110,11 +112,6 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
     } catch (Exception e) {
       throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
     }
-  }
-
-  @Override
-  public ReentrantReadWriteLock getLock() {
-    return lock;
   }
 
   @Override

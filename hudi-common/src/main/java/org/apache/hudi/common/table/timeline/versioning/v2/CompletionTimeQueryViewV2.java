@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
@@ -73,6 +74,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    * a completion query for t5 would trigger lazy loading with this cursor instant updated to t5.
    * This sliding window model amortizes redundant loading from different queries.
    */
+  @Getter
   private volatile String cursorInstant;
 
   /**
@@ -312,11 +314,6 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
       completionTime = beginInstantTime;
     }
     this.instantTimeToCompletionTimeMap.putIfAbsent(beginInstantTime, completionTime);
-  }
-
-  @Override
-  public String getCursorInstant() {
-    return cursorInstant;
   }
 
   @Override

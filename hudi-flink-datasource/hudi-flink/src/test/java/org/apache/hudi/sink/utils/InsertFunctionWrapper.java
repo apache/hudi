@@ -29,6 +29,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
@@ -62,6 +63,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockOperatorEventGateway gateway;
   private final MockSubtaskGateway subtaskGateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
+  @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
 
@@ -180,10 +182,6 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     // reset the attempt number to simulate the task failover/retries
     this.runtimeContext.setAttemptNumber(attemptNumber);
     setupWriteFunction();
-  }
-
-  public StreamWriteOperatorCoordinator getCoordinator() {
-    return coordinator;
   }
 
   @Override

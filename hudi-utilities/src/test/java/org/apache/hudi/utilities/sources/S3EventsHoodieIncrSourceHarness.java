@@ -56,6 +56,7 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -280,7 +281,9 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   static class TestSourceProfile implements SourceProfile<Long> {
+    @Getter
     private final long maxSourceBytes;
+    @Getter
     private final int sourcePartitions;
     private final long bytesPerPartition;
 
@@ -288,16 +291,6 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
       this.maxSourceBytes = maxSourceBytes;
       this.sourcePartitions = sourcePartitions;
       this.bytesPerPartition = bytesPerPartition;
-    }
-
-    @Override
-    public long getMaxSourceBytes() {
-      return maxSourceBytes;
-    }
-
-    @Override
-    public int getSourcePartitions() {
-      return sourcePartitions;
     }
 
     @Override

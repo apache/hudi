@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -43,6 +45,7 @@ public class RealtimeFileStatus extends FileStatus {
   /**
    * List of delta log-files holding updated records for this base-file
    */
+  @Getter
   private final List<HoodieLogFile> deltaLogFiles;
   /**
    * Marks whether this path produced as part of Incremental Query
@@ -52,10 +55,13 @@ public class RealtimeFileStatus extends FileStatus {
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
+  @Getter
+  @Setter
   private String maxCommitTime = "";
   /**
    * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
    */
+  @Setter
   private FileStatus bootStrapFileStatus;
   /**
    * Virtual key configuration of the table this split belongs to
@@ -86,21 +92,5 @@ public class RealtimeFileStatus extends FileStatus {
     }
 
     return realtimePath;
-  }
-
-  public List<HoodieLogFile> getDeltaLogFiles() {
-    return deltaLogFiles;
-  }
-
-  public String getMaxCommitTime() {
-    return maxCommitTime;
-  }
-
-  public void setMaxCommitTime(String maxCommitTime) {
-    this.maxCommitTime = maxCommitTime;
-  }
-
-  public void setBootStrapFileStatus(FileStatus bootStrapFileStatus) {
-    this.bootStrapFileStatus = bootStrapFileStatus;
   }
 }

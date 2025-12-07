@@ -72,6 +72,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -160,6 +161,7 @@ public class HoodieTestTable implements AutoCloseable {
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
+  @Getter
   private boolean isNonPartitioned = false;
   protected Option<HoodieEngineContext> context;
   protected final InstantGenerator instantGenerator = new DefaultInstantGenerator();
@@ -189,10 +191,6 @@ public class HoodieTestTable implements AutoCloseable {
 
   public void setNonPartitioned() {
     this.isNonPartitioned = true;
-  }
-
-  public boolean isNonPartitioned() {
-    return this.isNonPartitioned;
   }
 
   public static String makeNewCommitTime(int sequence, String instantFormat) {

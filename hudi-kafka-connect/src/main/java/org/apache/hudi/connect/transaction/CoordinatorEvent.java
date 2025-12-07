@@ -20,6 +20,9 @@ package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.connect.ControlMessage;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * The events within the Coordinator that trigger
  * the state changes in the state machine of
@@ -27,9 +30,14 @@ import org.apache.hudi.connect.ControlMessage;
  */
 public class CoordinatorEvent {
 
+  @Getter
   private final CoordinatorEventType eventType;
+  @Getter
   private final String topicName;
+  @Getter
   private final String commitTime;
+  @Getter
+  @Setter
   private ControlMessage message;
 
   public CoordinatorEvent(CoordinatorEventType eventType,
@@ -38,26 +46,6 @@ public class CoordinatorEvent {
     this.eventType = eventType;
     this.topicName = topicName;
     this.commitTime = commitTime;
-  }
-
-  public CoordinatorEventType getEventType() {
-    return eventType;
-  }
-
-  public String getTopicName() {
-    return topicName;
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public ControlMessage getMessage() {
-    return message;
-  }
-
-  public void setMessage(ControlMessage message) {
-    this.message = message;
   }
 
   /**

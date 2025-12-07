@@ -45,6 +45,7 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -128,6 +129,7 @@ import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_P
 public class HoodieHiveCatalog extends AbstractCatalog {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveCatalog.class);
 
+  @Getter
   private final HiveConf hiveConf;
   private IMetaStoreClient client;
 
@@ -186,10 +188,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       client = null;
       LOG.info("Disconnect to hive metastore");
     }
-  }
-
-  public HiveConf getHiveConf() {
-    return hiveConf;
   }
 
   // ------ databases ------

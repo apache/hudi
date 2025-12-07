@@ -96,6 +96,7 @@ import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkException;
@@ -222,6 +223,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private final String taskLabels;
 
+  @Getter
   private final List<Throwable> throwables = new ArrayList<>();
 
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
@@ -245,14 +247,6 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
-  }
-
-  /**
-   * Returns list of Throwable which were encountered during validation. This method is useful
-   * when ignoreFailed parameter is set to true.
-   */
-  public List<Throwable> getThrowables() {
-    return throwables;
   }
 
   /**
@@ -1816,10 +1810,14 @@ public class HoodieMetadataTableValidator implements Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataValidationContext.class);
 
     private final Properties props;
+    @Getter
     private final HoodieTableMetaClient metaClient;
+    @Getter
     private final HoodieMetadataConfig metadataConfig;
+    @Getter
     private final HoodieSchema schema;
     private final HoodieTableFileSystemView fileSystemView;
+    @Getter
     private final HoodieTableMetadata tableMetadata;
     private final boolean enableMetadataTable;
     private List<String> allColumnNameList;
@@ -1869,22 +1867,6 @@ public class HoodieMetadataTableValidator implements Serializable {
           throw new HoodieException("Unsupported storage type " + viewConf.getStorageType() + ", used with HoodieMetadataTableValidator");
       }
       return (HoodieTableFileSystemView) FileSystemViewManager.createViewManager(context, metadataConfig, viewConf, commonConfig, unused -> tableMetadata).getFileSystemView(metaClient);
-    }
-
-    public HoodieTableMetaClient getMetaClient() {
-      return metaClient;
-    }
-
-    public HoodieMetadataConfig getMetadataConfig() {
-      return metadataConfig;
-    }
-
-    public HoodieSchema getSchema() {
-      return schema;
-    }
-
-    public HoodieTableMetadata getTableMetadata() {
-      return tableMetadata;
     }
 
     public List<HoodieBaseFile> getSortedLatestBaseFileList(String partitionPath) {

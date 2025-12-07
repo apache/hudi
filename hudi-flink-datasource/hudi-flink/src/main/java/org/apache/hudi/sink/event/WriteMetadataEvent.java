@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.util.WriteStatusMerger;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
@@ -39,10 +41,19 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   public static final String BOOTSTRAP_INSTANT = "";
 
+  @Getter
+  @Setter
   private List<WriteStatus> writeStatuses;
+  @Getter
+  @Setter
   private int taskID;
+  @Setter
   private long checkpointId;
+  @Getter
+  @Setter
   private String instantTime;
+  @Getter
+  @Setter
   private boolean lastBatch;
 
   /**
@@ -51,11 +62,15 @@ public class WriteMetadataEvent implements OperatorEvent {
    * 1. batch execution mode
    * 2. bounded stream source such as VALUES
    */
+  @Getter
+  @Setter
   private boolean endInput;
 
   /**
    * Flag saying whether the event comes from bootstrap of a write function.
    */
+  @Getter
+  @Setter
   private boolean bootstrap;
 
   /**
@@ -98,60 +113,8 @@ public class WriteMetadataEvent implements OperatorEvent {
     return new Builder();
   }
 
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public int getTaskID() {
-    return taskID;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
-  }
-
   public Long getCheckpointId() {
     return checkpointId;
-  }
-
-  public void setCheckpointId(long checkpointId) {
-    this.checkpointId = checkpointId;
-  }
-
-  public String getInstantTime() {
-    return instantTime;
-  }
-
-  public void setInstantTime(String instantTime) {
-    this.instantTime = instantTime;
-  }
-
-  public boolean isEndInput() {
-    return endInput;
-  }
-
-  public void setEndInput(boolean endInput) {
-    this.endInput = endInput;
-  }
-
-  public boolean isBootstrap() {
-    return bootstrap;
-  }
-
-  public void setBootstrap(boolean bootstrap) {
-    this.bootstrap = bootstrap;
-  }
-
-  public boolean isLastBatch() {
-    return lastBatch;
-  }
-
-  public void setLastBatch(boolean lastBatch) {
-    this.lastBatch = lastBatch;
   }
 
   /**

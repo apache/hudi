@@ -155,23 +155,15 @@ public class ValueMetadata implements Serializable {
       return new DecimalMetadata(precision, scale);
     }
 
+    @Getter
     private final int precision;
+    @Getter
     private final int scale;
 
     private DecimalMetadata(int precision, int scale) {
       super(ValueType.DECIMAL);
       this.precision = precision;
       this.scale = scale;
-    }
-
-    @Override
-    public int getPrecision() {
-      return precision;
-    }
-
-    @Override
-    public int getScale() {
-      return scale;
     }
 
     @Override

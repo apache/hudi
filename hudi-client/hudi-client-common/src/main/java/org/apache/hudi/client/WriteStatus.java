@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,26 +57,43 @@ public class WriteStatus implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
+  @Getter
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
+  @Getter
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   // true if this WriteStatus refers to a write happening in metadata table.
+  @Getter
   private final boolean isMetadataTable;
+  @Getter
+  @Setter
   private Throwable globalError = null;
 
+  @Getter
+  @Setter
   private String fileId = null;
 
+  @Getter
+  @Setter
   private String partitionPath = null;
 
+  @Getter
+  @Setter
   private HoodieWriteStat stat = null;
 
+  @Getter
+  @Setter
   private long totalRecords = 0;
+  @Getter
+  @Setter
   private long totalErrorRecords = 0;
 
+  @Getter
   private final double failureFraction;
   private boolean trackSuccessRecords;
   private final transient Random random;
+  @Getter
   private IndexStats indexStats = new IndexStats();
 
   public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
@@ -204,18 +223,6 @@ public class WriteStatus implements Serializable {
     return this;
   }
 
-  public double getFailureFraction() {
-    return failureFraction;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
   public boolean hasErrors() {
     return totalErrorRecords > 0;
   }
@@ -224,72 +231,16 @@ public class WriteStatus implements Serializable {
     return errors.containsKey(key);
   }
 
-  public HashMap<HoodieKey, Throwable> getErrors() {
-    return errors;
-  }
-
   public boolean hasGlobalError() {
     return globalError != null;
-  }
-
-  public Throwable getGlobalError() {
-    return this.globalError;
-  }
-
-  public void setGlobalError(Throwable t) {
-    this.globalError = t;
-  }
-
-  public IndexStats getIndexStats() {
-    return indexStats;
   }
 
   public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
     return indexStats.getWrittenRecordDelegates();
   }
 
-  public List<Pair<HoodieRecordDelegate, Throwable>> getFailedRecords() {
-    return failedRecords;
-  }
-
-  public HoodieWriteStat getStat() {
-    return stat;
-  }
-
-  public void setStat(HoodieWriteStat stat) {
-    this.stat = stat;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public long getTotalRecords() {
-    return totalRecords;
-  }
-
-  public void setTotalRecords(long totalRecords) {
-    this.totalRecords = totalRecords;
-  }
-
-  public long getTotalErrorRecords() {
-    return totalErrorRecords;
-  }
-
-  public void setTotalErrorRecords(long totalErrorRecords) {
-    this.totalErrorRecords = totalErrorRecords;
-  }
-
   public boolean isTrackingSuccessfulWrites() {
     return trackSuccessRecords;
-  }
-
-  public boolean isMetadataTable() {
-    return isMetadataTable;
   }
 
   @Override

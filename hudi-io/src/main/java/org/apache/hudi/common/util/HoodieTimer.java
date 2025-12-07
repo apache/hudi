@@ -20,6 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 
@@ -48,21 +50,15 @@ public class HoodieTimer {
 
   static class TimeInfo {
     // captures the startTime of the code block
+    @Getter
     long startTime;
     // is the timing still running for the last started timer
+    @Getter
     boolean isRunning;
 
     public TimeInfo(long startTime) {
       this.startTime = startTime;
       this.isRunning = true;
-    }
-
-    public long getStartTime() {
-      return startTime;
-    }
-
-    public boolean isRunning() {
-      return isRunning;
     }
 
     public long stop() {

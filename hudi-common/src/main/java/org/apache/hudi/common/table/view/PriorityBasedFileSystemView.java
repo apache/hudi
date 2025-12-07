@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.Functions.Function3;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpResponseException;
 import org.slf4j.Logger;
@@ -53,6 +55,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private static final Logger LOG = LoggerFactory.getLogger(PriorityBasedFileSystemView.class);
 
   private final transient HoodieEngineContext engineContext;
+  @Getter(AccessLevel.PACKAGE)
   private final SyncableFileSystemView preferredView;
   private final SerializableFunctionUnchecked<HoodieEngineContext, SyncableFileSystemView> secondaryViewCreator;
   private SyncableFileSystemView secondaryView;
@@ -352,10 +355,6 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId) {
     return execute(partitionPath, fileId, preferredView::getLatestFileSlice, (path, fgId) -> getSecondaryView().getLatestFileSlice(path, fgId));
-  }
-
-  SyncableFileSystemView getPreferredView() {
-    return preferredView;
   }
 
   synchronized SyncableFileSystemView getSecondaryView() {

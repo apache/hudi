@@ -20,6 +20,7 @@ package org.apache.hudi.index.bucket.partition;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   // Map to store singleton instances for each instantToLoad + configuration hash combination
   private static final HashMap<String, PartitionBucketIndexCalculator> INSTANCES = new HashMap<>();
   private static final int CACHE_SIZE = 100_000;
+  @Getter
   private final int defaultBucketNumber;
   // Cache for partition to bucket number mapping
   private final Cache<String, Integer> partitionToBucketCache;
@@ -101,10 +103,6 @@ public class PartitionBucketIndexCalculator implements Serializable {
 
   public void cleanCache() {
     INSTANCES.clear();
-  }
-
-  public int getDefaultBucketNumber() {
-    return this.defaultBucketNumber;
   }
 
   public long getCacheSize() {

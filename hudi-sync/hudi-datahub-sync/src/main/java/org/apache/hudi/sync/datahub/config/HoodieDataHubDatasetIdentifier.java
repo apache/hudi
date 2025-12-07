@@ -26,11 +26,12 @@ import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.common.urn.Urn;
 import io.datahubproject.models.util.DatabaseKey;
+import lombok.Getter;
 
 import java.util.Properties;
 
-import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_ENV;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
@@ -46,13 +47,21 @@ public class HoodieDataHubDatasetIdentifier {
   public static final FabricType DEFAULT_DATAHUB_ENV = FabricType.DEV;
 
   protected final Properties props;
+  @Getter
   private final String dataPlatform;
+  @Getter
   private final DataPlatformUrn dataPlatformUrn;
+  @Getter
   private final Option<String> dataPlatformInstance;
+  @Getter
   private final Option<Urn> dataPlatformInstanceUrn;
+  @Getter
   private final DatasetUrn datasetUrn;
+  @Getter
   private final Urn databaseUrn;
+  @Getter
   private final String tableName;
+  @Getter
   private final String databaseName;
 
   public HoodieDataHubDatasetIdentifier(Properties props) {
@@ -85,38 +94,6 @@ public class HoodieDataHubDatasetIdentifier {
             .build();
 
     this.databaseUrn = databaseKey.asUrn();
-  }
-
-  public DatasetUrn getDatasetUrn() {
-    return this.datasetUrn;
-  }
-
-  public String getDataPlatform() {
-    return this.dataPlatform;
-  }
-
-  public DataPlatformUrn getDataPlatformUrn() {
-    return this.dataPlatformUrn;
-  }
-
-  public Option<String> getDataPlatformInstance() {
-    return this.dataPlatformInstance;
-  }
-
-  public Option<Urn> getDataPlatformInstanceUrn() {
-    return this.dataPlatformInstanceUrn;
-  }
-
-  public Urn getDatabaseUrn() {
-    return this.databaseUrn;
-  }
-
-  public String getTableName() {
-    return this.tableName;
-  }
-
-  public String getDatabaseName() {
-    return this.databaseName;
   }
 
   private static DataPlatformUrn createDataPlatformUrn(String platformUrn) {

@@ -39,6 +39,7 @@ import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.DefaultInputSplitAssigner;
@@ -116,6 +117,7 @@ public class MergeOnReadInputFormat
   /**
    * Flag saying whether the input format has been closed.
    */
+  @Getter
   private boolean closed = true;
 
   protected final InternalSchemaManager internalSchemaManager;
@@ -237,10 +239,6 @@ public class MergeOnReadInputFormat
     }
     this.iterator = null;
     this.closed = true;
-  }
-
-  public boolean isClosed() {
-    return this.closed;
   }
 
   // -------------------------------------------------------------------------

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.index.bloom;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,14 +31,29 @@ import java.util.List;
  */
 class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
+  @Getter
   private final List<String> fileNameList = new ArrayList<>();
+  @Getter
   private final String minRecordKey;
+  @Getter
   private final String maxRecordKey;
+  @Getter
+  @Setter
   private String rightSubTreeMax = null;
+  @Getter
+  @Setter
   private String leftSubTreeMax = null;
+  @Getter
+  @Setter
   private String rightSubTreeMin = null;
+  @Getter
+  @Setter
   private String leftSubTreeMin = null;
+  @Getter
+  @Setter
   private KeyRangeNode left = null;
+  @Getter
+  @Setter
   private KeyRangeNode right = null;
 
   /**
@@ -84,65 +102,5 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
     } else {
       return compareValue;
     }
-  }
-
-  public List<String> getFileNameList() {
-    return fileNameList;
-  }
-
-  public String getMinRecordKey() {
-    return minRecordKey;
-  }
-
-  public String getMaxRecordKey() {
-    return maxRecordKey;
-  }
-
-  public String getRightSubTreeMin() {
-    return rightSubTreeMin;
-  }
-
-  public void setRightSubTreeMin(String rightSubTreeMin) {
-    this.rightSubTreeMin = rightSubTreeMin;
-  }
-
-  public String getLeftSubTreeMin() {
-    return leftSubTreeMin;
-  }
-
-  public void setLeftSubTreeMin(String leftSubTreeMin) {
-    this.leftSubTreeMin = leftSubTreeMin;
-  }
-
-  public String getRightSubTreeMax() {
-    return rightSubTreeMax;
-  }
-
-  public void setRightSubTreeMax(String rightSubTreeMax) {
-    this.rightSubTreeMax = rightSubTreeMax;
-  }
-
-  public String getLeftSubTreeMax() {
-    return leftSubTreeMax;
-  }
-
-  public void setLeftSubTreeMax(String leftSubTreeMax) {
-    this.leftSubTreeMax = leftSubTreeMax;
-  }
-
-  public KeyRangeNode getLeft() {
-    return left;
-  }
-
-  public void setLeft(KeyRangeNode left) {
-    this.left = left;
-  }
-
-  public KeyRangeNode getRight() {
-    return right;
-  }
-
-  public void setRight(KeyRangeNode right) {
-    this.right = right;
   }
 }

@@ -54,6 +54,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,6 +94,7 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimest
 public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieTableFileIndex.class);
 
+  @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
 
   @Getter
@@ -103,6 +105,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final Option<String> specifiedQueryInstant;
   private final Option<String> incrementalQueryStartTime;
   private final Option<String> incrementalQueryEndTime;
+  @Getter(AccessLevel.PROTECTED)
   private final List<StoragePath> queryPaths;
 
   private final boolean shouldIncludePendingCommits;
@@ -207,14 +210,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   @Override
   public void close() throws Exception {
     resetTableMetadata(null);
-  }
-
-  protected String[] getPartitionColumns() {
-    return partitionColumns;
-  }
-
-  protected List<StoragePath> getQueryPaths() {
-    return queryPaths;
   }
 
   /**

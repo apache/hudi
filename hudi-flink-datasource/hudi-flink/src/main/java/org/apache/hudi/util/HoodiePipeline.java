@@ -24,6 +24,7 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTableFactory;
 
+import lombok.Getter;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -266,20 +267,14 @@ public class HoodiePipeline {
    *  A POJO that contains tableId and resolvedCatalogTable.
    */
   public static class TableDescriptor {
+    @Getter
     private final ObjectIdentifier tableId;
+    @Getter
     private final ResolvedCatalogTable resolvedCatalogTable;
 
     public TableDescriptor(ObjectIdentifier tableId, ResolvedCatalogTable resolvedCatalogTable) {
       this.tableId = tableId;
       this.resolvedCatalogTable = resolvedCatalogTable;
-    }
-
-    public ObjectIdentifier getTableId() {
-      return tableId;
-    }
-
-    public ResolvedCatalogTable getResolvedCatalogTable() {
-      return resolvedCatalogTable;
     }
   }
 }

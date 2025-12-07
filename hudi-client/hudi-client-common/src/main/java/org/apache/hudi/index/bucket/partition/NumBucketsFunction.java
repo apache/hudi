@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +46,7 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Flag indicating whether partition-level bucket index is enabled.
    */
+  @Getter
   private final boolean isPartitionLevelBucketIndexEnabled;
 
   /**
@@ -115,14 +117,5 @@ public class NumBucketsFunction implements Serializable {
    */
   public int getDefaultBucketNumber() {
     return defaultBucketsNum;
-  }
-
-  /**
-   * Checks if partition-level bucket index is enabled.
-   *
-   * @return True if partition-level bucket index is enabled, false otherwise.
-   */
-  public boolean isPartitionLevelBucketIndexEnabled() {
-    return isPartitionLevelBucketIndexEnabled;
   }
 }

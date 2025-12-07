@@ -22,6 +22,7 @@ import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
@@ -72,7 +73,9 @@ public class HiveTestService {
   private final Map<String, String> sysProps = new HashMap<>();
   private ExecutorService executorService;
   private TServer tServer;
+  @Getter
   private HiveServer2 hiveServer;
+  @Getter
   private HiveConf hiveConf;
 
   public HiveTestService(Configuration hadoopConf) throws IOException {
@@ -125,14 +128,6 @@ public class HiveTestService {
     LOG.info("Hive Minicluster service shut down.");
     tServer = null;
     hiveServer = null;
-  }
-
-  public HiveServer2 getHiveServer() {
-    return hiveServer;
-  }
-
-  public HiveConf getHiveConf() {
-    return hiveConf;
   }
 
   public int getHiveServerPort() {

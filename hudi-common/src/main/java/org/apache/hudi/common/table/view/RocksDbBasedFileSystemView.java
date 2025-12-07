@@ -38,6 +38,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,6 +77,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   private RocksDBDAO rocksDB;
 
+  @Getter(AccessLevel.PACKAGE)
   private boolean closed = false;
 
   public RocksDbBasedFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
@@ -606,10 +609,5 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     } catch (Exception e) {
       throw new HoodieException("Unable to close file system view", e);
     }
-  }
-
-  @Override
-  boolean isClosed() {
-    return closed;
   }
 }

@@ -32,6 +32,7 @@ import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -319,7 +320,9 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
 
   static class TestSourceProfile implements SourceProfile<Long> {
 
+    @Getter
     private final long maxSourceBytes;
+    @Getter
     private final int sourcePartitions;
     private final long numEvents;
 
@@ -327,16 +330,6 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
       this.maxSourceBytes = maxSourceBytes;
       this.sourcePartitions = sourcePartitions;
       this.numEvents = numEvents;
-    }
-
-    @Override
-    public long getMaxSourceBytes() {
-      return maxSourceBytes;
-    }
-
-    @Override
-    public int getSourcePartitions() {
-      return sourcePartitions;
     }
 
     @Override

@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
@@ -58,6 +59,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   private static final Logger LOG = LoggerFactory.getLogger(BaseZookeeperBasedLockProvider.class);
 
   private final transient CuratorFramework curatorFrameworkClient;
+  @Getter
   private volatile InterProcessMutex lock = null;
   protected final LockConfiguration lockConfiguration;
   protected final String zkBasePath;
@@ -166,11 +168,6 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
     } catch (Exception e) {
       LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
-  }
-
-  @Override
-  public InterProcessMutex getLock() {
-    return this.lock;
   }
 
   private void acquireLock(long time, TimeUnit unit) throws Exception {

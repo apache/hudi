@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -86,6 +87,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
+  @Getter(AccessLevel.PROTECTED)
   private final String payloadClassFQN;
   // Record's key/partition-path fields
   private final String recordKeyField;
@@ -93,6 +95,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final Option<String> partitionNameOverrideOpt;
   // Ordering fields
   protected final String orderingFields;
+  @Getter(AccessLevel.PROTECTED)
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<HoodieLogFile> logFiles;
@@ -625,10 +628,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     return totalLogBlocks.get();
   }
 
-  protected String getPayloadClassFQN() {
-    return payloadClassFQN;
-  }
-
   public Option<String> getPartitionNameOverride() {
     return partitionNameOverrideOpt;
   }
@@ -639,10 +638,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
   public long getTotalCorruptBlocks() {
     return totalCorruptBlocks.get();
-  }
-
-  protected TypedProperties getPayloadProps() {
-    return payloadProps;
   }
 
   private Pair<ClosableIterator<T>, Schema> getRecordsIterator(

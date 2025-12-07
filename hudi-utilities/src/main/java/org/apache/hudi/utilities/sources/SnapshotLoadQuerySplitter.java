@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import lombok.Getter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -56,20 +57,14 @@ public abstract class SnapshotLoadQuerySplitter {
    * Checkpoint returned for the SnapshotLoadQuerySplitter.
    */
   public static class CheckpointWithPredicates {
+    @Getter
     private final String endCompletionTime;
+    @Getter
     private final String predicateFilter;
 
     public CheckpointWithPredicates(String endCompletionTime, String predicateFilter) {
       this.endCompletionTime = endCompletionTime;
       this.predicateFilter = predicateFilter;
-    }
-
-    public String getEndCompletionTime() {
-      return endCompletionTime;
-    }
-
-    public String getPredicateFilter() {
-      return predicateFilter;
     }
   }
 

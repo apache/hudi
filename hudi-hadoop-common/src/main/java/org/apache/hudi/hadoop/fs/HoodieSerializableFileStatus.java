@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import lombok.Getter;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -37,16 +38,24 @@ import java.util.stream.Collectors;
  */
 public class HoodieSerializableFileStatus implements Serializable {
 
+  @Getter
   private final Path path;
   private final long length;
   private final Boolean isDir;
   private final short blockReplication;
+  @Getter
   private final long blockSize;
+  @Getter
   private final long modificationTime;
+  @Getter
   private final long accessTime;
+  @Getter
   private final FsPermission permission;
+  @Getter
   private final String owner;
+  @Getter
   private final String group;
+  @Getter
   private final Path symlink;
 
   HoodieSerializableFileStatus(Path path, long length, boolean isDir, short blockReplication,
@@ -65,10 +74,6 @@ public class HoodieSerializableFileStatus implements Serializable {
     this.symlink = symlink;
   }
 
-  public Path getPath() {
-    return path;
-  }
-
   public long getLen() {
     return length;
   }
@@ -79,34 +84,6 @@ public class HoodieSerializableFileStatus implements Serializable {
 
   public short getReplication() {
     return blockReplication;
-  }
-
-  public long getBlockSize() {
-    return blockSize;
-  }
-
-  public long getModificationTime() {
-    return modificationTime;
-  }
-
-  public long getAccessTime() {
-    return accessTime;
-  }
-
-  public FsPermission getPermission() {
-    return permission;
-  }
-
-  public String getOwner() {
-    return owner;
-  }
-
-  public String getGroup() {
-    return group;
-  }
-
-  public Path getSymlink() {
-    return symlink;
   }
 
   public static HoodieSerializableFileStatus fromFileStatus(FileStatus status) {

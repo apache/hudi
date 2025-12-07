@@ -20,6 +20,9 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.client.WriteStatus;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.List;
 
@@ -32,20 +35,28 @@ public class CompactionCommitEvent implements Serializable {
   /**
    * The compaction commit instant time.
    */
+  @Getter
+  @Setter
   private String instant;
 
   /**
    * The file ID.
    */
+  @Getter
+  @Setter
   private String fileId;
 
   /**
    * The write statuses.
    */
+  @Getter
+  @Setter
   private List<WriteStatus> writeStatuses;
   /**
    * The compaction task identifier.
    */
+  @Getter
+  @Setter
   private int taskID;
 
   public CompactionCommitEvent() {
@@ -67,41 +78,5 @@ public class CompactionCommitEvent implements Serializable {
 
   public boolean isFailed() {
     return this.writeStatuses == null;
-  }
-
-  // -------------------------------------------------------------------------
-  //  Getter/Setter
-  // -------------------------------------------------------------------------
-
-  public void setInstant(String instant) {
-    this.instant = instant;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
-  }
-
-  public String getInstant() {
-    return instant;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  public int getTaskID() {
-    return taskID;
   }
 }

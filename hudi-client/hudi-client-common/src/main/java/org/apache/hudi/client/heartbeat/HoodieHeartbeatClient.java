@@ -25,6 +25,8 @@ import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +55,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   private final transient HoodieStorage storage;
   private final String basePath;
   // path to the heartbeat folder where all writers are updating their heartbeats
+  @Getter
   private final String heartbeatFolderPath;
   // heartbeat interval in millis
   private final Long heartbeatIntervalInMs;
@@ -72,20 +75,20 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   static class Heartbeat {
 
+    @Getter
+    @Setter
     private String instantTime;
     private Boolean isHeartbeatStarted = false;
     private Boolean isHeartbeatStopped = false;
+    @Getter
+    @Setter
     private Long lastHeartbeatTime;
+    @Getter
+    @Setter
     private Integer numHeartbeats = 0;
+    @Getter
+    @Setter
     private Timer timer = new Timer(true);
-
-    public String getInstantTime() {
-      return instantTime;
-    }
-
-    public void setInstantTime(String instantTime) {
-      this.instantTime = instantTime;
-    }
 
     public Boolean isHeartbeatStarted() {
       return isHeartbeatStarted;
@@ -101,30 +104,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
     public void setHeartbeatStopped(Boolean heartbeatStopped) {
       isHeartbeatStopped = heartbeatStopped;
-    }
-
-    public Long getLastHeartbeatTime() {
-      return lastHeartbeatTime;
-    }
-
-    public void setLastHeartbeatTime(Long lastHeartbeatTime) {
-      this.lastHeartbeatTime = lastHeartbeatTime;
-    }
-
-    public Integer getNumHeartbeats() {
-      return numHeartbeats;
-    }
-
-    public void setNumHeartbeats(Integer numHeartbeats) {
-      this.numHeartbeats = numHeartbeats;
-    }
-
-    public Timer getTimer() {
-      return timer;
-    }
-
-    public void setTimer(Timer timer) {
-      this.timer = timer;
     }
 
     @Override
@@ -276,10 +255,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       }
       throw new HoodieHeartbeatException("Unable to generate heartbeat for instant " + instantTime, io);
     }
-  }
-
-  public String getHeartbeatFolderPath() {
-    return heartbeatFolderPath;
   }
 
   public Heartbeat getHeartbeat(String instantTime) {

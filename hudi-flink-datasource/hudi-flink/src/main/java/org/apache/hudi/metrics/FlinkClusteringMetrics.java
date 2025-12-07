@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sink.clustering.ClusteringOperator;
 import org.apache.hudi.sink.clustering.ClusteringPlanOperator;
 
+import lombok.Setter;
 import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,7 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
    *
    * @see ClusteringPlanOperator
    */
+  @Setter
   private long pendingClusteringCount;
 
   /**
@@ -75,10 +77,6 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "pendingClusteringCount"), () -> pendingClusteringCount);
     metricGroup.gauge(getMetricsName(actionType, "clusteringDelay"), () -> clusteringDelay);
     metricGroup.gauge(getMetricsName(actionType, "clusteringCost"), () -> clusteringCost);
-  }
-
-  public void setPendingClusteringCount(long pendingClusteringCount) {
-    this.pendingClusteringCount = pendingClusteringCount;
   }
 
   public void setFirstPendingClusteringInstant(Option<HoodieInstant> firstPendingClusteringInstant) {

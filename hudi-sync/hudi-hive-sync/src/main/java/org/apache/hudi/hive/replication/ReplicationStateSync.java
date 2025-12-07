@@ -20,6 +20,7 @@ package org.apache.hudi.hive.replication;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
 import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Map;
@@ -30,6 +31,7 @@ public class ReplicationStateSync implements AutoCloseable {
   protected GlobalHiveSyncTool globalHiveSyncTool;
   private Map<String, Option<String>> replicatedTimeStampMap;
   private Map<String, Option<String>> oldReplicatedTimeStampMap;
+  @Getter
   private final String clusterId;
 
   ReplicationStateSync(Properties props, HiveConf hiveConf, String uid) {
@@ -69,10 +71,6 @@ public class ReplicationStateSync implements AutoCloseable {
   @Override
   public String toString() {
     return  "{ clusterId: " + clusterId + " replicatedState: " + replicatedTimeStampMap + " }";
-  }
-
-  public String getClusterId() {
-    return clusterId;
   }
 
   @Override

@@ -20,6 +20,7 @@ package org.apache.hudi.common.testutils.minicluster;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -41,6 +42,7 @@ public class HdfsTestService {
   /**
    * Configuration settings.
    */
+  @Getter
   private final Configuration hadoopConf;
   private final java.nio.file.Path dfsBaseDirPath;
 
@@ -56,10 +58,6 @@ public class HdfsTestService {
   public HdfsTestService(Configuration hadoopConf) throws IOException {
     this.hadoopConf = hadoopConf;
     this.dfsBaseDirPath = Files.createTempDirectory("hdfs-test-service" + System.currentTimeMillis());
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
   }
 
   public MiniDFSCluster start(boolean format) throws IOException {

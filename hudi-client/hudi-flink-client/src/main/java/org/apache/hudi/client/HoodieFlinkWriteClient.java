@@ -50,6 +50,8 @@ import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 
 import com.codahale.metrics.Timer;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -495,6 +497,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   private final class AutoCloseableWriteHandle implements AutoCloseable {
+    @Getter(AccessLevel.PACKAGE)
     private final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 
     AutoCloseableWriteHandle(
@@ -512,10 +515,6 @@ public class HoodieFlinkWriteClient<T>
         HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
         boolean overwrite) {
       this.writeHandle = getOrCreateWriteHandle(bucketInfo, getConfig(), instantTime, table, recordIterator, overwrite);
-    }
-
-    HoodieWriteHandle<?, ?, ?, ?> getWriteHandle() {
-      return writeHandle;
     }
 
     @Override

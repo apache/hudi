@@ -39,6 +39,7 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
+import lombok.Getter;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -349,14 +350,11 @@ public class IncrSourceHelper {
     READ_LATEST("Read from latest commit in hoodie source table"),
     READ_UPTO_LATEST_COMMIT("Read everything upto latest commit");
 
+    @Getter
     private final String description;
 
     MissingCheckpointStrategy(String description) {
       this.description = description;
-    }
-
-    public String getDescription() {
-      return description;
     }
 
     private static MissingCheckpointStrategy nullEnum() {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import lombok.Getter;
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
@@ -29,6 +30,7 @@ import java.io.IOException;
  */
 public class BootstrapBaseFileSplit extends FileSplit {
 
+  @Getter
   private FileSplit bootstrapFileSplit;
 
   /**
@@ -42,10 +44,6 @@ public class BootstrapBaseFileSplit extends FileSplit {
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
     this.bootstrapFileSplit = bootstrapFileSplit;
-  }
-
-  public FileSplit getBootstrapFileSplit() {
-    return bootstrapFileSplit;
   }
 
   @Override

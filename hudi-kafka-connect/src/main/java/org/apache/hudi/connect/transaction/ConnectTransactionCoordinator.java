@@ -28,6 +28,7 @@ import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.connect.writers.KafkaConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private static final int COORDINATOR_EVENT_LOOP_TIMEOUT_MS = 1000;
 
   private final KafkaConnectConfigs configs;
+  @Getter
   private final TopicPartition partition;
   private final KafkaControlAgent kafkaControlClient;
   private final ConnectTransactionServices transactionServices;
@@ -153,11 +155,6 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
         executorService.shutdownNow();
       }
     }
-  }
-
-  @Override
-  public TopicPartition getPartition() {
-    return partition;
   }
 
   @Override

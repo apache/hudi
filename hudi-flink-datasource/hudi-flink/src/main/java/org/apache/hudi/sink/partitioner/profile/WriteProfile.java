@@ -34,6 +34,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
@@ -71,17 +72,20 @@ public class WriteProfile {
   /**
    * The meta client.
    */
+  @Getter
   protected final HoodieTableMetaClient metaClient;
 
   /**
    * The average record size.
    */
+  @Getter
   private long avgSize = -1L;
 
   /**
    * Total records to write for each bucket based on
    * the config option {@link HoodieStorageConfig#PARQUET_MAX_FILE_SIZE}.
    */
+  @Getter
   private long recordsPerBucket;
 
   /**
@@ -121,18 +125,6 @@ public class WriteProfile {
     this.fsView = getFileSystemView();
     // profile the record statistics on construction
     recordProfile();
-  }
-
-  public long getAvgSize() {
-    return avgSize;
-  }
-
-  public long getRecordsPerBucket() {
-    return recordsPerBucket;
-  }
-
-  public HoodieTableMetaClient getMetaClient() {
-    return this.metaClient;
   }
 
   protected HoodieTable<?, ?, ?, ?> getTable() {

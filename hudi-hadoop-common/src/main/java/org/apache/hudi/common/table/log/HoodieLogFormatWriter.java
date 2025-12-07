@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
@@ -46,10 +47,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatWriter.class);
 
+  @Getter
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
 
   private final HoodieStorage storage;
+  @Getter
   private final long sizeThreshold;
   private final Integer bufferSize;
   private final Short replication;
@@ -74,15 +77,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.fileCreationHook = fileCreationHook;
     addShutDownHook();
-  }
-
-  @Override
-  public HoodieLogFile getLogFile() {
-    return logFile;
-  }
-
-  public long getSizeThreshold() {
-    return sizeThreshold;
   }
 
   /**

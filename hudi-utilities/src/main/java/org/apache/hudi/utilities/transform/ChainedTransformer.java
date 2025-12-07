@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -141,6 +143,7 @@ public class ChainedTransformer implements Transformer {
   }
 
   protected static class TransformerInfo {
+    @Getter(AccessLevel.PROTECTED)
     private final Transformer transformer;
     private final Option<String> idOpt;
 
@@ -152,10 +155,6 @@ public class ChainedTransformer implements Transformer {
     private TransformerInfo(Transformer transformer) {
       this.transformer = transformer;
       this.idOpt = Option.empty();
-    }
-
-    protected Transformer getTransformer() {
-      return transformer;
     }
 
     private boolean hasIdentifier() {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.collection;
 
+import lombok.Getter;
+
 /**
  * (NOTE: Adapted from Apache commons-lang3)
  * <p>
@@ -48,16 +50,19 @@ public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
   /**
    * Left object.
    */
+  @Getter
   public final L left;
 
   /**
    * Middle object.
    */
+  @Getter
   public final M middle;
 
   /**
    * Right object.
    */
+  @Getter
   public final R right;
 
   /**
@@ -93,32 +98,6 @@ public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
     this.left = left;
     this.middle = middle;
     this.right = right;
-  }
-
-  // -----------------------------------------------------------------------
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public L getLeft() {
-    return left;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public M getMiddle() {
-    return middle;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public R getRight() {
-    return right;
   }
 }
 

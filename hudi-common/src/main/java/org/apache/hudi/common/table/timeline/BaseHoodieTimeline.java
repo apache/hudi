@@ -73,6 +73,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   // for efficient #isBeforeTimelineStartsByCompletionTime
   private transient volatile Option<HoodieInstant> firstNonSavepointCommitByCompletionTime;
+  @Getter
   private String timelineHash;
 
   protected TimelineFactory factory;
@@ -485,11 +486,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
     return containsInstant(instant) || isBeforeTimelineStarts(instant);
-  }
-
-  @Override
-  public String getTimelineHash() {
-    return timelineHash;
   }
 
   @Override

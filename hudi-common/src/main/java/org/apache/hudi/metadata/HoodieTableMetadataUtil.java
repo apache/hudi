@@ -122,6 +122,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -3099,12 +3101,15 @@ public class HoodieTableMetadataUtil {
    */
   public static class DirectoryInfo implements Serializable {
     // Relative path of the directory (relative to the base directory)
+    @Getter(AccessLevel.PACKAGE)
     private final String relativePath;
     // Map of filenames within this partition to their respective sizes
     private final HashMap<String, Long> filenameToSizeMap;
     // List of directories within this partition
+    @Getter(AccessLevel.PACKAGE)
     private final List<StoragePath> subDirectories = new ArrayList<>();
     // Is this a hoodie partition
+    @Getter(AccessLevel.PACKAGE)
     private boolean isHoodiePartition = false;
 
     public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
@@ -3142,20 +3147,8 @@ public class HoodieTableMetadataUtil {
       }
     }
 
-    String getRelativePath() {
-      return relativePath;
-    }
-
     int getTotalFiles() {
       return filenameToSizeMap.size();
-    }
-
-    boolean isHoodiePartition() {
-      return isHoodiePartition;
-    }
-
-    List<StoragePath> getSubDirectories() {
-      return subDirectories;
     }
 
     // Returns a map of filenames mapped to their lengths

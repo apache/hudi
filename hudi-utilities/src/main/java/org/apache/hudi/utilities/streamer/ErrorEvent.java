@@ -19,6 +19,8 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import lombok.Getter;
+
 import java.util.Objects;
 
 /**
@@ -26,20 +28,14 @@ import java.util.Objects;
  */
 public class ErrorEvent<T> {
 
+  @Getter
   private final ErrorReason reason;
+  @Getter
   private final T payload;
 
   public ErrorEvent(T payload, ErrorReason reason) {
     this.payload = payload;
     this.reason = reason;
-  }
-
-  public T getPayload() {
-    return payload;
-  }
-
-  public ErrorReason getReason() {
-    return reason;
   }
 
   @Override

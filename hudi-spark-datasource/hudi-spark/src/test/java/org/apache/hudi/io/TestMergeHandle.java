@@ -65,6 +65,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -620,12 +621,19 @@ public class TestMergeHandle extends BaseTestHandle {
   }
 
   class InputAndExpectedDataSet {
+    @Getter
     private final Map<String, HoodieRecord> expectedRecordsMap;
+    @Getter
     private final int expectedUpdates;
+    @Getter
     private final int expectedDeletes;
+    @Getter
     private final List<HoodieRecord> recordsToMerge;
+    @Getter
     private final List<HoodieRecord> newInserts;
+    @Getter
     private final List<HoodieRecord> validUpdates;
+    @Getter
     private final Map<String, HoodieRecord> validDeletes;
 
     public InputAndExpectedDataSet(Map<String, HoodieRecord> expectedRecordsMap, int expectedUpdates, int expectedDeletes,
@@ -638,34 +646,6 @@ public class TestMergeHandle extends BaseTestHandle {
       this.validUpdates = validUpdates;
       this.newInserts = newInserts;
       this.validDeletes = validDeletes;
-    }
-
-    public Map<String, HoodieRecord> getExpectedRecordsMap() {
-      return expectedRecordsMap;
-    }
-
-    public int getExpectedUpdates() {
-      return expectedUpdates;
-    }
-
-    public int getExpectedDeletes() {
-      return expectedDeletes;
-    }
-
-    public List<HoodieRecord> getRecordsToMerge() {
-      return recordsToMerge;
-    }
-
-    public List<HoodieRecord> getNewInserts() {
-      return newInserts;
-    }
-
-    public List<HoodieRecord> getValidUpdates() {
-      return validUpdates;
-    }
-
-    public Map<String, HoodieRecord> getValidDeletes() {
-      return validDeletes;
     }
   }
 }

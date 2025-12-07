@@ -48,6 +48,8 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +91,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final HoodieWriteConfig config;
   private final transient HoodieEngineContext context;
+  @Getter(AccessLevel.PACKAGE)
   private final List<String> savepointedTimestamps;
   private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
 
@@ -117,13 +120,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       commitTimeline = hoodieTable.getCompletedCommitsTimeline();
     }
     return commitTimeline;
-  }
-
-  /**
-   * @return list of savepointed timestamps in active timeline as of this clean planning.
-   */
-  List<String> getSavepointedTimestamps() {
-    return this.savepointedTimestamps;
   }
 
   /**
@@ -261,7 +257,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
     try {
-      return hoodieTable.getMetadataTable().getAllPartitionPaths();
+      return hoodieTable.getTableMetadata().getAllPartitionPaths();
     } catch (IOException ioe) {
       throw new HoodieIOException("Fetching all partitions failed ", ioe);
     }

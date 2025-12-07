@@ -28,6 +28,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Setter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
@@ -85,6 +86,7 @@ public class BulkInsertWriteFunction<I>
   /**
    * Correspondent to request the instant time.
    */
+  @Setter
   private transient Correspondent correspondent;
 
   /**
@@ -141,15 +143,6 @@ public class BulkInsertWriteFunction<I>
   @Override
   public void handleOperatorEvent(OperatorEvent event) {
     // no operation
-  }
-
-  // -------------------------------------------------------------------------
-  //  Getter/Setter
-  // -------------------------------------------------------------------------
-
-  @Override
-  public void setCorrespondent(Correspondent correspondent) {
-    this.correspondent = correspondent;
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {

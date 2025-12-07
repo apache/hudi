@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import lombok.Getter;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -30,14 +31,11 @@ import org.apache.hadoop.fs.Path;
  */
 public class PathWithBootstrapFileStatus extends Path {
 
+  @Getter
   private final FileStatus bootstrapFileStatus;
 
   public PathWithBootstrapFileStatus(Path path, FileStatus bootstrapFileStatus) {
     super(path.getParent(), path.getName());
     this.bootstrapFileStatus = bootstrapFileStatus;
-  }
-
-  public FileStatus getBootstrapFileStatus() {
-    return bootstrapFileStatus;
   }
 }

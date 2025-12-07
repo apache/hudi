@@ -20,6 +20,9 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,15 +36,15 @@ import java.util.Map;
 public class IndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  @Getter
+  @Setter
   private List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
+  @Getter
+  @Setter
   private Map<String, List<SecondaryIndexStats>> secondaryIndexStats = new HashMap<>();
 
   void addHoodieRecordDelegate(HoodieRecordDelegate hoodieRecordDelegate) {
     this.writtenRecordDelegates.add(hoodieRecordDelegate);
-  }
-
-  public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
-    return writtenRecordDelegates;
   }
 
   public void initSecondaryIndexStats(String secondaryIndexPartitionPath) {
@@ -51,17 +54,5 @@ public class IndexStats implements Serializable {
   public void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
     secondaryIndexStats.computeIfAbsent(secondaryIndexPartitionPath, k -> new ArrayList<>())
         .add(new SecondaryIndexStats(recordKey, secondaryIndexValue, isDeleted));
-  }
-
-  public Map<String, List<SecondaryIndexStats>> getSecondaryIndexStats() {
-    return secondaryIndexStats;
-  }
-
-  public void setWrittenRecordDelegates(List<HoodieRecordDelegate> writtenRecordDelegates) {
-    this.writtenRecordDelegates = writtenRecordDelegates;
-  }
-
-  public void setSecondaryIndexStats(Map<String, List<SecondaryIndexStats>> secondaryIndexStats) {
-    this.secondaryIndexStats = secondaryIndexStats;
   }
 }

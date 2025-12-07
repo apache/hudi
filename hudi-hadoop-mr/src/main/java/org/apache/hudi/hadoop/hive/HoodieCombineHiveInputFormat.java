@@ -37,6 +37,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -627,7 +629,9 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
    */
   public static class CombineHiveInputSplit extends InputSplitShim {
 
+    @Setter
     private String inputFormatClassName;
+    @Getter
     protected CombineFileSplit inputSplitShim;
     private Map<Path, PartitionDesc> pathToPartitionInfo;
 
@@ -663,19 +667,11 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       }
     }
 
-    public CombineFileSplit getInputSplitShim() {
-      return inputSplitShim;
-    }
-
     /**
      * Returns the inputFormat class name for the i-th chunk.
      */
     public String inputFormatClassName() {
       return inputFormatClassName;
-    }
-
-    public void setInputFormatClassName(String inputFormatClassName) {
-      this.inputFormatClassName = inputFormatClassName;
     }
 
     @Override
@@ -887,6 +883,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   public static class HoodieCombineFileInputFormatShim<K, V> extends CombineFileInputFormat<K, V>
       implements org.apache.hadoop.hive.shims.HadoopShims.CombineFileInputFormatShim<K, V> {
 
+    @Setter
     private boolean hoodieFilter = false;
     private boolean isRealTime = false;
 
@@ -1024,10 +1021,6 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         return new HoodieCombineRealtimeRecordReader(job, split, recordReaders);
       }
       return new HadoopShimsSecure.CombineFileRecordReader(job, split, reporter, rrClass);
-    }
-
-    public void setHoodieFilter(boolean hoodieFilter) {
-      this.hoodieFilter = hoodieFilter;
     }
 
     public void setRealTime(boolean realTime) {

@@ -31,6 +31,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexRule;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -568,6 +569,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static class Builder {
 
+    @Getter
     private EngineType engineType = EngineType.SPARK;
     private final HoodieIndexConfig hoodieIndexConfig = new HoodieIndexConfig();
 
@@ -758,10 +760,6 @@ public class HoodieIndexConfig extends HoodieConfig {
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
-    }
-
-    public EngineType getEngineType() {
-      return engineType;
     }
 
     private void validateBucketIndexConfig() {

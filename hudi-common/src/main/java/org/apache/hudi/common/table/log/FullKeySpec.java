@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.log;
 
+import lombok.Getter;
+
 import java.util.List;
 
 /**
@@ -27,15 +29,11 @@ import java.util.List;
  * of the set is {@link String#equals}.
  */
 public class FullKeySpec implements KeySpec {
+  @Getter
   private final List<String> keys;
 
   public FullKeySpec(List<String> keys) {
     this.keys = keys;
-  }
-
-  @Override
-  public List<String> getKeys() {
-    return keys;
   }
 
   @Override

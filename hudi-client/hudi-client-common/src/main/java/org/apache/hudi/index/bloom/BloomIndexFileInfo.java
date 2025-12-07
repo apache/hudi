@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -26,10 +28,13 @@ import java.util.Objects;
  */
 public class BloomIndexFileInfo implements Serializable {
 
+  @Getter
   private final String fileId;
 
+  @Getter
   private final String minRecordKey;
 
+  @Getter
   private final String maxRecordKey;
 
   public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {
@@ -42,18 +47,6 @@ public class BloomIndexFileInfo implements Serializable {
     this.fileId = fileId;
     this.minRecordKey = null;
     this.maxRecordKey = null;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getMinRecordKey() {
-    return minRecordKey;
-  }
-
-  public String getMaxRecordKey() {
-    return maxRecordKey;
   }
 
   public boolean hasKeyRanges() {

@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.collection.ArrayUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 
+import lombok.Getter;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileSplit;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 public class HoodieCombineRealtimeFileSplit extends CombineFileSplit {
 
   // These are instances of HoodieRealtimeSplits
+  @Getter
   List<FileSplit> realtimeFileSplits = new ArrayList<>();
 
   public HoodieCombineRealtimeFileSplit() {
@@ -67,10 +69,6 @@ public class HoodieCombineRealtimeFileSplit extends CombineFileSplit {
             String[realtimeFileSplits.size()]));
     this.realtimeFileSplits = realtimeFileSplits;
 
-  }
-
-  public List<FileSplit> getRealtimeFileSplits() {
-    return realtimeFileSplits;
   }
 
   @Override

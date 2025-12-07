@@ -32,6 +32,7 @@ import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
+import lombok.Getter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
@@ -67,7 +68,9 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   private final IOManager ioManager;
   protected final StreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  @Getter
   private final MockOperatorCoordinatorContext coordinatorContext;
+  @Getter
   protected final StreamWriteOperatorCoordinator coordinator;
   protected final MockStateInitializationContext stateInitializationContext;
 
@@ -197,17 +200,9 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     }
   }
 
-  public StreamWriteOperatorCoordinator getCoordinator() {
-    return coordinator;
-  }
-
   @Override
   public AbstractWriteFunction getWriteFunction() {
     return this.writeFunction;
-  }
-
-  public MockOperatorCoordinatorContext getCoordinatorContext() {
-    return coordinatorContext;
   }
 
   // -------------------------------------------------------------------------

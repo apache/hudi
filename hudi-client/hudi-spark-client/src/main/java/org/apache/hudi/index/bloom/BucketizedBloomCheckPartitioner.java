@@ -21,6 +21,8 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.NumericUtils;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.spark.Partitioner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +67,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
   /**
    * Stores the final mapping of a file group to a list of partitions for its keys.
    */
+  @Getter(AccessLevel.PACKAGE)
   private Map<HoodieFileGroupId, List<Integer>> fileGroupToPartitions;
 
   /**
@@ -171,9 +174,5 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     final int idx = Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
-  }
-
-  Map<HoodieFileGroupId, List<Integer>> getFileGroupToPartitions() {
-    return fileGroupToPartitions;
   }
 }

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.Serializable;
@@ -30,7 +32,11 @@ import java.util.Map;
  */
 public class HoodieWriteResult implements Serializable {
 
+  @Getter
+  @Setter
   private JavaRDD<WriteStatus> writeStatuses;
+  @Getter
+  @Setter
   private Map<String, List<String>> partitionToReplaceFileIds;
 
   public HoodieWriteResult(JavaRDD<WriteStatus> writeStatuses) {
@@ -39,22 +45,6 @@ public class HoodieWriteResult implements Serializable {
 
   public HoodieWriteResult(JavaRDD<WriteStatus> writeStatuses, Map<String, List<String>> partitionToReplaceFileIds) {
     this.writeStatuses = writeStatuses;
-    this.partitionToReplaceFileIds = partitionToReplaceFileIds;
-  }
-
-  public JavaRDD<WriteStatus> getWriteStatuses() {
-    return this.writeStatuses;
-  }
-
-  public void setWriteStatuses(final JavaRDD<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public Map<String, List<String>> getPartitionToReplaceFileIds() {
-    return this.partitionToReplaceFileIds;
-  }
-
-  public void setPartitionToReplaceFileIds(final Map<String, List<String>> partitionToReplaceFileIds) {
     this.partitionToReplaceFileIds = partitionToReplaceFileIds;
   }
 

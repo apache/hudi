@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusValidator;
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
@@ -40,6 +39,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -53,6 +53,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 
 import com.codahale.metrics.Timer;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.Getter;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -422,12 +425,16 @@ public class SparkRDDWriteClient<T> extends
    * Slim WriteStatus to hold info like total records, total record records,
    * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
    */
+  @Getter
   static class SlimWriteStats implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private boolean isMetadataTable;
+    @Setter
     private long totalRecords;
+    @Setter
     private long totalErrorRecords;
+    @Setter
     private HoodieWriteStat writeStat;
 
     private SlimWriteStats(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
@@ -442,44 +449,10 @@ public class SparkRDDWriteClient<T> extends
           writeStatus.getStat())).collect();
     }
 
-    public boolean isMetadataTable() {
-      return isMetadataTable;
-    }
-
-    public long getTotalRecords() {
-      return totalRecords;
-    }
-
-    public long getTotalErrorRecords() {
-      return totalErrorRecords;
-    }
-
-    public HoodieWriteStat getWriteStat() {
-      return writeStat;
-    }
-
     // setter for efficient serialization,
     // please do not remove it even if it is not used.
     public void setMetadataTable(boolean metadataTable) {
       isMetadataTable = metadataTable;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setTotalRecords(long totalRecords) {
-      this.totalRecords = totalRecords;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setTotalErrorRecords(long totalErrorRecords) {
-      this.totalErrorRecords = totalErrorRecords;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setWriteStat(HoodieWriteStat writeStat) {
-      this.writeStat = writeStat;
     }
   }
 }

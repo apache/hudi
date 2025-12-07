@@ -21,6 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 /**
  * Stores the current position and {@link KeyValue} at the position in the HFile.
  * The same instance is used as a position cursor during HFile reading.
@@ -29,7 +31,9 @@ import org.apache.hudi.common.util.Option;
 public class HFileCursor {
   private static final int INVALID_POSITION = -1;
 
+  @Getter
   private int offset;
+  @Getter
   private Option<KeyValue> keyValue;
   private boolean eof;
 
@@ -45,14 +49,6 @@ public class HFileCursor {
 
   public boolean isValid() {
     return !(offset == INVALID_POSITION || eof);
-  }
-
-  public int getOffset() {
-    return offset;
-  }
-
-  public Option<KeyValue> getKeyValue() {
-    return keyValue;
   }
 
   public void set(int offset, KeyValue keyValue) {

@@ -52,6 +52,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
@@ -87,7 +89,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected HoodieRecordLocation newRecordLocation;
+  @Getter
   protected final String partitionPath;
+  @Getter
   protected final String fileId;
   protected final String writeToken;
   protected final TaskContextSupplier taskContextSupplier;
@@ -100,6 +104,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
   protected List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
 
+  @Getter(AccessLevel.PROTECTED)
   private boolean closed = false;
   protected boolean isTrackingEventTimeWatermark;
   protected boolean keepConsistentLogicalTimestamp;
@@ -237,10 +242,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     doWrite(record, schema, props);
   }
 
-  protected boolean isClosed() {
-    return closed;
-  }
-
   protected void markClosed() {
     this.closed = true;
   }
@@ -249,10 +250,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   public List<WriteStatus> getWriteStatuses() {
     return Collections.singletonList(writeStatus);
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
   }
 
   public abstract IOType getIOType();
@@ -268,10 +265,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   public HoodieTableMetaClient getHoodieTableMetaClient() {
     return hoodieTable.getMetaClient();
-  }
-
-  public String getFileId() {
-    return this.fileId;
   }
 
   protected int getPartitionId() {

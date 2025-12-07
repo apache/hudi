@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import lombok.Getter;
+
 import java.util.List;
 
 /**
@@ -25,14 +27,11 @@ import java.util.List;
  * Incremental GCS ingestion module.
  */
 public class MessageBatch {
+  @Getter
   private final List<String> messages;
 
   public MessageBatch(List<String> messages) {
     this.messages = messages;
-  }
-
-  public List<String> getMessages() {
-    return messages;
   }
 
   public boolean isEmpty() {

@@ -39,6 +39,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +72,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   protected LockConfiguration lockConfiguration;
   private final SimpleDateFormat sdf;
   private final LockInfo lockInfo;
+  @Getter
   private String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
@@ -146,11 +148,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   @Override
   public String getLock() {
     return this.lockFile.toString();
-  }
-
-  @Override
-  public String getCurrentOwnerLockInfo() {
-    return currentOwnerLockInfo;
   }
 
   private boolean checkIfExpired() {

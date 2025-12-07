@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,6 +29,7 @@ import java.util.List;
 public class TableHeader {
 
   // List of fields (columns)
+  @Getter
   private final List<String> fieldNames = new ArrayList<>();
 
   /**
@@ -47,13 +50,6 @@ public class TableHeader {
   public TableHeader addTableHeaderFields(TableHeader tableHeader) {
     fieldNames.addAll(tableHeader.getFieldNames());
     return this;
-  }
-
-  /**
-   * Get all field names.
-   */
-  public List<String> getFieldNames() {
-    return fieldNames;
   }
 
   /**

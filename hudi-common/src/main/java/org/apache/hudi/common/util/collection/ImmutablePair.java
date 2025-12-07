@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.collection;
 
+import lombok.Getter;
+
 /**
  * (NOTE: Adapted from Apache commons-lang3)
  * <p>
@@ -47,11 +49,13 @@ public final class ImmutablePair<L, R> extends Pair<L, R> {
   /**
    * Left object.
    */
+  @Getter
   public final L left;
 
   /**
    * Right object.
    */
+  @Getter
   public final R right;
 
   /**
@@ -83,24 +87,6 @@ public final class ImmutablePair<L, R> extends Pair<L, R> {
     super();
     this.left = left;
     this.right = right;
-  }
-
-  // -----------------------------------------------------------------------
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public L getLeft() {
-    return left;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public R getRight() {
-    return right;
   }
 
   /**

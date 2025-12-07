@@ -21,6 +21,8 @@ package org.apache.hudi.table.format.mor;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.core.io.InputSplit;
 
 import javax.annotation.Nullable;
@@ -36,17 +38,27 @@ public class MergeOnReadInputSplit implements InputSplit {
   private static final long NUM_NO_CONSUMPTION = 0L;
 
   private final int splitNum;
+  @Getter
   private final Option<String> basePath;
+  @Getter
   private final Option<List<String>> logPaths;
+  @Getter
   private final String latestCommit;
+  @Getter
   private final String tablePath;
+  @Getter
   private final long maxCompactionMemoryInBytes;
+  @Getter
   private final String mergeType;
+  @Getter
   private final Option<InstantRange> instantRange;
+  @Getter
+  @Setter
   protected String fileId;
 
   // for streaming reader to record the consumed offset,
   // which is the start of next round reading.
+  @Getter
   private long consumed = NUM_NO_CONSUMPTION;
 
   public MergeOnReadInputSplit(
@@ -70,42 +82,6 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.fileId = fileId;
   }
 
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public Option<String> getBasePath() {
-    return basePath;
-  }
-
-  public Option<List<String>> getLogPaths() {
-    return logPaths;
-  }
-
-  public String getLatestCommit() {
-    return latestCommit;
-  }
-
-  public String getTablePath() {
-    return tablePath;
-  }
-
-  public long getMaxCompactionMemoryInBytes() {
-    return maxCompactionMemoryInBytes;
-  }
-
-  public String getMergeType() {
-    return mergeType;
-  }
-
-  public Option<InstantRange> getInstantRange() {
-    return this.instantRange;
-  }
-
   @Override
   public int getSplitNumber() {
     return this.splitNum;
@@ -113,10 +89,6 @@ public class MergeOnReadInputSplit implements InputSplit {
 
   public void consume() {
     this.consumed += 1L;
-  }
-
-  public long getConsumed() {
-    return consumed;
   }
 
   public boolean isConsumed() {

@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.types.DataType;
@@ -85,7 +86,9 @@ public class SerializableSchema implements Serializable {
   public static class Column implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    @Getter
     private final String name;
+    @Getter
     private final DataType dataType;
 
     private Column(String name, DataType dataType) {
@@ -95,14 +98,6 @@ public class SerializableSchema implements Serializable {
 
     public static Column create(String name, DataType type) {
       return new Column(name, type);
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public DataType getDataType() {
-      return dataType;
     }
   }
 }

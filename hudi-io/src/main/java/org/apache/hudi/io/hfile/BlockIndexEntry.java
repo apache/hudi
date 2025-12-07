@@ -21,6 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 /**
  * Represents the index entry of a data block in the Data Index stored in the
  * {@link HFileBlockType#ROOT_INDEX} block.
@@ -36,9 +38,13 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
   // first key does not exist in the data block. The fake first key is
   // lexicographically greater than the last key of the previous block and
   // lexicographically equal or smaller than the actual first key of the current block.
+  @Getter
   private final Key firstKey;
+  @Getter
   private final Option<Key> nextBlockFirstKey;
+  @Getter
   private final long offset;
+  @Getter
   private final int size;
 
   public BlockIndexEntry(Key firstKey, Option<Key> nextBlockFirstKey,
@@ -48,22 +54,6 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
     this.nextBlockFirstKey = nextBlockFirstKey;
     this.offset = offset;
     this.size = size;
-  }
-
-  public Key getFirstKey() {
-    return firstKey;
-  }
-
-  public Option<Key> getNextBlockFirstKey() {
-    return nextBlockFirstKey;
-  }
-
-  public long getOffset() {
-    return offset;
-  }
-
-  public int getSize() {
-    return size;
   }
 
   @Override

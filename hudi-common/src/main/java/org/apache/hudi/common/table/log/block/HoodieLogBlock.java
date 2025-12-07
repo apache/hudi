@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
@@ -77,6 +78,7 @@ public abstract class HoodieLogBlock {
   // data for a specific block
   @Getter
   private Option<byte[]> content;
+  @Getter(AccessLevel.PROTECTED)
   private final Supplier<SeekableDataInputStream> inputStreamSupplier;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
   protected boolean readBlockLazily;
@@ -328,10 +330,6 @@ public abstract class HoodieLogBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream(contentBytes.length);
     baos.write(contentBytes);
     return Option.of(baos);
-  }
-
-  protected Supplier<SeekableDataInputStream> getInputStreamSupplier() {
-    return inputStreamSupplier;
   }
 
   /**

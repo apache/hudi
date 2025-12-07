@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+import lombok.Getter;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
@@ -32,12 +33,18 @@ public class MergeOnReadTableState implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  @Getter
   private final RowType rowType;
+  @Getter
   private final RowType requiredRowType;
+  @Getter
   private final String avroSchema;
+  @Getter
   private final String requiredAvroSchema;
+  @Getter
   private final List<MergeOnReadInputSplit> inputSplits;
   private final String[] pkFields;
+  @Getter
   private final int operationPos;
 
   public MergeOnReadTableState(
@@ -54,30 +61,6 @@ public class MergeOnReadTableState implements Serializable {
     this.inputSplits = inputSplits;
     this.pkFields = pkFields;
     this.operationPos = rowType.getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
-  }
-
-  public RowType getRowType() {
-    return rowType;
-  }
-
-  public RowType getRequiredRowType() {
-    return requiredRowType;
-  }
-
-  public String getAvroSchema() {
-    return avroSchema;
-  }
-
-  public String getRequiredAvroSchema() {
-    return requiredAvroSchema;
-  }
-
-  public List<MergeOnReadInputSplit> getInputSplits() {
-    return inputSplits;
-  }
-
-  public int getOperationPos() {
-    return operationPos;
   }
 
   public int[] getRequiredPositions() {

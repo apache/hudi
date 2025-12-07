@@ -20,6 +20,9 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.client.WriteStatus;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.List;
 
@@ -32,18 +35,25 @@ public class ClusteringCommitEvent implements Serializable {
   /**
    * The clustering commit instant time.
    */
+  @Getter
+  @Setter
   private String instant;
   /**
    * The file IDs.
    */
+  @Getter
   private String fileIds;
   /**
    * The write statuses.
    */
+  @Getter
+  @Setter
   private List<WriteStatus> writeStatuses;
   /**
    * The clustering task identifier.
    */
+  @Getter
+  @Setter
   private int taskID;
 
   public ClusteringCommitEvent() {
@@ -58,34 +68,6 @@ public class ClusteringCommitEvent implements Serializable {
     this.fileIds = filedIds;
     this.writeStatuses = writeStatuses;
     this.taskID = taskID;
-  }
-
-  public void setInstant(String instant) {
-    this.instant = instant;
-  }
-
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
-  }
-
-  public String getInstant() {
-    return instant;
-  }
-
-  public String getFileIds() {
-    return fileIds;
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  public int getTaskID() {
-    return taskID;
   }
 
   public boolean isFailed() {

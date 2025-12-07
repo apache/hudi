@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import com.codahale.metrics.Gauge;
+import lombok.Getter;
 import lombok.Setter;
 
 /**
@@ -30,6 +31,7 @@ public class HoodieGauge<T> implements Gauge<T> {
    * -- SETTER --
    *  Set the metric to a new value.
    */
+  @Getter
   private volatile T value;
 
   /**
@@ -37,15 +39,5 @@ public class HoodieGauge<T> implements Gauge<T> {
    */
   public HoodieGauge(T value) {
     this.value = value;
-  }
-
-  /**
-   * Returns the metric's current value.
-   *
-   * @return the metric's current value
-   */
-  @Override
-  public T getValue() {
-    return value;
   }
 }

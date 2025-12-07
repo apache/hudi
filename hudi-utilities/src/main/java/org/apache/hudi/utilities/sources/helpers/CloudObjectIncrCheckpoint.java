@@ -21,6 +21,8 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT_START_TIMESTAMP;
 
@@ -30,20 +32,14 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT
  */
 public class CloudObjectIncrCheckpoint {
 
+  @Getter
   private final String commit;
+  @Getter
   private final String key;
 
   public CloudObjectIncrCheckpoint(String commit, String key) {
     this.commit = commit;
     this.key = key;
-  }
-
-  public String getCommit() {
-    return commit;
-  }
-
-  public String getKey() {
-    return key;
   }
 
   public static CloudObjectIncrCheckpoint fromString(Option<Checkpoint> lastCheckpoint) {

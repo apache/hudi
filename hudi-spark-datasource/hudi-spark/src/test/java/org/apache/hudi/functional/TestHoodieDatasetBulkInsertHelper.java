@@ -35,6 +35,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
@@ -385,6 +386,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
     private boolean checkFlag = false;
     private String checkMessage;
+    @Getter
     private int parallelism;
 
     StageCheckBulkParallelismListener(String checkMessage) {
@@ -401,10 +403,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
       if (stageSubmitted.stageInfo().details().contains(checkMessage)) {
         checkFlag = true;
       }
-    }
-
-    public int getParallelism() {
-      return parallelism;
     }
   }
 }

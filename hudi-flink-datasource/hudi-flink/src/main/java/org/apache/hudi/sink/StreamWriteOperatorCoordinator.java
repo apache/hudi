@@ -50,6 +50,7 @@ import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -687,17 +688,13 @@ public class StreamWriteOperatorCoordinator
    * Provider for {@link StreamWriteOperatorCoordinator}.
    */
   public static class Provider implements OperatorCoordinator.Provider {
+    @Getter
     private final OperatorID operatorId;
     private final Configuration conf;
 
     public Provider(OperatorID operatorId, Configuration conf) {
       this.operatorId = operatorId;
       this.conf = conf;
-    }
-
-    @Override
-    public OperatorID getOperatorId() {
-      return this.operatorId;
     }
 
     @Override

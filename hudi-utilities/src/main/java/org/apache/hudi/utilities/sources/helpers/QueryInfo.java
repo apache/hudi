@@ -22,6 +22,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -44,14 +46,22 @@ import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL;
  * </p>
  */
 public class QueryInfo {
+  @Getter
   private final String queryType;
+  @Getter
   private final String previousInstant;
+  @Getter
   private final String startInstant;
+  @Getter
   private final String endInstant;
   private final String predicateFilter;
+  @Getter
   private final String orderColumn;
+  @Getter
   private final String keyColumn;
+  @Getter
   private final String limitColumn;
+  @Getter
   private final List<String> orderByColumns;
 
   public QueryInfo(
@@ -101,38 +111,6 @@ public class QueryInfo {
 
   public boolean isSnapshot() {
     return QUERY_TYPE_SNAPSHOT_OPT_VAL().equals(queryType);
-  }
-
-  public String getQueryType() {
-    return queryType;
-  }
-
-  public String getPreviousInstant() {
-    return previousInstant;
-  }
-
-  public String getStartInstant() {
-    return startInstant;
-  }
-
-  public String getEndInstant() {
-    return endInstant;
-  }
-
-  public String getOrderColumn() {
-    return orderColumn;
-  }
-
-  public String getKeyColumn() {
-    return keyColumn;
-  }
-
-  public String getLimitColumn() {
-    return limitColumn;
-  }
-
-  public List<String> getOrderByColumns() {
-    return orderByColumns;
   }
 
   public Option<String> getPredicateFilter() {

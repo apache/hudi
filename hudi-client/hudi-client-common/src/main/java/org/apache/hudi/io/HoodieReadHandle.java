@@ -27,6 +27,8 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.Getter;
+
 import java.io.IOException;
 
 /**
@@ -34,6 +36,7 @@ import java.io.IOException;
  */
 public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
+  @Getter
   protected final Pair<String, String> partitionPathFileIDPair;
 
   public HoodieReadHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
@@ -53,10 +56,6 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   @Override
   public HoodieStorage getStorage() {
     return hoodieTable.getStorage();
-  }
-
-  public Pair<String, String> getPartitionPathFileIDPair() {
-    return partitionPathFileIDPair;
   }
 
   public String getFileId() {

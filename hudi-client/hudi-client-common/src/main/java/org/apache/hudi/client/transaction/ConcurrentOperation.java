@@ -31,6 +31,8 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -53,12 +55,15 @@ import static org.apache.hudi.common.util.CommitUtils.getPartitionAndFileIdWitho
  */
 public class ConcurrentOperation {
 
+  @Getter
   private WriteOperationType operationType;
   private final HoodieMetadataWrapper metadataWrapper;
+  @Getter
   private final Option<HoodieCommitMetadata> commitMetadataOption;
   private final String actionState;
   private final String actionType;
   private final String instantTime;
+  @Getter
   private Set<Pair<String, String>> mutatedPartitionAndFileIds = Collections.emptySet();
 
   public ConcurrentOperation(HoodieInstant instant, HoodieTableMetaClient metaClient) throws IOException {
@@ -94,18 +99,6 @@ public class ConcurrentOperation {
 
   public String getInstantTimestamp() {
     return instantTime;
-  }
-
-  public WriteOperationType getOperationType() {
-    return operationType;
-  }
-
-  public Set<Pair<String, String>> getMutatedPartitionAndFileIds() {
-    return mutatedPartitionAndFileIds;
-  }
-
-  public Option<HoodieCommitMetadata> getCommitMetadataOption() {
-    return commitMetadataOption;
   }
 
   private void init(HoodieInstant instant) {

@@ -29,6 +29,7 @@ import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -100,6 +101,7 @@ public class StreamReadMonitoringFunction
 
   private String issuedInstant;
 
+  @Getter
   private String issuedOffset;
 
   /**
@@ -329,11 +331,8 @@ public class StreamReadMonitoringFunction
     readMetrics.registerMetrics();
   }
 
-  public String getIssuedOffset() {
-    return issuedOffset;
-  }
-
   private static class SplitState implements Serializable {
+    @Getter
     private final int totalSplitState;
     private final List<MergeOnReadInputSplit> remainingSplitState;
 
@@ -344,10 +343,6 @@ public class StreamReadMonitoringFunction
 
     public List<MergeOnReadInputSplit> getRemainingSplits() {
       return remainingSplitState;
-    }
-
-    public int getTotalSplitState() {
-      return totalSplitState;
     }
   }
 

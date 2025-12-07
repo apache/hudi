@@ -39,6 +39,7 @@ import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -73,9 +74,12 @@ public class HoodieMultiTableStreamer {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableStreamer.class);
 
+  @Getter
   private final List<TableExecutionContext> tableExecutionContexts;
   private transient JavaSparkContext jssc;
+  @Getter
   private final Set<String> successTables;
+  @Getter
   private final Set<String> failedTables;
 
   public HoodieMultiTableStreamer(Config config, JavaSparkContext jssc) throws IOException {
@@ -485,17 +489,5 @@ public class HoodieMultiTableStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
-  }
-
-  public Set<String> getSuccessTables() {
-    return successTables;
-  }
-
-  public Set<String> getFailedTables() {
-    return failedTables;
-  }
-
-  public List<TableExecutionContext> getTableExecutionContexts() {
-    return this.tableExecutionContexts;
   }
 }

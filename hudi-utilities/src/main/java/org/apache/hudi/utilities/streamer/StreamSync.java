@@ -112,10 +112,11 @@ import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
-import org.apache.hudi.utilities.streamer.HoodieStreamer.Config;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericRecord;
@@ -185,6 +186,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Delta Sync Config.
    */
+  @Getter
   private final HoodieStreamer.Config cfg;
 
   /**
@@ -212,6 +214,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Filesystem used.
    */
+  @Getter
   private transient HoodieStorage storage;
 
   /**
@@ -234,6 +237,7 @@ public class StreamSync implements Serializable, Closeable {
    *
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides
    */
+  @Getter
   private final TypedProperties props;
 
   /**
@@ -244,6 +248,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Timeline with completed commits, including both .commit and .deltacommit.
    */
+  @Getter
   private transient Option<HoodieTimeline> commitsTimelineOpt;
 
   // all commits timeline, including all (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index)
@@ -268,6 +273,7 @@ public class StreamSync implements Serializable, Closeable {
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
   private HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
 
+  @Getter
   private transient HoodieIngestionMetrics metrics;
   private transient HoodieMetrics hoodieMetrics;
 
@@ -1302,26 +1308,6 @@ public class StreamSync implements Serializable, Closeable {
 
   }
 
-  public HoodieStorage getStorage() {
-    return storage;
-  }
-
-  public TypedProperties getProps() {
-    return props;
-  }
-
-  public Config getCfg() {
-    return cfg;
-  }
-
-  public Option<HoodieTimeline> getCommitsTimelineOpt() {
-    return commitsTimelineOpt;
-  }
-
-  public HoodieIngestionMetrics getMetrics() {
-    return metrics;
-  }
-
   /**
    * Schedule clustering.
    * Called from {@link HoodieStreamer} when async clustering is enabled.
@@ -1349,23 +1335,14 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   class WriteClientWriteResult {
+    @Getter
+    @Setter
     private Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
+    @Getter
     private final JavaRDD<WriteStatus> writeStatusRDD;
 
     public WriteClientWriteResult(JavaRDD<WriteStatus> writeStatusRDD) {
       this.writeStatusRDD = writeStatusRDD;
-    }
-
-    public Map<String, List<String>> getPartitionToReplacedFileIds() {
-      return partitionToReplacedFileIds;
-    }
-
-    public void setPartitionToReplacedFileIds(Map<String, List<String>> partitionToReplacedFileIds) {
-      this.partitionToReplacedFileIds = partitionToReplacedFileIds;
-    }
-
-    public JavaRDD<WriteStatus> getWriteStatusRDD() {
-      return writeStatusRDD;
     }
   }
 

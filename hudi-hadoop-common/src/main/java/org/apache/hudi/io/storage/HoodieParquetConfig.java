@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 /**
@@ -27,12 +28,19 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
  * @param <T>
  */
 public class HoodieParquetConfig<T> {
+  @Getter
   private final T writeSupport;
+  @Getter
   private final CompressionCodecName compressionCodecName;
+  @Getter
   private final int blockSize;
+  @Getter
   private final int pageSize;
+  @Getter
   private final long maxFileSize;
+  @Getter
   private final StorageConfiguration<?> storageConf;
+  @Getter
   private final double compressionRatio;
   private final boolean dictionaryEnabled;
 
@@ -46,34 +54,6 @@ public class HoodieParquetConfig<T> {
     this.storageConf = storageConf;
     this.compressionRatio = compressionRatio;
     this.dictionaryEnabled = dictionaryEnabled;
-  }
-
-  public CompressionCodecName getCompressionCodecName() {
-    return compressionCodecName;
-  }
-
-  public int getBlockSize() {
-    return blockSize;
-  }
-
-  public int getPageSize() {
-    return pageSize;
-  }
-
-  public long getMaxFileSize() {
-    return maxFileSize;
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
-  }
-
-  public double getCompressionRatio() {
-    return compressionRatio;
-  }
-
-  public T getWriteSupport() {
-    return writeSupport;
   }
 
   public boolean dictionaryEnabled() {

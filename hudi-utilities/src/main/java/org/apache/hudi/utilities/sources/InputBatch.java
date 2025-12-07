@@ -27,12 +27,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.Getter;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class InputBatch<T> {
 
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
+  @Getter
   private final Option<T> batch;
+  @Getter
   private final Checkpoint checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
 
@@ -52,14 +55,6 @@ public class InputBatch<T> {
 
   public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch) {
     this(batch, checkpointForNextBatch, null);
-  }
-
-  public Option<T> getBatch() {
-    return batch;
-  }
-
-  public Checkpoint getCheckpointForNextBatch() {
-    return checkpointForNextBatch;
   }
 
   public SchemaProvider getSchemaProvider() {

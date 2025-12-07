@@ -20,6 +20,7 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,16 +46,20 @@ public abstract class HoodieAsyncService implements Serializable {
   // Flag indicating whether an error is incurred in the service
   protected boolean hasError;
   // Flag to track if the service is started.
+  @Getter
   private boolean started;
   // Flag indicating shutdown is externally requested
+  @Getter
   private boolean shutdownRequested;
   // Flag indicating the service is shutdown
+  @Getter
   private volatile boolean shutdown;
   // Executor Service for running delta-sync/compaction
   private transient ExecutorService executor;
   // Future tracking delta-sync/compaction
   private transient CompletableFuture future;
   // Run in daemon mode
+  @Getter
   private final boolean runInDaemonMode;
   // Queue to hold pending compaction/clustering instants
   private transient BlockingQueue<String> pendingInstants = new LinkedBlockingQueue<>();
@@ -70,18 +75,6 @@ public abstract class HoodieAsyncService implements Serializable {
   protected HoodieAsyncService(boolean runInDaemonMode) {
     shutdownRequested = false;
     this.runInDaemonMode = runInDaemonMode;
-  }
-
-  public boolean isStarted() {
-    return started;
-  }
-
-  public boolean isShutdownRequested() {
-    return shutdownRequested;
-  }
-
-  public boolean isShutdown() {
-    return shutdown;
   }
 
   public boolean hasError() {
@@ -171,10 +164,6 @@ public abstract class HoodieAsyncService implements Serializable {
       }
       this.started = false;
     });
-  }
-
-  public boolean isRunInDaemonMode() {
-    return runInDaemonMode;
   }
 
   /**

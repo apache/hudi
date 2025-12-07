@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 
+import lombok.Getter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -986,9 +987,13 @@ public class TestHFileReader {
   }
 
   static class KeyLookUpInfo {
+    @Getter
     private final String lookUpKey;
+    @Getter
     private final int expectedSeekToResult;
+    @Getter
     private final String expectedKey;
+    @Getter
     private final String expectedValue;
 
     public KeyLookUpInfo(String lookUpKey,
@@ -999,22 +1004,6 @@ public class TestHFileReader {
       this.expectedSeekToResult = expectedSeekToResult;
       this.expectedKey = expectedKey;
       this.expectedValue = expectedValue;
-    }
-
-    public String getLookUpKey() {
-      return lookUpKey;
-    }
-
-    public int getExpectedSeekToResult() {
-      return expectedSeekToResult;
-    }
-
-    public String getExpectedKey() {
-      return expectedKey;
-    }
-
-    public String getExpectedValue() {
-      return expectedValue;
     }
   }
 }

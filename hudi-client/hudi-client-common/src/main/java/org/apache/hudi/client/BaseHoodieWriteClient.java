@@ -98,6 +98,8 @@ import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -135,8 +137,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
 
+  @Getter
   private final transient HoodieIndex<?, ?> index;
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
+  @Getter
+  @Setter
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
 
@@ -145,6 +150,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
   protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
+  @Getter
   protected BaseHoodieTableServiceClient<?, ?, O> tableServiceClient;
 
   /**
@@ -192,18 +198,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
-
-  public void setOperationType(WriteOperationType operationType) {
-    this.operationType = operationType;
-  }
-
-  public WriteOperationType getOperationType() {
-    return this.operationType;
-  }
-
-  public BaseHoodieTableServiceClient<?, ?, O> getTableServiceClient() {
-    return tableServiceClient;
-  }
 
   /**
    * Commit changes performed at the given instantTime marker.
@@ -1319,10 +1313,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   public HoodieMetrics getMetrics() {
     return metrics;
-  }
-
-  public HoodieIndex<?, ?> getIndex() {
-    return index;
   }
 
   /**

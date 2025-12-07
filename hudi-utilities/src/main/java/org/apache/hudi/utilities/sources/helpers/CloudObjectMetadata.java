@@ -19,22 +19,18 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 
 public class CloudObjectMetadata implements Serializable {
+  @Getter
   private final String path;
+  @Getter
   private final long size;
 
   public CloudObjectMetadata(String path, long size) {
     this.path = path;
     this.size = size;
-  }
-
-  public String getPath() {
-    return path;
-  }
-
-  public long getSize() {
-    return size;
   }
 }

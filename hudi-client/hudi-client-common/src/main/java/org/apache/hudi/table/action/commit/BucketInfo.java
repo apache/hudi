@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.commit;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -26,26 +28,17 @@ import java.util.Objects;
  */
 public class BucketInfo implements Serializable {
 
+  @Getter
   BucketType bucketType;
+  @Getter
   String fileIdPrefix;
+  @Getter
   String partitionPath;
 
   public BucketInfo(BucketType bucketType, String fileIdPrefix, String partitionPath) {
     this.bucketType = bucketType;
     this.fileIdPrefix = fileIdPrefix;
     this.partitionPath = partitionPath;
-  }
-
-  public BucketType getBucketType() {
-    return bucketType;
-  }
-
-  public String getFileIdPrefix() {
-    return fileIdPrefix;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
   }
 
   @Override

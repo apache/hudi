@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 
 /**
@@ -28,9 +30,13 @@ import java.io.Serializable;
  */
 public class OperationResult<T> implements Serializable {
 
+  @Getter
   private T operation;
+  @Getter
   private boolean executed;
+  @Getter
   private boolean success;
+  @Getter
   private Option<Exception> exception;
 
   public OperationResult() {
@@ -48,22 +54,6 @@ public class OperationResult<T> implements Serializable {
     this.success = success;
     this.exception = exception;
     this.executed = executed;
-  }
-
-  public T getOperation() {
-    return operation;
-  }
-
-  public boolean isSuccess() {
-    return success;
-  }
-
-  public boolean isExecuted() {
-    return executed;
-  }
-
-  public Option<Exception> getException() {
-    return exception;
   }
 
   @Override

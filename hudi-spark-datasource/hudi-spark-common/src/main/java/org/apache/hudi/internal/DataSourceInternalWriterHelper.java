@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.Getter;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
@@ -55,6 +56,7 @@ public class DataSourceInternalWriterHelper {
   private final String instantTime;
   private final HoodieTableMetaClient metaClient;
   private final SparkRDDWriteClient writeClient;
+  @Getter
   private final HoodieTable hoodieTable;
   private final WriteOperationType operationType;
   private final Map<String, String> extraMetadata;
@@ -105,10 +107,6 @@ public class DataSourceInternalWriterHelper {
         metaClient.createNewInstant(State.REQUESTED,
             CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime), Option.empty());
     return instantTime;
-  }
-
-  public HoodieTable getHoodieTable() {
-    return hoodieTable;
   }
 
   public WriteOperationType getWriteOperationType() {

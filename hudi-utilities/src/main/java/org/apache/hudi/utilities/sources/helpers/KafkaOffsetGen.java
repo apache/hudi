@@ -20,9 +20,11 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.util.LogicalClock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.SystemClock;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -30,9 +32,8 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
-import org.apache.hudi.common.util.LogicalClock;
-import org.apache.hudi.common.util.SystemClock;
 
+import lombok.Getter;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -235,8 +236,10 @@ public class KafkaOffsetGen {
     }
   }
 
+  @Getter
   private final Map<String, Object> kafkaParams;
   private final TypedProperties props;
+  @Getter
   protected final String topicName;
   private KafkaSourceConfig.KafkaResetOffsetStrategies autoResetValue;
   private final String kafkaCheckpointType;
@@ -558,14 +561,6 @@ public class KafkaOffsetGen {
   public boolean checkTopicExists(KafkaConsumer consumer)  {
     Map<String, List<PartitionInfo>> result = consumer.listTopics();
     return result.containsKey(topicName);
-  }
-
-  public String getTopicName() {
-    return topicName;
-  }
-
-  public Map<String, Object> getKafkaParams() {
-    return kafkaParams;
   }
 
   public static Map<String, Object> excludeHoodieConfigs(TypedProperties props) {

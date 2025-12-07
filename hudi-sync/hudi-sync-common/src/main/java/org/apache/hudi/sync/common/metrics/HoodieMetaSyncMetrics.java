@@ -29,6 +29,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +43,7 @@ public class HoodieMetaSyncMetrics {
   private static final String META_SYNC_ACTION = "meta_sync";
   private static final String RECREATE_TABLE_DURATION_MS_METRIC = "recreate_table_duration_ms";
   // Metrics are shut down by the shutdown hook added in the Metrics class
+  @Getter
   private Metrics metrics;
   private final HoodieMetricsConfig metricsConfig;
   private transient HoodieStorage storage;
@@ -63,10 +65,6 @@ public class HoodieMetaSyncMetrics {
       recreateAndSyncTimerName = getMetricsName(META_SYNC_ACTION, META_SYNC_RECREATE_TABLE_METRIC + TIMER_METRIC_EXTENSION);
       recreateAndSyncFailureCounterName = getMetricsName(META_SYNC_ACTION, META_SYNC_RECREATE_TABLE_FAILURE_METRIC + COUNTER_METRIC_EXTENSION);
     }
-  }
-
-  public Metrics getMetrics() {
-    return metrics;
   }
 
   public Timer.Context getRecreateAndSyncTimer() {

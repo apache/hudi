@@ -63,6 +63,7 @@ import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import lombok.Getter;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -978,7 +979,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   static class TestSourceProfile implements SourceProfile<Integer> {
 
+    @Getter
     private final long maxSourceBytes;
+    @Getter
     private final int sourcePartitions;
     private final int numInstantsPerFetch;
 
@@ -989,32 +992,20 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public long getMaxSourceBytes() {
-      return maxSourceBytes;
-    }
-
-    @Override
-    public int getSourcePartitions() {
-      return sourcePartitions;
-    }
-
-    @Override
     public Integer getSourceSpecificContext() {
       return numInstantsPerFetch;
     }
   }
 
   static class WriteResult {
+    @Getter
     private HoodieInstant instant;
+    @Getter
     private List<HoodieRecord> records;
 
     WriteResult(HoodieInstant instant, List<HoodieRecord> records) {
       this.instant = instant;
       this.records = records;
-    }
-
-    public HoodieInstant getInstant() {
-      return instant;
     }
 
     public String getInstantTime() {
@@ -1023,10 +1014,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     public String getCompletionTime() {
       return instant.getCompletionTime();
-    }
-
-    public List<HoodieRecord> getRecords() {
-      return records;
     }
   }
 }

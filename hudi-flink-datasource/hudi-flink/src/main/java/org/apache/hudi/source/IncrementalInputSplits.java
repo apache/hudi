@@ -44,6 +44,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import lombok.Getter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
@@ -469,7 +470,9 @@ public class IncrementalInputSplits implements Serializable {
    * Represents a result of calling {@link #inputSplits}.
    */
   public static class Result {
+    @Getter
     private final List<MergeOnReadInputSplit> inputSplits; // input splits
+    @Getter
     private final String endInstant; // end instant to consume to
     private final String offset;     // monotonic increasing consumption offset
 
@@ -477,14 +480,6 @@ public class IncrementalInputSplits implements Serializable {
 
     public boolean isEmpty() {
       return this.inputSplits.size() == 0;
-    }
-
-    public List<MergeOnReadInputSplit> getInputSplits() {
-      return this.inputSplits;
-    }
-
-    public String getEndInstant() {
-      return this.endInstant;
     }
 
     @Nullable

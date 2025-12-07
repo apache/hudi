@@ -41,6 +41,7 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.util.Timestamps;
+import lombok.Getter;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -107,8 +108,11 @@ public class ProtoConversionUtil {
   }
 
   public static class SchemaConfig {
+    @Getter
     private final boolean wrappedPrimitivesAsRecords;
+    @Getter
     private final int maxRecursionDepth;
+    @Getter
     private final boolean timestampsAsRecords;
 
     /**
@@ -128,18 +132,6 @@ public class ProtoConversionUtil {
       int maxRecursionDepth = getIntWithAltKeys(props, PROTO_SCHEMA_MAX_RECURSION_DEPTH);
       boolean timestampsAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS);
       return new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
-    }
-
-    public boolean isWrappedPrimitivesAsRecords() {
-      return wrappedPrimitivesAsRecords;
-    }
-
-    public boolean isTimestampsAsRecords() {
-      return timestampsAsRecords;
-    }
-
-    public int getMaxRecursionDepth() {
-      return maxRecursionDepth;
     }
   }
 

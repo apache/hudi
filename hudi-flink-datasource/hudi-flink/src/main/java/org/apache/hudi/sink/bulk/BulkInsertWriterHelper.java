@@ -31,6 +31,7 @@ import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.DataTypeUtils;
 
+import lombok.Getter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -60,6 +61,7 @@ public class BulkInsertWriterHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(BulkInsertWriterHelper.class);
 
+  @Getter
   protected final String instantTime;
   protected final int taskPartitionId;
   protected final long totalSubtaskNum;
@@ -112,13 +114,6 @@ public class BulkInsertWriterHelper {
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGens.instance(conf, rowType, taskPartitionId, instantTime);
     this.writeMetrics = writeMetrics;
-  }
-
-  /**
-   * Returns the write instant time.
-   */
-  public String getInstantTime() {
-    return this.instantTime;
   }
 
   public void write(RowData record) throws IOException {

@@ -33,6 +33,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -64,13 +66,21 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 public abstract class AbstractRealtimeRecordReader {
   private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
+  @Getter
   protected final RealtimeSplit split;
+  @Getter
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
   protected TypedProperties payloadProps = new TypedProperties();
   // Schema handles
+  @Getter
+  @Setter
   private Schema readerSchema;
+  @Getter
+  @Setter
   private Schema writerSchema;
+  @Getter
+  @Setter
   private Schema hiveSchema;
   private final HoodieTableMetaClient metaClient;
   protected SchemaEvolutionContext schemaEvolutionContext;
@@ -78,6 +88,7 @@ public abstract class AbstractRealtimeRecordReader {
   protected boolean supportPayload;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
+  @Getter
   private final boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
@@ -203,41 +214,5 @@ public abstract class AbstractRealtimeRecordReader {
 
   protected Schema getLogScannerReaderSchema() {
     return usesCustomPayload ? writerSchema : readerSchema;
-  }
-
-  public Schema getReaderSchema() {
-    return readerSchema;
-  }
-
-  public Schema getWriterSchema() {
-    return writerSchema;
-  }
-
-  public Schema getHiveSchema() {
-    return hiveSchema;
-  }
-
-  public boolean isSupportTimestamp() {
-    return supportTimestamp;
-  }
-
-  public RealtimeSplit getSplit() {
-    return split;
-  }
-
-  public JobConf getJobConf() {
-    return jobConf;
-  }
-
-  public void setReaderSchema(Schema readerSchema) {
-    this.readerSchema = readerSchema;
-  }
-
-  public void setWriterSchema(Schema writerSchema) {
-    this.writerSchema = writerSchema;
-  }
-
-  public void setHiveSchema(Schema hiveSchema) {
-    this.hiveSchema = hiveSchema;
   }
 }

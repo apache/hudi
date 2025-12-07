@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.connect.writers.ConnectWriter;
 import org.apache.hudi.connect.writers.ConnectWriterProvider;
 
+import lombok.Getter;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import java.util.List;
@@ -53,20 +54,14 @@ public class TestHudiWriterProvider implements ConnectWriterProvider<WriteStatus
 
   private static class TestHudiWriter implements ConnectWriter<WriteStatus> {
 
+    @Getter
     private int numberRecords;
+    @Getter
     private boolean isClosed;
 
     public TestHudiWriter() {
       this.numberRecords = 0;
       this.isClosed = false;
-    }
-
-    public int getNumberRecords() {
-      return numberRecords;
-    }
-
-    public boolean isClosed() {
-      return isClosed;
     }
 
     @Override

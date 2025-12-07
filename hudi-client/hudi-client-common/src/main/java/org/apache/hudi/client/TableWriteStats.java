@@ -20,6 +20,8 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieWriteStat;
 
+import lombok.Getter;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -28,7 +30,9 @@ import java.util.List;
  */
 public class TableWriteStats {
 
+  @Getter
   private final List<HoodieWriteStat> dataTableWriteStats;
+  @Getter
   private final List<HoodieWriteStat> metadataTableWriteStats;
 
   public TableWriteStats(List<HoodieWriteStat> dataTableWriteStats) {
@@ -38,14 +42,6 @@ public class TableWriteStats {
   public TableWriteStats(List<HoodieWriteStat> dataTableWriteStats, List<HoodieWriteStat> metadataTableWriteStats) {
     this.dataTableWriteStats = dataTableWriteStats;
     this.metadataTableWriteStats = metadataTableWriteStats;
-  }
-
-  public List<HoodieWriteStat> getDataTableWriteStats() {
-    return dataTableWriteStats;
-  }
-
-  public List<HoodieWriteStat> getMetadataTableWriteStats() {
-    return metadataTableWriteStats;
   }
 
   public boolean isEmptyDataTableWriteStats() {

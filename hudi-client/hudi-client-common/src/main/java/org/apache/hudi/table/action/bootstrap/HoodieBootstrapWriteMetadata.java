@@ -21,25 +21,21 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.Getter;
+
 /**
  * Write Result for a bootstrap operation.
  */
 public class HoodieBootstrapWriteMetadata<O> {
 
+  @Getter
   private final Option<HoodieWriteMetadata<O>> metadataBootstrapResult;
+  @Getter
   private final Option<HoodieWriteMetadata<O>> fullBootstrapResult;
 
   public HoodieBootstrapWriteMetadata(Option<HoodieWriteMetadata<O>> metadataBootstrapResult,
                                       Option<HoodieWriteMetadata<O>> fullBootstrapResult) {
     this.metadataBootstrapResult = metadataBootstrapResult;
     this.fullBootstrapResult = fullBootstrapResult;
-  }
-
-  public Option<HoodieWriteMetadata<O>> getMetadataBootstrapResult() {
-    return metadataBootstrapResult;
-  }
-
-  public Option<HoodieWriteMetadata<O>> getFullBootstrapResult() {
-    return fullBootstrapResult;
   }
 }

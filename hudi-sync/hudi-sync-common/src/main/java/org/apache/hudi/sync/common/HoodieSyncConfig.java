@@ -33,6 +33,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
@@ -201,7 +203,10 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "This is useful when the partition metadata is large, and the partition info can be "
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
+  @Getter
+  @Setter
   private Configuration hadoopConf;
+  @Getter
   private final HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
@@ -224,18 +229,6 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public String getBasePath() {
     return getString(BASE_PATH);
-  }
-
-  public void setHadoopConf(Configuration hadoopConf) {
-    this.hadoopConf = hadoopConf;
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
-  }
-
-  public HoodieMetricsConfig getMetricsConfig() {
-    return metricsConfig;
   }
 
   public FileSystem getHadoopFileSystem() {
@@ -287,12 +280,9 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = {"--sync-no-partition-metadata"}, description = "do not sync partition metadata info to the catalog")
     public Boolean shouldNotSyncPartitionMetadata;
 
+    @Getter
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
-
-    public boolean isHelp() {
-      return help;
-    }
 
     public TypedProperties toProps() {
       final TypedProperties props = new TypedProperties();

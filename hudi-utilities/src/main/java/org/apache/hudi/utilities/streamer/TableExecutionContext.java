@@ -21,6 +21,9 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Objects;
 
 /**
@@ -29,42 +32,18 @@ import java.util.Objects;
  */
 public class TableExecutionContext {
 
+  @Getter
+  @Setter
   private TypedProperties properties;
+  @Getter
+  @Setter
   private HoodieStreamer.Config config;
+  @Getter
+  @Setter
   private String database;
+  @Getter
+  @Setter
   private String tableName;
-
-  public HoodieStreamer.Config getConfig() {
-    return config;
-  }
-
-  public void setConfig(HoodieStreamer.Config config) {
-    this.config = config;
-  }
-
-  public String getDatabase() {
-    return database;
-  }
-
-  public void setDatabase(String database) {
-    this.database = database;
-  }
-
-  public String getTableName() {
-    return tableName;
-  }
-
-  public void setTableName(String tableName) {
-    this.tableName = tableName;
-  }
-
-  public TypedProperties getProperties() {
-    return properties;
-  }
-
-  public void setProperties(TypedProperties properties) {
-    this.properties = properties;
-  }
 
   @Override
   public boolean equals(Object o) {

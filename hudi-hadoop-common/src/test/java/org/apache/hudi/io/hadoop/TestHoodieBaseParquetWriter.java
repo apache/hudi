@@ -30,6 +30,8 @@ import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -51,7 +53,10 @@ public class TestHoodieBaseParquetWriter {
 
   private static class MockHoodieParquetWriter extends HoodieBaseParquetWriter<IndexedRecord> {
 
+    @Getter
+    @Setter
     long writtenRecordCount = 0L;
+    @Setter
     long currentDataSize = 0L;
 
     public MockHoodieParquetWriter(StoragePath file,
@@ -63,19 +68,6 @@ public class TestHoodieBaseParquetWriter {
     @Override
     public long getDataSize() {
       return currentDataSize;
-    }
-
-    @Override
-    public long getWrittenRecordCount() {
-      return writtenRecordCount;
-    }
-
-    public void setWrittenRecordCount(long writtenCount) {
-      this.writtenRecordCount = writtenCount;
-    }
-
-    public void setCurrentDataSize(long currentDataSize) {
-      this.currentDataSize = currentDataSize;
     }
   }
 

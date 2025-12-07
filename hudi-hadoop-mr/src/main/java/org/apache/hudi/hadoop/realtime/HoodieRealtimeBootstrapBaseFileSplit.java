@@ -22,6 +22,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
@@ -40,23 +42,32 @@ public class HoodieRealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit
   /**
    * Marks whether this path produced as part of Incremental Query
    */
+  @Setter
   private boolean belongsToIncrementalQuery = false;
   /**
    * List of delta log-files holding updated records for this base-file
    */
+  @Getter
+  @Setter
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
+  @Getter
+  @Setter
   private String maxCommitTime;
   /**
    * Base path of the table this path belongs to
    */
+  @Getter
+  @Setter
   private String basePath;
   /**
    * Virtual key configuration of the table this split belongs to
    */
+  @Getter
+  @Setter
   private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   /**
@@ -94,52 +105,7 @@ public class HoodieRealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit
   }
 
   @Override
-  public List<HoodieLogFile> getDeltaLogFiles() {
-    return deltaLogFiles;
-  }
-
-  @Override
-  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
-    this.deltaLogFiles = deltaLogFiles;
-  }
-
-  @Override
-  public String getMaxCommitTime() {
-    return maxCommitTime;
-  }
-
-  @Override
-  public String getBasePath() {
-    return basePath;
-  }
-
-  @Override
-  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
-    return virtualKeyInfo;
-  }
-
-  @Override
   public boolean getBelongsToIncrementalQuery() {
     return belongsToIncrementalQuery;
-  }
-
-  @Override
-  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
-    this.belongsToIncrementalQuery = belongsToIncrementalPath;
-  }
-
-  @Override
-  public void setMaxCommitTime(String maxInstantTime) {
-    this.maxCommitTime = maxInstantTime;
-  }
-
-  @Override
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
-  }
-
-  @Override
-  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
-    this.virtualKeyInfo = virtualKeyInfo;
   }
 }

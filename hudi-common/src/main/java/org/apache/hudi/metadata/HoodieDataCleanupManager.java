@@ -22,6 +22,8 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,8 +39,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class HoodieDataCleanupManager implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieDataCleanupManager.class);
-  
+
   // Thread-local tracking of persisted data for cleanup on exceptions
+  @Getter(AccessLevel.PACKAGE)
   private final ConcurrentHashMap<Long, List<Object>> threadPersistedData = new ConcurrentHashMap<>();
   
   /**
@@ -110,14 +113,5 @@ public class HoodieDataCleanupManager implements Serializable {
   private void clearThreadTracking() {
     long threadId = Thread.currentThread().getId();
     threadPersistedData.remove(threadId);
-  }
-  
-  /**
-   * Get the thread-persisted data map for testing purposes.
-   *
-   * @return The concurrent map tracking persisted data by thread ID
-   */
-  ConcurrentHashMap<Long, List<Object>> getThreadPersistedData() {
-    return threadPersistedData;
   }
 }

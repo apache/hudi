@@ -31,6 +31,8 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -88,6 +90,8 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * Correspondent to request the instant time.
    */
+  @Getter
+  @Setter
   protected transient Correspondent correspondent;
 
   /**
@@ -173,18 +177,6 @@ public abstract class AbstractStreamWriteFunction<I>
   @Override
   public void endInput() {
     this.inputEnded = true;
-  }
-
-  // -------------------------------------------------------------------------
-  //  Getter/Setter
-  // -------------------------------------------------------------------------
-
-  public void setCorrespondent(Correspondent correspondent) {
-    this.correspondent = correspondent;
-  }
-
-  public Correspondent getCorrespondent() {
-    return correspondent;
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {

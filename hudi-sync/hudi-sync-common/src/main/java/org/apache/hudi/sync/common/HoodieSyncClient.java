@@ -33,6 +33,7 @@ import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
+import lombok.Getter;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
@@ -59,6 +60,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;
+  @Getter
   protected final HoodieTableMetaClient metaClient;
   protected final ParquetTableSchemaResolver tableSchemaResolver;
   private static final String TEMP_SUFFIX = "_temp";
@@ -84,10 +86,6 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public boolean isBootstrap() {
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
-  }
-
-  public HoodieTableMetaClient getMetaClient() {
-    return metaClient;
   }
 
   public String getTableName() {

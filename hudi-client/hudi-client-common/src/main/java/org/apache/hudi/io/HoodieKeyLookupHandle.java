@@ -63,7 +63,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
       if (config.getBloomIndexUseMetadata()
           && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
           .contains(BLOOM_FILTERS.getPartitionPath())) {
-        bloomFilter = hoodieTable.getMetadataTable().getBloomFilter(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight())
+        bloomFilter = hoodieTable.getTableMetadata().getBloomFilter(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight())
             .orElseThrow(() -> new HoodieIndexException("BloomFilter missing for " + partitionPathFileIDPair.getRight()));
       } else {
         try (HoodieFileReader reader = createNewFileReader()) {

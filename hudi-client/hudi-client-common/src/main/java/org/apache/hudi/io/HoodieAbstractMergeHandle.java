@@ -32,6 +32,8 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,10 +50,15 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected StoragePath newFilePath;
+  @Getter
   protected StoragePath oldFilePath;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   protected HoodieBaseFile baseFileToMerge;
+  @Getter
+  @Setter
   protected Option<String[]> partitionFields = Option.empty();
+  @Getter
+  @Setter
   protected Object[] partitionValues = new Object[0];
 
   /**
@@ -85,11 +92,6 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
   }
 
   @Override
-  public StoragePath getOldFilePath() {
-    return oldFilePath;
-  }
-
-  @Override
   public IOType getIOType() {
     return IOType.MERGE;
   }
@@ -97,22 +99,6 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
   @Override
   public HoodieBaseFile baseFileForMerge() {
     return baseFileToMerge;
-  }
-
-  public void setPartitionFields(Option<String[]> partitionFields) {
-    this.partitionFields = partitionFields;
-  }
-
-  public Option<String[]> getPartitionFields() {
-    return this.partitionFields;
-  }
-
-  public void setPartitionValues(Object[] partitionValues) {
-    this.partitionValues = partitionValues;
-  }
-
-  public Object[] getPartitionValues() {
-    return this.partitionValues;
   }
 
   /**

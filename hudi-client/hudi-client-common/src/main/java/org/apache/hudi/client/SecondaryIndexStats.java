@@ -18,6 +18,9 @@
 
 package org.apache.hudi.client;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 
 /**
@@ -27,37 +30,19 @@ import java.io.Serializable;
 public class SecondaryIndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  @Getter
+  @Setter
   private String recordKey;
+  @Getter
+  @Setter
   private String secondaryKeyValue;
+  @Getter
+  @Setter
   private boolean isDeleted;
 
   public SecondaryIndexStats(String recordKey, String secondaryKeyValue, boolean isDeleted) {
     this.recordKey = recordKey;
     this.secondaryKeyValue = secondaryKeyValue;
     this.isDeleted = isDeleted;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public String getSecondaryKeyValue() {
-    return secondaryKeyValue;
-  }
-
-  public boolean isDeleted() {
-    return isDeleted;
-  }
-
-  public void setRecordKey(String recordKey) {
-    this.recordKey = recordKey;
-  }
-
-  public void setSecondaryKeyValue(String secondaryKeyValue) {
-    this.secondaryKeyValue = secondaryKeyValue;
-  }
-
-  public void setIsDeleted(boolean deleted) {
-    isDeleted = deleted;
   }
 }

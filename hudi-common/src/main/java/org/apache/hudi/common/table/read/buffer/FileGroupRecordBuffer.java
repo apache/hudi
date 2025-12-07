@@ -50,6 +50,7 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -82,6 +83,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   @Getter
   protected final DeleteContext deleteContext;
   protected final BufferedRecordConverter<T> bufferedRecordConverter;
+  @Setter
   protected ClosableIterator<T> baseFileIterator;
   protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
@@ -133,11 +135,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     return new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
         readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
-  }
-
-  @Override
-  public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
-    this.baseFileIterator = baseFileIterator;
   }
 
   /**

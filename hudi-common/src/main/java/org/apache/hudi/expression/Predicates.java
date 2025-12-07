@@ -20,6 +20,8 @@ package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -416,6 +418,7 @@ public class Predicates {
   }
 
   public static class StringStartsWithAny implements Predicate {
+    @Getter
     private final Operator operator;
     private final Expression left;
     private final List<Expression> right;
@@ -432,11 +435,6 @@ public class Predicates {
       children.add(left);
       children.addAll(right);
       return children;
-    }
-
-    @Override
-    public Operator getOperator() {
-      return operator;
     }
 
     @Override

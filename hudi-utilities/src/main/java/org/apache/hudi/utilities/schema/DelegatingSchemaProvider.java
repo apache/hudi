@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 
+import lombok.Getter;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -28,7 +29,9 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public final class DelegatingSchemaProvider extends SchemaProvider {
 
+  @Getter
   private final SchemaProvider sourceSchemaProvider;
+  @Getter
   private final SchemaProvider targetSchemaProvider;
 
   public DelegatingSchemaProvider(TypedProperties props,
@@ -47,13 +50,5 @@ public final class DelegatingSchemaProvider extends SchemaProvider {
   @Override
   public HoodieSchema getTargetHoodieSchema() {
     return targetSchemaProvider.getTargetHoodieSchema();
-  }
-
-  public SchemaProvider getSourceSchemaProvider() {
-    return sourceSchemaProvider;
-  }
-
-  public SchemaProvider getTargetSchemaProvider() {
-    return targetSchemaProvider;
   }
 }

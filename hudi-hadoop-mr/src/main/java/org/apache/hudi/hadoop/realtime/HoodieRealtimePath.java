@@ -22,6 +22,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.fs.Path;
 
 import java.util.List;
@@ -39,23 +41,29 @@ public class HoodieRealtimePath extends Path {
   /**
    * List of delta log-files holding updated records for this base-file
    */
+  @Getter
   private final List<HoodieLogFile> deltaLogFiles;
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
+  @Getter
   private final String maxCommitTime;
   /**
    * Base path of the table this path belongs to
    */
+  @Getter
   private final String basePath;
   /**
    * Virtual key configuration of the table this split belongs to
    */
+  @Getter
   private final Option<HoodieVirtualKeyInfo> virtualKeyInfo;
   /**
    * File status for the Bootstrap file (only relevant if this table is a bootstrapped table
    */
+  @Getter
+  @Setter
   private PathWithBootstrapFileStatus pathWithBootstrapFileStatus;
 
   public HoodieRealtimePath(Path parent,
@@ -73,18 +81,6 @@ public class HoodieRealtimePath extends Path {
     this.virtualKeyInfo = virtualKeyInfo;
   }
 
-  public List<HoodieLogFile> getDeltaLogFiles() {
-    return deltaLogFiles;
-  }
-
-  public String getMaxCommitTime() {
-    return maxCommitTime;
-  }
-
-  public String getBasePath() {
-    return basePath;
-  }
-
   public boolean getBelongsToIncrementalQuery() {
     return belongsToIncrementalQuery;
   }
@@ -93,19 +89,7 @@ public class HoodieRealtimePath extends Path {
     return !toString().contains(".log") && deltaLogFiles.isEmpty() && !includeBootstrapFilePath();
   }
 
-  public PathWithBootstrapFileStatus getPathWithBootstrapFileStatus() {
-    return pathWithBootstrapFileStatus;
-  }
-
-  public void setPathWithBootstrapFileStatus(PathWithBootstrapFileStatus pathWithBootstrapFileStatus) {
-    this.pathWithBootstrapFileStatus = pathWithBootstrapFileStatus;
-  }
-
   public boolean includeBootstrapFilePath() {
     return pathWithBootstrapFileStatus != null;
-  }
-
-  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
-    return virtualKeyInfo;
   }
 }

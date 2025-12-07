@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.utils.keyedstate;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.streaming.api.operators.KeyContext;
 
 /**
@@ -25,15 +27,7 @@ import org.apache.flink.streaming.api.operators.KeyContext;
  *
  */
 public class MockKeyContext implements KeyContext {
+  @Getter
+  @Setter
   private Object currentKey;
-
-  @Override
-  public void setCurrentKey(Object key) {
-    currentKey = key;
-  }
-
-  @Override
-  public Object getCurrentKey() {
-    return currentKey;
-  }
 }

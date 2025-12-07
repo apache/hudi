@@ -72,6 +72,8 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
+import lombok.AccessLevel;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,6 +116,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected transient AsyncCleanerService asyncCleanerService;
   protected transient AsyncArchiveService asyncArchiveService;
 
+  @Setter(AccessLevel.PROTECTED)
   protected Set<String> pendingInflightAndRequestedInstants;
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
@@ -159,10 +162,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         break;
       default:
     }
-  }
-
-  protected void setPendingInflightAndRequestedInstants(Set<String> pendingInflightAndRequestedInstants) {
-    this.pendingInflightAndRequestedInstants = pendingInflightAndRequestedInstants;
   }
 
   /**

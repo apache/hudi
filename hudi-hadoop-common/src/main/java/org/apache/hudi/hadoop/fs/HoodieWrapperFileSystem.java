@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.ContentSummary;
@@ -94,7 +95,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
 
   private final ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
+  @Getter
   private FileSystem fileSystem;
+  @Getter
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
@@ -196,11 +199,6 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
     // fileSystem.setConf(conf);
-  }
-
-  @Override
-  public URI getUri() {
-    return uri;
   }
 
   @Override
@@ -1009,9 +1007,5 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // When the file is first written, we do not have a track of it
     throw new IllegalArgumentException(
         file + " does not have a open stream. Cannot get the bytes written on the stream");
-  }
-
-  public FileSystem getFileSystem() {
-    return fileSystem;
   }
 }

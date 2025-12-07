@@ -36,6 +36,8 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.util.Lazy;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,8 +58,11 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
 
-  protected final HoodieTable<T,I,K,O> hoodieTable;
+  @Getter(AccessLevel.PROTECTED)
+  protected final HoodieTable<T, I, K, O> hoodieTable;
+  @Getter(AccessLevel.PROTECTED)
   private final transient HoodieEngineContext engineContext;
+  @Getter(AccessLevel.PROTECTED)
   private final HoodieWriteConfig writeConfig;
 
   /**
@@ -171,17 +176,5 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
     Map<String, Double> metrics = new HashMap<>();
     FileSliceMetricUtils.addFileSliceCommonMetrics(fileSlices, metrics, getWriteConfig().getParquetMaxFileSize());
     return metrics;
-  }
-
-  protected HoodieTable<T, I, K, O> getHoodieTable() {
-    return this.hoodieTable;
-  }
-
-  protected HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  protected HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
   }
 }

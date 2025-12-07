@@ -34,6 +34,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.Getter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -51,7 +52,9 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
   private static final Logger LOG = LoggerFactory.getLogger(SparkPreCommitValidator.class);
 
   private final HoodieSparkTable<T> table;
+  @Getter
   private final HoodieEngineContext engineContext;
+  @Getter
   private final HoodieWriteConfig writeConfig;
   private final HoodieMetrics metrics;
 
@@ -111,14 +114,6 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
 
   public HoodieTable getHoodieTable() {
     return this.table;
-  }
-
-  public HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  public HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
   }
 
   protected Dataset<Row> executeSqlQuery(SQLContext sqlContext,

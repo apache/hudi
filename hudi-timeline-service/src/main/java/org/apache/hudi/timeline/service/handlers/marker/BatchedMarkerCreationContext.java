@@ -18,17 +18,23 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
+import lombok.Getter;
+
 import java.util.List;
 
 /**
  * Input of batch processing of marker creation requests for a single marker directory.
  */
 public class BatchedMarkerCreationContext {
+  @Getter
   private final String markerDir;
+  @Getter
   private final MarkerDirState markerDirState;
   // List of marker creation futures to process
+  @Getter
   private final List<MarkerCreationFuture> futures;
   // File index to use to write markers
+  @Getter
   private final int fileIndex;
 
   public BatchedMarkerCreationContext(String markerDir, MarkerDirState markerDirState,
@@ -37,21 +43,5 @@ public class BatchedMarkerCreationContext {
     this.markerDirState = markerDirState;
     this.futures = futures;
     this.fileIndex = fileIndex;
-  }
-
-  public String getMarkerDir() {
-    return markerDir;
-  }
-
-  public MarkerDirState getMarkerDirState() {
-    return markerDirState;
-  }
-
-  public List<MarkerCreationFuture> getFutures() {
-    return futures;
-  }
-
-  public int getFileIndex() {
-    return fileIndex;
   }
 }

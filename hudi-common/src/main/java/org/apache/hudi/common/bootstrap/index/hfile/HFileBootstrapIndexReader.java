@@ -38,6 +38,7 @@ import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +64,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
   private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndexReader.class);
 
   // Base Path of external files.
+  @Getter
   private final String bootstrapBasePath;
   // Well Known Paths for indices
   private final String indexByPartitionPath;
@@ -187,11 +189,6 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-  }
-
-  @Override
-  public String getBootstrapBasePath() {
-    return bootstrapBasePath;
   }
 
   @Override

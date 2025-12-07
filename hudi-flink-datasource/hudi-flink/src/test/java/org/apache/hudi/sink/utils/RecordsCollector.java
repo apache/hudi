@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import lombok.Getter;
 import org.apache.flink.util.Collector;
 
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ import java.util.List;
  * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
 class RecordsCollector<T> implements Collector<T> {
+  @Getter
   private List<T> val;
 
   public RecordsCollector() {
@@ -46,9 +48,5 @@ class RecordsCollector<T> implements Collector<T> {
   public void close() {
     this.val.clear();
     this.val = null;
-  }
-
-  public List<T> getVal() {
-    return val;
   }
 }

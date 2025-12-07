@@ -70,6 +70,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 import org.apache.hudi.testutils.SparkRDDValidationUtils;
 
 import jodd.io.FileUtil;
+import lombok.AccessLevel;
+import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -1348,24 +1350,15 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   class MockHoodieMetadataTableValidator extends HoodieMetadataTableValidator {
 
+    @Setter(AccessLevel.PACKAGE)
     private List<String> metadataPartitionsToReturn;
+    @Setter(AccessLevel.PACKAGE)
     private List<String> fsPartitionsToReturn;
+    @Setter(AccessLevel.PACKAGE)
     private Option<String> partitionCreationTime;
 
     public MockHoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
       super(jsc, cfg);
-    }
-
-    void setMetadataPartitionsToReturn(List<String> metadataPartitionsToReturn) {
-      this.metadataPartitionsToReturn = metadataPartitionsToReturn;
-    }
-
-    void setFsPartitionsToReturn(List<String> fsPartitionsToReturn) {
-      this.fsPartitionsToReturn = fsPartitionsToReturn;
-    }
-
-    void setPartitionCreationTime(Option<String> partitionCreationTime) {
-      this.partitionCreationTime = partitionCreationTime;
     }
 
     @Override
@@ -1452,7 +1445,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
    */
   static class MockHoodieMetadataTableValidatorForRli extends HoodieMetadataTableValidator {
 
+    @Setter
     private String destFilePath;
+    @Setter
     private String originalFilePath;
 
     public MockHoodieMetadataTableValidatorForRli(JavaSparkContext jsc, Config cfg) {
@@ -1470,14 +1465,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       } catch (IOException e) {
         throw new HoodieException("Move should not have failed");
       }
-    }
-
-    public void setDestFilePath(String destFilePath) {
-      this.destFilePath = destFilePath;
-    }
-
-    public void setOriginalFilePath(String originalFilePath) {
-      this.originalFilePath = originalFilePath;
     }
   }
 

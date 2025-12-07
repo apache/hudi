@@ -22,33 +22,20 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 
 public class LockInfo {
+  @Getter
+  @Setter
   private String lockCreateTime;
+  @Getter
+  @Setter
   private String lockThreadName;
+  @Getter
   private ArrayList<String> lockStacksInfo;
-
-  public String getLockCreateTime() {
-    return lockCreateTime;
-  }
-
-  public void setLockCreateTime(String lockCreateTime) {
-    this.lockCreateTime = lockCreateTime;
-  }
-
-  public String getLockThreadName() {
-    return lockThreadName;
-  }
-
-  public void setLockThreadName(String lockThreadName) {
-    this.lockThreadName = lockThreadName;
-  }
-
-  public ArrayList<String> getLockStacksInfo() {
-    return lockStacksInfo;
-  }
 
   public void setLockStacksInfo(StackTraceElement[] stacks) {
     lockStacksInfo = new ArrayList<>();

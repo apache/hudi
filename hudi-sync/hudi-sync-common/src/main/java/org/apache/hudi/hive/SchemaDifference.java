@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import lombok.Getter;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
@@ -35,8 +36,11 @@ public class SchemaDifference {
 
   private final MessageType storageSchema;
   private final Map<String, String> tableSchema;
+  @Getter
   private final List<String> deleteColumns;
+  @Getter
   private final Map<String, String> updateColumnTypes;
+  @Getter
   private final Map<String, String> addColumnTypes;
 
   private SchemaDifference(MessageType storageSchema, Map<String, String> tableSchema, List<String> deleteColumns,
@@ -46,18 +50,6 @@ public class SchemaDifference {
     this.deleteColumns = Collections.unmodifiableList(deleteColumns);
     this.updateColumnTypes = Collections.unmodifiableMap(updateColumnTypes);
     this.addColumnTypes = Collections.unmodifiableMap(addColumnTypes);
-  }
-
-  public List<String> getDeleteColumns() {
-    return deleteColumns;
-  }
-
-  public Map<String, String> getUpdateColumnTypes() {
-    return updateColumnTypes;
-  }
-
-  public Map<String, String> getAddColumnTypes() {
-    return addColumnTypes;
   }
 
   public static Builder newBuilder(MessageType storageSchema, Map<String, String> tableSchema) {

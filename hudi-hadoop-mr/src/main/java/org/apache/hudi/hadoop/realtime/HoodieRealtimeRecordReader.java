@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
@@ -40,6 +41,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);
+  @Getter
   private final RecordReader<NullWritable, ArrayWritable> reader;
 
   public HoodieRealtimeRecordReader(RealtimeSplit split, JobConf job,
@@ -109,9 +111,5 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   @Override
   public float getProgress() throws IOException {
     return this.reader.getProgress();
-  }
-
-  public RecordReader<NullWritable, ArrayWritable> getReader() {
-    return this.reader;
   }
 }

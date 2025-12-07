@@ -32,6 +32,7 @@ import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,6 +97,7 @@ public class HoodieMetrics {
   public static final String SUCCESS_COUNTER = "success" + COUNTER_METRIC_EXTENSION;
   public static final String FAILURE_COUNTER = "failure" + COUNTER_METRIC_EXTENSION;
 
+  @Getter
   private Metrics metrics;
   // Some timers
   public String rollbackTimerName = null;
@@ -159,10 +161,6 @@ public class HoodieMetrics {
 
   private Timer createTimer(String name) {
     return config.isMetricsOn() ? metrics.getRegistry().timer(name) : null;
-  }
-
-  public Metrics getMetrics() {
-    return metrics;
   }
 
   public Timer.Context getRollbackCtx() {

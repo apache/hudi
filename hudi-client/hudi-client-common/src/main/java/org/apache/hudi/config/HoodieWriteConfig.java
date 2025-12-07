@@ -90,6 +90,8 @@ import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.orc.CompressionKind;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -930,22 +932,36 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
 
+  @Getter
+  @Setter
   private ConsistencyGuardConfig consistencyGuardConfig;
+  @Getter
   private FileSystemRetryConfig fileSystemRetryConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
   // We keep track of original config and rewritten config
+  @Getter
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
+  @Getter
+  @Setter
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
+  @Getter
   private HoodieMetadataConfig metadataConfig;
+  @Getter
   private HoodieMetricsConfig metricsConfig;
   private HoodieMetaserverConfig metaserverConfig;
+  @Getter
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
+  @Getter
   private HoodieCommonConfig commonConfig;
+  @Getter
   private HoodieStorageConfig storageConfig;
+  @Getter
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
+  @Getter
   private HoodieIndexingConfig indexingConfig;
+  @Getter
   private final EngineType engineType;
 
   /**
@@ -1686,10 +1702,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getSmallFileGroupCandidatesLimit() {
     return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
-  }
-
-  public EngineType getEngineType() {
-    return engineType;
   }
 
   public boolean populateMetaFields() {
@@ -2549,64 +2561,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION);
   }
 
-  public ConsistencyGuardConfig getConsistencyGuardConfig() {
-    return consistencyGuardConfig;
-  }
-
-  public FileSystemRetryConfig getFileSystemRetryConfig() {
-    return fileSystemRetryConfig;
-  }
-
-  public void setConsistencyGuardConfig(ConsistencyGuardConfig consistencyGuardConfig) {
-    this.consistencyGuardConfig = consistencyGuardConfig;
-  }
-
-  public FileSystemViewStorageConfig getViewStorageConfig() {
-    return viewStorageConfig;
-  }
-
-  public void setViewStorageConfig(FileSystemViewStorageConfig viewStorageConfig) {
-    this.viewStorageConfig = viewStorageConfig;
-  }
-
   public void resetViewStorageConfig() {
     this.setViewStorageConfig(getClientSpecifiedViewStorageConfig());
   }
 
-  public FileSystemViewStorageConfig getClientSpecifiedViewStorageConfig() {
-    return clientSpecifiedViewStorageConfig;
-  }
-
   public HoodiePayloadConfig getPayloadConfig() {
     return hoodiePayloadConfig;
-  }
-
-  public HoodieMetadataConfig getMetadataConfig() {
-    return metadataConfig;
-  }
-
-  public HoodieMetricsConfig getMetricsConfig() {
-    return metricsConfig;
-  }
-
-  public HoodieTableServiceManagerConfig getTableServiceManagerConfig() {
-    return tableServiceManagerConfig;
-  }
-
-  public HoodieCommonConfig getCommonConfig() {
-    return commonConfig;
-  }
-
-  public HoodieStorageConfig getStorageConfig() {
-    return storageConfig;
-  }
-
-  public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
-    return timeGeneratorConfig;
-  }
-
-  public HoodieIndexingConfig getIndexingConfig() {
-    return indexingConfig;
   }
 
   /**

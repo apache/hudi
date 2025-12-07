@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 
+import lombok.Getter;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
@@ -32,7 +33,9 @@ import org.apache.flink.util.SerializedValue;
  * Correspondent between a write task with the coordinator.
  */
 public class Correspondent {
+  @Getter
   private final OperatorID operatorID;
+  @Getter
   private final TaskOperatorEventGateway gateway;
 
   private Correspondent(OperatorID operatorID, TaskOperatorEventGateway gateway) {
@@ -71,18 +74,11 @@ public class Correspondent {
     }
   }
 
-  public OperatorID getOperatorID() {
-    return operatorID;
-  }
-
-  public TaskOperatorEventGateway getGateway() {
-    return gateway;
-  }
-
   /**
    * A request for instant time with a given checkpoint id.
    */
   public static class InstantTimeRequest implements CoordinationRequest {
+    @Getter
     private final long checkpointId;
 
     private InstantTimeRequest(long checkpointId) {
@@ -92,16 +88,13 @@ public class Correspondent {
     public static InstantTimeRequest getInstance(long checkpointId) {
       return new InstantTimeRequest(checkpointId);
     }
-
-    public long getCheckpointId() {
-      return checkpointId;
-    }
   }
 
   /**
    * A response with instant time.
    */
   public static class InstantTimeResponse implements CoordinationResponse {
+    @Getter
     private final String instant;
 
     private InstantTimeResponse(String instant) {
@@ -110,10 +103,6 @@ public class Correspondent {
 
     public static InstantTimeResponse getInstance(String instant) {
       return new InstantTimeResponse(instant);
-    }
-
-    public String getInstant() {
-      return instant;
     }
   }
 }

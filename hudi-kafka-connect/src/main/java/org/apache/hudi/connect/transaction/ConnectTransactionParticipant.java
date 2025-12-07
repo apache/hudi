@@ -28,6 +28,7 @@ import org.apache.hudi.connect.writers.KafkaConnectWriterProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -50,6 +51,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
 
   private final LinkedList<SinkRecord> buffer;
   private final BlockingQueue<ControlMessage> controlEvents;
+  @Getter
   private final TopicPartition partition;
   private final SinkTaskContext context;
   private final KafkaControlAgent kafkaControlAgent;
@@ -105,11 +107,6 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   @Override
   public long getLastKafkaCommittedOffset() {
     return committedKafkaOffset;
-  }
-
-  @Override
-  public TopicPartition getPartition() {
-    return partition;
   }
 
   @Override

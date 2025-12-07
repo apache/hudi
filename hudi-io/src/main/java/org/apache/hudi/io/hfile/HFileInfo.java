@@ -22,6 +22,8 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.util.IOUtils;
 
+import lombok.Getter;
+
 import java.util.Map;
 
 /**
@@ -44,7 +46,9 @@ public class HFileInfo {
   static final int KEY_VALUE_VERSION_WITH_MVCC_TS = 1;
 
   private final Map<UTF8StringKey, byte[]> infoMap;
+  @Getter
   private final long fileCreationTime;
+  @Getter
   private final Option<Key> lastKey;
 
   public HFileInfo(Map<UTF8StringKey, byte[]> infoMap) {
@@ -56,14 +60,6 @@ public class HFileInfo {
       // Parsing MVCC timestamps is not supported.
       throw new UnsupportedOperationException("HFiles with MVCC timestamps are not supported");
     }
-  }
-
-  public long getFileCreationTime() {
-    return fileCreationTime;
-  }
-
-  public Option<Key> getLastKey() {
-    return lastKey;
   }
 
   public byte[] get(UTF8StringKey key) {

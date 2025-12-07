@@ -31,6 +31,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JavalinBindException;
+import lombok.Getter;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
@@ -49,16 +50,14 @@ public class TimelineService {
   private static final int START_SERVICE_MAX_RETRIES = 16;
   private static final int DEFAULT_NUM_THREADS = 250;
 
+  @Getter
   private int serverPort;
   private final Config timelineServerConf;
+  @Getter
   private final StorageConfiguration<?> storageConf;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
-
-  public int getServerPort() {
-    return serverPort;
-  }
 
   public TimelineService(StorageConfiguration<?> storageConf, Config timelineServerConf,
                          FileSystemViewManager globalFileSystemViewManager) {
@@ -425,10 +424,6 @@ public class TimelineService {
 
   public void unregisterBasePath(String basePath) {
     fsViewsManager.clearFileSystemView(basePath);
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
   }
 
   public static void main(String[] args) throws Exception {

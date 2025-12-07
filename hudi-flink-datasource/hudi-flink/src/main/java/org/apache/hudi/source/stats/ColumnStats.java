@@ -18,6 +18,8 @@
 
 package org.apache.hudi.source.stats;
 
+import lombok.Getter;
+
 import javax.annotation.Nullable;
 
 import java.util.Objects;
@@ -29,6 +31,7 @@ public class ColumnStats {
 
   @Nullable private final Object minVal;
   @Nullable private final Object maxVal;
+  @Getter
   private final long nullCnt;
 
   public ColumnStats(@Nullable Object minVal, @Nullable Object maxVal, long nullCnt) {
@@ -45,10 +48,6 @@ public class ColumnStats {
   @Nullable
   public Object getMaxVal() {
     return maxVal;
-  }
-
-  public long getNullCnt() {
-    return nullCnt;
   }
 
   @Override

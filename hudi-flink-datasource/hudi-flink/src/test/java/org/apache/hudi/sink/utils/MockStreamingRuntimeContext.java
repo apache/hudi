@@ -17,6 +17,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.metrics.groups.OperatorMetricGroup;
@@ -40,8 +42,10 @@ import java.util.Map;
  */
 public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
+  @Getter
   private final boolean isCheckpointingEnabled;
 
+  @Getter
   private final MockTaskInfo taskInfo;
 
   public MockStreamingRuntimeContext(
@@ -67,10 +71,6 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     this.taskInfo = new MockTaskInfo(numParallelSubtasks, subtaskIndex, 0);
   }
 
-  public MockTaskInfo getTaskInfo() {
-    return taskInfo;
-  }
-
   public int getIndexOfThisSubtask() {
     return taskInfo.getIndexOfThisSubtask();
   }
@@ -83,11 +83,6 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     return taskInfo.getAttemptNumber();
   }
 
-  @Override
-  public boolean isCheckpointingEnabled() {
-    return isCheckpointingEnabled;
-  }
-
   public void setAttemptNumber(int attemptNumber) {
     this.taskInfo.setAttemptNumber(attemptNumber);
   }
@@ -97,6 +92,7 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
     private transient TestProcessingTimeService testProcessingTimeService;
 
+    @Setter
     private transient Object currentKey;
     private final transient Map<Object, MockKeyedStateStore> mockKeyedStateStoreMap = new HashMap<>();
 
@@ -116,11 +112,6 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
         testProcessingTimeService = new TestProcessingTimeService();
       }
       return testProcessingTimeService;
-    }
-
-    @Override
-    public void setCurrentKey(Object key) {
-      this.currentKey = key;
     }
 
     @Override

@@ -44,6 +44,7 @@ import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -103,6 +104,7 @@ public class BootstrapExecutor implements Serializable {
   /**
    * Bootstrap Configuration.
    */
+  @Getter
   private final HoodieWriteConfig bootstrapConfig;
 
   /**
@@ -243,9 +245,5 @@ public class BootstrapExecutor implements Serializable {
     }
 
     builder.initTable(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()), cfg.targetBasePath);
-  }
-
-  public HoodieWriteConfig getBootstrapConfig() {
-    return bootstrapConfig;
   }
 }

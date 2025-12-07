@@ -20,6 +20,9 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.Map;
 
@@ -29,12 +32,19 @@ import java.util.Map;
 public class ClusteringPlanEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  @Getter
+  @Setter
   private String clusteringInstantTime;
 
+  @Getter
+  @Setter
   private ClusteringGroupInfo clusteringGroupInfo;
 
+  @Getter
+  @Setter
   private Map<String, String> strategyParams;
 
+  @Getter
   private int index;
 
   public ClusteringPlanEvent() {
@@ -58,33 +68,5 @@ public class ClusteringPlanEvent implements Serializable {
     this.clusteringGroupInfo = clusteringGroupInfo;
     this.strategyParams = strategyParams;
     this.index = index;
-  }
-
-  public void setClusteringInstantTime(String clusteringInstantTime) {
-    this.clusteringInstantTime = clusteringInstantTime;
-  }
-
-  public void setClusteringGroupInfo(ClusteringGroupInfo clusteringGroupInfo) {
-    this.clusteringGroupInfo = clusteringGroupInfo;
-  }
-
-  public void setStrategyParams(Map<String, String> strategyParams) {
-    this.strategyParams = strategyParams;
-  }
-
-  public String getClusteringInstantTime() {
-    return clusteringInstantTime;
-  }
-
-  public ClusteringGroupInfo getClusteringGroupInfo() {
-    return clusteringGroupInfo;
-  }
-
-  public Map<String, String> getStrategyParams() {
-    return strategyParams;
-  }
-
-  public int getIndex() {
-    return index;
   }
 }

@@ -33,6 +33,7 @@ import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +90,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Flag to determine if closed.
    */
+  @Getter
   private boolean closed = false;
 
   HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, boolean enableIncrementalTimelineSync) {
@@ -448,10 +450,5 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     this.fgIdToReplaceInstants = null;
     this.fgIdToPendingClustering = null;
     this.closed = true;
-  }
-
-  @Override
-  public boolean isClosed() {
-    return closed;
   }
 }

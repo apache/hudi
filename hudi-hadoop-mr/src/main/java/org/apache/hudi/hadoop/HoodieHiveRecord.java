@@ -34,6 +34,8 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -60,6 +62,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private final HiveAvroSerializer avroSerializer;
 
+  @Getter(AccessLevel.PROTECTED)
   protected Schema schema;
 
   public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer) {
@@ -244,9 +247,5 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private Object getValue(String name) {
     return avroSerializer.getValue(data, name);
-  }
-
-  protected Schema getSchema() {
-    return schema;
   }
 }

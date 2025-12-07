@@ -20,6 +20,8 @@ package org.apache.hudi.internal;
 
 import org.apache.hudi.client.WriteStatus;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
@@ -29,14 +31,11 @@ import java.util.List;
  */
 public class BaseWriterCommitMessage implements Serializable {
 
+  @Getter
   private final List<WriteStatus> writeStatuses;
 
   public BaseWriterCommitMessage(List<WriteStatus> writeStatuses) {
     this.writeStatuses = writeStatuses;
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
   }
 
   @Override

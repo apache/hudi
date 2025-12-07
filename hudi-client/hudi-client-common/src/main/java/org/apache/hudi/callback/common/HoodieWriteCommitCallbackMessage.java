@@ -22,6 +22,8 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
@@ -37,31 +39,37 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   /**
    * CommitTime for one batch write, this is required.
    */
+  @Getter
   private final String commitTime;
 
   /**
    * Table name this batch commit to.
    */
+  @Getter
   private final String tableName;
 
   /**
    * BathPath the table located.
    */
+  @Getter
   private final String basePath;
 
   /**
    * Statistics about Hoodie write operation.
    */
+  @Getter
   private final List<HoodieWriteStat> hoodieWriteStat;
 
   /**
    * Action Type of the commit.
    */
+  @Getter
   private final Option<String> commitActionType;
 
   /**
    * Extra metadata in the commit.
    */
+  @Getter
   private final Option<Map<String, String>> extraMetadata;
 
   public HoodieWriteCommitCallbackMessage(String commitTime,
@@ -83,29 +91,5 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
     this.hoodieWriteStat = hoodieWriteStat;
     this.commitActionType = commitActionType;
     this.extraMetadata = extraMetadata;
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public String getTableName() {
-    return tableName;
-  }
-
-  public String getBasePath() {
-    return basePath;
-  }
-
-  public List<HoodieWriteStat> getHoodieWriteStat() {
-    return hoodieWriteStat;
-  }
-
-  public Option<String> getCommitActionType() {
-    return commitActionType;
-  }
-
-  public Option<Map<String, String>> getExtraMetadata() {
-    return extraMetadata;
   }
 }

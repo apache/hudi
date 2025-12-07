@@ -20,6 +20,8 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 
 /**
@@ -27,9 +29,13 @@ import java.io.Serializable;
  */
 public class HoodieVirtualKeyInfo implements Serializable {
 
+  @Getter
   private final String recordKeyField;
+  @Getter
   private final Option<String> partitionPathField;
+  @Getter
   private final int recordKeyFieldIndex;
+  @Getter
   private final Option<Integer> partitionPathFieldIndex;
 
   public HoodieVirtualKeyInfo(String recordKeyField, Option<String> partitionPathField, int recordKeyFieldIndex, Option<Integer> partitionPathFieldIndex) {
@@ -37,22 +43,6 @@ public class HoodieVirtualKeyInfo implements Serializable {
     this.partitionPathField = partitionPathField;
     this.recordKeyFieldIndex = recordKeyFieldIndex;
     this.partitionPathFieldIndex = partitionPathFieldIndex;
-  }
-
-  public String getRecordKeyField() {
-    return recordKeyField;
-  }
-
-  public Option<String> getPartitionPathField() {
-    return partitionPathField;
-  }
-
-  public int getRecordKeyFieldIndex() {
-    return recordKeyFieldIndex;
-  }
-
-  public Option<Integer> getPartitionPathFieldIndex() {
-    return partitionPathFieldIndex;
   }
 
   @Override

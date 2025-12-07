@@ -22,6 +22,7 @@ import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
+import lombok.Getter;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.types.logical.DecimalType;
@@ -44,6 +45,7 @@ import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 public class ColumnStatsProbe implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  @Getter
   private final String[] referencedCols;
   private final List<ExpressionEvaluators.Evaluator> evaluators;
 
@@ -67,10 +69,6 @@ public class ColumnStatsProbe implements Serializable {
       }
     }
     return true;
-  }
-
-  public String[] getReferencedCols() {
-    return referencedCols;
   }
 
   @Nullable

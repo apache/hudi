@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -83,7 +84,9 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   private final String databaseName;
   private final String tableName;
   private final String hiveMetastoreUris;
+  @Getter
   private transient IMetaStoreClient hiveClient;
+  @Getter
   private volatile LockResponse lock = null;
   protected LockConfiguration lockConfiguration;
   private transient ScheduledFuture<?> future = null;
@@ -170,15 +173,6 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
     } catch (Exception e) {
       LOG.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
-  }
-
-  public IMetaStoreClient getHiveClient() {
-    return hiveClient;
-  }
-
-  @Override
-  public LockResponse getLock() {
-    return this.lock;
   }
 
   // This API is exposed for tests and not intended to be used elsewhere

@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
@@ -69,6 +70,7 @@ public class QuickstartUtils {
 
     private final Map<Integer, HoodieKey> existingKeys;
     private final String[] partitionPaths;
+    @Getter
     private int numExistingKeys;
 
     public DataGenerator() {
@@ -94,10 +96,6 @@ public class QuickstartUtils {
         buffer.append((char) randomLimitedInt);
       }
       return buffer.toString();
-    }
-
-    public int getNumExistingKeys() {
-      return numExistingKeys;
     }
 
     public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,

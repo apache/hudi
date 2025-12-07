@@ -21,6 +21,8 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 
 /**
@@ -40,23 +42,28 @@ public class ListingBasedRollbackRequest implements Serializable {
   /**
    * Partition path that needs to be rolled-back.
    */
+  @Getter
   private final String partitionPath;
 
   /**
    * FileId in case of appending rollback block.
    */
+  @Getter
   private final Option<String> fileId;
 
   /**
    * Latest base instant needed for appending rollback block instant.
    */
+  @Getter
   private final Option<String> latestBaseInstant;
 
   /**
    * TODO
    */
+  @Getter
   private final Option<HoodieWriteStat> writeStat;
 
+  @Getter
   private final Type type;
 
   public ListingBasedRollbackRequest(String partitionPath, Type type) {
@@ -88,25 +95,5 @@ public class ListingBasedRollbackRequest implements Serializable {
                                                                                                String baseInstant,
                                                                                                HoodieWriteStat writeStat) {
     return new ListingBasedRollbackRequest(partitionPath, Option.of(fileId), Option.of(baseInstant), Option.of(writeStat), Type.APPEND_ROLLBACK_BLOCK);
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public Option<String> getFileId() {
-    return fileId;
-  }
-
-  public Option<String> getLatestBaseInstant() {
-    return latestBaseInstant;
-  }
-
-  public Option<HoodieWriteStat> getWriteStat() {
-    return writeStat;
-  }
-
-  public Type getType() {
-    return type;
   }
 }

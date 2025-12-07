@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +63,7 @@ public class EmbeddedTimelineService {
   private final TimelineServiceIdentifier timelineServiceIdentifier;
   private final Set<String> basePaths; // the set of base paths using this EmbeddedTimelineService
 
+  @Getter
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
@@ -215,10 +217,6 @@ public class EmbeddedTimelineService {
         .withRemoteTimelineClientMaxRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
         .withRemoteTimelineClientRetryExceptions(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
         .build();
-  }
-
-  public FileSystemViewManager getViewManager() {
-    return viewManager;
   }
 
   /**

@@ -34,10 +34,10 @@ import com.linkedin.common.BrowsePathEntry;
 import com.linkedin.common.BrowsePathEntryArray;
 import com.linkedin.common.BrowsePathsV2;
 import com.linkedin.common.DataPlatformInstance;
-import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.Status;
 import com.linkedin.common.SubTypes;
 import com.linkedin.common.UrnArray;
+import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.common.urn.Urn;
 import com.linkedin.container.Container;
@@ -50,6 +50,7 @@ import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import io.datahubproject.schematron.converters.avro.AvroSchemaConverter;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
@@ -79,7 +80,9 @@ public class DataHubSyncClient extends HoodieSyncClient {
   private final Option<Urn> dataPlatformInstanceUrn;
   private final DatasetUrn datasetUrn;
   private final Urn databaseUrn;
+  @Getter
   private final String tableName;
+  @Getter
   private final String databaseName;
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
@@ -95,16 +98,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
     this.databaseUrn = datasetIdentifier.getDatabaseUrn();
     this.tableName = datasetIdentifier.getTableName();
     this.databaseName = datasetIdentifier.getDatabaseName();
-  }
-
-  @Override
-  public String getDatabaseName() {
-    return this.databaseName;
-  }
-
-  @Override
-  public String getTableName() {
-    return this.tableName;
   }
 
   @Override

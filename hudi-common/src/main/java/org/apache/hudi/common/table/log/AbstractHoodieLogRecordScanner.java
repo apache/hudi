@@ -47,6 +47,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -99,6 +100,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final String latestInstantTime;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
+  @Getter(AccessLevel.PROTECTED)
   private final String payloadClassFQN;
   // Record's key/partition-path fields
   private final String recordKeyField;
@@ -107,6 +109,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final Option<String> partitionNameOverrideOpt;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
+  @Getter(AccessLevel.PROTECTED)
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
@@ -716,10 +719,6 @@ public abstract class AbstractHoodieLogRecordScanner {
     return totalLogBlocks.get();
   }
 
-  protected String getPayloadClassFQN() {
-    return payloadClassFQN;
-  }
-
   public Option<String> getPartitionNameOverride() {
     return partitionNameOverrideOpt;
   }
@@ -730,10 +729,6 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   public long getTotalCorruptBlocks() {
     return totalCorruptBlocks.get();
-  }
-
-  protected TypedProperties getPayloadProps() {
-    return payloadProps;
   }
 
   /**
@@ -754,14 +749,10 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   private static class FullKeySpec implements KeySpec {
+    @Getter
     private final List<String> keys;
     private FullKeySpec(List<String> keys) {
       this.keys = keys;
-    }
-
-    @Override
-    public List<String> getKeys() {
-      return keys;
     }
 
     @Override

@@ -28,13 +28,14 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.hudi.table.action.cluster.util.ConsistentHashingUpdateStrategyUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.table.action.commit.BucketType;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -146,8 +147,11 @@ public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<Bu
   }
 
   public static class BucketRecords {
+    @Getter
     private final Iterator<HoodieRecord> recordItr;
+    @Getter
     private final BucketInfo bucketInfo;
+    @Getter
     private final String instant;
 
     private BucketRecords(Iterator<HoodieRecord> recordItr, BucketInfo bucketInfo, String instant) {
@@ -158,18 +162,6 @@ public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<Bu
 
     public static BucketRecords of(Iterator<HoodieRecord> recordItr, BucketInfo bucketInfo, String instant) {
       return new BucketRecords(recordItr, bucketInfo, instant);
-    }
-
-    public Iterator<HoodieRecord> getRecordItr() {
-      return this.recordItr;
-    }
-
-    public BucketInfo getBucketInfo() {
-      return this.bucketInfo;
-    }
-
-    public String getInstant() {
-      return this.instant;
     }
   }
 }

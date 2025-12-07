@@ -21,12 +21,15 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.Getter;
+
 /**
  * Whether a message should be processed or not, and an optional description about the message.
  */
 public class MessageValidity {
 
   private final ProcessingDecision processingDecision;
+  @Getter
   private final Option<String> description;
 
   public static final MessageValidity DEFAULT_VALID_MESSAGE = new MessageValidity(ProcessingDecision.DO_PROCESS,
@@ -39,10 +42,6 @@ public class MessageValidity {
 
   public ProcessingDecision getDecision() {
     return processingDecision;
-  }
-
-  public Option<String> getDescription() {
-    return description;
   }
 
   /**

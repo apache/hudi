@@ -42,6 +42,8 @@ import org.apache.hudi.utilities.sources.helpers.RowConverter;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import com.google.protobuf.Message;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -73,10 +75,12 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  */
 public class SourceFormatAdapter implements Closeable {
 
+  @Getter
   private final Source source;
   private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
 
   private  boolean wrapWithException = ROW_THROW_EXPLICIT_EXCEPTIONS.defaultValue();
+  @Getter(AccessLevel.PRIVATE)
   private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
   private boolean useJava8api = (boolean) SQLConf.DATETIME_JAVA8API_ENABLED().defaultValue().get();
@@ -108,14 +112,6 @@ public class SourceFormatAdapter implements Closeable {
    */
   private boolean isFieldNameSanitizingEnabled() {
     return shouldSanitize;
-  }
-
-  /**
-   * Replacement mask for invalid characters encountered in avro names.
-   * @return sanitized value.
-   */
-  private String getInvalidCharMask() {
-    return invalidCharMask;
   }
 
   private boolean getUseJava8api() {
@@ -315,10 +311,6 @@ public class SourceFormatAdapter implements Closeable {
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
-  }
-
-  public Source getSource() {
-    return source;
   }
 
   @Override

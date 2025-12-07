@@ -30,6 +30,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
@@ -59,11 +60,17 @@ public class LockAuditingCommand {
    * Maps to the structure written by StorageLockProviderAuditService.
    */
   public static class AuditRecord {
+    @Getter
     private final String ownerId;
+    @Getter
     private final long transactionStartTime;
+    @Getter
     private final long timestamp;
+    @Getter
     private final String state;
+    @Getter
     private final long lockExpiration;
+    @Getter
     private final boolean lockHeld;
 
     @JsonCreator
@@ -80,30 +87,6 @@ public class LockAuditingCommand {
       this.state = state;
       this.lockExpiration = lockExpiration;
       this.lockHeld = lockHeld;
-    }
-
-    public String getOwnerId() {
-      return ownerId;
-    }
-
-    public long getTransactionStartTime() {
-      return transactionStartTime;
-    }
-
-    public long getTimestamp() {
-      return timestamp;
-    }
-
-    public String getState() {
-      return state;
-    }
-
-    public long getLockExpiration() {
-      return lockExpiration;
-    }
-
-    public boolean isLockHeld() {
-      return lockHeld;
     }
   }
 

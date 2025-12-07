@@ -20,6 +20,9 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.common.model.CompactionOperation;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 
 /**
@@ -28,10 +31,15 @@ import java.io.Serializable;
 public class CompactionPlanEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  @Getter
+  @Setter
   private String compactionInstantTime;
 
+  @Getter
+  @Setter
   private CompactionOperation operation;
 
+  @Getter
   private int index;
 
   public CompactionPlanEvent() {
@@ -46,25 +54,5 @@ public class CompactionPlanEvent implements Serializable {
     this.compactionInstantTime = instantTime;
     this.operation = operation;
     this.index = index;
-  }
-
-  public void setCompactionInstantTime(String compactionInstantTime) {
-    this.compactionInstantTime = compactionInstantTime;
-  }
-
-  public void setOperation(CompactionOperation operation) {
-    this.operation = operation;
-  }
-
-  public String getCompactionInstantTime() {
-    return compactionInstantTime;
-  }
-
-  public CompactionOperation getOperation() {
-    return operation;
-  }
-
-  public int getIndex() {
-    return index;
   }
 }

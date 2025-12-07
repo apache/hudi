@@ -43,6 +43,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +72,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static final String REVERSE_LOG_READER_HAS_NOT_BEEN_ENABLED = "Reverse log reader has not been enabled";
 
   private final HoodieStorage storage;
+  @Getter
   private final HoodieLogFile logFile;
   private final int bufferSize;
   private final byte[] magicBuffer = new byte[6];
@@ -116,11 +118,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
-  }
-
-  @Override
-  public HoodieLogFile getLogFile() {
-    return logFile;
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows

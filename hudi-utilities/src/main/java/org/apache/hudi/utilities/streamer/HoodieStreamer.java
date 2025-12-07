@@ -74,6 +74,7 @@ import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -669,11 +670,13 @@ public class HoodieStreamer implements Serializable {
     /**
      * Schema provider that supplies the command for reading the input and writing out the target table.
      */
+    @Getter
     private transient SchemaProvider schemaProvider;
 
     /**
      * Spark Session.
      */
+    @Getter
     private transient SparkSession sparkSession;
 
     /**
@@ -689,6 +692,7 @@ public class HoodieStreamer implements Serializable {
     /**
      * Bag of properties with source, hoodie client, key generator etc.
      */
+    @Getter
     TypedProperties props;
 
     /**
@@ -1005,18 +1009,6 @@ public class HoodieStreamer implements Serializable {
       if (streamSync != null) {
         streamSync.close();
       }
-    }
-
-    public SchemaProvider getSchemaProvider() {
-      return schemaProvider;
-    }
-
-    public SparkSession getSparkSession() {
-      return sparkSession;
-    }
-
-    public TypedProperties getProps() {
-      return props;
     }
 
     @VisibleForTesting

@@ -24,6 +24,7 @@ import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -56,9 +57,13 @@ public class InputPathHandler {
 
   private final Configuration conf;
   // tableName to metadata mapping for all Hoodie tables(both incremental & snapshot)
+  @Getter
   private final Map<String, HoodieTableMetaClient> tableMetaClientMap;
+  @Getter
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
+  @Getter
   private final List<Path> snapshotPaths;
+  @Getter
   private final List<Path> nonHoodieInputPaths;
   private final boolean isIncrementalUseDatabase;
 
@@ -131,22 +136,6 @@ public class InputPathHandler {
       }
       groupedIncrementalPaths.get(metaClient).add(inputPath);
     }
-  }
-
-  public Map<HoodieTableMetaClient, List<Path>> getGroupedIncrementalPaths() {
-    return groupedIncrementalPaths;
-  }
-
-  public Map<String, HoodieTableMetaClient> getTableMetaClientMap() {
-    return tableMetaClientMap;
-  }
-
-  public List<Path> getSnapshotPaths() {
-    return snapshotPaths;
-  }
-
-  public List<Path> getNonHoodieInputPaths() {
-    return nonHoodieInputPaths;
   }
 
   private String getIncrementalTable(HoodieTableMetaClient metaClient) {

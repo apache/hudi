@@ -18,21 +18,23 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.TimelinePathProviderV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.TimelineV1Factory;
 import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.TimelinePathProviderV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 import org.apache.hudi.common.util.collection.Pair;
+
+import lombok.Getter;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -83,35 +85,19 @@ public abstract class TimelineLayout implements Serializable {
    */
   private static class TimelineLayoutV0 extends TimelineLayout {
 
+    @Getter
     private final InstantGenerator instantGenerator = new InstantGeneratorV1();
+    @Getter
     private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV1();
+    @Getter
     private final TimelineFactory timelineFactory = new TimelineV1Factory(this);
+    @Getter
     private final InstantComparator instantComparator = new InstantComparatorV1();
     private final InstantFileNameParser fileNameParser = new InstantFileNameParserV2();
 
     @Override
     public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
       return instantStream;
-    }
-
-    @Override
-    public InstantGenerator getInstantGenerator() {
-      return instantGenerator;
-    }
-
-    @Override
-    public InstantFileNameGenerator getInstantFileNameGenerator() {
-      return instantFileNameGenerator;
-    }
-
-    @Override
-    public TimelineFactory getTimelineFactory() {
-      return timelineFactory;
-    }
-
-    @Override
-    public InstantComparator getInstantComparator() {
-      return instantComparator;
     }
 
     @Override
@@ -159,35 +145,19 @@ public abstract class TimelineLayout implements Serializable {
    */
   private static class TimelineLayoutV2 extends TimelineLayout {
 
+    @Getter
     private final InstantGenerator instantGenerator = new InstantGeneratorV2();
+    @Getter
     private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV2();
+    @Getter
     private final TimelineFactory timelineFactory = new TimelineV2Factory(this);
+    @Getter
     private final InstantComparator instantComparator = new InstantComparatorV2();
     private final InstantFileNameParser fileNameParser = new InstantFileNameParserV2();
 
     @Override
     public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
       return TimelineLayout.filterHoodieInstantsByLatestState(instantStream, InstantComparatorV2::getComparableAction);
-    }
-
-    @Override
-    public InstantGenerator getInstantGenerator() {
-      return instantGenerator;
-    }
-
-    @Override
-    public InstantFileNameGenerator getInstantFileNameGenerator() {
-      return instantFileNameGenerator;
-    }
-
-    @Override
-    public TimelineFactory getTimelineFactory() {
-      return timelineFactory;
-    }
-
-    @Override
-    public InstantComparator getInstantComparator() {
-      return instantComparator;
     }
 
     @Override

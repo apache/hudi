@@ -31,6 +31,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +51,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBucketIndex.class);
 
+  @Getter
   protected final int numBuckets;
   protected final List<String> indexKeyFields;
 
@@ -153,9 +155,5 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   @Override
   public boolean isImplicitWithStorage() {
     return true;
-  }
-
-  public int getNumBuckets() {
-    return numBuckets;
   }
 }

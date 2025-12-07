@@ -49,6 +49,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,8 +72,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final transient HoodieEngineContext context;
   protected final transient StorageConfiguration<?> storageConf;
   protected final transient HoodieMetrics metrics;
+  @Getter
   protected final HoodieWriteConfig config;
   protected final String basePath;
+  @Getter
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
   protected final TimeGenerator timeGenerator;
@@ -82,6 +85,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
    * incremental fashion.
    */
+  @Getter
   private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;
 
@@ -181,10 +185,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     });
   }
 
-  public HoodieWriteConfig getConfig() {
-    return config;
-  }
-
   public HoodieEngineContext getEngineContext() {
     return context;
   }
@@ -211,14 +211,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   public String createNewInstantTime(boolean shouldLock) {
     return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
-  }
-
-  public Option<EmbeddedTimelineService> getTimelineServer() {
-    return timelineServer;
-  }
-
-  public HoodieHeartbeatClient getHeartbeatClient() {
-    return heartbeatClient;
   }
 
   /**

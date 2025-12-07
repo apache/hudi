@@ -21,6 +21,7 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.hudi.common.util.HoodieTimer;
 
 import io.javalin.http.Context;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,8 +32,11 @@ import java.util.concurrent.CompletableFuture;
  */
 public class MarkerCreationFuture extends CompletableFuture<String> {
   private static final Logger LOG = LoggerFactory.getLogger(MarkerCreationFuture.class);
+  @Getter
   private final Context context;
+  @Getter
   private final String markerDirPath;
+  @Getter
   private final String markerName;
   private boolean result;
   private final HoodieTimer timer;
@@ -44,18 +48,6 @@ public class MarkerCreationFuture extends CompletableFuture<String> {
     this.markerDirPath = markerDirPath;
     this.markerName = markerName;
     this.result = false;
-  }
-
-  public Context getContext() {
-    return context;
-  }
-
-  public String getMarkerDirPath() {
-    return markerDirPath;
-  }
-
-  public String getMarkerName() {
-    return markerName;
   }
 
   public boolean isSuccessful() {

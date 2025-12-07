@@ -37,6 +37,7 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
 import com.codahale.metrics.Timer;
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.parquet.schema.MessageType;
@@ -94,7 +95,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   protected HiveSyncConfig config;
+  @Getter
   private String databaseName;
+  @Getter
   private String tableName;
 
   protected HoodieSyncClient syncClient;
@@ -163,14 +166,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           throw new InvalidTableException(syncClient.getBasePath());
       }
     }
-  }
-
-  public String getTableName() {
-    return this.tableName;
-  }
-
-  public String getDatabaseName() {
-    return this.databaseName;
   }
 
   @Override

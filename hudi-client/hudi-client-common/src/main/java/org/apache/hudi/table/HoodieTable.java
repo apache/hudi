@@ -95,6 +95,7 @@ import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.util.CommonClientUtils;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -138,15 +139,22 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
 public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTable.class);
 
+  @Getter
   protected final HoodieWriteConfig config;
+  @Getter
   protected final HoodieTableMetaClient metaClient;
   private transient HoodieIndex<?, ?> index;
+  @Getter
   protected final TaskContextSupplier taskContextSupplier;
   private transient HoodieTableMetadata metadata;
   private transient HoodieStorageLayout storageLayout;
+  @Getter
   private final InstantGenerator instantGenerator;
+  @Getter
   private final InstantFileNameGenerator instantFileNameGenerator;
+  @Getter
   private final InstantFileNameParser instantFileNameParser;
+  @Getter
   private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
@@ -177,10 +185,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.taskContextSupplier = supplier;
   }
 
-  public boolean isMetadataTable() {
-    return isMetadataTable;
-  }
-
   public HoodieTableVersion version() {
     return metaClient.getTableConfig().getTableVersion();
   }
@@ -189,7 +193,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getTableMetadata());
     }
     return viewManager;
   }
@@ -320,26 +324,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> managePartitionTTL(HoodieEngineContext context, String instantTime);
-
-  public HoodieWriteConfig getConfig() {
-    return config;
-  }
-
-  public HoodieTableMetaClient getMetaClient() {
-    return metaClient;
-  }
-
-  public InstantGenerator getInstantGenerator() {
-    return instantGenerator;
-  }
-
-  public InstantFileNameGenerator getInstantFileNameGenerator() {
-    return instantFileNameGenerator;
-  }
-
-  public InstantFileNameParser getInstantFileNameParser() {
-    return instantFileNameParser;
-  }
 
   /**
    * @return if the table is physically partitioned, based on the partition fields stored in the table config.
@@ -924,10 +908,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     }
   }
 
-  public TaskContextSupplier getTaskContextSupplier() {
-    return taskContextSupplier;
-  }
-
   /**
    * Ensure that the current writerSchema is compatible with the latest schema of this dataset.
    *
@@ -1240,7 +1220,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     }
   }
 
-  public HoodieTableMetadata getMetadataTable() {
+  public HoodieTableMetadata getTableMetadata() {
     if (metadata == null) {
       metadata = refreshAndGetTableMetadata();
     }

@@ -35,6 +35,7 @@ import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.Getter;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -64,11 +65,13 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   protected transient TypedProperties props;
   protected transient JavaSparkContext sparkContext;
+  @Getter
   protected transient SparkSession sparkSession;
   protected transient Option<SourceProfileSupplier> sourceProfileSupplier;
   protected int writeTableVersion;
   private transient SchemaProvider overriddenSchemaProvider;
 
+  @Getter
   private final SourceType sourceType;
   private final StorageLevel storageLevel;
   protected final boolean persistRdd;
@@ -184,14 +187,6 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
-  }
-
-  public SourceType getSourceType() {
-    return sourceType;
-  }
-
-  public SparkSession getSparkSession() {
-    return sparkSession;
   }
 
   private synchronized void persist(T data) {

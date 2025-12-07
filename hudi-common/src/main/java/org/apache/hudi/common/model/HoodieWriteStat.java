@@ -53,6 +53,7 @@ public class HoodieWriteStat extends HoodieReadStats {
    * Relative path to the file from the base path.
    */
   @Getter
+  @Setter
   private String path;
 
   /**
@@ -143,6 +144,7 @@ public class HoodieWriteStat extends HoodieReadStats {
   private String prevBaseFile;
 
   @Nullable
+  @Setter
   private RuntimeStats runtimeStats;
 
   @JsonIgnore
@@ -151,10 +153,6 @@ public class HoodieWriteStat extends HoodieReadStats {
 
   public HoodieWriteStat() {
     // called by jackson json lib
-  }
-
-  public void setPath(String path) {
-    this.path = path;
   }
 
   public void setNumDeletes(long numDeletes) {
@@ -194,10 +192,6 @@ public class HoodieWriteStat extends HoodieReadStats {
   @Nullable
   public RuntimeStats getRuntimeStats() {
     return runtimeStats;
-  }
-
-  public void setRuntimeStats(@Nullable RuntimeStats runtimeStats) {
-    this.runtimeStats = runtimeStats;
   }
 
   /**

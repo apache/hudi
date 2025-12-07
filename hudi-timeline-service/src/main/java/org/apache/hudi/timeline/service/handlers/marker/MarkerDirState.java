@@ -34,6 +34,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import lombok.Getter;
 import org.apache.hadoop.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +70,7 @@ public class MarkerDirState implements Serializable {
   private final HoodieStorage storage;
   private final Registry metricsRegistry;
   // A cached copy of all markers in memory
+  @Getter
   private final Set<String> allMarkers = new HashSet<>();
   // A cached copy of marker entries in each marker file, stored in StringBuilder
   // for efficient appending
@@ -114,13 +116,6 @@ public class MarkerDirState implements Serializable {
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-  }
-
-  /**
-   * @return all markers in the marker directory.
-   */
-  public Set<String> getAllMarkers() {
-    return allMarkers;
   }
 
   /**

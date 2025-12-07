@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,6 +69,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   public static final String INDEX_INFO_KEY_STRING = "INDEX_INFO";
   public static final byte[] INDEX_INFO_KEY = getUTF8Bytes(INDEX_INFO_KEY_STRING);
 
+  @Getter
   private final boolean isPresent;
 
   public HFileBootstrapIndex(HoodieTableMetaClient metaClient) {
@@ -159,10 +161,5 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-  }
-
-  @Override
-  public boolean isPresent() {
-    return isPresent;
   }
 }

@@ -136,7 +136,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
-    return Either.left(hoodieTable.getMetadataTable().getNumFileGroupsForPartition(RECORD_INDEX));
+    return Either.left(hoodieTable.getTableMetadata().getNumFileGroupsForPartition(RECORD_INDEX));
   }
 
   protected int getTotalFileGroupCount(Either<Integer, Map<String, Integer>> fileGroupSize) {
@@ -195,7 +195,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
 
       // recordIndexInfo object only contains records that are present in record_index.
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
+          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
         List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
         return recordIndexInfo.stream()

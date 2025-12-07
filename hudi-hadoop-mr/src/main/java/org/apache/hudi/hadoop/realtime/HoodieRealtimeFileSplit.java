@@ -21,6 +21,8 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
@@ -45,23 +47,32 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
   /**
    * List of delta log-files holding updated records for this base-file
    */
+  @Getter
+  @Setter
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   /**
    * Base path of the table this path belongs to
    */
+  @Getter
+  @Setter
   private String basePath;
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
+  @Getter
+  @Setter
   private String maxCommitTime;
   /**
    * Marks whether this path produced as part of Incremental Query
    */
+  @Setter
   private boolean belongsToIncrementalQuery = false;
   /**
    * Virtual key configuration of the table this split belongs to
    */
+  @Getter
+  @Setter
   private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   public HoodieRealtimeFileSplit() {
@@ -94,49 +105,9 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     this.virtualKeyInfo = virtualKeyInfo;
   }
 
-  public List<HoodieLogFile> getDeltaLogFiles() {
-    return deltaLogFiles;
-  }
-
-  @Override
-  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
-    this.deltaLogFiles = deltaLogFiles;
-  }
-
-  public String getMaxCommitTime() {
-    return maxCommitTime;
-  }
-
-  public void setMaxCommitTime(String maxCommitTime) {
-    this.maxCommitTime = maxCommitTime;
-  }
-
-  public String getBasePath() {
-    return basePath;
-  }
-
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
-  }
-
-  @Override
-  public void setVirtualKeyInfo(Option<HoodieVirtualKeyInfo> virtualKeyInfo) {
-    this.virtualKeyInfo = virtualKeyInfo;
-  }
-
-  @Override
-  public Option<HoodieVirtualKeyInfo> getVirtualKeyInfo() {
-    return virtualKeyInfo;
-  }
-
   @Override
   public boolean getBelongsToIncrementalQuery() {
     return belongsToIncrementalQuery;
-  }
-
-  @Override
-  public void setBelongsToIncrementalQuery(boolean belongsToIncrementalPath) {
-    this.belongsToIncrementalQuery = belongsToIncrementalPath;
   }
 
   @Override

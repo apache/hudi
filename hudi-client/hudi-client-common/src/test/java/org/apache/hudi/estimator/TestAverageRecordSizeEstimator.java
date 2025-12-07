@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.Getter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -251,26 +252,17 @@ public class TestAverageRecordSizeEstimator {
   }
 
   static class HWriteStat {
+    @Getter
     private final String path;
+    @Getter
     private final Long totalRecordsWritten;
+    @Getter
     private final Long perRecordSize;
 
     public HWriteStat(String path, Long totalRecordsWritten, Long perRecordSize) {
       this.path = path;
       this.totalRecordsWritten = totalRecordsWritten;
       this.perRecordSize = perRecordSize;
-    }
-
-    public String getPath() {
-      return path;
-    }
-
-    public Long getTotalRecordsWritten() {
-      return totalRecordsWritten;
-    }
-
-    public Long getPerRecordSize() {
-      return perRecordSize;
     }
   }
 }

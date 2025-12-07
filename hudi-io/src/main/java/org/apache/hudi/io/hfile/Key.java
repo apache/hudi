@@ -21,6 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.IOUtils;
 
+import lombok.Getter;
+
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.HFileUtils.compareKeys;
@@ -31,8 +33,11 @@ import static org.apache.hudi.io.util.IOUtils.readShort;
  */
 public class Key implements Comparable<Key> {
   private static final int CONTENT_LENGTH_SIZE = SIZEOF_INT16;
+  @Getter
   private final byte[] bytes;
+  @Getter
   private final int offset;
+  @Getter
   private final int length;
 
   public Key(byte[] bytes) {
@@ -43,18 +48,6 @@ public class Key implements Comparable<Key> {
     this.bytes = bytes;
     this.offset = offset;
     this.length = length;
-  }
-
-  public byte[] getBytes() {
-    return bytes;
-  }
-
-  public int getOffset() {
-    return this.offset;
-  }
-
-  public int getLength() {
-    return length;
   }
 
   public int getContentOffset() {

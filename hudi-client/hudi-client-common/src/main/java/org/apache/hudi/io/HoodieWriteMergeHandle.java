@@ -51,6 +51,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,6 +107,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
+  @Setter
   protected HoodieReaderContext<T> readerContext;
 
   protected long recordsWritten = 0;
@@ -508,13 +510,5 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
               baseFileToMerge.getCommitTime(), oldNumWrites));
     }
-  }
-
-  /**
-   * This is only for spark, the engine context fetched from a serialized hoodie table is always local,
-   * overrides it to spark specific reader context.
-   */
-  public void setReaderContext(HoodieReaderContext<T> readerContext) {
-    this.readerContext = readerContext;
   }
 }

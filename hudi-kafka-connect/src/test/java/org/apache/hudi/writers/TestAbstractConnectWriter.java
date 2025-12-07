@@ -34,6 +34,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -147,15 +148,12 @@ public class TestAbstractConnectWriter {
 
   private static class AbstractHudiConnectWriterTestWrapper extends AbstractConnectWriter {
 
+    @Getter
     private List<HoodieRecord> writtenRecords;
 
     public AbstractHudiConnectWriterTestWrapper(KafkaConnectConfigs connectConfigs, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {
       super(connectConfigs, keyGenerator, schemaProvider, "000");
       writtenRecords = new ArrayList<>();
-    }
-
-    public List<HoodieRecord> getWrittenRecords() {
-      return writtenRecords;
     }
 
     @Override

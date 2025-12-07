@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop.fs.inline;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -43,6 +44,7 @@ public class InMemoryFileSystem extends FileSystem {
   private ByteArrayOutputStream bos;
   private Configuration conf = null;
   public static final String SCHEME = "inmemfs";
+  @Getter
   private URI uri;
 
   InMemoryFileSystem() {
@@ -53,11 +55,6 @@ public class InMemoryFileSystem extends FileSystem {
     super.initialize(name, conf);
     this.conf = conf;
     this.uri = name;
-  }
-
-  @Override
-  public URI getUri() {
-    return uri;
   }
 
   public String getScheme() {

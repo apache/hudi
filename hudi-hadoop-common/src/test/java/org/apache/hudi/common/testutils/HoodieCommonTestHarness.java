@@ -49,6 +49,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.AccessLevel;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -85,6 +87,7 @@ public class HoodieCommonTestHarness {
   protected static ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = null;
   protected static final HoodieLogBlock.HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
 
+  @Setter(AccessLevel.PROTECTED)
   protected String tableName;
   protected String basePath;
   protected URI baseUri;
@@ -96,10 +99,6 @@ public class HoodieCommonTestHarness {
 
   protected StorageConfiguration<Configuration> storageConf;
   protected HoodieStorage storage;
-
-  protected void setTableName(String tableName) {
-    this.tableName = tableName;
-  }
 
   /**
    * Initializes basePath.

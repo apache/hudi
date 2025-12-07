@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 
+import lombok.Setter;
 import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
    *
    * @see CompactionPlanOperator
    */
+  @Setter
   private int pendingCompactionCount;
 
   /**
@@ -83,10 +85,6 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "compactionDelay"), () -> compactionDelay);
     metricGroup.gauge(getMetricsName(actionType, "compactionCost"), () -> compactionCost);
     metricGroup.gauge(getMetricsName(actionType, "compactionStateSignal"), () -> compactionStateSignal);
-  }
-
-  public void setPendingCompactionCount(int pendingCompactionCount) {
-    this.pendingCompactionCount = pendingCompactionCount;
   }
 
   public void setFirstPendingCompactionInstant(Option<HoodieInstant> firstPendingCompactionInstant) {

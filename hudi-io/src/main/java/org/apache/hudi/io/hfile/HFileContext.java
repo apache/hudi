@@ -23,14 +23,22 @@ import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.compress.HoodieCompressor;
 import org.apache.hudi.io.compress.HoodieCompressorFactory;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 /**
  * The context of HFile that contains information of the blocks.
  */
 public class HFileContext {
+  @Getter(AccessLevel.PACKAGE)
   private final CompressionCodec compressionCodec;
+  @Getter(AccessLevel.PACKAGE)
   private final HoodieCompressor compressor;
+  @Getter(AccessLevel.PACKAGE)
   private final ChecksumType checksumType;
+  @Getter(AccessLevel.PACKAGE)
   private final int blockSize;
+  @Getter(AccessLevel.PACKAGE)
   private final long fileCreationTime;
 
   private HFileContext(CompressionCodec compressionCodec,
@@ -42,26 +50,6 @@ public class HFileContext {
     this.blockSize = blockSize;
     this.checksumType = checksumType;
     this.fileCreationTime = fileCreationTime;
-  }
-
-  CompressionCodec getCompressionCodec() {
-    return compressionCodec;
-  }
-
-  HoodieCompressor getCompressor() {
-    return compressor;
-  }
-
-  int getBlockSize() {
-    return blockSize;
-  }
-
-  ChecksumType getChecksumType() {
-    return checksumType;
-  }
-
-  long getFileCreationTime() {
-    return fileCreationTime;
   }
 
   public static Builder builder() {

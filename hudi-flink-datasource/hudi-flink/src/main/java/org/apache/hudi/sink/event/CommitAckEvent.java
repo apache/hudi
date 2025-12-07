@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.event;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 /**
@@ -26,6 +28,8 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 public class CommitAckEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
+  @Getter
+  @Setter
   private long checkpointId;
 
   public CommitAckEvent(long checkpointId) {
@@ -34,14 +38,6 @@ public class CommitAckEvent implements OperatorEvent {
 
   // default constructor for efficient serialization
   public CommitAckEvent() {
-  }
-
-  public long getCheckpointId() {
-    return checkpointId;
-  }
-
-  public void setCheckpointId(long checkpointId) {
-    this.checkpointId = checkpointId;
   }
 
   public static CommitAckEvent getInstance(long checkpointId) {

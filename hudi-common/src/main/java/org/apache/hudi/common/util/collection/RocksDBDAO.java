@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.rocksdb.AbstractImmutableNativeReference;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -71,8 +72,10 @@ public class RocksDBDAO {
 
   private transient ConcurrentHashMap<String, ColumnFamilyHandle> managedHandlesMap;
   private transient ConcurrentHashMap<String, ColumnFamilyDescriptor> managedDescriptorMap;
+  @Getter(AccessLevel.PRIVATE)
   private transient RocksDB rocksDB;
   private boolean closed = false;
+  @Getter(AccessLevel.PACKAGE)
   private final String rocksDBBasePath;
   private final transient Map<String, CustomSerializer<?>> columnFamilySerializers;
   @Getter
@@ -88,13 +91,6 @@ public class RocksDBDAO {
     this.columnFamilySerializers = columnFamilySerializers;
     init();
     totalBytesWritten = 0L;
-  }
-
-  /**
-   * Create RocksDB if not initialized.
-   */
-  private RocksDB getRocksDB() {
-    return rocksDB;
   }
 
   /**
@@ -528,10 +524,6 @@ public class RocksDBDAO {
     } catch (IOException e) {
       throw new HoodieException(e);
     }
-  }
-
-  String getRocksDBBasePath() {
-    return rocksDBBasePath;
   }
 
   /**

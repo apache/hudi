@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -38,17 +40,9 @@ import java.io.IOException;
 public abstract class HoodieTableInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
+  @Getter
+  @Setter
   protected Configuration conf;
-
-  @Override
-  public final Configuration getConf() {
-    return conf;
-  }
-
-  @Override
-  public final void setConf(Configuration conf) {
-    this.conf = conf;
-  }
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
