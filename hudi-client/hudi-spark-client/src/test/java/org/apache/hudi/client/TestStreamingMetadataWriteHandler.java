@@ -61,9 +61,7 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
   private static Stream<Arguments> coalesceDivisorTestArgs() {
     return Arrays.stream(new Object[][] {
         {100, 20, 1000, true},
-        {100, 20, 1000, false},
         {1, 1, 1000, true},
-        {1, 1, 1000, false},
         {10000, 100, 5000, true},
         {10000, 100, 5000, true},
         {10000, 100, 20000, true},
@@ -73,15 +71,14 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
 
   @ParameterizedTest
   @MethodSource("coalesceDivisorTestArgs")
-  public void testCoalesceDividentConfig(int numDataTableWriteStatuses, int numMdtWriteStatus, int coalesceDividentForDataTableWrites,
-                                         boolean enforceCoalesceWithRepartition) {
+  public void testCoalesceDividentConfig(int numDataTableWriteStatuses, int numMdtWriteStatus, int coalesceDividentForDataTableWrites) {
     HoodieData<WriteStatus> dataTableWriteStatus = mockWriteStatuses(numDataTableWriteStatuses);
     HoodieData<WriteStatus> mdtWriteStatus = mockWriteStatuses(numMdtWriteStatus);
     HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
     when(mdtWriter.streamWriteToMetadataPartitions(any(), any())).thenReturn(mdtWriteStatus);
     StreamingMetadataWriteHandler metadataWriteHandler = new MockStreamingMetadataWriteHandler(mdtWriter);
 
-    HoodieData<WriteStatus> allWriteStatuses = metadataWriteHandler.streamWriteToMetadataTable(mockHoodieTable, dataTableWriteStatus, "00001", enforceCoalesceWithRepartition,
+    HoodieData<WriteStatus> allWriteStatuses = metadataWriteHandler.streamWriteToMetadataTable(mockHoodieTable, dataTableWriteStatus, "00001",
         coalesceDividentForDataTableWrites);
     assertEquals(Math.max(1, numDataTableWriteStatuses / coalesceDividentForDataTableWrites) + numMdtWriteStatus, allWriteStatuses.getNumPartitions());
   }
