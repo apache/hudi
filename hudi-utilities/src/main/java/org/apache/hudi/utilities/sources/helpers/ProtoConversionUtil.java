@@ -417,6 +417,7 @@ public class ProtoConversionUtil {
           return ByteBuffer.wrap(bytesCopy, 0, length);
         case ENUM:
           return GenericData.get().createEnum(value.toString(), schema.toAvroSchema());
+        case DECIMAL:
         case FIXED:
           if (value instanceof byte[]) {
             return GenericData.get().createFixed(null, (byte[]) value, schema.toAvroSchema());
