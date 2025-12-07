@@ -109,7 +109,7 @@ public class SparkRDDWriteClient<T> extends
     if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
       // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
       writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime,
-              config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
+          config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     } else {
       writeStatuses = rawWriteStatuses;
     }
