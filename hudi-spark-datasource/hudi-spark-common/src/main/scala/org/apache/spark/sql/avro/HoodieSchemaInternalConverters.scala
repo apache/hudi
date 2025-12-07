@@ -61,7 +61,12 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
       case BinaryType => HoodieSchema.create(HoodieSchemaType.BYTES)
 
       case d: DecimalType =>
-        HoodieSchema.createDecimal(d.precision, d.scale)
+        val fixedSize = minBytesForPrecision(d.precision)
+        val name = nameSpace match {
+          case "" => s"$recordName.fixed"
+          case _ => s"$nameSpace.$recordName.fixed"
+        }
+        HoodieSchema.createDecimal(name, nameSpace, null, d.precision, d.scale, fixedSize)
 
       // Complex types
       case ArrayType(elementType, containsNull) =>
@@ -95,7 +100,7 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
           // Create record
           val fields = st.map { f =>
             val fieldSchema = toHoodieType(f.dataType, f.nullable, f.name, childNameSpace)
-            val doc = if (f.metadata.contains("comment")) f.metadata.getString("comment") else null
+            val doc = f.getComment.orNull
             HoodieSchemaField.of(f.name, fieldSchema, doc)
           }
 
@@ -120,14 +125,13 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
     hoodieSchema.getType match {
       // Primitive types
       case HoodieSchemaType.INT => SchemaType(IntegerType, nullable = false)
-      case HoodieSchemaType.STRING => SchemaType(StringType, nullable = false)
+      case HoodieSchemaType.STRING | HoodieSchemaType.ENUM => SchemaType(StringType, nullable = false)
       case HoodieSchemaType.BOOLEAN => SchemaType(BooleanType, nullable = false)
-      case HoodieSchemaType.BYTES => SchemaType(BinaryType, nullable = false)
+      case HoodieSchemaType.BYTES | HoodieSchemaType.FIXED => SchemaType(BinaryType, nullable = false)
       case HoodieSchemaType.DOUBLE => SchemaType(DoubleType, nullable = false)
       case HoodieSchemaType.FLOAT => SchemaType(FloatType, nullable = false)
       case HoodieSchemaType.LONG => SchemaType(LongType, nullable = false)
       case HoodieSchemaType.NULL => SchemaType(NullType, nullable = true)
-      case HoodieSchemaType.ENUM => SchemaType(StringType, nullable = false)
 
       // Logical types
       case HoodieSchemaType.DATE =>
@@ -135,14 +139,9 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
 
       case HoodieSchemaType.TIMESTAMP =>
         hoodieSchema match {
-          case ts: HoodieSchema.Timestamp =>
-            if (ts.isUtcAdjusted) {
-              SchemaType(TimestampType, nullable = false)
-            } else {
-              SchemaType(TimestampNTZType, nullable = false)
-            }
+          case ts: HoodieSchema.Timestamp if !ts.isUtcAdjusted =>
+            SchemaType(TimestampNTZType, nullable = false)
           case _ =>
-            // Fallback for non-specialized timestamp schema
             SchemaType(TimestampType, nullable = false)
         }
 
@@ -153,15 +152,6 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
           case _ =>
             throw new IncompatibleSchemaException(
               s"DECIMAL type must be HoodieSchema.Decimal instance, got: ${hoodieSchema.getClass}")
-        }
-
-      case HoodieSchemaType.FIXED =>
-        // FIXED can be either binary or decimal with logical type
-        hoodieSchema match {
-          case dec: HoodieSchema.Decimal =>
-            SchemaType(DecimalType(dec.getPrecision, dec.getScale), nullable = false)
-          case _ =>
-            SchemaType(BinaryType, nullable = false)
         }
 
       // Complex types
@@ -177,7 +167,12 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
         val newRecordNames = existingRecordNames + fullName
         val fields = hoodieSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          StructField(f.name(), schemaType.dataType, schemaType.nullable)
+          val metadata = if (f.doc().isPresent) {
+            new MetadataBuilder().putString("comment", f.doc().get()).build()
+          } else {
+            Metadata.empty
+          }
+          StructField(f.name(), schemaType.dataType, schemaType.nullable, metadata)
         }
         SchemaType(StructType(fields.toSeq), nullable = false)
 
@@ -232,5 +227,16 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
       st.forall { f =>
         f.name.matches("member\\d+") && f.nullable
       }
+  }
+
+  /**
+   * Calculates the minimum number of bytes needed to store a decimal with the given precision.
+   */
+  private def minBytesForPrecision(precision: Int): Int = {
+    var numBytes = 1
+    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+      numBytes += 1
+    }
+    numBytes
   }
 }
