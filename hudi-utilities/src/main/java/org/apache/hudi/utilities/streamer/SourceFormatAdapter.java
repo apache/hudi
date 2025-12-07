@@ -129,7 +129,7 @@ public class SourceFormatAdapter implements Closeable {
    */
   private JavaRDD<GenericRecord> transformJsonToGenericRdd(InputBatch<JavaRDD<String>> inputBatch) {
     MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceHoodieSchema().getFullName());
-    AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceHoodieSchema().toAvroSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask());
+    AvroConvertor convertor = new AvroConvertor(inputBatch.getSchemaProvider().getSourceHoodieSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask());
     return inputBatch.getBatch().map(rdd -> {
       if (errorTableWriter.isPresent()) {
         JavaRDD<Either<GenericRecord,String>> javaRDD = rdd.map(convertor::fromJsonWithError);
@@ -144,7 +144,7 @@ public class SourceFormatAdapter implements Closeable {
 
   private JavaRDD<Row> transformJsonToRowRdd(InputBatch<JavaRDD<String>> inputBatch) {
     MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceHoodieSchema().getFullName());
-    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceHoodieSchema().toAvroSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), getUseJava8api());
+    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceHoodieSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), getUseJava8api());
     return inputBatch.getBatch().map(rdd -> {
       if (errorTableWriter.isPresent()) {
         JavaRDD<Either<Row, String>> javaRDD = rdd.map(convertor::fromJsonToRowWithError);
@@ -215,7 +215,7 @@ public class SourceFormatAdapter implements Closeable {
       case PROTO: {
         //TODO([HUDI-5830]) implement field name sanitization
         InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCheckpoint, sourceLimit);
-        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceHoodieSchema().toAvroSchema());
+        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceHoodieSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromProtoMessage)).orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
@@ -299,7 +299,7 @@ public class SourceFormatAdapter implements Closeable {
       case PROTO: {
         //TODO([HUDI-5830]) implement field name sanitization
         InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCheckpoint, sourceLimit);
-        Schema sourceSchema = r.getSchemaProvider().getSourceHoodieSchema().toAvroSchema();
+        HoodieSchema sourceSchema = r.getSchemaProvider().getSourceHoodieSchema();
         AvroConvertor convertor = new AvroConvertor(sourceSchema);
         return new InputBatch<>(
             Option

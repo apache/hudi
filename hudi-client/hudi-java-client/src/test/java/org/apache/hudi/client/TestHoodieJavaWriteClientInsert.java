@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -63,10 +64,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness {
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieJavaWriteClientInsert.class, "/exampleSchema.avsc");
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestHoodieJavaWriteClientInsert.class, "/exampleSchema.avsc");
 
   private static HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String basePath) {
-    return makeHoodieClientConfigBuilder(basePath, SCHEMA);
+    return makeHoodieClientConfigBuilder(basePath, SCHEMA.toAvroSchema());
   }
 
   private static HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String basePath, Schema schema) {

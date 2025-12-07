@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -136,12 +137,12 @@ public class StreamerUtil {
     return properties;
   }
 
-  public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
+  public static HoodieSchema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
-      return new FilebasedSchemaProvider(conf).getSourceSchema();
+      return new FilebasedSchemaProvider(conf).getSourceHoodieSchema();
     } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
       final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
-      return new Schema.Parser().parse(schemaStr);
+      return HoodieSchema.parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
