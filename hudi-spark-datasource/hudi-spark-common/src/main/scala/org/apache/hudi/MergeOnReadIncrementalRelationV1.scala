@@ -86,18 +86,20 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    new HoodieMergeOnReadRDDV1(
+    new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
       config = jobConf,
+      sqlConf = sqlContext.sparkSession.sessionState.conf,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      includeStartTime = includeStartTime,
-      startTimestamp = startTs,
-      endTimestamp = endTs)
+      includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
+      optionalFilters = optionalFilters,
+      metaClient = metaClient,
+      options = optParams)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
