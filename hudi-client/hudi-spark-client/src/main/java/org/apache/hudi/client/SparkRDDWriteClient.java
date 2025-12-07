@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusValidator;
-import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -109,9 +108,8 @@ public class SparkRDDWriteClient<T> extends
     final JavaRDD<WriteStatus> writeStatuses;
     if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
       // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
-      boolean enforceCoalesceWithRepartition = getOperationType() == WriteOperationType.BULK_INSERT && config.getBulkInsertSortMode() == BulkInsertSortMode.NONE;
       writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime,
-          enforceCoalesceWithRepartition, config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
+          config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     } else {
       writeStatuses = rawWriteStatuses;
     }
