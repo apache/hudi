@@ -83,12 +83,11 @@ public class SerializableSchema implements Serializable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+  @Getter
   public static class Column implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @Getter
     private final String name;
-    @Getter
     private final DataType dataType;
 
     private Column(String name, DataType dataType) {

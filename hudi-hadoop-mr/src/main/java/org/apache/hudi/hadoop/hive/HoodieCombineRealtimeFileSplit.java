@@ -42,10 +42,10 @@ import java.util.stream.Collectors;
 /**
  * Represents a CombineFileSplit for realtime tables.
  */
+@Getter
 public class HoodieCombineRealtimeFileSplit extends CombineFileSplit {
 
   // These are instances of HoodieRealtimeSplits
-  @Getter
   List<FileSplit> realtimeFileSplits = new ArrayList<>();
 
   public HoodieCombineRealtimeFileSplit() {

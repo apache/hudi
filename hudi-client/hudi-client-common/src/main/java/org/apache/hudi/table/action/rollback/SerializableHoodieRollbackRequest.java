@@ -32,17 +32,13 @@ import java.util.Map;
  * HoodieRollbackRequest in HoodieRollbackPlan (avro pojo) is not operable directly within spark parallel engine.
  * Hence converting the same to this {@link SerializableHoodieRollbackRequest} and then using it within spark.parallelize.
  */
+@Getter
 public class SerializableHoodieRollbackRequest implements Serializable {
 
-  @Getter
   private final String partitionPath;
-  @Getter
   private final String fileId;
-  @Getter
   private final String latestBaseInstant;
-  @Getter
   private final List<String> filesToBeDeleted = new ArrayList<>();
-  @Getter
   private final Map<String, Long> logBlocksToBeDeleted = new HashMap<>();
 
   public SerializableHoodieRollbackRequest(HoodieRollbackRequest rollbackRequest) {

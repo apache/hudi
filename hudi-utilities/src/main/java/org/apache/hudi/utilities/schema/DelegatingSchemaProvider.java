@@ -27,11 +27,10 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * SchemaProvider which uses separate Schema Providers for source and target.
  */
+@Getter
 public final class DelegatingSchemaProvider extends SchemaProvider {
 
-  @Getter
   private final SchemaProvider sourceSchemaProvider;
-  @Getter
   private final SchemaProvider targetSchemaProvider;
 
   public DelegatingSchemaProvider(TypedProperties props,

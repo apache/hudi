@@ -251,12 +251,10 @@ public class TestAverageRecordSizeEstimator {
     return new HWriteStat(getLogFileName(String.valueOf(instant)), totalRecordsWritten, perRecordSize);
   }
 
+  @Getter
   static class HWriteStat {
-    @Getter
     private final String path;
-    @Getter
     private final Long totalRecordsWritten;
-    @Getter
     private final Long perRecordSize;
 
     public HWriteStat(String path, Long totalRecordsWritten, Long perRecordSize) {

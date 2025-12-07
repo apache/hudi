@@ -29,30 +29,27 @@ import java.util.List;
 /**
  * Represents a commit event from the clustering task {@link ClusteringOperator}.
  */
+@Getter
 public class ClusteringCommitEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
   /**
    * The clustering commit instant time.
    */
-  @Getter
   @Setter
   private String instant;
   /**
    * The file IDs.
    */
-  @Getter
   private String fileIds;
   /**
    * The write statuses.
    */
-  @Getter
   @Setter
   private List<WriteStatus> writeStatuses;
   /**
    * The clustering task identifier.
    */
-  @Getter
   @Setter
   private int taskID;
 

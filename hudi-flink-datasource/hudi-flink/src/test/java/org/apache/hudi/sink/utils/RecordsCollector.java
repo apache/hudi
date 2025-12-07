@@ -27,8 +27,8 @@ import java.util.List;
 /**
  * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
+@Getter
 class RecordsCollector<T> implements Collector<T> {
-  @Getter
   private List<T> val;
 
   public RecordsCollector() {

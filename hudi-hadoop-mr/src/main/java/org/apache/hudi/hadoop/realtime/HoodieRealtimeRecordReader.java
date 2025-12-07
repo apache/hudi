@@ -34,6 +34,7 @@ import java.io.IOException;
  * Realtime Record Reader which can do compacted (merge-on-read) record reading or unmerged reading (parquet and log
  * files read in parallel) based on job configuration.
  */
+@Getter
 public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   // Property to enable parallel reading of parquet and log files without merging.
@@ -41,7 +42,6 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);
-  @Getter
   private final RecordReader<NullWritable, ArrayWritable> reader;
 
   public HoodieRealtimeRecordReader(RealtimeSplit split, JobConf job,

@@ -28,11 +28,10 @@ import java.util.List;
 /**
  * Class to hold list of {@link HoodieWriteStat} for data table and metadata table.
  */
+@Getter
 public class TableWriteStats {
 
-  @Getter
   private final List<HoodieWriteStat> dataTableWriteStats;
-  @Getter
   private final List<HoodieWriteStat> metadataTableWriteStats;
 
   public TableWriteStats(List<HoodieWriteStat> dataTableWriteStats) {

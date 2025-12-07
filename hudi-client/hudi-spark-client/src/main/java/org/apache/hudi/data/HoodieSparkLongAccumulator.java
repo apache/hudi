@@ -28,9 +28,9 @@ import org.apache.spark.util.LongAccumulator;
 /**
  * An accumulator on counts based on Spark {@link AccumulatorV2} implementation.
  */
+@Getter
 public class HoodieSparkLongAccumulator extends HoodieAccumulator {
 
-  @Getter
   private final AccumulatorV2<Long, Long> accumulator;
 
   private HoodieSparkLongAccumulator() {

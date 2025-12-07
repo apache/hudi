@@ -37,11 +37,11 @@ import java.io.IOException;
  * Abstract base class of the Hive's {@link FileInputFormat} implementations allowing for reading of Hudi's
  * Copy-on-Write (COW) and Merge-on-Read (MOR) tables
  */
+@Getter
+@Setter
 public abstract class HoodieTableInputFormat extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
-  @Getter
-  @Setter
   protected Configuration conf;
 
   @Override

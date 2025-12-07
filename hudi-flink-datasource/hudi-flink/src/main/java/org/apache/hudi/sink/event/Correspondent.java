@@ -32,10 +32,9 @@ import org.apache.flink.util.SerializedValue;
 /**
  * Correspondent between a write task with the coordinator.
  */
+@Getter
 public class Correspondent {
-  @Getter
   private final OperatorID operatorID;
-  @Getter
   private final TaskOperatorEventGateway gateway;
 
   private Correspondent(OperatorID operatorID, TaskOperatorEventGateway gateway) {

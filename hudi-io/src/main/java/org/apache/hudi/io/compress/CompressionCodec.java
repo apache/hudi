@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
  * Available compression codecs.
  * There should not be any assumption on the ordering or ordinal of the defined enums.
  */
+@Getter
 public enum CompressionCodec {
   NONE("none", 2),
   BZIP2("bz2", 5),
@@ -47,12 +48,10 @@ public enum CompressionCodec {
   private static final Map<Integer, CompressionCodec>
       ID_TO_COMPRESSION_CODEC_MAP = createIdToCompressionCodecMap();
 
-  @Getter
   private final String name;
   // CompressionCodec ID to be stored in HFile on storage
   // The ID of each codec cannot change or else that breaks all existing HFiles out there
   // even the ones that are not compressed! (They use the NONE algorithm)
-  @Getter
   private final int id;
 
   CompressionCodec(final String name, int id) {

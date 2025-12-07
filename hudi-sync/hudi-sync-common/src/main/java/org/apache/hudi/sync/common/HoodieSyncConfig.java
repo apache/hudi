@@ -60,6 +60,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
+@Getter
 @Immutable
 @ConfigClassProperty(name = "Common Metadata Sync Configs",
     groupName = ConfigGroups.Names.META_SYNC,
@@ -203,10 +204,8 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "This is useful when the partition metadata is large, and the partition info can be "
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
-  @Getter
   @Setter
   private Configuration hadoopConf;
-  @Getter
   private final HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {

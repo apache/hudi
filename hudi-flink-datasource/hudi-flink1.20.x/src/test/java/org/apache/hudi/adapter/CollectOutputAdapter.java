@@ -33,9 +33,9 @@ import java.util.List;
 /**
  * Adapter clazz for {@code Output}.
  */
+@Getter
 public class CollectOutputAdapter<T> implements Output<StreamRecord<T>> {
 
-  @Getter
   private final List<T> records;
 
   public CollectOutputAdapter() {

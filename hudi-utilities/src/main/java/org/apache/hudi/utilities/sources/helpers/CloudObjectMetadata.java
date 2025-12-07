@@ -23,10 +23,9 @@ import lombok.Getter;
 
 import java.io.Serializable;
 
+@Getter
 public class CloudObjectMetadata implements Serializable {
-  @Getter
   private final String path;
-  @Getter
   private final long size;
 
   public CloudObjectMetadata(String path, long size) {

@@ -26,8 +26,8 @@ import java.util.List;
  * A batch of messages fetched from Google Cloud Pubsub within the metadata fetcher of
  * Incremental GCS ingestion module.
  */
+@Getter
 public class MessageBatch {
-  @Getter
   private final List<String> messages;
 
   public MessageBatch(List<String> messages) {

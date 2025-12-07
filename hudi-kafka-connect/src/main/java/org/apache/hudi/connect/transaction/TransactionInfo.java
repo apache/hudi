@@ -28,16 +28,13 @@ import lombok.Setter;
  * {@link TransactionParticipant}.
  * @param <T> The type of status returned by the underlying writer.
  */
+@Getter
 public class TransactionInfo<T> {
 
-  @Getter
   private final String commitTime;
-  @Getter
   private final ConnectWriter<T> writer;
-  @Getter
   @Setter
   private long expectedKafkaOffset;
-  @Getter
   private boolean commitInitiated;
 
   public TransactionInfo(String commitTime, ConnectWriter<T> writer) {

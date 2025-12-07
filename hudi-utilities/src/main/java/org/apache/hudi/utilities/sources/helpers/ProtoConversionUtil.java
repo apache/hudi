@@ -107,12 +107,10 @@ public class ProtoConversionUtil {
     return AvroSupport.convert(schema, message);
   }
 
+  @Getter
   public static class SchemaConfig {
-    @Getter
     private final boolean wrappedPrimitivesAsRecords;
-    @Getter
     private final int maxRecursionDepth;
-    @Getter
     private final boolean timestampsAsRecords;
 
     /**

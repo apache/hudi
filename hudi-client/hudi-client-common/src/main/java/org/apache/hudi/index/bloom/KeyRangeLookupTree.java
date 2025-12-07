@@ -27,9 +27,9 @@ import java.util.Set;
 /**
  * Look up tree implemented as interval trees to search for any given key in (N logN) time complexity.
  */
+@Getter
 class KeyRangeLookupTree implements Serializable {
 
-  @Getter
   private KeyRangeNode root;
 
   /**

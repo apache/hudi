@@ -25,13 +25,13 @@ import lombok.Setter;
 /**
  * Similar to {@link Gauge}, but metric value can be updated by {@link #setValue(T)}.
  */
+@Getter
 @Setter
 public class HoodieGauge<T> implements Gauge<T> {
   /**
    * -- SETTER --
    *  Set the metric to a new value.
    */
-  @Getter
   private volatile T value;
 
   /**

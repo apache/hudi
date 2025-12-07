@@ -36,24 +36,20 @@ import java.util.stream.Collectors;
 /**
  * An operator event to mark successful checkpoint batch write.
  */
+@Setter
 public class WriteMetadataEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
   public static final String BOOTSTRAP_INSTANT = "";
 
   @Getter
-  @Setter
   private List<WriteStatus> writeStatuses;
   @Getter
-  @Setter
   private int taskID;
-  @Setter
   private long checkpointId;
   @Getter
-  @Setter
   private String instantTime;
   @Getter
-  @Setter
   private boolean lastBatch;
 
   /**
@@ -63,14 +59,12 @@ public class WriteMetadataEvent implements OperatorEvent {
    * 2. bounded stream source such as VALUES
    */
   @Getter
-  @Setter
   private boolean endInput;
 
   /**
    * Flag saying whether the event comes from bootstrap of a write function.
    */
   @Getter
-  @Setter
   private boolean bootstrap;
 
   /**

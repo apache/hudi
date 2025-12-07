@@ -27,15 +27,12 @@ import java.io.Serializable;
 /**
  * Class to hold virtual key info when meta fields are disabled.
  */
+@Getter
 public class HoodieVirtualKeyInfo implements Serializable {
 
-  @Getter
   private final String recordKeyField;
-  @Getter
   private final Option<String> partitionPathField;
-  @Getter
   private final int recordKeyFieldIndex;
-  @Getter
   private final Option<Integer> partitionPathFieldIndex;
 
   public HoodieVirtualKeyInfo(String recordKeyField, Option<String> partitionPathField, int recordKeyFieldIndex, Option<Integer> partitionPathFieldIndex) {

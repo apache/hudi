@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Properties;
 
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
@@ -51,12 +52,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBaseParquetWriter {
 
+  @Setter
   private static class MockHoodieParquetWriter extends HoodieBaseParquetWriter<IndexedRecord> {
 
     @Getter
-    @Setter
     long writtenRecordCount = 0L;
-    @Setter
     long currentDataSize = 0L;
 
     public MockHoodieParquetWriter(StoragePath file,
@@ -72,7 +72,7 @@ public class TestHoodieBaseParquetWriter {
   }
 
   @TempDir
-  public java.nio.file.Path tempDir;
+  public Path tempDir;
 
   @Test
   public void testCanWrite() throws IOException {

@@ -23,12 +23,11 @@ import lombok.Getter;
 
 import java.util.List;
 
+@Getter
 public class Partition {
 
-  @Getter
   private final List<String> values;
 
-  @Getter
   private final String storageLocation;
 
   public Partition(List<String> values, String storageLocation) {

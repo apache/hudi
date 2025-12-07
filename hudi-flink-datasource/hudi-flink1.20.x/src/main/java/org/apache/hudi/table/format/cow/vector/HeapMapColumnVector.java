@@ -27,12 +27,11 @@ import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector
 /**
  * This class represents a nullable heap map column vector.
  */
+@Getter
 public class HeapMapColumnVector extends AbstractHeapVector
     implements WritableColumnVector, MapColumnVector {
 
-  @Getter
   private final WritableColumnVector keys;
-  @Getter
   private final WritableColumnVector values;
 
   public HeapMapColumnVector(int len, WritableColumnVector keys, WritableColumnVector values) {

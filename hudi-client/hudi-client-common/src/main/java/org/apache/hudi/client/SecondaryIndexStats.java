@@ -27,17 +27,13 @@ import java.io.Serializable;
  * Class used to hold secondary index metadata stats. These stats are generated from
  * various write handles during write.
  */
+@Getter
+@Setter
 public class SecondaryIndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  @Getter
-  @Setter
   private String recordKey;
-  @Getter
-  @Setter
   private String secondaryKeyValue;
-  @Getter
-  @Setter
   private boolean isDeleted;
 
   public SecondaryIndexStats(String recordKey, String secondaryKeyValue, boolean isDeleted) {

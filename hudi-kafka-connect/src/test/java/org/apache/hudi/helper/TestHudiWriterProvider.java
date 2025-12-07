@@ -52,11 +52,10 @@ public class TestHudiWriterProvider implements ConnectWriterProvider<WriteStatus
     return currentWriter;
   }
 
+  @Getter
   private static class TestHudiWriter implements ConnectWriter<WriteStatus> {
 
-    @Getter
     private int numberRecords;
-    @Getter
     private boolean isClosed;
 
     public TestHudiWriter() {

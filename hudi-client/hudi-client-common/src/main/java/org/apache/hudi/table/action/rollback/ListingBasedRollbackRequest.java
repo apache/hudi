@@ -28,6 +28,7 @@ import java.io.Serializable;
 /**
  * Request for performing one rollback action.
  */
+@Getter
 public class ListingBasedRollbackRequest implements Serializable {
 
   /**
@@ -42,28 +43,23 @@ public class ListingBasedRollbackRequest implements Serializable {
   /**
    * Partition path that needs to be rolled-back.
    */
-  @Getter
   private final String partitionPath;
 
   /**
    * FileId in case of appending rollback block.
    */
-  @Getter
   private final Option<String> fileId;
 
   /**
    * Latest base instant needed for appending rollback block instant.
    */
-  @Getter
   private final Option<String> latestBaseInstant;
 
   /**
    * TODO
    */
-  @Getter
   private final Option<HoodieWriteStat> writeStat;
 
-  @Getter
   private final Type type;
 
   public ListingBasedRollbackRequest(String partitionPath, Type type) {

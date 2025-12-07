@@ -25,12 +25,10 @@ import lombok.Getter;
 /**
  * Pojo for conditional writes-based lock provider.
  */
+@Getter
 public class StorageLockData {
-  @Getter
   private final boolean expired;
-  @Getter
   private final long validUntil;
-  @Getter
   private final String owner;
 
   /**

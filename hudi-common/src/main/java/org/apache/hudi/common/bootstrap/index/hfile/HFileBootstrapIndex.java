@@ -49,7 +49,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * the index files in the same way as Hudi data files so that we can reuse file-system abstraction
  * on these index files to manage multiple file-groups.
  */
-
+@Getter
 public class HFileBootstrapIndex extends BootstrapIndex {
 
   private static final long serialVersionUID = 1L;
@@ -69,7 +69,6 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   public static final String INDEX_INFO_KEY_STRING = "INDEX_INFO";
   public static final byte[] INDEX_INFO_KEY = getUTF8Bytes(INDEX_INFO_KEY_STRING);
 
-  @Getter
   private final boolean isPresent;
 
   public HFileBootstrapIndex(HoodieTableMetaClient metaClient) {

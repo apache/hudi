@@ -31,13 +31,11 @@ import static org.apache.hudi.io.util.IOUtils.readShort;
 /**
  * Represents the key part only.
  */
+@Getter
 public class Key implements Comparable<Key> {
   private static final int CONTENT_LENGTH_SIZE = SIZEOF_INT16;
-  @Getter
   private final byte[] bytes;
-  @Getter
   private final int offset;
-  @Getter
   private final int length;
 
   public Key(byte[] bytes) {

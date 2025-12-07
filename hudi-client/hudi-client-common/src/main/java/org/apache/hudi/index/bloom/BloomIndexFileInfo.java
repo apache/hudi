@@ -26,15 +26,13 @@ import java.util.Objects;
 /**
  * Metadata about a given file group, useful for index lookup.
  */
+@Getter
 public class BloomIndexFileInfo implements Serializable {
 
-  @Getter
   private final String fileId;
 
-  @Getter
   private final String minRecordKey;
 
-  @Getter
   private final String maxRecordKey;
 
   public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {

@@ -22,9 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 
 import lombok.Getter;
 
+@Getter
 public abstract class FileIdPrefixProvider {
 
-  @Getter
   private final TypedProperties props;
 
   public FileIdPrefixProvider(TypedProperties props) {

@@ -26,11 +26,10 @@ import java.util.Objects;
 /**
  * Error event is an event triggered during write or processing failure of a record.
  */
+@Getter
 public class ErrorEvent<T> {
 
-  @Getter
   private final ErrorReason reason;
-  @Getter
   private final T payload;
 
   public ErrorEvent(T payload, ErrorReason reason) {

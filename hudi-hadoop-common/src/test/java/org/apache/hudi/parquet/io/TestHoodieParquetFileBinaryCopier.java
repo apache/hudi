@@ -840,10 +840,9 @@ public class TestHoodieParquetFileBinaryCopier {
     }
   }
 
+  @Getter
   public static class TestFile {
-    @Getter
     private final String fileName;
-    @Getter
     private final SimpleGroup[] fileContent;
 
     public TestFile(String fileName, SimpleGroup[] fileContent) {

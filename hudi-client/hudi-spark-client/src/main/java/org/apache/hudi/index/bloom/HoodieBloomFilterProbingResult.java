@@ -23,9 +23,9 @@ import lombok.Getter;
 
 import java.util.List;
 
+@Getter
 class HoodieBloomFilterProbingResult {
 
-  @Getter
   private final List<String> candidateKeys;
 
   HoodieBloomFilterProbingResult(List<String> candidateKeys) {

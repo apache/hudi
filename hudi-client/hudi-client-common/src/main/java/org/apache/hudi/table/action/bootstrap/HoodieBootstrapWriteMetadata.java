@@ -26,11 +26,10 @@ import lombok.Getter;
 /**
  * Write Result for a bootstrap operation.
  */
+@Getter
 public class HoodieBootstrapWriteMetadata<O> {
 
-  @Getter
   private final Option<HoodieWriteMetadata<O>> metadataBootstrapResult;
-  @Getter
   private final Option<HoodieWriteMetadata<O>> fullBootstrapResult;
 
   public HoodieBootstrapWriteMetadata(Option<HoodieWriteMetadata<O>> metadataBootstrapResult,

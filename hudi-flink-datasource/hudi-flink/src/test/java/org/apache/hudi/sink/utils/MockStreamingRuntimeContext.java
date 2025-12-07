@@ -40,12 +40,11 @@ import java.util.Map;
  *
  * <p>NOTE: Adapted from Apache Flink, the MockStreamOperator is modified to support MapState.
  */
+@Getter
 public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
-  @Getter
   private final boolean isCheckpointingEnabled;
 
-  @Getter
   private final MockTaskInfo taskInfo;
 
   public MockStreamingRuntimeContext(

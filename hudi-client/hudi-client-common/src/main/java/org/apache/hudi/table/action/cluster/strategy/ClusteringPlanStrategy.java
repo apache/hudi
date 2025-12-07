@@ -53,16 +53,14 @@ import java.util.stream.Stream;
 /**
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
  */
+@Getter(AccessLevel.PROTECTED)
 public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanStrategy.class);
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
 
-  @Getter(AccessLevel.PROTECTED)
   protected final HoodieTable<T, I, K, O> hoodieTable;
-  @Getter(AccessLevel.PROTECTED)
   private final transient HoodieEngineContext engineContext;
-  @Getter(AccessLevel.PROTECTED)
   private final HoodieWriteConfig writeConfig;
 
   /**

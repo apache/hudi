@@ -28,9 +28,9 @@ import java.io.IOException;
 /**
  * Sub-type of File Split which encapsulates both skeleton and bootstrap base file splits.
  */
+@Getter
 public class BootstrapBaseFileSplit extends FileSplit {
 
-  @Getter
   private FileSplit bootstrapFileSplit;
 
   /**

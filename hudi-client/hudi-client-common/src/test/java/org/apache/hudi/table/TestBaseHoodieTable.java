@@ -46,6 +46,7 @@ import lombok.Getter;
 
 import java.util.List;
 
+@Getter
 public class TestBaseHoodieTable extends HoodieTable {
   public TestBaseHoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -56,7 +57,6 @@ public class TestBaseHoodieTable extends HoodieTable {
     super(config, engineContext, metaClient, viewManager, TestSimpleSchemaConflictResolutionStrategy.taskContextSupplier);
   }
 
-  @Getter
   private int countOfScheduleRollbackFunctionCalls = 0;
 
   @Override

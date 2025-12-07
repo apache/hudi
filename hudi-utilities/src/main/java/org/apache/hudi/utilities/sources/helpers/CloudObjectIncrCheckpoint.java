@@ -30,11 +30,10 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT
  * This POJO is used to craft checkpoints that supports size based batching
  * This object will be use by object based Hudi incr sources (s3/gcs)
  */
+@Getter
 public class CloudObjectIncrCheckpoint {
 
-  @Getter
   private final String commit;
-  @Getter
   private final String key;
 
   public CloudObjectIncrCheckpoint(String commit, String key) {

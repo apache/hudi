@@ -39,6 +39,7 @@ import lombok.Getter;
  * @param <L> the left element type
  * @param <R> the right element type
  */
+@Getter
 public final class ImmutablePair<L, R> extends Pair<L, R> {
 
   /**
@@ -49,13 +50,11 @@ public final class ImmutablePair<L, R> extends Pair<L, R> {
   /**
    * Left object.
    */
-  @Getter
   public final L left;
 
   /**
    * Right object.
    */
-  @Getter
   public final R right;
 
   /**

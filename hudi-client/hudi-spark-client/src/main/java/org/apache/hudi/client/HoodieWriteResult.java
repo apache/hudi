@@ -30,13 +30,11 @@ import java.util.Map;
 /**
  * Result of a write operation.
  */
+@Getter
+@Setter
 public class HoodieWriteResult implements Serializable {
 
-  @Getter
-  @Setter
   private JavaRDD<WriteStatus> writeStatuses;
-  @Getter
-  @Setter
   private Map<String, List<String>> partitionToReplaceFileIds;
 
   public HoodieWriteResult(JavaRDD<WriteStatus> writeStatuses) {

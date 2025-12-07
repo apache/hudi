@@ -146,9 +146,9 @@ public class TestAbstractConnectWriter {
         record, currentKafkaOffset++);
   }
 
+  @Getter
   private static class AbstractHudiConnectWriterTestWrapper extends AbstractConnectWriter {
 
-    @Getter
     private List<HoodieRecord> writtenRecords;
 
     public AbstractHudiConnectWriterTestWrapper(KafkaConnectConfigs connectConfigs, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {

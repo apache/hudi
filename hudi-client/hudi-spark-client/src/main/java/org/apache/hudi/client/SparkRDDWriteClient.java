@@ -55,7 +55,6 @@ import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import com.codahale.metrics.Timer;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.Getter;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;

@@ -48,12 +48,11 @@ public class HoodieTimer {
     }
   }
 
+  @Getter
   static class TimeInfo {
     // captures the startTime of the code block
-    @Getter
     long startTime;
     // is the timing still running for the last started timer
-    @Getter
     boolean isRunning;
 
     public TimeInfo(long startTime) {

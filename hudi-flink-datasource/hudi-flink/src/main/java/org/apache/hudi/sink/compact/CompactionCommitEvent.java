@@ -29,34 +29,28 @@ import java.util.List;
 /**
  * Represents a commit event from the compaction task {@link CompactOperator}.
  */
+@Getter
+@Setter
 public class CompactionCommitEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
   /**
    * The compaction commit instant time.
    */
-  @Getter
-  @Setter
   private String instant;
 
   /**
    * The file ID.
    */
-  @Getter
-  @Setter
   private String fileId;
 
   /**
    * The write statuses.
    */
-  @Getter
-  @Setter
   private List<WriteStatus> writeStatuses;
   /**
    * The compaction task identifier.
    */
-  @Getter
-  @Setter
   private int taskID;
 
   public CompactionCommitEvent() {

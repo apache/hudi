@@ -28,18 +28,16 @@ import java.io.Serializable;
 /**
  * Represents a compact command from the compaction plan task {@link CompactionPlanOperator}.
  */
+@Getter
 public class CompactionPlanEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  @Getter
   @Setter
   private String compactionInstantTime;
 
-  @Getter
   @Setter
   private CompactionOperation operation;
 
-  @Getter
   private int index;
 
   public CompactionPlanEvent() {

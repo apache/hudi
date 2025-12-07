@@ -37,12 +37,9 @@ public class BaseFile implements Serializable {
 
   @Getter
   private transient StoragePathInfo pathInfo;
-
   private final String fullPath;
-
   @Getter
   protected final String fileName;
-
   @Setter
   @Getter
   private long fileLen;

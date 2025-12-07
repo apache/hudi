@@ -27,20 +27,14 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
  * Base ParquetConfig to hold config params for writing to Parquet.
  * @param <T>
  */
+@Getter
 public class HoodieParquetConfig<T> {
-  @Getter
   private final T writeSupport;
-  @Getter
   private final CompressionCodecName compressionCodecName;
-  @Getter
   private final int blockSize;
-  @Getter
   private final int pageSize;
-  @Getter
   private final long maxFileSize;
-  @Getter
   private final StorageConfiguration<?> storageConf;
-  @Getter
   private final double compressionRatio;
   private final boolean dictionaryEnabled;
 
@@ -54,9 +48,5 @@ public class HoodieParquetConfig<T> {
     this.storageConf = storageConf;
     this.compressionRatio = compressionRatio;
     this.dictionaryEnabled = dictionaryEnabled;
-  }
-
-  public boolean dictionaryEnabled() {
-    return dictionaryEnabled;
   }
 }

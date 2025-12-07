@@ -35,11 +35,11 @@ import static org.apache.hudi.config.HoodieTTLConfig.PARTITION_TTL_STRATEGY_TYPE
 /**
  * Types of {@link PartitionTTLStrategy}.
  */
+@Getter
 public enum PartitionTTLStrategyType {
   KEEP_BY_TIME("org.apache.hudi.table.action.ttl.strategy.KeepByTimeStrategy"),
   KEEP_BY_CREATION_TIME("org.apache.hudi.table.action.ttl.strategy.KeepByCreationTimeStrategy");
 
-  @Getter
   private final String className;
 
   PartitionTTLStrategyType(String className) {

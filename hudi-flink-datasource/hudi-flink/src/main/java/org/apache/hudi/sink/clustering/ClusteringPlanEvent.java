@@ -29,22 +29,19 @@ import java.util.Map;
 /**
  * Represents a cluster command from the clustering plan task {@link ClusteringPlanSourceFunction}.
  */
+@Getter
 public class ClusteringPlanEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  @Getter
   @Setter
   private String clusteringInstantTime;
 
-  @Getter
   @Setter
   private ClusteringGroupInfo clusteringGroupInfo;
 
-  @Getter
   @Setter
   private Map<String, String> strategyParams;
 
-  @Getter
   private int index;
 
   public ClusteringPlanEvent() {

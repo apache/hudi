@@ -266,10 +266,9 @@ public class HoodiePipeline {
   /***
    *  A POJO that contains tableId and resolvedCatalogTable.
    */
+  @Getter
   public static class TableDescriptor {
-    @Getter
     private final ObjectIdentifier tableId;
-    @Getter
     private final ResolvedCatalogTable resolvedCatalogTable;
 
     public TableDescriptor(ObjectIdentifier tableId, ResolvedCatalogTable resolvedCatalogTable) {

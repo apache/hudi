@@ -26,10 +26,10 @@ import java.util.List;
 /**
  * Header for the table to be rendered.
  */
+@Getter
 public class TableHeader {
 
   // List of fields (columns)
-  @Getter
   private final List<String> fieldNames = new ArrayList<>();
 
   /**

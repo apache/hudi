@@ -33,14 +33,12 @@ import java.util.Map;
  * Class to hold all index stats required to generate Metadata records for all enabled partitions.
  * Supported stats are record level index stats and secondary index stats.
  */
+@Getter
+@Setter
 public class IndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  @Getter
-  @Setter
   private List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
-  @Getter
-  @Setter
   private Map<String, List<SecondaryIndexStats>> secondaryIndexStats = new HashMap<>();
 
   void addHoodieRecordDelegate(HoodieRecordDelegate hoodieRecordDelegate) {

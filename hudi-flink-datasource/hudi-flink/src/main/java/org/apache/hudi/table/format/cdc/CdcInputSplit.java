@@ -30,11 +30,11 @@ import java.util.Arrays;
 /**
  * Represents an input split of source, actually a data bucket.
  */
+@Getter
+@Setter
 public class CdcInputSplit extends MergeOnReadInputSplit {
   private static final long serialVersionUID = 1L;
 
-  @Getter
-  @Setter
   private HoodieCDCFileSplit[] changes;
 
   public CdcInputSplit(

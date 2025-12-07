@@ -199,9 +199,9 @@ public class CompactionTestUtils {
   /**
    * The hoodie data file for testing.
    */
+  @Getter
   public static class DummyHoodieBaseFile extends HoodieBaseFile {
 
-    @Getter
     private final String path;
 
     public DummyHoodieBaseFile(String path) {

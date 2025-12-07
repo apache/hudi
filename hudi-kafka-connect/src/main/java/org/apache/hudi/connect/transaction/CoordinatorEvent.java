@@ -28,15 +28,12 @@ import lombok.Setter;
  * the state changes in the state machine of
  * the Coordinator.
  */
+@Getter
 public class CoordinatorEvent {
 
-  @Getter
   private final CoordinatorEventType eventType;
-  @Getter
   private final String topicName;
-  @Getter
   private final String commitTime;
-  @Getter
   @Setter
   private ControlMessage message;
 

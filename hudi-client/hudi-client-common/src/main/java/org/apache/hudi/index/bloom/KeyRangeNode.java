@@ -29,30 +29,22 @@ import java.util.List;
  * Represents a node in the {@link KeyRangeLookupTree}. Holds information pertaining to a single index file, viz file
  * name, min record key and max record key.
  */
+@Getter
 class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
-  @Getter
   private final List<String> fileNameList = new ArrayList<>();
-  @Getter
   private final String minRecordKey;
-  @Getter
   private final String maxRecordKey;
-  @Getter
   @Setter
   private String rightSubTreeMax = null;
-  @Getter
   @Setter
   private String leftSubTreeMax = null;
-  @Getter
   @Setter
   private String rightSubTreeMin = null;
-  @Getter
   @Setter
   private String leftSubTreeMin = null;
-  @Getter
   @Setter
   private KeyRangeNode left = null;
-  @Getter
   @Setter
   private KeyRangeNode right = null;
 

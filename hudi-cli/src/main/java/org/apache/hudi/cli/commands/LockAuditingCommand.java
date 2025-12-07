@@ -59,18 +59,13 @@ public class LockAuditingCommand {
    * Represents a single audit log entry in the JSONL file.
    * Maps to the structure written by StorageLockProviderAuditService.
    */
+  @Getter
   public static class AuditRecord {
-    @Getter
     private final String ownerId;
-    @Getter
     private final long transactionStartTime;
-    @Getter
     private final long timestamp;
-    @Getter
     private final String state;
-    @Getter
     private final long lockExpiration;
-    @Getter
     private final boolean lockHeld;
 
     @JsonCreator

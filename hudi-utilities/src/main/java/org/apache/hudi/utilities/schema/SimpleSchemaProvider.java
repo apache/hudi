@@ -25,9 +25,9 @@ import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
+@Getter
 public class SimpleSchemaProvider extends SchemaProvider {
 
-  @Getter
   private final Schema sourceSchema;
 
   public SimpleSchemaProvider(JavaSparkContext jssc, HoodieSchema sourceSchema, TypedProperties props) {

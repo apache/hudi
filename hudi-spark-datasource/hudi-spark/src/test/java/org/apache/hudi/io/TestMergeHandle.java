@@ -620,20 +620,14 @@ public class TestMergeHandle extends BaseTestHandle {
     assertEquals(expectedTotalDeletedRecords, writeStat.getNumDeletes());
   }
 
+  @Getter
   class InputAndExpectedDataSet {
-    @Getter
     private final Map<String, HoodieRecord> expectedRecordsMap;
-    @Getter
     private final int expectedUpdates;
-    @Getter
     private final int expectedDeletes;
-    @Getter
     private final List<HoodieRecord> recordsToMerge;
-    @Getter
     private final List<HoodieRecord> newInserts;
-    @Getter
     private final List<HoodieRecord> validUpdates;
-    @Getter
     private final Map<String, HoodieRecord> validDeletes;
 
     public InputAndExpectedDataSet(Map<String, HoodieRecord> expectedRecordsMap, int expectedUpdates, int expectedDeletes,

@@ -40,6 +40,7 @@ import lombok.Getter;
  * @param <M> the middle element type
  * @param <R> the right element type
  */
+@Getter
 public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
 
   /**
@@ -50,19 +51,16 @@ public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
   /**
    * Left object.
    */
-  @Getter
   public final L left;
 
   /**
    * Middle object.
    */
-  @Getter
   public final M middle;
 
   /**
    * Right object.
    */
-  @Getter
   public final R right;
 
   /**

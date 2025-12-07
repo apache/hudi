@@ -25,16 +25,13 @@ import java.util.List;
 /**
  * Input of batch processing of marker creation requests for a single marker directory.
  */
+@Getter
 public class BatchedMarkerCreationContext {
-  @Getter
   private final String markerDir;
-  @Getter
   private final MarkerDirState markerDirState;
   // List of marker creation futures to process
-  @Getter
   private final List<MarkerCreationFuture> futures;
   // File index to use to write markers
-  @Getter
   private final int fileIndex;
 
   public BatchedMarkerCreationContext(String markerDir, MarkerDirState markerDirState,

@@ -29,9 +29,9 @@ import java.util.List;
 /**
  * Base class for HoodieWriterCommitMessage used by Spark datasource v2.
  */
+@Getter
 public class BaseWriterCommitMessage implements Serializable {
 
-  @Getter
   private final List<WriteStatus> writeStatuses;
 
   public BaseWriterCommitMessage(List<WriteStatus> writeStatuses) {

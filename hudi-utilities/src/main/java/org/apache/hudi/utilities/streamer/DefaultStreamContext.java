@@ -28,11 +28,10 @@ import lombok.Getter;
  * composes SchemaProvider and SourceProfileSupplier currently,
  * can be extended for other arguments in the future.
  */
+@Getter
 public class DefaultStreamContext implements StreamContext {
 
-  @Getter
   private final SchemaProvider schemaProvider;
-  @Getter
   private final Option<SourceProfileSupplier> sourceProfileSupplier;
 
   public DefaultStreamContext(SchemaProvider schemaProvider, Option<SourceProfileSupplier> sourceProfileSupplier) {

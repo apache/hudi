@@ -146,12 +146,10 @@ public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<Bu
     );
   }
 
+  @Getter
   public static class BucketRecords {
-    @Getter
     private final Iterator<HoodieRecord> recordItr;
-    @Getter
     private final BucketInfo bucketInfo;
-    @Getter
     private final String instant;
 
     private BucketRecords(Iterator<HoodieRecord> recordItr, BucketInfo bucketInfo, String instant) {

@@ -26,13 +26,11 @@ import java.util.Objects;
 /**
  * Helper class for a bucket's type (INSERT and UPDATE) and its file location.
  */
+@Getter
 public class BucketInfo implements Serializable {
 
-  @Getter
   BucketType bucketType;
-  @Getter
   String fileIdPrefix;
-  @Getter
   String partitionPath;
 
   public BucketInfo(BucketType bucketType, String fileIdPrefix, String partitionPath) {

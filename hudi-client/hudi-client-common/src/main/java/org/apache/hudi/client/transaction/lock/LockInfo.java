@@ -27,14 +27,12 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 
+@Getter
 public class LockInfo {
-  @Getter
   @Setter
   private String lockCreateTime;
-  @Getter
   @Setter
   private String lockThreadName;
-  @Getter
   private ArrayList<String> lockStacksInfo;
 
   public void setLockStacksInfo(StackTraceElement[] stacks) {

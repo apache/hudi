@@ -28,15 +28,12 @@ import java.io.Serializable;
  * Holds Operation result. Used as a result container for Compaction Admin Client (running as part of Spark-launcher
  * process) to communicate results back to Hoodie CLI process.
  */
+@Getter
 public class OperationResult<T> implements Serializable {
 
-  @Getter
   private T operation;
-  @Getter
   private boolean executed;
-  @Getter
   private boolean success;
-  @Getter
   private Option<Exception> exception;
 
   public OperationResult() {

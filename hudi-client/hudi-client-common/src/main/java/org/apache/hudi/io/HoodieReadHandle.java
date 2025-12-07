@@ -34,9 +34,9 @@ import java.io.IOException;
 /**
  * Base class for read operations done logically on the file group.
  */
+@Getter
 public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
-  @Getter
   protected final Pair<String, String> partitionPathFileIDPair;
 
   public HoodieReadHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,

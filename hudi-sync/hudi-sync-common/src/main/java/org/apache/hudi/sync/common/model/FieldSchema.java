@@ -26,14 +26,12 @@ import lombok.Setter;
 
 import java.util.Objects;
 
+@Getter
 public class FieldSchema {
 
-  @Getter
   private final String name;
-  @Getter
   @Setter
   private String type;
-  @Getter
   private Option<String> comment;
 
   public FieldSchema(String name, String type) {

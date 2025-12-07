@@ -986,14 +986,11 @@ public class TestHFileReader {
     }
   }
 
+  @Getter
   static class KeyLookUpInfo {
-    @Getter
     private final String lookUpKey;
-    @Getter
     private final int expectedSeekToResult;
-    @Getter
     private final String expectedKey;
-    @Getter
     private final String expectedValue;
 
     public KeyLookUpInfo(String lookUpKey,

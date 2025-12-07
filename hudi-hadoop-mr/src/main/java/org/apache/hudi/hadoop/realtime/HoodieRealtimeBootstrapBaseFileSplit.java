@@ -38,36 +38,32 @@ import java.util.List;
  * NOTE: If you're adding fields here you need to make sure that you appropriately de-/serialize them
  *       in {@link #readFromInput(DataInput)} and {@link #writeToOutput(DataOutput)}
  */
+@Setter
 public class HoodieRealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
   /**
    * Marks whether this path produced as part of Incremental Query
    */
-  @Setter
   private boolean belongsToIncrementalQuery = false;
   /**
    * List of delta log-files holding updated records for this base-file
    */
   @Getter
-  @Setter
   private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   /**
    * Latest commit instant available at the time of the query in which all of the files
    * pertaining to this split are represented
    */
   @Getter
-  @Setter
   private String maxCommitTime;
   /**
    * Base path of the table this path belongs to
    */
   @Getter
-  @Setter
   private String basePath;
   /**
    * Virtual key configuration of the table this split belongs to
    */
   @Getter
-  @Setter
   private Option<HoodieVirtualKeyInfo> virtualKeyInfo = Option.empty();
 
   /**

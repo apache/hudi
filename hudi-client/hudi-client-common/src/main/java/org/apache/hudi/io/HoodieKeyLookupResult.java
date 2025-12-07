@@ -27,15 +27,12 @@ import java.util.List;
 /**
  * Encapsulates the result from a key lookup.
  */
+@Getter
 public class HoodieKeyLookupResult {
 
-  @Getter
   private final String fileId;
-  @Getter
   private final String baseInstantTime;
-  @Getter
   private final List<Pair<String, Long>> matchingRecordKeysAndPositions;
-  @Getter
   private final String partitionPath;
 
   public HoodieKeyLookupResult(String fileId, String partitionPath, String baseInstantTime,

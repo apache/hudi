@@ -29,9 +29,9 @@ import org.apache.hadoop.fs.Path;
  * Hence, this weird looking class which tracks an external file status
  * in Path.
  */
+@Getter
 public class PathWithBootstrapFileStatus extends Path {
 
-  @Getter
   private final FileStatus bootstrapFileStatus;
 
   public PathWithBootstrapFileStatus(Path path, FileStatus bootstrapFileStatus) {

@@ -28,8 +28,8 @@ import java.util.List;
  * That is, the comparison between a record key and an element
  * of the set is {@link String#equals}.
  */
+@Getter
 public class FullKeySpec implements KeySpec {
-  @Getter
   private final List<String> keys;
 
   public FullKeySpec(List<String> keys) {

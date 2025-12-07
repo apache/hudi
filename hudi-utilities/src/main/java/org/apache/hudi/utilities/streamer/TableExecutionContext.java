@@ -30,19 +30,13 @@ import java.util.Objects;
  * Wrapper over TableConfig objects.
  * Useful for incrementally syncing multiple tables one by one via HoodieMultiTableStreamer.java class.
  */
+@Getter
+@Setter
 public class TableExecutionContext {
 
-  @Getter
-  @Setter
   private TypedProperties properties;
-  @Getter
-  @Setter
   private HoodieStreamer.Config config;
-  @Getter
-  @Setter
   private String database;
-  @Getter
-  @Setter
   private String tableName;
 
   @Override

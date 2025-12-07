@@ -305,14 +305,17 @@ public class BootstrapExecutorUtils implements Serializable {
   // Note: This class is used from Scala, so we cannot use Lombok @Setter as Scala cannot see Lombok-generated methods at compile time
   public static class Config {
     private String database;
+
     private String tableName;
     private String tableType;
+
     private String basePath;
     private String baseFileFormat;
     private String bootstrapIndexClass;
     private String schemaProviderClass;
     private String payloadClass;
     private Boolean enableHiveSync;
+
     private Boolean bootstrapOverwrite;
 
     public static String checkpoint = null;

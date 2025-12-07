@@ -346,11 +346,11 @@ public class IncrSourceHelper {
   /**
    * Kafka reset offset strategies.
    */
+  @Getter
   public enum MissingCheckpointStrategy {
     READ_LATEST("Read from latest commit in hoodie source table"),
     READ_UPTO_LATEST_COMMIT("Read everything upto latest commit");
 
-    @Getter
     private final String description;
 
     MissingCheckpointStrategy(String description) {

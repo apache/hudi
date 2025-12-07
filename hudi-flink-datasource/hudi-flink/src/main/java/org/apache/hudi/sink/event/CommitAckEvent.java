@@ -25,11 +25,11 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 /**
  * An operator event to mark successful instant commit.
  */
+@Getter
+@Setter
 public class CommitAckEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
-  @Getter
-  @Setter
   private long checkpointId;
 
   public CommitAckEvent(long checkpointId) {

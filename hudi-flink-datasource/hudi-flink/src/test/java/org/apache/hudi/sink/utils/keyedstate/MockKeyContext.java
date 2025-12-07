@@ -26,8 +26,8 @@ import org.apache.flink.streaming.api.operators.KeyContext;
  * Key context for testing.
  *
  */
+@Getter
+@Setter
 public class MockKeyContext implements KeyContext {
-  @Getter
-  @Setter
   private Object currentKey;
 }

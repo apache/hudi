@@ -31,6 +31,7 @@ import java.util.Map;
 /**
  * Base callback message, which contains commitTime and tableName only for now.
  */
+@Getter
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieWriteCommitCallbackMessage implements Serializable {
 
@@ -39,37 +40,31 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   /**
    * CommitTime for one batch write, this is required.
    */
-  @Getter
   private final String commitTime;
 
   /**
    * Table name this batch commit to.
    */
-  @Getter
   private final String tableName;
 
   /**
    * BathPath the table located.
    */
-  @Getter
   private final String basePath;
 
   /**
    * Statistics about Hoodie write operation.
    */
-  @Getter
   private final List<HoodieWriteStat> hoodieWriteStat;
 
   /**
    * Action Type of the commit.
    */
-  @Getter
   private final Option<String> commitActionType;
 
   /**
    * Extra metadata in the commit.
    */
-  @Getter
   private final Option<Map<String, String>> extraMetadata;
 
   public HoodieWriteCommitCallbackMessage(String commitTime,
