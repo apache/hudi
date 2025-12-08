@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -140,7 +139,7 @@ public class LSMTimelineWriter {
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to check archiving file before write: " + filePath, ioe);
     }
-    try (HoodieFileWriter writer = openWriter(filePath, false)) {
+    try (HoodieFileWriter writer = openWriter(filePath)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
       LOG.info("Writing schema " + wrapperSchema.toString());
       HoodieSchema schema = HoodieSchema.fromAvroSchema(wrapperSchema);
@@ -209,10 +208,10 @@ public class LSMTimelineWriter {
     int newVersion = currentVersion < 0 ? 1 : currentVersion + 1;
     // create manifest file
     final StoragePath manifestFilePath = LSMTimeline.getManifestFilePath(newVersion, archivePath);
-    // create the manifest file with overwrite semantics, to handle the case like that:
-    // writer_1 creates the manifest file successfully, but fails before updating the version file,
-    // so we need to allow writer_2 to overwrite the manifest file wth the same version number.
-    FileIOUtils.createFileInPath(metaClient.getStorage(), manifestFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
+    // the version is basically the latest version plus 1, if the preceding failed write succeed
+    // to write a manifest file but failed to write the version file, a corrupt manifest file was left with just the `newVersion`.
+    deleteIfExists(manifestFilePath);
+    metaClient.getStorage().createImmutableFileInPath(manifestFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
     // update version file
     updateVersionFile(newVersion);
   }
@@ -220,8 +219,9 @@ public class LSMTimelineWriter {
   private void updateVersionFile(int newVersion) throws IOException {
     byte[] content = getUTF8Bytes(String.valueOf(newVersion));
     final StoragePath versionFilePath = LSMTimeline.getVersionFilePath(archivePath);
-    // create or overwrite the version file
-    FileIOUtils.createFileInPath(metaClient.getStorage(), versionFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
+    metaClient.getStorage().deleteFile(versionFilePath);
+    // if the step fails here, either the writer or reader would list the manifest files to find the latest snapshot version.
+    metaClient.getStorage().createImmutableFileInPath(versionFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
   }
 
   /**
@@ -299,9 +299,11 @@ public class LSMTimelineWriter {
     return Option.empty();
   }
 
-  public void compactFiles(List<String> candidateFiles, String compactedFileName) {
+  public void compactFiles(List<String> candidateFiles, String compactedFileName) throws IOException {
     LOG.info("Starting to compact source files.");
-    try (HoodieFileWriter writer = openWriter(new StoragePath(archivePath, compactedFileName), true)) {
+    StoragePath compactedFilePath = new StoragePath(archivePath, compactedFileName);
+    deleteIfExists(compactedFilePath);
+    try (HoodieFileWriter writer = openWriter(compactedFilePath)) {
       for (String fileName : candidateFiles) {
         // Read the input source file
         try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
@@ -415,6 +417,14 @@ public class LSMTimelineWriter {
     return newFileName(minInstant, maxInstant, currentLayer + 1);
   }
 
+  private void deleteIfExists(StoragePath filePath) throws IOException {
+    if (metaClient.getStorage().exists(filePath)) {
+      // delete file if exists when try to overwrite file
+      metaClient.getStorage().deleteFile(filePath);
+      LOG.info("Delete corrupt file: {} left by failed write", filePath);
+    }
+  }
+
   /**
    * Get or create a writer config for parquet writer.
    */
@@ -427,13 +437,8 @@ public class LSMTimelineWriter {
     return this.writeConfig;
   }
 
-  private HoodieFileWriter openWriter(StoragePath filePath, boolean overwrite) {
+  private HoodieFileWriter openWriter(StoragePath filePath) {
     try {
-      if (overwrite && metaClient.getStorage().exists(filePath)) {
-        // delete file if exists when try to overwrite file
-        metaClient.getStorage().deleteFile(filePath);
-        LOG.info("Delete exists file: {} when try to open writer with overwrite mode", filePath);
-      }
       return HoodieFileWriterFactory.getFileWriter("", filePath, metaClient.getStorage(), getOrCreateWriterConfig(),
           HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()), taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
     } catch (IOException e) {
