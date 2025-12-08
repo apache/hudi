@@ -147,6 +147,8 @@ public interface HoodieLogFormat {
     private String suffix;
     // file creation hook
     private LogFileCreationCallback fileCreationCallback;
+    // When flushing, should `FSDataOutputStream#hsync` be called simultaneously
+    private boolean syncDuringFlush;
 
     private HoodieTableVersion tableVersion;
 
@@ -212,6 +214,11 @@ public interface HoodieLogFormat {
 
     public WriterBuilder withTableVersion(HoodieTableVersion writeTableVersion) {
       this.tableVersion = writeTableVersion;
+      return this;
+    }
+
+    public WriterBuilder withSyncDuringFlush(boolean sync) {
+      this.syncDuringFlush = sync;
       return this;
     }
 
@@ -287,8 +294,8 @@ public interface HoodieLogFormat {
       }
       return (Writer) ReflectionUtils.loadClass(
           DEFAULT_LOG_FORMAT_WRITER,
-          new Class[] {HoodieStorage.class, HoodieLogFile.class, Integer.class, Short.class, Long.class, String.class, LogFileCreationCallback.class},
-          storage, logFile, bufferSize, null, sizeThreshold, logWriteToken, fileCreationCallback
+          new Class[] {HoodieStorage.class, HoodieLogFile.class, Integer.class, Short.class, Long.class, String.class, LogFileCreationCallback.class, boolean.class},
+          storage, logFile, bufferSize, null, sizeThreshold, logWriteToken, fileCreationCallback, syncDuringFlush
       );
     }
   }
