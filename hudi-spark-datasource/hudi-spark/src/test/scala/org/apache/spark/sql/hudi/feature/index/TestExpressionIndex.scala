@@ -1768,7 +1768,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
                    |    preCombineField = 'ts',
                    |    hoodie.metadata.enable = 'true',
                    |    hoodie.enable.data.skipping = 'true',
-                   |    hoodie.metadata.index.column.stats.column.list = 'fare'
+                   |    hoodie.metadata.index.column.stats.column.list = 'fare',
+                   |    hoodie.metadata.index.column.stats.enable = 'false',
+                   |    hoodie.metadata.record.index.enable = 'false',
+                   |    hoodie.bucket.index.enable = 'false',
+                   |    hoodie.secondary.index.enable = 'false',
+                   |    hoodie.bloom.index.enable = 'false'
                    |)
                    |PARTITIONED BY (city)
                    |location '$basePath'
@@ -1797,6 +1802,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
               assertEquals(1, expressionIndexMetadata.getIndexDefinitions.size())
               assertEquals("expr_index_ts_hour", expressionIndexMetadata.getIndexDefinitions.get("expr_index_ts_hour").getIndexName)
 
+              val metadataSql = s"select ColumnStatsMetadata.columnName, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$tableName') where type=3"
+              checkAnswer(metadataSql)(
+                Seq("ts", 1, 2),   // for files in chennai partition (hours: 1, 2)
+                Seq("ts", 16, 23), // for files in san_francisco partition (hours: 19, 21, 23, 16)
+                Seq("ts", 9, 9)  // for files in sao_paulo partition (hours: 9, 9)
+              )
+              // TODO: remove this after the bug is fixed - show plan
+              spark.sql(s"SELECT city, _hoodie_file_name, fare FROM $tableName WHERE hour(ts) = 16").explain()
               // This query should work but currently fails with the bug
               // The error occurs when executing mapToPair during data skipping
               // Error: org.apache.hudi.exception.HoodieException: Error occurs when executing mapToPair
