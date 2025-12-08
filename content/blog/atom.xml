@@ -2,11 +2,28 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2025-12-01T00:00:00.000Z</updated>
+    <updated>2025-12-03T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Mastering Schema Evolution with Apache Hudi]]></title>
+        <id>https://hudi.apache.org/blog/2025/12/03/Mastering-Schema-Evolution-with-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2025/12/03/Mastering-Schema-Evolution-with-Apache-Hudi"/>
+        <updated>2025-12-03T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@shaiksameer0045/the-chameleon-architecture-mastering-schema-evolution-with-apache-hudi-446da1a2f0c6">here</a></span>]]></content>
+        <author>
+            <name>Shaik Sameer</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="Apache Hudi" term="Apache Hudi"/>
+        <category label="Schema Evolution" term="Schema Evolution"/>
+        <category label="Data Lakehouse" term="Data Lakehouse"/>
+        <category label="Lakehouse" term="Lakehouse"/>
+        <category label="Use-case" term="Use-case"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Next Generation Lakehouse: New Engine for the Intelligent Future | Apache Hudi Meetup Asia Recap]]></title>
         <id>https://hudi.apache.org/blog/2025/12/01/apache-hudi-JD-meetup-asia-2025-recap</id>
@@ -65,6 +82,24 @@
         <category label="meetup" term="meetup"/>
         <category label="lakehouse" term="lakehouse"/>
         <category label="community" term="community"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Dynamic Bloom Filter"]]></title>
+        <id>https://hudi.apache.org/blog/2025/11/28/Apache-Hudi-Dynamic-Bloom-Filter</id>
+        <link href="https://hudi.apache.org/blog/2025/11/28/Apache-Hudi-Dynamic-Bloom-Filter"/>
+        <updated>2025-11-28T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://codepointer.substack.com/p/apache-hudi-dynamic-bloom-filter">here</a></span>]]></content>
+        <author>
+            <name>Yongkyun Lee</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="Apache Hudi" term="Apache Hudi"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="Lakehouse" term="Lakehouse"/>
+        <category label="use-case" term="use-case"/>
+        <category label="Bloom Filter" term="Bloom Filter"/>
+        <category label="Indexing" term="Indexing"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 1.1 is Here—Building the Foundation for the Next Generation of Lakehouse]]></title>
@@ -1221,43 +1256,5 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <category label="Apache Hudi" term="Apache Hudi"/>
         <category label="Uber" term="Uber"/>
         <category label="Community" term="Community"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
-        <id>https://hudi.apache.org/blog/2025/06/16/Apache-Hudi-does-XYZ-110</id>
-        <link href="https://hudi.apache.org/blog/2025/06/16/Apache-Hudi-does-XYZ-110"/>
-        <updated>2025-06-16T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/apache-hudi-does-xyz-110">here</a></span>]]></content>
-        <author>
-            <name>Shiyan Xu</name>
-        </author>
-        <category label="hudi" term="hudi"/>
-        <category label="spark" term="spark"/>
-        <category label="blog" term="blog"/>
-        <category label="course" term="course"/>
-        <category label="tutorial" term="tutorial"/>
-        <category label="datumagic" term="datumagic"/>
-        <category label="data lake" term="data lake"/>
-        <category label="lakehouse" term="lakehouse"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache spark" term="apache spark"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing & Concurrency]]></title>
-        <id>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</id>
-        <link href="https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency"/>
-        <updated>2025-06-13T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blogs.halodoc.io/optimizing-apache-hudi-workflows-automation-for-clustering-resizing-concurrency/">here</a></span>]]></content>
-        <author>
-            <name>Halodoc, Apache Hudi</name>
-        </author>
-        <category label="hudi" term="hudi"/>
-        <category label="blog" term="blog"/>
-        <category label="halodoc" term="halodoc"/>
-        <category label="data lake" term="data lake"/>
-        <category label="lakehouse" term="lakehouse"/>
-        <category label="apache hudi" term="apache hudi"/>
     </entry>
 </feed>

@@ -4,10 +4,24 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 01 Dec 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 03 Dec 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Mastering Schema Evolution with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2025/12/03/Mastering-Schema-Evolution-with-Apache-Hudi</link>
+            <guid>https://hudi.apache.org/blog/2025/12/03/Mastering-Schema-Evolution-with-Apache-Hudi</guid>
+            <pubDate>Wed, 03 Dec 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@shaiksameer0045/the-chameleon-architecture-mastering-schema-evolution-with-apache-hudi-446da1a2f0c6">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>Schema Evolution</category>
+            <category>Data Lakehouse</category>
+            <category>Lakehouse</category>
+            <category>Use-case</category>
+        </item>
         <item>
             <title><![CDATA[Next Generation Lakehouse: New Engine for the Intelligent Future | Apache Hudi Meetup Asia Recap]]></title>
             <link>https://hudi.apache.org/blog/2025/12/01/apache-hudi-JD-meetup-asia-2025-recap</link>
@@ -63,6 +77,21 @@
             <category>meetup</category>
             <category>lakehouse</category>
             <category>community</category>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi Dynamic Bloom Filter"]]></title>
+            <link>https://hudi.apache.org/blog/2025/11/28/Apache-Hudi-Dynamic-Bloom-Filter</link>
+            <guid>https://hudi.apache.org/blog/2025/11/28/Apache-Hudi-Dynamic-Bloom-Filter</guid>
+            <pubDate>Fri, 28 Nov 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://codepointer.substack.com/p/apache-hudi-dynamic-bloom-filter">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>data lakehouse</category>
+            <category>Lakehouse</category>
+            <category>use-case</category>
+            <category>Bloom Filter</category>
+            <category>Indexing</category>
         </item>
         <item>
             <title><![CDATA[Apache Hudi 1.1 is Here—Building the Foundation for the Next Generation of Lakehouse]]></title>
@@ -1168,38 +1197,6 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <category>Apache Hudi</category>
             <category>Uber</category>
             <category>Community</category>
-        </item>
-        <item>
-            <title><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
-            <link>https://hudi.apache.org/blog/2025/06/16/Apache-Hudi-does-XYZ-110</link>
-            <guid>https://hudi.apache.org/blog/2025/06/16/Apache-Hudi-does-XYZ-110</guid>
-            <pubDate>Mon, 16 Jun 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/apache-hudi-does-xyz-110">here</a></span>]]></content:encoded>
-            <category>hudi</category>
-            <category>spark</category>
-            <category>blog</category>
-            <category>course</category>
-            <category>tutorial</category>
-            <category>datumagic</category>
-            <category>data lake</category>
-            <category>lakehouse</category>
-            <category>apache hudi</category>
-            <category>apache spark</category>
-        </item>
-        <item>
-            <title><![CDATA[Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing & Concurrency]]></title>
-            <link>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</link>
-            <guid>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</guid>
-            <pubDate>Fri, 13 Jun 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blogs.halodoc.io/optimizing-apache-hudi-workflows-automation-for-clustering-resizing-concurrency/">here</a></span>]]></content:encoded>
-            <category>hudi</category>
-            <category>blog</category>
-            <category>halodoc</category>
-            <category>data lake</category>
-            <category>lakehouse</category>
-            <category>apache hudi</category>
         </item>
     </channel>
 </rss>
