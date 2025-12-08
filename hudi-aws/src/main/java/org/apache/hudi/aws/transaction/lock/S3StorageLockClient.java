@@ -32,8 +32,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -63,10 +63,9 @@ import static org.apache.hudi.config.StorageBasedLockConfig.VALIDITY_TIMEOUT_SEC
  * S3-based distributed lock client using ETag checks (AWS SDK v2).
  * See RFC: <a href="https://github.com/apache/hudi/blob/master/rfc/rfc-91/rfc-91.md">RFC-91</a>
  */
+@Slf4j
 @ThreadSafe
 public class S3StorageLockClient implements StorageLockClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(S3StorageLockClient.class);
   private static final int PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final int NOT_FOUND_ERROR_CODE = 404;
   private static final int CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE = 409;
@@ -87,7 +86,7 @@ public class S3StorageLockClient implements StorageLockClient {
    * @param props       The properties for the lock config, can be used to customize client.
    */
   public S3StorageLockClient(String ownerId, String lockFileUri, Properties props) {
-    this(ownerId, lockFileUri, props, createDefaultS3Client(), LOG);
+    this(ownerId, lockFileUri, props, createDefaultS3Client(), log);
   }
 
   @VisibleForTesting
