@@ -313,7 +313,7 @@ public class TestDataHubSyncClient {
     }
 
     @Override
-    HoodieSchema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+    HoodieSchema getTableSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
       return schema;
     }
 

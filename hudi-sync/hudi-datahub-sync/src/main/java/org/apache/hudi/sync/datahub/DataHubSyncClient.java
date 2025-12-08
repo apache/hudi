@@ -47,6 +47,7 @@ import com.linkedin.data.template.StringArray;
 import com.linkedin.domain.Domains;
 import com.linkedin.metadata.aspect.patch.builder.DatasetPropertiesPatchBuilder;
 import com.linkedin.mxe.MetadataChangeProposal;
+import com.linkedin.schema.SchemaMetadata;
 import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
@@ -324,9 +325,9 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private MetadataChangeProposalWrapper createSchemaMetadataAspect(String tableName) {
-    HoodieSchema tableSchema = getAvroSchemaWithoutMetadataFields(metaClient);
+    HoodieSchema tableSchema = getTableSchemaWithoutMetadataFields(metaClient);
     AvroSchemaConverter avroSchemaConverter = AvroSchemaConverter.builder().build();
-    com.linkedin.schema.SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
+    SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
             tableSchema.toAvroSchema(),
             false,
             false,
@@ -367,7 +368,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return result;
   }
 
-  HoodieSchema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+  HoodieSchema getTableSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
       return new TableSchemaResolver(metaClient).getTableSchema(true);
     } catch (Exception e) {
