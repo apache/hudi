@@ -30,8 +30,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -49,15 +49,15 @@ import java.util.List;
  * CLI commands for managing Hudi table lock auditing functionality.
  */
 @ShellComponent
+@Slf4j
 public class LockAuditingCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(LockAuditingCommand.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
    * Represents a single audit log entry in the JSONL file.
    * Maps to the structure written by StorageLockProviderAuditService.
    */
+  @Getter
   public static class AuditRecord {
     private final String ownerId;
     private final long transactionStartTime;
@@ -80,30 +80,6 @@ public class LockAuditingCommand {
       this.state = state;
       this.lockExpiration = lockExpiration;
       this.lockHeld = lockHeld;
-    }
-
-    public String getOwnerId() {
-      return ownerId;
-    }
-
-    public long getTransactionStartTime() {
-      return transactionStartTime;
-    }
-
-    public long getTimestamp() {
-      return timestamp;
-    }
-
-    public String getState() {
-      return state;
-    }
-
-    public long getLockExpiration() {
-      return lockExpiration;
-    }
-
-    public boolean isLockHeld() {
-      return lockHeld;
     }
   }
 
@@ -213,7 +189,7 @@ public class LockAuditingCommand {
           + "Audit files will be stored at: %s", auditConfigPath, StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       
     } catch (Exception e) {
-      LOG.error("Error enabling lock audit", e);
+      log.error("Error enabling lock audit", e);
       return String.format("Failed to enable lock audit: %s", e.getMessage());
     }
   }
@@ -275,7 +251,7 @@ public class LockAuditingCommand {
       return message;
       
     } catch (Exception e) {
-      LOG.error("Error disabling lock audit", e);
+      log.error("Error disabling lock audit", e);
       return String.format("Failed to disable lock audit: %s", e.getMessage());
     }
   }
@@ -323,7 +299,7 @@ public class LockAuditingCommand {
           status, HoodieCLI.basePath, auditConfigPath, StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       
     } catch (Exception e) {
-      LOG.error("Error checking lock audit status", e);
+      log.error("Error checking lock audit status", e);
       return String.format("Failed to check lock audit status: %s", e.getMessage());
     }
   }
@@ -418,7 +394,7 @@ public class LockAuditingCommand {
           + "Details: %s", result, auditFiles.size(), windows.size(), parseErrors.size(), windows.size(), totalIssues, details);
       
     } catch (Exception e) {
-      LOG.error("Error validating audit locks", e);
+      log.error("Error validating audit locks", e);
       return String.format("Validation Result: ERROR\n"
           + "Transactions Validated: 0\n"
           + "Issues Found: -1\n"
@@ -460,7 +436,7 @@ public class LockAuditingCommand {
 
       return performAuditCleanup(dryRun, ageDays).toString();
     } catch (Exception e) {
-      LOG.error("Error during audit cleanup", e);
+      log.error("Error during audit cleanup", e);
       return String.format("Error during cleanup: %s", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
     }
   }
@@ -527,7 +503,7 @@ public class LockAuditingCommand {
             deletedCount++;
           } catch (Exception e) {
             failedCount++;
-            LOG.warn("Failed to delete audit file: " + pathInfo.getPath(), e);
+            log.warn("Failed to delete audit file: " + pathInfo.getPath(), e);
           }
         }
         
@@ -541,7 +517,7 @@ public class LockAuditingCommand {
       }
       
     } catch (Exception e) {
-      LOG.error("Error cleaning up audit locks", e);
+      log.error("Error cleaning up audit locks", e);
       String message = String.format("Failed to cleanup audit locks: %s", e.getMessage());
       return new CleanupResult(false, 0, 0, 0, message, dryRun);
     }
@@ -567,7 +543,7 @@ public class LockAuditingCommand {
             AuditRecord entry = OBJECT_MAPPER.readValue(line, AuditRecord.class);
             entries.add(entry);
           } catch (Exception e) {
-            LOG.warn("Failed to parse JSON line in file " + filename + ": " + line, e);
+            log.warn("Failed to parse JSON line in file " + filename + ": " + line, e);
           }
         }
       }
@@ -616,7 +592,7 @@ public class LockAuditingCommand {
           filename
       ));
     } catch (Exception e) {
-      LOG.warn("Failed to parse audit file: " + filename, e);
+      log.warn("Failed to parse audit file: " + filename, e);
       return Option.empty();
     }
   }

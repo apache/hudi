@@ -18,12 +18,15 @@
 
 package org.apache.hudi.cli;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Header for the table to be rendered.
  */
+@Getter
 public class TableHeader {
 
   // List of fields (columns)

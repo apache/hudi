@@ -37,8 +37,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -60,9 +59,9 @@ import java.util.stream.Stream;
  * CLI command to display timeline options.
  */
 @ShellComponent
+@Slf4j
 public class TimelineCommand {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineCommand.class);
   private static final SimpleDateFormat DATE_FORMAT_DEFAULT = new SimpleDateFormat("MM-dd HH:mm");
   private static final SimpleDateFormat DATE_FORMAT_SECONDS = new SimpleDateFormat("MM-dd HH:mm:ss");
 
@@ -315,7 +314,7 @@ public class TimelineCommand {
         return String.join(",", metadata.getCommitsRollback());
       }
     } catch (IOException e) {
-      LOG.error(String.format("Error reading rollback info of %s", instant));
+      log.error(String.format("Error reading rollback info of %s", instant));
       e.printStackTrace();
       return "-";
     }
@@ -342,7 +341,7 @@ public class TimelineCommand {
           });
         }
       } catch (IOException e) {
-        LOG.error(String.format("Error reading rollback info of %s", rollbackInstant));
+        log.error(String.format("Error reading rollback info of %s", rollbackInstant));
         e.printStackTrace();
       }
     });
