@@ -59,7 +59,7 @@ public class HiveSchemaUtil {
   public static final String DOUBLE_TYPE_NAME = "double";
   public static final String STRING_TYPE_NAME = "string";
   public static final String BINARY_TYPE_NAME = "binary";
-  public static final String DATE_TYPE_NAME = "date";
+  public static final String DATE_TYPE_NAME = "DATE";
 
   /**
    * Get the schema difference between the storage schema and hive table schema.
@@ -221,8 +221,11 @@ public class HiveSchemaUtil {
       case BOOLEAN:
         return BOOLEAN_TYPE_NAME;
       case STRING:
+      case ENUM:
         return STRING_TYPE_NAME;
       case BYTES:
+      case UUID:
+      case FIXED:
         return BINARY_TYPE_NAME;
       case DATE:
         return DATE_TYPE_NAME;

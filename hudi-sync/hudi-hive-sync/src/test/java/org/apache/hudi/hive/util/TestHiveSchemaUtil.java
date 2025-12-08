@@ -31,6 +31,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -122,5 +124,54 @@ public class TestHiveSchemaUtil {
     schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         schemaDifference.getAddColumnTypes(), Collections.emptyList(), true);
     assertTrue(schemaDifference.isEmpty());
+  }
+
+  @Test
+  void testSchemaTypeConversion() throws IOException {
+    HoodieSchema schema = HoodieSchema.createRecord("TestSchema", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("int_field", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("long_field", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("float_field", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+            HoodieSchemaField.of("double_field", HoodieSchema.createNullable(HoodieSchemaType.DOUBLE)),
+            HoodieSchemaField.of("string_field", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("enum_field", HoodieSchema.createEnum("enum", null, null,
+                Arrays.asList("VALUE1", "VALUE2", "VALUE3"))),
+            HoodieSchemaField.of("bytes_field", HoodieSchema.create(HoodieSchemaType.BYTES)),
+            HoodieSchemaField.of("fixed_field", HoodieSchema.createFixed("fixed", null, null, 16)),
+            HoodieSchemaField.of("boolean_field", HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN)),
+            HoodieSchemaField.of("timestamp_millis_field", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("timestamp_micros_field", HoodieSchema.createTimestampMicros()),
+            HoodieSchemaField.of("timestamp_ntz_millis_field", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("timestamp_ntz_micros_field", HoodieSchema.createTimestampMicros()),
+            HoodieSchemaField.of("date_field", HoodieSchema.createDate()),
+            HoodieSchemaField.of("time_millis_field", HoodieSchema.createTimeMillis()),
+            HoodieSchemaField.of("time_micros_field", HoodieSchema.createTimeMicros()),
+            HoodieSchemaField.of("decimal_field", HoodieSchema.createDecimal(10, 2)),
+            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID))
+        )
+    );
+
+    Map<String, String> actual = HiveSchemaUtil.convertSchemaToHiveSchema(schema, true);
+    Map<String, String> expected = new HashMap<>();
+    expected.put("`int_field`", "int");
+    expected.put("`long_field`", "bigint");
+    expected.put("`float_field`", "float");
+    expected.put("`double_field`", "double");
+    expected.put("`string_field`", "string");
+    expected.put("`enum_field`", "string");
+    expected.put("`bytes_field`", "binary");
+    expected.put("`fixed_field`", "binary");
+    expected.put("`boolean_field`", "boolean");
+    expected.put("`timestamp_millis_field`", "TIMESTAMP");
+    expected.put("`timestamp_micros_field`", "TIMESTAMP");
+    expected.put("`timestamp_ntz_millis_field`", "TIMESTAMP");
+    expected.put("`timestamp_ntz_micros_field`", "TIMESTAMP");
+    expected.put("`date_field`", "DATE");
+    expected.put("`time_millis_field`", "int");
+    expected.put("`time_micros_field`", "bigint");
+    expected.put("`decimal_field`", "DECIMAL(10 , 2)");
+    expected.put("`uuid_field`", "binary");
+    assertEquals(expected, actual);
   }
 }
