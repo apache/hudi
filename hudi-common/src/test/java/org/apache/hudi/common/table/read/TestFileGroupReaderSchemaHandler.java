@@ -266,7 +266,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieSchema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema.toAvroSchema(), hoodieTableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
-    DeleteContext deleteContext = new DeleteContext(props, dataSchema.toAvroSchema());
+    DeleteContext deleteContext = new DeleteContext(props, dataSchema);
     assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDeleteField());
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),

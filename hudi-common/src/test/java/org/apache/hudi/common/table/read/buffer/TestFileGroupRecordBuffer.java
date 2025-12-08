@@ -122,7 +122,7 @@ class TestFileGroupRecordBuffer {
       props.setProperty(DELETE_MARKER, customDeleteValue);
     }
     Throwable exception = assertThrows(IllegalArgumentException.class,
-        () -> new DeleteContext(props, dataSchema.toAvroSchema()));
+        () -> new DeleteContext(props, dataSchema));
     assertEquals("Either custom delete key or marker is not specified",
         exception.getMessage());
   }
