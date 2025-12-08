@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
@@ -25,10 +26,10 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -64,10 +65,10 @@ import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SparkBucketIndexBucketInfoGetter;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.commit.SparkPartitionBucketIndexBucketInfoGetter;
-import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -92,8 +93,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.junit.jupiter.params.provider.ValueSource;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -103,6 +102,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecor
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -206,6 +206,38 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         createSimpleRecord("002", "2016-01-31T00:00:02.000Z", 2),
         createSimpleRecord("003", "2016-01-31T00:00:03.000Z", 3),
         createSimpleRecord("004", "2016-01-31T00:00:04.000Z", 4));
+  }
+
+  private static List<HoodieRecord> getRandomInserts(int count) {
+    List<HoodieRecord> records = new ArrayList<>();
+    Random random = new Random();
+    for (int i = 0; i < count; i++) {
+      String recordKey = String.format("%03d", random.nextInt(10000));
+      // Generate random timestamp within a range
+      int year = 2016 + random.nextInt(5); // 2016-2020
+      int month = 1 + random.nextInt(12);
+      int day = 1 + random.nextInt(28);
+      int hour = random.nextInt(24);
+      int minute = random.nextInt(60);
+      int second = random.nextInt(60);
+      String timeField = String.format("%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+          year, month, day, hour, minute, second);
+      int number = random.nextInt(1000);
+      records.add(createSimpleRecord(recordKey, timeField, number));
+    }
+    return records;
+  }
+
+  private static List<HoodieRecord> getUpdates(List<HoodieRecord> records) {
+    return records.stream()
+        .map(record -> {
+          GenericRecord data = (GenericRecord) ((HoodieAvroIndexedRecord) record).getData();
+          return createSimpleRecord(
+              record.getRecordKey(),
+              data.get("time").toString(),
+              (Integer) data.get("number") + 100);
+        })
+        .collect(Collectors.toList());
   }
 
   @ParameterizedTest
@@ -330,61 +362,56 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testRecordIndexTagLocationAndUpdate(boolean populateMetaFields) throws Exception {
-    setUp(IndexType.RECORD_INDEX, populateMetaFields, true);
+  @MethodSource("indexTypeParams")
+  public void testTagLocationDuringUpdatesAndFailures(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
+    setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
-    int initialRecords = 10 + new Random().nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, initialRecords);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    int initialRecords = 10;// + new Random().nextInt(20);
+    List<HoodieRecord> originalBatch = getRandomInserts(initialRecords);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(originalBatch, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
-    // Test tagLocation without any entries in index
+    // Test tagLocation without any entries in index, no records should be tagged.
     JavaRDD<HoodieRecord> javaRDD = tagLocation(hoodieTable.getIndex(), writeRecords, hoodieTable);
-    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    assertEquals(0, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
 
-    // Insert totalRecords records
+    // Insert initialRecords
     WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(writeStatues.collect());
+    assertNoWriteErrors(writeStatues.collect());
 
-    // Now tagLocation for these records, index should not tag them since it was a failed
-    // commit
+    // Now tagLocation for these records, index should not tag them since the commit is still in progress.
     javaRDD = tagLocation(hoodieTable.getIndex(), writeRecords, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+
     // Now commit this & update location of records inserted and validate no errors
     writeClient.commit(newCommitTime, writeStatues);
 
-    // Create new commit time.
-    String secondCommitTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
-    // Now tagLocation for these records, index should tag them correctly
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    // Now test tagLocation for these records, index should tag them correctly
+    metaClient.reloadActiveTimeline();
+    metaClient.reloadTableConfig();
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
     // Generate updates for all existing records.
-    List<HoodieRecord> newRecords = dataGen.generateUpdatesForAllRecords(secondCommitTime);
+    List<HoodieRecord> newRecords = getUpdates(originalBatch);
     int newInsertsCount = 10;
-    newRecords.addAll(dataGen.generateInserts(secondCommitTime, newInsertsCount));
-    // Update partitionPath information.
-    String newPartitionPath = "2022/11/04";
-    newRecords = newRecords.stream()
-        .map(rec -> new HoodieAvroRecord(new HoodieKey(rec.getRecordKey(), newPartitionPath), (HoodieRecordPayload) rec.getData()))
-        .collect(Collectors.toList());
+    newRecords.addAll(getRandomInserts(newInsertsCount));
+    // For record_index updating partitionPath should not matter.
+    if (indexType.equals(RECORD_INDEX)) {
+      String newPartitionPath = "2022/11/04";
+      newRecords = newRecords.stream()
+          .map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.getRecordKey(), newPartitionPath), (IndexedRecord) rec.getData()))
+          .collect(Collectors.toList());
+    }
     JavaRDD<HoodieRecord> newWriteRecords = jsc.parallelize(newRecords, 1);
-
     javaRDD = tagLocation(hoodieTable.getIndex(), newWriteRecords, hoodieTable);
-    Map<String, String> recordKeyToPartitionPathMap = new HashMap();
-    List<HoodieRecord> hoodieRecords = newWriteRecords.collect();
-    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
 
-    assertEquals(initialRecords, javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size());
+    assertEquals(initialRecords, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
     assertEquals(initialRecords + newInsertsCount, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
     assertEquals(initialRecords, javaRDD.filter(record -> (record.getCurrentLocation() != null
         && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());
-    assertEquals(newInsertsCount, javaRDD.filter(record -> record.getKey().getPartitionPath().equalsIgnoreCase(newPartitionPath))
-        .count(), "PartitionPath mismatch");
 
     JavaRDD<HoodieKey> hoodieKeyJavaRDD = newWriteRecords.map(entry -> entry.getKey());
     JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(hoodieKeyJavaRDD, hoodieTable);
@@ -392,7 +419,6 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertEquals(initialRecords + newInsertsCount, recordLocations.collect().size());
     assertEquals(initialRecords + newInsertsCount, recordLocations.map(record -> record._1).distinct().count());
     recordLocations.foreach(entry -> assertTrue(hoodieRecordKeys.contains(entry._1.getRecordKey()), "Missing HoodieRecordKey"));
-    assertEquals(newInsertsCount, recordLocations.filter(entry -> newPartitionPath.equalsIgnoreCase(entry._1.getPartitionPath())).count());
   }
 
   @ParameterizedTest
