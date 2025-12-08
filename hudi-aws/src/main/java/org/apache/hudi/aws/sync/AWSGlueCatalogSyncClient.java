@@ -22,6 +22,7 @@ import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -40,7 +41,6 @@ import org.apache.hudi.sync.common.model.Partition;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.parquet.schema.MessageType;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
@@ -121,7 +121,7 @@ import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
-import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
+import static org.apache.hudi.hive.util.HiveSchemaUtil.hoodieSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
@@ -534,10 +534,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
+  public void updateTableSchema(String tableName, HoodieSchema newSchema, SchemaDifference schemaDiff) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      Map<String, String> newSchemaMap = parquetSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
+      Map<String, String> newSchemaMap = hoodieSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
       List<Column> newColumns = getColumnsFromSchema(newSchemaMap);
       StorageDescriptor sd = table.storageDescriptor();
       StorageDescriptor partitionSD = sd.copy(copySd -> copySd.columns(newColumns));
@@ -586,7 +586,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createOrReplaceTable(String tableName,
-                                   MessageType storageSchema,
+                                   HoodieSchema storageSchema,
                                    String inputFormatClass,
                                    String outputFormatClass,
                                    String serdeClass,
@@ -617,7 +617,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    * issues with table creation because of provided schema or properties
    */
   private void validateSchemaAndProperties(String tableName,
-                                           MessageType storageSchema,
+                                           HoodieSchema storageSchema,
                                            String inputFormatClass,
                                            String outputFormatClass,
                                            String serdeClass,
@@ -632,7 +632,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createTable(String tableName,
-                          MessageType storageSchema,
+                          HoodieSchema storageSchema,
                           String inputFormatClass,
                           String outputFormatClass,
                           String serdeClass,
@@ -649,7 +649,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     params.putAll(tableProperties);
 
     try {
-      Map<String, String> mapSchema = parquetSchemaToMapSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
+      Map<String, String> mapSchema = hoodieSchemaToMapSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
 
       List<Column> schemaWithoutPartitionKeys = getColumnsFromSchema(mapSchema);
 
