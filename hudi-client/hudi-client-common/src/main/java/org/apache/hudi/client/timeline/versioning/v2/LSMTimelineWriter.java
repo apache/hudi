@@ -206,6 +206,9 @@ public class LSMTimelineWriter {
     int newVersion = currentVersion < 0 ? 1 : currentVersion + 1;
     // create manifest file
     final StoragePath manifestFilePath = LSMTimeline.getManifestFilePath(newVersion, archivePath);
+    // the version is basically the latest version plus 1, if the preceding failed write succeed
+    // to write a manifest file but failed to write the version file, a corrupt manifest file was left with just the `newVersion`.
+    deleteIfExists(manifestFilePath);
     metaClient.getStorage().createImmutableFileInPath(manifestFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
     // update version file
     updateVersionFile(newVersion);
@@ -215,6 +218,7 @@ public class LSMTimelineWriter {
     byte[] content = getUTF8Bytes(String.valueOf(newVersion));
     final StoragePath versionFilePath = LSMTimeline.getVersionFilePath(archivePath);
     metaClient.getStorage().deleteFile(versionFilePath);
+    // if the step fails here, either the writer or reader would list the manifest files to find the latest snapshot version.
     metaClient.getStorage().createImmutableFileInPath(versionFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
   }
 
@@ -293,9 +297,11 @@ public class LSMTimelineWriter {
     return Option.empty();
   }
 
-  public void compactFiles(List<String> candidateFiles, String compactedFileName) {
+  public void compactFiles(List<String> candidateFiles, String compactedFileName) throws IOException {
     LOG.info("Starting to compact source files.");
-    try (HoodieFileWriter writer = openWriter(new StoragePath(archivePath, compactedFileName))) {
+    StoragePath compactedFilePath = new StoragePath(archivePath, compactedFileName);
+    deleteIfExists(compactedFilePath);
+    try (HoodieFileWriter writer = openWriter(compactedFilePath)) {
       for (String fileName : candidateFiles) {
         // Read the input source file
         try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
@@ -404,6 +410,14 @@ public class LSMTimelineWriter {
         .max(Comparator.naturalOrder()).get();
     int currentLayer = LSMTimeline.getFileLayer(files.get(0));
     return newFileName(minInstant, maxInstant, currentLayer + 1);
+  }
+
+  private void deleteIfExists(StoragePath filePath) throws IOException {
+    if (metaClient.getStorage().exists(filePath)) {
+      // delete file if exists when try to overwrite file
+      metaClient.getStorage().deleteFile(filePath);
+      LOG.info("Delete corrupt file: {} left by failed write", filePath);
+    }
   }
 
   /**
