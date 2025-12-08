@@ -924,7 +924,7 @@ public class TestHoodieSchemaUtils {
 
   @Test
   void testAreSchemasProjectionEquivalentLogicalVsNoLogicalType() {
-    HoodieSchema s1 = HoodieSchema.createDecimal(10, 2);;
+    HoodieSchema s1 = HoodieSchema.createDecimal(10, 2);
     HoodieSchema s2 = HoodieSchema.create(HoodieSchemaType.BYTES);
 
     assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
