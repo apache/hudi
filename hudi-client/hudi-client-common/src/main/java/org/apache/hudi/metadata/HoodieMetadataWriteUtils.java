@@ -211,7 +211,6 @@ public class HoodieMetadataWriteUtils {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
-            .withEnableOptimizedLogBlocksScan(String.valueOf(writeConfig.enableOptimizedLogBlocksScan()))
             // Compaction on metadata table is used as a barrier for archiving on main dataset and for validating the
             // deltacommits having corresponding completed commits. Therefore, we need to compact all fileslices of all
             // partitions together requiring UnBoundedCompactionStrategy.
@@ -374,7 +373,7 @@ public class HoodieMetadataWriteUtils {
                                                                                String instantTime, HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
                                                                                HoodieMetadataConfig metadataConfig, Set<String> enabledPartitionTypes, String bloomFilterType,
                                                                                int bloomIndexParallelism, int writesFileIdEncoding, EngineType engineType,
-                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt, boolean enableOptimizeLogBlocksScan) {
+                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
@@ -402,7 +401,7 @@ public class HoodieMetadataWriteUtils {
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
-          dataMetaClient, writesFileIdEncoding, instantTime, engineType, enableOptimizeLogBlocksScan));
+          dataMetaClient, writesFileIdEncoding, instantTime, engineType));
     }
     return partitionToRecordsMap;
   }

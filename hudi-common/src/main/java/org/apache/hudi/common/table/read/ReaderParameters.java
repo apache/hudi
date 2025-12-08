@@ -35,14 +35,12 @@ public class ReaderParameters {
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
-  private final boolean enableOptimizedLogBlockScan;
 
-  private ReaderParameters(boolean useRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
+  private ReaderParameters(boolean useRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants) {
     this.useRecordPosition = useRecordPosition;
     this.emitDelete = emitDelete;
     this.sortOutput = sortOutput;
     this.allowInflightInstants = allowInflightInstants;
-    this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
   }
 
   public boolean useRecordPosition() {
@@ -61,10 +59,6 @@ public class ReaderParameters {
     return allowInflightInstants;
   }
 
-  public boolean enableOptimizedLogBlockScan() {
-    return enableOptimizedLogBlockScan;
-  }
-
   static Builder builder() {
     return new Builder();
   }
@@ -74,7 +68,6 @@ public class ReaderParameters {
     private boolean emitDelete = false;
     private boolean sortOutput = false;
     private boolean allowInflightInstants = false;
-    private boolean enableOptimizedLogBlockScan = false;
 
     public Builder shouldUseRecordPosition(boolean shouldUseRecordPosition) {
       this.shouldUseRecordPosition = shouldUseRecordPosition;
@@ -96,13 +89,8 @@ public class ReaderParameters {
       return this;
     }
 
-    public Builder enableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
-      this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
-      return this;
-    }
-
     public ReaderParameters build() {
-      return new ReaderParameters(shouldUseRecordPosition, emitDelete, sortOutput, allowInflightInstants, enableOptimizedLogBlockScan);
+      return new ReaderParameters(shouldUseRecordPosition, emitDelete, sortOutput, allowInflightInstants);
     }
   }
 }

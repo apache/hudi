@@ -242,7 +242,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   @Test
   public void testLogCompactionOnMORTableWithoutBaseFile() throws Exception {
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
-        .withEnableOptimizedLogBlocksScan("true")
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();

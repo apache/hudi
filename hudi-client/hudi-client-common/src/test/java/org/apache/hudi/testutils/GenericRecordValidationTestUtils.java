@@ -18,7 +18,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -113,7 +112,6 @@ public class GenericRecordValidationTestUtils {
         .collect(Collectors.toList());
 
     jobConf.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant1);
-    jobConf.set(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), "true");
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true);
     Map<String, GenericRecord> prevRecordsMap = records.stream()

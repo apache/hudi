@@ -548,7 +548,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withRequestedSchema(SCHEMA)
         .withProps(fileGroupReaderProps)
         .withRecordBufferLoader(recordBufferLoader)
-        .withEnableOptimizedLogBlockScan(metadataConfig.isOptimizedLogBlocksScanEnabled())
         .build();
 
     return fileGroupReader.getClosableIterator();
