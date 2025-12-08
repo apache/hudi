@@ -36,11 +36,10 @@ import org.apache.hudi.io.IOUtils
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.parquet.schema.{AvroSchemaRepair, MessageType}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -59,7 +58,6 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 trait HoodieFormatTrait {
@@ -88,15 +86,15 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            hoodieFileFormat: HoodieFileFormat)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
-  private lazy val avroTableSchema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
+  private lazy val hoodieTableSchema = HoodieSchema.parse(tableSchema.avroSchemaStr)
 
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     HOption.ofNullable(
-      ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, new Configuration())
+      ParquetTableSchemaResolver.convertAvroSchemaToParquet(hoodieTableSchema.getAvroSchema, new Configuration())
     )
   }
 
-  private lazy val hasTimestampMillisFieldInTableSchema = AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
+  private lazy val hasTimestampMillisFieldInTableSchema = AvroSchemaRepair.hasTimestampMillisField(hoodieTableSchema.getAvroSchema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
   override def shortName(): String = "HudiFileGroup"
 
@@ -211,8 +209,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    val requestedAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
-    val dataAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
+    //TODO add util for this in HoodieSchema
+    val requestedAvroSchema = AvroSchemaUtils.pruneDataSchema(hoodieTableSchema.getAvroSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
+    val dataAvroSchema = AvroSchemaUtils.pruneDataSchema(hoodieTableSchema.getAvroSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
 

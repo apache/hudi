@@ -144,6 +144,26 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Fetches HoodieSchema as of the given instant
+   *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public HoodieSchema getTableSchema(String timestamp) throws Exception {
+    Schema schemaOption = getTableAvroSchema(timestamp);
+    return HoodieSchema.fromAvroSchema(schemaOption);
+  }
+
+  /**
+   * Fetches HoodieSchema as of the given instant
+   *
+   * @param instant as of which table's schema will be fetched
+   */
+  public HoodieSchema getTableSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
+    Schema schema = getTableAvroSchema(instant, includeMetadataFields);
+    return HoodieSchema.fromAvroSchema(schema);
+  }
+
+  /**
    * Gets full schema (user + metadata) for a hoodie table in Avro format.
    *
    * @return Avro schema for this table

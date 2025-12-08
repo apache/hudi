@@ -19,10 +19,9 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.{AvroConversionUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.cdc.CDCFileGroupIterator.{CDC_OPERATION_DELETE, CDC_OPERATION_INSERT, CDC_OPERATION_UPDATE}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRESSION_ENABLED, SPILLABLE_DISK_MAP_TYPE}
@@ -44,10 +43,9 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
-
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.Partition
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -63,7 +61,6 @@ import java.io.Closeable
 import java.util
 import java.util.{Collections, Locale}
 import java.util.stream.Collectors
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -103,7 +100,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
-    payloadClass, avroSchema, props, partialUpdateModeOpt)
+    payloadClass, hoodieSchema.getAvroSchema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage
 
@@ -132,24 +129,24 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val recordMerger: HoodieRecordMerger = readerContext.getRecordMerger().get()
 
-  protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)
+  protected override val hoodieSchema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
   private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
-  private lazy val cdcAvroSchema: Schema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+  private lazy val cdcHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(HoodieCDCUtils.schemaBySupplementalLoggingMode(
     cdcSupplementalLoggingMode,
-    HoodieAvroUtils.removeMetadataFields(avroSchema)
-  )
+    HoodieSchemaUtils.removeMetadataFields(hoodieSchema).getAvroSchema
+  ))
 
-  private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcAvroSchema)
+  private lazy val cdcSparkSchema: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(cdcHoodieSchema)
 
   private lazy val sparkPartitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
 
-  private lazy val tableSchemaOpt = if (avroSchema != null) {
+  private lazy val tableSchemaOpt = if (hoodieSchema != null) {
     val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(avroSchema)
+    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(hoodieSchema.getAvroSchema)
     org.apache.hudi.common.util.Option.of(parquetSchema)
   } else {
     org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
@@ -159,7 +156,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
    */
   private lazy val cdcRecordDeserializer: HoodieAvroDeserializer = {
-    sparkAdapter.createAvroDeserializer(cdcAvroSchema, cdcSparkSchema)
+    sparkAdapter.createAvroDeserializer(cdcHoodieSchema.getAvroSchema, cdcSparkSchema)
   }
 
   private lazy val projection: Projection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
@@ -418,7 +415,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
           recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
             toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
-            .map(record => BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext, orderingFieldNames, false))
+            .map(record => BufferedRecords.fromEngineRecord(record, hoodieSchema.getAvroSchema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
           recordIter = loadFileSlice(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -447,7 +444,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           val cdcLogFiles = currentCDCFileSplit.getCdcFiles.asScala.map { cdcFile =>
             new HoodieLogFile(storage.getPathInfo(new StoragePath(basePath, cdcFile)))
           }.toArray
-          cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcAvroSchema)
+          cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, hoodieSchema.getAvroSchema)
         case REPLACE_COMMIT =>
           if (currentCDCFileSplit.getBeforeFileSlice.isPresent) {
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -520,8 +517,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withReaderContext(readerContext)
       .withHoodieTableMetaClient(metaClient)
       .withFileSlice(fileSlice)
-      .withDataSchema(avroSchema)
-      .withRequestedSchema(avroSchema)
+      .withDataSchema(hoodieSchema.getAvroSchema)
+      .withRequestedSchema(hoodieSchema.getAvroSchema)
       .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
@@ -535,7 +532,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerContext.setHasBootstrapBaseFile(false)
     readerContext.setHasLogFiles(true)
     readerContext.setSchemaHandler(
-      new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema, Option.empty(), readerProperties, metaClient))
+      new FileGroupReaderSchemaHandler[InternalRow](readerContext, hoodieSchema.getAvroSchema, hoodieSchema.getAvroSchema, Option.empty(), readerProperties, metaClient))
     val stats = new HoodieReadStats
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,

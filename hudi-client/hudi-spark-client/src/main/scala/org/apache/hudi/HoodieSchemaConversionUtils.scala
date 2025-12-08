@@ -18,9 +18,11 @@
 
 package org.apache.hudi
 
+import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
 import scala.collection.JavaConverters._
@@ -204,4 +206,7 @@ object HoodieSchemaConversionUtils {
       case _ => dataType
     }
   }
+
+  //TODO need to fill in impl
+  def createHoodieSchemaToInternalRowConverter(requiredAvroSchema: HoodieSchema, requiredRowSchema: StructType):  GenericRecord => Option[InternalRow] = ???
 }

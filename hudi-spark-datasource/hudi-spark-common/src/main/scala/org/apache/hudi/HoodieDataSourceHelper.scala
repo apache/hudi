@@ -20,10 +20,9 @@ package org.apache.hudi
 
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.storage.StoragePathInfo
-
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -87,11 +86,13 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
   }
 
   trait AvroDeserializerSupport extends SparkAdapterSupport {
-    protected val avroSchema: Schema
+    protected val schema: HoodieSchema
     protected val structTypeSchema: StructType
 
-    private lazy val deserializer: HoodieAvroDeserializer =
-      sparkAdapter.createAvroDeserializer(avroSchema, structTypeSchema)
+    private lazy val deserializer: HoodieAvroDeserializer = {
+      //TODO do we need to make a HoodieSchema serde?
+      sparkAdapter.createAvroDeserializer(schema.getAvroSchema, structTypeSchema)
+    }
 
     protected def deserialize(avroRecord: GenericRecord): InternalRow = {
       checkState(avroRecord.getSchema.getFields.size() == structTypeSchema.fields.length)

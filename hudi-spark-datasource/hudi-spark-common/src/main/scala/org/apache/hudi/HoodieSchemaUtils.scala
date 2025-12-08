@@ -33,7 +33,6 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
-import org.apache.avro.Schema
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.slf4j.LoggerFactory
 

@@ -26,7 +26,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -36,9 +36,8 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
-
-import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
+import org.apache.hudi.common.schema.HoodieSchemaType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
@@ -123,16 +122,16 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
     }
 
     val tableSchema = if (useEndInstantSchema && iSchema.isEmptySchema) {
-      if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchema(false) else
-        schemaResolver.getTableAvroSchema(commitsToReturn.last, false)
+      if (commitsToReturn.isEmpty) schemaResolver.getTableSchema(false) else
+        schemaResolver.getTableSchema(commitsToReturn.last, false)
     } else {
-      schemaResolver.getTableAvroSchema(false)
+      schemaResolver.getTableSchema(false)
     }
-    if (tableSchema.getType == Schema.Type.NULL) {
+    if (tableSchema.getType == HoodieSchemaType.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
       (StructType(Nil), InternalSchema.getEmptyInternalSchema)
     } else {
-      val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+      val dataSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
       if (iSchema != null && !iSchema.isEmptySchema) {
         // if internalSchema is ready, dataSchema will contains skeletonSchema
         (dataSchema, iSchema)

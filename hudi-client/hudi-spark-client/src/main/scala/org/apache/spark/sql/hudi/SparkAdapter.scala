@@ -94,6 +94,7 @@ trait SparkAdapter extends Serializable {
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
    * Spark's [[InternalRow]] into Avro payloads
    */
+  //TODO should we create a hoodieSchema serializer?
   def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer
 
   /**
