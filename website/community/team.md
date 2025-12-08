@@ -23,7 +23,7 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 | Nishith Agarwal             | n3nash              | [nagarwal](https://people.apache.org/committer-index.html#nagarwal)   |
 | Prasanna Rajaperumal        | prasannarajaperumal | [prasanna](https://people.apache.org/committer-index.html#prasanna)   |
 | Prashant Wason              | prashantwason       | [pwason](https://people.apache.org/committer-index.html#pwason)       |
-| Raymond Xu                  | xushiyan            | [xushiyan](https://people.apache.org/committer-index.html#xushiyan)   |
+| Shiyan Xu                   | xushiyan            | [xushiyan](https://people.apache.org/committer-index.html#xushiyan)   |
 | Shaofeng Li                 | leesf               | [leesf](https://people.apache.org/committer-index.html#leesf)         |
 | Sivabalan Narayanan         | nsivabalan          | [sivabalan](https://people.apache.org/committer-index.html#sivabalan) |
 | Sagar Sumit                 | codope              | [codope](https://people.apache.org/committer-index.html#codope)       |
