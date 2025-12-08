@@ -21,6 +21,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
@@ -325,8 +326,17 @@ public class TestHoodieSchemaUtils {
 
   private static Schema deduceWriterSchema(Schema incomingSchema, Schema latestTableSchema, Boolean addNull) {
     TYPED_PROPERTIES.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(), addNull.toString());
-    return HoodieSchemaUtils.deduceWriterSchema(incomingSchema, Option.ofNullable(latestTableSchema),
-        Option.empty(), TYPED_PROPERTIES);
+
+    // Convert latestTableSchema to Option<HoodieSchema>
+    Option<HoodieSchema> latestTableSchemaOpt = Option.ofNullable(latestTableSchema).map(HoodieSchema::fromAvroSchema);
+
+    // Call deduceWriterSchema and convert result back to Avro Schema
+    return HoodieSchemaUtils.deduceWriterSchema(
+        HoodieSchema.fromAvroSchema(incomingSchema),
+        latestTableSchemaOpt,
+        Option.empty(),
+        TYPED_PROPERTIES
+    ).toAvroSchema();
   }
 
 }

@@ -27,11 +27,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.IOUtils;
@@ -43,7 +45,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -190,24 +191,15 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
-    // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
-    HoodieWriteMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieWriteMergeHandle<?, ?, ?, ?>) this.writeHandle;
-    if (upsertHandle.isEmptyNewRecords() && !recordItr.hasNext()) {
-      LOG.info("Empty partition with fileId => {}.", fileId);
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
-    }
+    ValidationUtils.checkArgument(this.writeHandle instanceof HoodieMergeHandle,
+        "`writeHandle` should be an instance of `HoodieMergeHandle`");
     // these are updates
-    return IOUtils.runMerge(upsertHandle, instantTime, fileId);
+    return IOUtils.runMerge((HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle, instantTime, fileId);
   }
 
   @Override
   public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
-    // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
-    if (!recordItr.hasNext()) {
-      LOG.info("Empty partition");
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
-    }
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
         taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle));
   }

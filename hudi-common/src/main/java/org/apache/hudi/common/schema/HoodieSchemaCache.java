@@ -38,6 +38,7 @@ public class HoodieSchemaCache {
 
   /**
    * Get schema variable from global cache. If not found, put it into the cache and then return it.
+   *
    * @param schema schema to get
    * @return if found, return the exist schema variable, otherwise return the param itself.
    */

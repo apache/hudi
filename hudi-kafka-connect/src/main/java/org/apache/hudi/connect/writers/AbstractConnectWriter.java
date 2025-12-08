@@ -66,7 +66,7 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
 
   @Override
   public void writeRecord(SinkRecord record) throws IOException {
-    AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema().getAvroSchema());
+    AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceHoodieSchema());
     Option<GenericRecord> avroRecord;
     switch (connectConfigs.getKafkaValueConverter()) {
       case KAFKA_AVRO_CONVERTER:

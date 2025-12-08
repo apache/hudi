@@ -75,7 +75,7 @@ public class TestAbstractConnectWriter {
   @ParameterizedTest
   @EnumSource(value = TestInputFormats.class)
   public void testAbstractWriterForAllFormats(TestInputFormats inputFormats) throws Exception {
-    HoodieSchema schema = schemaProvider.getSourceSchema();
+    HoodieSchema schema = schemaProvider.getSourceHoodieSchema();
     List<?> inputRecords;
     List<HoodieRecord> expectedRecords;
 
@@ -83,7 +83,7 @@ public class TestAbstractConnectWriter {
     switch (inputFormats) {
       case JSON_STRING:
         formatConverter = AbstractConnectWriter.KAFKA_STRING_CONVERTER;
-        GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(schema.getAvroSchema(), schema.getAvroSchema());
+        GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(schema.toAvroSchema(), schema.toAvroSchema());
         inputRecords = SchemaTestUtil.generateTestJsonRecords(0, NUM_RECORDS);
         expectedRecords = ((List<String>) inputRecords).stream().map(s -> {
           try {
@@ -97,7 +97,7 @@ public class TestAbstractConnectWriter {
       case AVRO:
         formatConverter = AbstractConnectWriter.KAFKA_AVRO_CONVERTER;
         inputRecords = SchemaTestUtil.generateTestRecords(0, NUM_RECORDS);
-        expectedRecords = inputRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema.getAvroSchema()))
+        expectedRecords = inputRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema.toAvroSchema()))
             .map(p -> convertToHoodieRecords(p, p.get(RECORD_KEY_INDEX).toString(), "000/00/00")).collect(Collectors.toList());
         break;
       default:
@@ -194,9 +194,9 @@ public class TestAbstractConnectWriter {
   static class TestSchemaProvider extends SchemaProvider {
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       try {
-        return HoodieSchema.fromAvroSchema(SchemaTestUtil.getSimpleSchema());
+        return SchemaTestUtil.getSimpleSchema();
       } catch (IOException exception) {
         throw new HoodieException("Fatal error parsing schema", exception);
       }
