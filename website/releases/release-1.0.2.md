@@ -7,8 +7,6 @@ last_modified_at: 2024-05-02T18:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.2](https://github.com/apache/hudi/releases/tag/release-1.0.2)
-
 ## Migration Guide
 
 * This release (1.0.2) does not introduce any new table version, thus no migration is needed if you are on 1.0.1.
