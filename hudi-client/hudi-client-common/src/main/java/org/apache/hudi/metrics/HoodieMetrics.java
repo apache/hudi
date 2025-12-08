@@ -59,6 +59,8 @@ public class HoodieMetrics {
   public static final String TOTAL_COMPACTED_RECORDS_UPDATED_STR = "totalCompactedRecordsUpdated";
   public static final String TOTAL_LOG_FILES_COMPACTED_STR = "totalLogFilesCompacted";
   public static final String TOTAL_LOG_FILES_SIZE_STR = "totalLogFilesSize";
+  public static final String TOTAL_LOG_BLOCKS_COMPACTED_STR = "totalLogBlocksCompacted";
+  public static final String TOTAL_LOG_RECORDS_COMPACTED_STR = "totalLogRecordsCompacted";
   public static final String TOTAL_RECORDS_DELETED = "totalRecordsDeleted";
   public static final String TOTAL_CORRUPTED_LOG_BLOCKS_STR = "totalCorruptedLogBlocks";
   public static final String TOTAL_ROLLBACK_LOG_BLOCKS_STR = "totalRollbackLogBlocks";
@@ -95,8 +97,6 @@ public class HoodieMetrics {
   public static final String COUNTER_METRIC_EXTENSION = "." + COUNTER_METRIC;
   public static final String SUCCESS_COUNTER = "success" + COUNTER_METRIC_EXTENSION;
   public static final String FAILURE_COUNTER = "failure" + COUNTER_METRIC_EXTENSION;
-  public static final String TOTAL_LOG_BLOCKS_COMPACTED_STR = "totalLogBlocksCompacted";
-  public static final String TOTAL_LOG_RECORDS_COMPACTED_STR = "totalLogRecordsCompacted";
 
   private Metrics metrics;
   // Some timers
