@@ -147,7 +147,7 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
 
     // Read from file source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf).toAvroSchema())
             .getLogicalType();
 
     String sourcePath = Objects.requireNonNull(Thread.currentThread()

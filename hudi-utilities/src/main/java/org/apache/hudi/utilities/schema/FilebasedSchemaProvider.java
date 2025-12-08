@@ -123,7 +123,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     boolean shouldSanitize = SanitizationUtils.shouldSanitize(props);
     String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     String schemaStr = readSchemaString(schemaPath, fs);
-    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask);
+    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask).toAvroSchema();
   }
 
   private static String readSchemaString(String schemaPath, FileSystem fs) {

@@ -21,6 +21,7 @@ import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
@@ -46,8 +47,8 @@ import org.junit.jupiter.params.provider.MethodSource
  */
 class TestDataSourceDefaults extends ScalaAssertionSupport {
 
-  val schema = SchemaTestUtil.getComplexEvolvedSchema
-  val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+  val schema: HoodieSchema = SchemaTestUtil.getComplexEvolvedSchema
+  val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema)
   var baseRecord: GenericRecord = _
   var baseRow: Row = _
   var internalRow: InternalRow = _
@@ -609,12 +610,12 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
     // it will provide the record with greatest combine value
     val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2)
-    val combinedGR12 = combinedPayload12.getInsertValue(schema).get().asInstanceOf[GenericRecord]
+    val combinedGR12 = combinedPayload12.getInsertValue(schema.toAvroSchema).get().asInstanceOf[GenericRecord]
     assertEquals("field1", combinedGR12.get("field1").toString)
 
     // and it will be deterministic, to order of processing.
     val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
-    val combinedGR21 = combinedPayload21.getInsertValue(schema).get().asInstanceOf[GenericRecord]
+    val combinedGR21 = combinedPayload21.getInsertValue(schema.toAvroSchema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", combinedGR21.get("field1").toString)
   }
 
@@ -635,7 +636,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
     // it always returns the latest payload.
     val preCombinedPayload = basePayload.preCombine(newerPayload)
-    val precombinedGR = preCombinedPayload.getInsertValue(schema).get().asInstanceOf[GenericRecord]
+    val precombinedGR = preCombinedPayload.getInsertValue(schema.toAvroSchema).get().asInstanceOf[GenericRecord]
     assertEquals("field1", precombinedGR.get("field1").toString)
   }
 
@@ -660,16 +661,16 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = laterPayload.preCombine(earlierPayload)
-    val precombinedGR = preCombinedPayload.getInsertValue(schema).get().asInstanceOf[GenericRecord]
+    val precombinedGR = preCombinedPayload.getInsertValue(schema.toAvroSchema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", precombinedGR.get("field1").toString)
     assertEquals(laterOrderingVal, precombinedGR.get("favoriteIntNumber"))
 
-    val earlierWithLater = earlierPayload.combineAndGetUpdateValue(laterRecord, schema, props)
+    val earlierWithLater = earlierPayload.combineAndGetUpdateValue(laterRecord, schema.toAvroSchema, props)
     val earlierwithLaterGR = earlierWithLater.get().asInstanceOf[GenericRecord]
     assertEquals("field2", earlierwithLaterGR.get("field1").toString)
     assertEquals(laterOrderingVal, earlierwithLaterGR.get("favoriteIntNumber"))
 
-    val laterWithEarlier = laterPayload.combineAndGetUpdateValue(earlierRecord, schema, props)
+    val laterWithEarlier = laterPayload.combineAndGetUpdateValue(earlierRecord, schema.toAvroSchema, props)
     val laterWithEarlierGR = laterWithEarlier.get().asInstanceOf[GenericRecord]
     assertEquals("field2", laterWithEarlierGR.get("field1").toString)
     assertEquals(laterOrderingVal, laterWithEarlierGR.get("favoriteIntNumber"))
@@ -683,12 +684,12 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
     // it will provide an empty record
     val combinedPayload12 = emptyPayload1.preCombine(emptyPayload2)
-    val combined12 = combinedPayload12.getInsertValue(schema)
+    val combined12 = combinedPayload12.getInsertValue(schema.toAvroSchema)
     assertEquals(Option.empty(), combined12)
   }
 
-  def getRow(record: GenericRecord, schema: Schema, structType: StructType): Row = {
-    val converterFn = AvroConversionUtils.createConverterToRow(schema, structType)
+  def getRow(record: GenericRecord, schema: HoodieSchema, structType: StructType): Row = {
+    val converterFn = AvroConversionUtils.createConverterToRow(schema.toAvroSchema, structType)
     val row = converterFn.apply(record)
     new GenericRowWithSchema(structType.fieldNames.indices.map(i => row.get(i)).toArray, structType)
   }

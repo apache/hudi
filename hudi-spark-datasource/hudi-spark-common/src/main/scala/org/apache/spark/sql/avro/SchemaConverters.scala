@@ -17,7 +17,10 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.common.util.StringUtils
+
+import org.apache.avro.{JsonProperties, LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.LogicalTypes.{Date, Decimal, LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.spark.annotation.DeveloperApi
@@ -96,7 +99,12 @@ private[sql] object SchemaConverters {
         val newRecordNames = existingRecordNames + avroSchema.getFullName
         val fields = avroSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          StructField(f.name, schemaType.dataType, schemaType.nullable)
+          val metadata = if (StringUtils.isNullOrEmpty(f.doc())) {
+            Metadata.empty
+          } else {
+            new MetadataBuilder().putString("comment", f.doc()).build()
+          }
+          StructField(f.name, schemaType.dataType, schemaType.nullable, metadata)
         }
 
         SchemaType(StructType(fields.toSeq), nullable = false)
@@ -156,23 +164,22 @@ private[sql] object SchemaConverters {
                  nullable: Boolean = false,
                  recordName: String = "topLevelRecord",
                  nameSpace: String = ""): Schema = {
-    val builder = SchemaBuilder.builder()
 
     val schema = catalystType match {
-      case BooleanType => builder.booleanType()
-      case ByteType | ShortType | IntegerType => builder.intType()
-      case LongType => builder.longType()
+      case BooleanType => Schema.create(Schema.Type.BOOLEAN)
+      case ByteType | ShortType | IntegerType => Schema.create(Schema.Type.INT)
+      case LongType => Schema.create(Schema.Type.LONG)
       case DateType =>
-        LogicalTypes.date().addToSchema(builder.intType())
+        LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))
       case TimestampType =>
-        LogicalTypes.timestampMicros().addToSchema(builder.longType())
+        LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))
       case TimestampNTZType =>
-        LogicalTypes.localTimestampMicros().addToSchema(builder.longType())
+        LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))
 
-      case FloatType => builder.floatType()
-      case DoubleType => builder.doubleType()
-      case StringType | CharType(_) | VarcharType(_) => builder.stringType()
-      case NullType => builder.nullType()
+      case FloatType => Schema.create(Schema.Type.FLOAT)
+      case DoubleType => Schema.create(Schema.Type.DOUBLE)
+      case StringType | CharType(_) | VarcharType(_) => Schema.create(Schema.Type.STRING)
+      case NullType => Schema.create(Schema.Type.NULL)
       case d: DecimalType =>
         val avroType = LogicalTypes.decimal(d.precision, d.scale)
         val fixedSize = minBytesForPrecision(d.precision)
@@ -183,17 +190,15 @@ private[sql] object SchemaConverters {
         }
         avroType.addToSchema(SchemaBuilder.fixed(name).size(fixedSize))
 
-      case BinaryType => builder.bytesType()
+      case BinaryType => Schema.create(Schema.Type.BYTES)
       case ArrayType(et, containsNull) =>
-        builder.array()
-          .items(toAvroType(et, containsNull, recordName, nameSpace))
+        Schema.createArray(toAvroType(et, containsNull, recordName, nameSpace))
       case MapType(StringType, vt, valueContainsNull) =>
-        builder.map()
-          .values(toAvroType(vt, valueContainsNull, recordName, nameSpace))
-      case st: StructType =>
+        Schema.createMap(toAvroType(vt, valueContainsNull, recordName, nameSpace))
+      case struct: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
-        if (canBeUnion(st)) {
-          val nonNullUnionFieldTypes = st.map(f => toAvroType(f.dataType, nullable = false, f.name, childNameSpace))
+        if (canBeUnion(struct)) {
+          val nonNullUnionFieldTypes = struct.map(f => toAvroType(f.dataType, nullable = false, f.name, childNameSpace))
           val unionFieldTypes = if (nullable) {
             nullSchema +: nonNullUnionFieldTypes
           } else {
@@ -201,13 +206,16 @@ private[sql] object SchemaConverters {
           }
           Schema.createUnion(unionFieldTypes:_*)
         } else {
-          val fieldsAssembler = builder.record(recordName).namespace(nameSpace).fields()
-          st.foreach { f =>
-            val fieldAvroType =
-              toAvroType(f.dataType, f.nullable, f.name, childNameSpace)
-            fieldsAssembler.name(f.name).`type`(fieldAvroType).noDefault()
+          val fields = struct.map { field =>
+            val doc = field.getComment().orNull
+            val fieldAvroType = toAvroType(field.dataType, field.nullable, field.name, childNameSpace)
+            if (AvroSchemaUtils.isNullable(fieldAvroType)) {
+              HoodieAvroUtils.createNewSchemaField(field.name, fieldAvroType, doc, JsonProperties.NULL_VALUE)
+            } else {
+              HoodieAvroUtils.createNewSchemaField(field.name, fieldAvroType, doc, null)
+            }
           }
-          fieldsAssembler.endRecord()
+          Schema.createRecord(recordName, null, nameSpace, false, fields.asJava)
         }
 
       // This should never happen.
@@ -215,7 +223,7 @@ private[sql] object SchemaConverters {
     }
 
     if (nullable && catalystType != NullType && schema.getType != Schema.Type.UNION) {
-      Schema.createUnion(schema, nullSchema)
+      Schema.createUnion(nullSchema, schema)
     } else {
       schema
     }

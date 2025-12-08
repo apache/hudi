@@ -56,6 +56,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -101,7 +102,7 @@ public class ExportCommand {
     List<StoragePathInfo> pathInfoList =
         HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<StoragePathInfo> archivedPathInfoList = pathInfoList.stream()
-        .sorted((f1, f2) -> (int) (f1.getModificationTime() - f2.getModificationTime()))
+        .sorted(Comparator.comparingLong(StoragePathInfo::getModificationTime))
         .collect(Collectors.toList());
 
     if (descending) {

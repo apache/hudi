@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -39,16 +40,16 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    Schema sourceSchema = schemaProvider.getSourceSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
-        .orElse(sourceSchema);
+    HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema).toAvroSchema())
+        .orElse(sourceSchema.toAvroSchema());
   }
 
   @Override
   public Schema getTargetSchema() {
-    Schema targetSchema = schemaProvider.getTargetSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema))
-        .orElse(targetSchema);
+    HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema).toAvroSchema())
+        .orElse(targetSchema.toAvroSchema());
   }
 
   public SchemaProvider getOriginalSchemaProvider() {

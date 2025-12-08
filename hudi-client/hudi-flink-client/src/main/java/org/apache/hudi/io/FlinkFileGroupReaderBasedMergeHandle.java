@@ -119,12 +119,6 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
   }
 
   @Override
-  public boolean isEmptyNewRecords() {
-    // `keyToNewRecords` is not initialized or used for file group reader based handle.
-    return false;
-  }
-
-  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
