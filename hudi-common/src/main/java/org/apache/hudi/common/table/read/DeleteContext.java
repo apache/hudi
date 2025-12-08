@@ -103,9 +103,7 @@ public class DeleteContext implements Serializable {
    * Returns position of hoodie operation meta field in the schema
    */
   private static int getHoodieOperationPos(HoodieSchema schema) {
-    return Option.ofNullable(schema.getField(HoodieRecord.OPERATION_METADATA_FIELD))
-        // Safely flattens nested options; if inner is empty, the whole chain becomes empty
-        .flatMap(field -> field)
+    return schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)
         .map(HoodieSchemaField::pos)
         .orElseGet(() -> -1);
   }

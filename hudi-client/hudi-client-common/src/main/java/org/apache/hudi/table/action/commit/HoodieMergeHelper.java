@@ -121,7 +121,6 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
         recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
       } else {
         // In case writer's schema is simply a projection of the reader's one we can read

@@ -42,7 +42,7 @@ class TestHoodieAvroIndexedRecord {
     HoodieSchema hoodieSchema = HoodieSchema.createRecord("TestRecord", null, null,
         Arrays.asList(
             HoodieSchemaField.of("_hoodie_is_deleted",
-                HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieSchema.NULL_VALUE),
+                HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN), null, HoodieSchema.NULL_VALUE),
             HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.STRING))
         ));
     GenericRecord record1 = new GenericRecordBuilder(hoodieSchema.toAvroSchema())

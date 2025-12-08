@@ -113,7 +113,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getContentReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, pathForReader, HoodieFileFormat.HFILE,
-            //TODO boundary to revisit in later pr to use HoodieSchema directly
             inlineStorage, content, Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
     }
@@ -148,7 +147,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         HoodieIOFactory.getIOFactory(inlineStorage).getReaderFactory(HoodieRecordType.AVRO).getContentReader(
             readerContext.getHoodieReaderConfig(), pathForReader, HoodieFileFormat.HFILE, inlineStorage, content,
             Option.of(getSchemaFromHeader()))) {
-      //TODO boundary to revisit in later pr to use HoodieSchema directly
       return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
     }
   }
@@ -171,11 +169,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
         .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, inlinePath, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
       final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
-              //TODO boundary to revisit in later pr to use HoodieSchema directly
               fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) :
                       reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
       return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
@@ -202,10 +198,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
             inlinePath,
             HoodieFileFormat.HFILE,
-            //TODO boundary to revisit in later pr to use HoodieSchema directly
             Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
-      //TODO boundary to revisit in later pr to use HoodieSchema directly
       return (ClosableIterator<T>) (fullKey ? reader.getEngineRecordsByKeysIterator(sortedKeys, readerSchema) :
               reader.getEngineRecordsByKeyPrefixIterator(sortedKeys, readerSchema));
     }

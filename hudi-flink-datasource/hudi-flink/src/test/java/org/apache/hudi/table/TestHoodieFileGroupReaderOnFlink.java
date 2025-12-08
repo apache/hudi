@@ -83,7 +83,6 @@ import static org.mockito.Mockito.when;
  * Tests {@code HoodieFileGroupReader} with {@code FlinkRowDataReaderContext} on Flink.
  */
 public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderBase<RowData> {
-
   private Configuration conf;
   private Option<InstantRange> instantRangeOpt = Option.empty();
 
@@ -211,10 +210,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(
             HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
-            HoodieSchemaField.of("field2", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.STRING)),
-                null, HoodieSchema.NULL_VALUE),
-            HoodieSchemaField.of("ts", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.LONG)),
-                null, HoodieSchema.NULL_VALUE)
+            HoodieSchemaField.of("field2", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("ts", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE)
         ));
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
     assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
@@ -230,8 +227,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(
             HoodieSchemaField.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING)),
-            HoodieSchemaField.of("field2", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.STRING)),
-                null, HoodieSchema.NULL_VALUE)
+            HoodieSchemaField.of("field2", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE)
         ));
     String key = "my_key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("field2_val"));
@@ -248,8 +244,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(
             HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
-            HoodieSchemaField.of("field2", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.STRING)),
-                null, HoodieSchema.NULL_VALUE)
+            HoodieSchemaField.of("field2", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE)
         ));
     String key = "key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("other"));
