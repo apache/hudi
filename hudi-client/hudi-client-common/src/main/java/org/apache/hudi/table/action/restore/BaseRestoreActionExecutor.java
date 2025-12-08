@@ -36,8 +36,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,9 +48,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 
+@Slf4j
 public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRestoreMetadata> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseRestoreActionExecutor.class);
 
   private final String savepointToRestoreTimestamp;
   private final TransactionManager txnManager;
@@ -88,7 +86,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
 
       instantsToRollback.forEach(instant -> {
         instantToMetadata.put(instant.requestedTime(), Collections.singletonList(rollbackInstant(instant)));
-        LOG.info("Deleted instant " + instant);
+        log.info("Deleted instant " + instant);
       });
 
       return finishRestore(instantToMetadata,
@@ -111,7 +109,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       if (rollbackInstantOpt.isPresent()) {
         instantsToRollback.add(rollbackInstantOpt.get());
       } else {
-        LOG.info("Ignoring already rolledback instant {}", instantInfo.toString());
+        log.info("Ignoring already rolledback instant {}", instantInfo.toString());
       }
     }
     return instantsToRollback;
@@ -145,7 +143,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
     });
-    LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
+    log.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
     return restoreMetadata;
   }
 

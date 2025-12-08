@@ -95,9 +95,9 @@ import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.util.CommonClientUtils;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -135,18 +135,25 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
+@Slf4j
 public abstract class HoodieTable<T, I, K, O> implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTable.class);
 
+  @Getter
   protected final HoodieWriteConfig config;
+  @Getter
   protected final HoodieTableMetaClient metaClient;
   private transient HoodieIndex<?, ?> index;
+  @Getter
   protected final TaskContextSupplier taskContextSupplier;
   private transient HoodieTableMetadata metadata;
   private transient HoodieStorageLayout storageLayout;
+  @Getter
   private final InstantGenerator instantGenerator;
+  @Getter
   private final InstantFileNameGenerator instantFileNameGenerator;
+  @Getter
   private final InstantFileNameParser instantFileNameParser;
+  @Getter
   private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
@@ -177,10 +184,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.taskContextSupplier = supplier;
   }
 
-  public boolean isMetadataTable() {
-    return isMetadataTable;
-  }
-
   public HoodieTableVersion version() {
     return metaClient.getTableConfig().getTableVersion();
   }
@@ -189,7 +192,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getTableMetadata());
     }
     return viewManager;
   }
@@ -320,26 +323,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> managePartitionTTL(HoodieEngineContext context, String instantTime);
-
-  public HoodieWriteConfig getConfig() {
-    return config;
-  }
-
-  public HoodieTableMetaClient getMetaClient() {
-    return metaClient;
-  }
-
-  public InstantGenerator getInstantGenerator() {
-    return instantGenerator;
-  }
-
-  public InstantFileNameGenerator getInstantFileNameGenerator() {
-    return instantFileNameGenerator;
-  }
-
-  public InstantFileNameParser getInstantFileNameParser() {
-    return instantFileNameParser;
-  }
 
   /**
    * @return if the table is physically partitioned, based on the partition fields stored in the table config.
@@ -775,7 +758,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
             .collect(Collectors.toList()),
         partitionFilePair -> {
           final HoodieStorage storage = metaClient.getStorage();
-          LOG.info("Deleting invalid data file=" + partitionFilePair);
+          log.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
             StoragePath pathToDelete = new StoragePath(partitionFilePair.getValue());
@@ -846,7 +829,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           throw new HoodieDuplicateDataFileDetectedException("Duplicate data files detected " + invalidDataPaths);
         }
 
-        LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
+        log.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp ->
                 Pair.of(new StoragePath(basePath, dp).getParent().toString(),
@@ -901,7 +884,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       getConsistencyGuard(storage, config.getConsistencyGuardConfig())
           .waitTill(partitionPath, fileList, visibility);
     } catch (IOException | TimeoutException ioe) {
-      LOG.error("Got exception while waiting for files to show up", ioe);
+      log.error("Got exception while waiting for files to show up", ioe);
       return false;
     }
     return true;
@@ -922,10 +905,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     } catch (Throwable e) {
       throw new IOException("Could not load ConsistencyGuard ", e);
     }
-  }
-
-  public TaskContextSupplier getTaskContextSupplier() {
-    return taskContextSupplier;
   }
 
   /**
@@ -1010,7 +989,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       
       if (tableField == null) {
         // This shouldn't happen as indexed columns should exist in table schema
-        LOG.warn("Secondary index '{}' references non-existent column: {}", indexName, columnName);
+        log.warn("Secondary index '{}' references non-existent column: {}", indexName, columnName);
         continue;
       }
       
@@ -1140,7 +1119,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public void maybeDeleteMetadataTable() {
     if (shouldExecuteMetadataTableDeletion()) {
       try {
-        LOG.info("Deleting metadata table because it is disabled in writer.");
+        log.info("Deleting metadata table because it is disabled in writer.");
         deleteMetadataTable(config.getBasePath(), context);
       } catch (HoodieMetadataException e) {
         throw new HoodieException("Failed to delete metadata table.", e);
@@ -1155,7 +1134,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     Stream.of(MetadataPartitionType.getValidValues()).forEach(partitionType -> {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
-          LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
+          log.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
           if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType.getPartitionPath())) {
             deleteMetadataPartition(metaClient.getBasePath(), context, partitionType.getPartitionPath());
           }
@@ -1209,7 +1188,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
         break;
       default:
-        LOG.debug("Not a valid metadata partition type: {}", partitionType.name());
+        log.debug("Not a valid metadata partition type: {}", partitionType.name());
         return false;
     }
     return metadataIndexDisabled;
@@ -1231,7 +1210,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
     Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
     if (clearAll && partitions.size() > 0) {
-      LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
+      log.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
       HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
     } else if (partitionType.isPresent() && partitions.remove(partitionType.get().getPartitionPath())) {
@@ -1240,7 +1219,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     }
   }
 
-  public HoodieTableMetadata getMetadataTable() {
+  public HoodieTableMetadata getTableMetadata() {
     if (metadata == null) {
       metadata = refreshAndGetTableMetadata();
     }

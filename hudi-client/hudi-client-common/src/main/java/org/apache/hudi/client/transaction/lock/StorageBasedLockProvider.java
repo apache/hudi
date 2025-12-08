@@ -44,9 +44,9 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -72,6 +72,7 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  * The underlying storage client interface {@link StorageLockClient} is pluggable so it can be implemented for any
  * filesystem which supports conditional writes.
  */
+@Slf4j
 @ThreadSafe
 public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
@@ -84,8 +85,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // therefore we do not expect drift more than a few ms.
   // However, since our lock leases are pretty long, we can use a high buffer.
   private static final long CLOCK_DRIFT_BUFFER_MS = 500;
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(StorageBasedLockProvider.class);
 
   // Use for testing
   private final Logger logger;
@@ -129,7 +128,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         lockConfiguration.getConfig(),
         LockProviderHeartbeatManager::new,
         getStorageLockClientClassName(),
-        LOGGER,
+        log,
         null);
   }
 
@@ -148,7 +147,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         lockConfiguration.getConfig(),
         LockProviderHeartbeatManager::new,
         getStorageLockClientClassName(),
-        LOGGER,
+        log,
         metrics);
   }
 

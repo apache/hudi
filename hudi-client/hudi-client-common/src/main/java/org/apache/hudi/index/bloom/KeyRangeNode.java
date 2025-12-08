@@ -18,6 +18,9 @@
 
 package org.apache.hudi.index.bloom;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,16 +29,23 @@ import java.util.List;
  * Represents a node in the {@link KeyRangeLookupTree}. Holds information pertaining to a single index file, viz file
  * name, min record key and max record key.
  */
+@Getter
 class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
   private final List<String> fileNameList = new ArrayList<>();
   private final String minRecordKey;
   private final String maxRecordKey;
+  @Setter
   private String rightSubTreeMax = null;
+  @Setter
   private String leftSubTreeMax = null;
+  @Setter
   private String rightSubTreeMin = null;
+  @Setter
   private String leftSubTreeMin = null;
+  @Setter
   private KeyRangeNode left = null;
+  @Setter
   private KeyRangeNode right = null;
 
   /**
@@ -84,65 +94,5 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
     } else {
       return compareValue;
     }
-  }
-
-  public List<String> getFileNameList() {
-    return fileNameList;
-  }
-
-  public String getMinRecordKey() {
-    return minRecordKey;
-  }
-
-  public String getMaxRecordKey() {
-    return maxRecordKey;
-  }
-
-  public String getRightSubTreeMin() {
-    return rightSubTreeMin;
-  }
-
-  public void setRightSubTreeMin(String rightSubTreeMin) {
-    this.rightSubTreeMin = rightSubTreeMin;
-  }
-
-  public String getLeftSubTreeMin() {
-    return leftSubTreeMin;
-  }
-
-  public void setLeftSubTreeMin(String leftSubTreeMin) {
-    this.leftSubTreeMin = leftSubTreeMin;
-  }
-
-  public String getRightSubTreeMax() {
-    return rightSubTreeMax;
-  }
-
-  public void setRightSubTreeMax(String rightSubTreeMax) {
-    this.rightSubTreeMax = rightSubTreeMax;
-  }
-
-  public String getLeftSubTreeMax() {
-    return leftSubTreeMax;
-  }
-
-  public void setLeftSubTreeMax(String leftSubTreeMax) {
-    this.leftSubTreeMax = leftSubTreeMax;
-  }
-
-  public KeyRangeNode getLeft() {
-    return left;
-  }
-
-  public void setLeft(KeyRangeNode left) {
-    this.left = left;
-  }
-
-  public KeyRangeNode getRight() {
-    return right;
-  }
-
-  public void setRight(KeyRangeNode right) {
-    this.right = right;
   }
 }

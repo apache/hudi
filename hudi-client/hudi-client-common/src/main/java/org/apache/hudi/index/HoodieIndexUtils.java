@@ -76,10 +76,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -107,9 +106,8 @@ import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDelet
 /**
  * Hoodie Index Utilities.
  */
+@Slf4j
 public class HoodieIndexUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexUtils.class);
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -290,7 +288,7 @@ public class HoodieIndexUtils {
                                                             HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
-    LOG.info(String.format("Going to filter %d keys from file %s", candidateRecordKeys.size(), filePath));
+    log.info(String.format("Going to filter %d keys from file %s", candidateRecordKeys.size(), filePath));
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
@@ -299,9 +297,9 @@ public class HoodieIndexUtils {
         HoodieTimer timer = HoodieTimer.start();
         Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
+        log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
-        LOG.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
+        log.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
       }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
@@ -682,7 +680,7 @@ public class HoodieIndexUtils {
    * Table Config is updated if necessary.
    */
   public static void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
-    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+    log.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     // build HoodieIndexMetadata and then add to index definition file
     metaClient.buildIndexDefinition(indexDefinition);
   }

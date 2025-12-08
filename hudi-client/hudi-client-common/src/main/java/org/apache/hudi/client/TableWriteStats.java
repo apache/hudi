@@ -20,12 +20,15 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieWriteStat;
 
+import lombok.Getter;
+
 import java.util.Collections;
 import java.util.List;
 
 /**
  * Class to hold list of {@link HoodieWriteStat} for data table and metadata table.
  */
+@Getter
 public class TableWriteStats {
 
   private final List<HoodieWriteStat> dataTableWriteStats;
@@ -38,14 +41,6 @@ public class TableWriteStats {
   public TableWriteStats(List<HoodieWriteStat> dataTableWriteStats, List<HoodieWriteStat> metadataTableWriteStats) {
     this.dataTableWriteStats = dataTableWriteStats;
     this.metadataTableWriteStats = metadataTableWriteStats;
-  }
-
-  public List<HoodieWriteStat> getDataTableWriteStats() {
-    return dataTableWriteStats;
-  }
-
-  public List<HoodieWriteStat> getMetadataTableWriteStats() {
-    return metadataTableWriteStats;
   }
 
   public boolean isEmptyDataTableWriteStats() {

@@ -20,8 +20,8 @@ package org.apache.hudi.index.bucket.partition;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -32,12 +32,13 @@ import java.util.Map;
  * A singleton implementation of PartitionBucketIndexCalculator that ensures only one instance
  * exists for each unique hashingInstantToLoad value.
  */
+@Slf4j
 public class PartitionBucketIndexCalculator implements Serializable {
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexCalculator.class);
   // Map to store singleton instances for each instantToLoad + configuration hash combination
   private static final HashMap<String, PartitionBucketIndexCalculator> INSTANCES = new HashMap<>();
   private static final int CACHE_SIZE = 100_000;
+  @Getter
   private final int defaultBucketNumber;
   // Cache for partition to bucket number mapping
   private final Cache<String, Integer> partitionToBucketCache;
@@ -58,7 +59,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   public static PartitionBucketIndexCalculator getInstance(String expressions, String rule, int defaultBucketNumber) {
     return INSTANCES.computeIfAbsent(expressions,
         key -> {
-          LOG.info("Creating new {} instance for expressions: {}", PartitionBucketIndexCalculator.class, key);
+          log.info("Creating new {} instance for expressions: {}", PartitionBucketIndexCalculator.class, key);
           return new PartitionBucketIndexCalculator(expressions, rule, defaultBucketNumber);
         });
   }
@@ -82,7 +83,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
     // If no rule matched, use default bucket number
     if (bucketNumber == -1) {
       bucketNumber = defaultBucketNumber;
-      LOG.debug("No rule matched for partition: {}. Using default bucket number: {}",
+      log.debug("No rule matched for partition: {}. Using default bucket number: {}",
           partitionPath, defaultBucketNumber);
     }
 
@@ -103,10 +104,6 @@ public class PartitionBucketIndexCalculator implements Serializable {
     INSTANCES.clear();
   }
 
-  public int getDefaultBucketNumber() {
-    return this.defaultBucketNumber;
-  }
-
   public long getCacheSize() {
     return partitionToBucketCache.estimatedSize();
   }
@@ -123,7 +120,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
       case REGEX:
         return new RegexRuleEngine(expressions);
       default:
-        LOG.error("Unsupported rule type: {}.", ruleType);
+        log.error("Unsupported rule type: {}.", ruleType);
         throw new UnsupportedOperationException("Unsupported rule type " + ruleType);
     }
   }

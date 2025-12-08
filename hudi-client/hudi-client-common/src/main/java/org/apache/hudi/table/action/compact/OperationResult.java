@@ -20,12 +20,19 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 import java.io.Serializable;
 
 /**
  * Holds Operation result. Used as a result container for Compaction Admin Client (running as part of Spark-launcher
  * process) to communicate results back to Hoodie CLI process.
  */
+@AllArgsConstructor
+@Getter
+@NoArgsConstructor
 public class OperationResult<T> implements Serializable {
 
   private T operation;
@@ -33,37 +40,11 @@ public class OperationResult<T> implements Serializable {
   private boolean success;
   private Option<Exception> exception;
 
-  public OperationResult() {
-  }
-
   public OperationResult(T operation, boolean success, Option<Exception> exception) {
     this.operation = operation;
     this.success = success;
     this.exception = exception;
     this.executed = true;
-  }
-
-  public OperationResult(T operation, boolean executed, boolean success, Option<Exception> exception) {
-    this.operation = operation;
-    this.success = success;
-    this.exception = exception;
-    this.executed = executed;
-  }
-
-  public T getOperation() {
-    return operation;
-  }
-
-  public boolean isSuccess() {
-    return success;
-  }
-
-  public boolean isExecuted() {
-    return executed;
-  }
-
-  public Option<Exception> getException() {
-    return exception;
   }
 
   @Override

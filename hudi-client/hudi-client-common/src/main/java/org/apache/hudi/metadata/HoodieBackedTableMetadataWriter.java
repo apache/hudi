@@ -89,6 +89,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.util.Lazy;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,9 +176,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected Option<HoodieMetadataMetrics> metrics;
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
+  @Getter
   protected final List<MetadataPartitionType> enabledPartitionTypes;
 
   // Is the MDT bootstrapped and ready to be read from
+  @Getter
   boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
   private final boolean streamingWritesEnabled;
@@ -267,10 +270,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   public HoodieBackedTableMetadata getTableMetadata() {
     return metadata;
-  }
-
-  public List<MetadataPartitionType> getEnabledPartitionTypes() {
-    return this.enabledPartitionTypes;
   }
 
   /**
@@ -2209,10 +2208,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } catch (Exception e) {
       throw new HoodieException("Failed to close HoodieMetadata writer ", e);
     }
-  }
-
-  public boolean isInitialized() {
-    return initialized;
   }
 
   protected BaseHoodieWriteClient<?, I, ?, O> getWriteClient() {

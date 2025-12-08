@@ -20,11 +20,14 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+
 import java.util.List;
 
 /**
  * Encapsulates the result from a key lookup.
  */
+@Getter
 public class HoodieKeyLookupResult {
 
   private final String fileId;
@@ -38,22 +41,6 @@ public class HoodieKeyLookupResult {
     this.partitionPath = partitionPath;
     this.baseInstantTime = baseInstantTime;
     this.matchingRecordKeysAndPositions = matchingRecordKeysAndPositions;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getBaseInstantTime() {
-    return baseInstantTime;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public List<Pair<String, Long>> getMatchingRecordKeysAndPositions() {
-    return matchingRecordKeysAndPositions;
   }
 }
 

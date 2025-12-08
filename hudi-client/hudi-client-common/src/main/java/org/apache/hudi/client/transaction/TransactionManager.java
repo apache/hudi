@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,9 @@ import java.io.Serializable;
 public class TransactionManager implements Serializable, AutoCloseable {
 
   protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
+  @Getter
   protected final LockManager lockManager;
+  @Getter
   protected final boolean isLockRequired;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
@@ -91,19 +94,11 @@ public class TransactionManager implements Serializable, AutoCloseable {
     }
   }
 
-  public LockManager getLockManager() {
-    return lockManager;
-  }
-
   public Option<HoodieInstant> getLastCompletedTransactionOwner() {
     return lastCompletedActionInstant;
   }
 
   public Option<HoodieInstant> getCurrentTransactionOwner() {
     return changeActionInstant;
-  }
-
-  public boolean isLockRequired() {
-    return isLockRequired;
   }
 }

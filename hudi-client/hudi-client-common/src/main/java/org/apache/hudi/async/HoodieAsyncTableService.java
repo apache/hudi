@@ -22,14 +22,15 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.RunsTableService;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.util.function.Function;
 
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public abstract class HoodieAsyncTableService extends HoodieAsyncService implements RunsTableService {
 
   protected HoodieWriteConfig writeConfig;
-
-  protected HoodieAsyncTableService() {
-  }
 
   protected HoodieAsyncTableService(HoodieWriteConfig writeConfig) {
     this.writeConfig = writeConfig;

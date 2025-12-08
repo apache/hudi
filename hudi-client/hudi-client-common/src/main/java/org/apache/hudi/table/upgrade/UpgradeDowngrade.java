@@ -39,11 +39,10 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
-import java.util.Collections;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Map;
@@ -53,9 +52,8 @@ import java.util.stream.Collectors;
 /**
  * Helper class to assist in upgrading/downgrading Hoodie when there is a version change.
  */
+@Slf4j
 public class UpgradeDowngrade {
-
-  private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngrade.class);
   public static final String HOODIE_UPDATED_PROPERTY_FILE = "hoodie.properties.updated";
 
   private static final Set<Pair<Integer, Integer>> UPGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT = new HashSet<>(Arrays.asList(
@@ -102,7 +100,7 @@ public class UpgradeDowngrade {
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
     if (fromTableVersion.greaterThan(toWriteVersion)) {
-      LOG.info("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+      log.info("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
       return false;
     }
     if (fromTableVersion.equals(toWriteVersion)) {
@@ -121,7 +119,7 @@ public class UpgradeDowngrade {
       // then we must ensure the write version is set to the table version.
       // and skip the upgrade
       config.setWriteVersion(fromTableVersion);
-      LOG.warn("hoodie.write.auto.upgrade was disabled. Table version {} does not match write version {}. "
+      log.warn("hoodie.write.auto.upgrade was disabled. Table version {} does not match write version {}. "
                       + "Setting hoodie.write.table.version={} to match hoodie.table.version, and skipping upgrade",
               fromTableVersion.versionCode(), toWriteVersion.versionCode(), fromTableVersion.versionCode());
       return false;
@@ -210,7 +208,7 @@ public class UpgradeDowngrade {
 
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
-    LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
+    log.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     if (isUpgrade) {
@@ -391,7 +389,7 @@ public class UpgradeDowngrade {
       }
     }
     if (requireRollbackAndCompaction) {
-      LOG.info("Rolling back failed writes and compacting table before upgrade/downgrade");
+      log.info("Rolling back failed writes and compacting table before upgrade/downgrade");
       // For version SEVEN to EIGHT upgrade, use SIX as tableVersion to avoid hitting issue with WRITE_TABLE_VERSION,
       // as table version SEVEN is not considered as a valid value due to being a bridge release.
       // otherwise use current table version

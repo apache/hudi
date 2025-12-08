@@ -38,17 +38,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class CommonClientUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CommonClientUtils.class);
 
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
@@ -84,7 +82,7 @@ public class CommonClientUtils {
     if (tableVersion.greaterThan(HoodieTableVersion.SIX)
         && writeVersion.versionCode() < tableVersion.versionCode()
         && writeVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
-      LOG.info("Table version is greater than 6, and writer version is lower than table version and must be >= 6.");
+      log.info("Table version is greater than 6, and writer version is lower than table version and must be >= 6.");
       return true;
     }
     return false;
@@ -129,7 +127,7 @@ public class CommonClientUtils {
           taskContextSupplier.getAttemptIdSupplier().get()
       );
     } catch (Throwable t) {
-      LOG.warn("Error generating write token, using default.", t);
+      log.warn("Error generating write token, using default.", t);
       return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
     }
   }

@@ -36,8 +36,7 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,9 +49,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_TH
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
+@Slf4j
 public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SavepointActionExecutor.class);
 
   private final String user;
   private final String comment;
@@ -112,7 +110,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         List<String> partitions = FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
         latestFilesMap = context.mapToPair(partitions, partitionPath -> {
           // Scan all partitions files with this commit time
-          LOG.info("Collecting latest files in partition path {}", partitionPath);
+          log.info("Collecting latest files in partition path {}", partitionPath);
           List<String> latestFiles = new ArrayList<>();
           view.getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true).forEach(fileSlice -> {
             if (fileSlice.getBaseFile().isPresent()) {
@@ -132,7 +130,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           .saveAsComplete(
               true, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime), Option.of(metadata),
               savepointCompletedInstant -> table.getMetaClient().getTableFormat().savepoint(savepointCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-      LOG.info("Savepoint {} created", instantTime);
+      log.info("Savepoint {} created", instantTime);
       return metadata;
     } catch (HoodieIOException e) {
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);

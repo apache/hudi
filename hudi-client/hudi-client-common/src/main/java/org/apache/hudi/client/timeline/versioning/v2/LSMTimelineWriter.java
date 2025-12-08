@@ -22,6 +22,7 @@ package org.apache.hudi.client.timeline.versioning.v2;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLSMTimelineManifest;
@@ -36,7 +37,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -48,10 +48,9 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,8 +66,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * A timeline writer which organizes the files as an LSM tree.
  */
+@Slf4j
 public class LSMTimelineWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(LSMTimelineWriter.class);
 
   public static final int FILE_LAYER_ZERO = 0;
 
@@ -129,7 +128,7 @@ public class LSMTimelineWriter {
         // 2. the file was in complete state but the archiving fails during the deletion of active metadata files.
         if (isFileCommitted(filePath.getName())) {
           // case2: the last archiving succeeded for committing to the archive timeline, just returns early.
-          LOG.info("Skip archiving for the redundant file: {}", filePath);
+          log.info("Skip archiving for the redundant file: {}", filePath);
           return;
         } else {
           // case1: delete the corrupt file and retry.
@@ -141,7 +140,7 @@ public class LSMTimelineWriter {
     }
     try (HoodieFileWriter writer = openWriter(filePath)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
-      LOG.info("Writing schema " + wrapperSchema.toString());
+      log.info("Writing schema " + wrapperSchema.toString());
       HoodieSchema schema = HoodieSchema.fromAvroSchema(wrapperSchema);
       for (ActiveAction activeAction : activeActions) {
         try {
@@ -150,7 +149,7 @@ public class LSMTimelineWriter {
           final HoodieLSMTimelineInstant metaEntry = MetadataConversionUtils.createLSMTimelineInstant(activeAction, metaClient);
           writer.write(metaEntry.getInstantTime(), new HoodieAvroIndexedRecord(metaEntry), schema);
         } catch (Exception e) {
-          LOG.error("Failed to write instant: " + activeAction.getInstantTime(), e);
+          log.error("Failed to write instant: " + activeAction.getInstantTime(), e);
           exceptionHandler.ifPresent(handler -> handler.accept(e));
         }
       }
@@ -293,14 +292,14 @@ public class LSMTimelineWriter {
       compactFiles(candidateFiles, compactedFileName);
       // 4. update the manifest file
       updateManifest(candidateFiles, compactedFileName);
-      LOG.info("Finishes compaction of source files: " + candidateFiles);
+      log.info("Finishes compaction of source files: " + candidateFiles);
       return Option.of(compactedFileName);
     }
     return Option.empty();
   }
 
   public void compactFiles(List<String> candidateFiles, String compactedFileName) throws IOException {
-    LOG.info("Starting to compact source files.");
+    log.info("Starting to compact source files.");
     StoragePath compactedFilePath = new StoragePath(archivePath, compactedFileName);
     deleteIfExists(compactedFilePath);
     try (HoodieFileWriter writer = openWriter(compactedFilePath)) {
@@ -421,7 +420,7 @@ public class LSMTimelineWriter {
     if (metaClient.getStorage().exists(filePath)) {
       // delete file if exists when try to overwrite file
       metaClient.getStorage().deleteFile(filePath);
-      LOG.info("Delete corrupt file: {} left by failed write", filePath);
+      log.info("Delete corrupt file: {} left by failed write", filePath);
     }
   }
 
