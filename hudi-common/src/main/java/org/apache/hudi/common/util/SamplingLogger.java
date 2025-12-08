@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.slf4j.Logger;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * A sampling logger that logs at INFO level once every N times, otherwise at DEBUG level.
@@ -51,7 +52,7 @@ public class SamplingLogger {
    *
    * @return true if the caller should log at INFO level, false for DEBUG level
    */
-  public boolean shouldLogAtInfo() {
+  private boolean shouldLogAtInfo() {
     return counter.incrementAndGet() % sampleFrequency == 0;
   }
 
@@ -66,6 +67,21 @@ public class SamplingLogger {
       logger.info(message, args);
     } else {
       logger.debug(message, args);
+    }
+  }
+
+  /**
+   * Logs a message at INFO level if it's time to sample, otherwise at DEBUG level.
+   * Uses a Supplier to lazily evaluate arguments
+   *
+   * @param message      the log message (can contain {} placeholders)
+   * @param argsSupplier a supplier that provides the arguments to substitute into the message
+   */
+  public void logInfoOrDebug(String message, Supplier<Object[]> argsSupplier) {
+    if (shouldLogAtInfo()) {
+      logger.info(message, argsSupplier.get());
+    } else if (logger.isDebugEnabled()) {
+      logger.debug(message, argsSupplier.get());
     }
   }
 }

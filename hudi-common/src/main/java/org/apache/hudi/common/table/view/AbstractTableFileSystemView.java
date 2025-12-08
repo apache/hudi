@@ -108,9 +108,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // Used to concurrently load and populate partition views
   private final ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>(4096);
 
-  // Sampling logger for partition view build logs (log at INFO once every 10 times for data tables)
-  private final SamplingLogger partitionViewBuildSamplingLogger = new SamplingLogger(LOG, 10);
-
   // Sampling logger for replaced file groups read logs (log at INFO once every 5 times)
   private final SamplingLogger replacedFileGroupsReadSamplingLogger = new SamplingLogger(LOG, 5);
 
@@ -304,7 +301,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     // Sample log: log at INFO once every 5 times to track latencies, otherwise DEBUG
     replacedFileGroupsReadSamplingLogger.logInfoOrDebug(
         "Took {} ms to read {} instants, {} replaced file groups",
-        hoodieTimer.endTimer(), replacedTimeline.countInstants(), replacedFileGroups.size());
+        () -> new Object[]{hoodieTimer.endTimer(), replacedTimeline.countInstants(), replacedFileGroups.size()});
   }
 
   @Override
@@ -400,12 +397,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         long beginTs = System.currentTimeMillis();
         // Not loaded yet
         try {
-          // For metadata table, always log at DEBUG. For data table, log at INFO once every 10 times
+          // For metadata table, log at DEBUG. For data table, log at INFO.
           if (metaClient.isMetadataTable()) {
             LOG.debug("Building file system view for partitions: {}", partitionSet);
           } else {
-            partitionViewBuildSamplingLogger.logInfoOrDebug(
-                "Building file system view for partitions: {}", partitionSet);
+            LOG.info("Building file system view for partitions: {}", partitionSet);
           }
 
           // Pairs of relative partition path and absolute partition path
@@ -469,12 +465,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!isPartitionAvailableInStore(partitionPathStr)) {
         // Not loaded yet
         try {
-          // For metadata table, always log at DEBUG. For data table, log at INFO once every 10 times
+          // For metadata table, log at DEBUG. For data table, log at INFO.
           if (metaClient.isMetadataTable()) {
             LOG.debug("Building file system view for partition ({})", partitionPathStr);
           } else {
-            partitionViewBuildSamplingLogger.logInfoOrDebug(
-                "Building file system view for partition ({})", partitionPathStr);
+            LOG.info("Building file system view for partition ({})", partitionPathStr);
           }
           List<HoodieFileGroup> groups = addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
           if (groups.isEmpty()) {
