@@ -52,27 +52,14 @@ public class SamplingLogger {
    *
    * @return true if the caller should log at INFO level, false for DEBUG level
    */
-  private boolean shouldLogAtInfo() {
+  @VisibleForTesting
+  boolean shouldLogAtInfo() {
     return counter.incrementAndGet() % sampleFrequency == 0;
   }
 
   /**
    * Logs a message at INFO level if it's time to sample, otherwise at DEBUG level.
-   *
-   * @param message the log message (can contain {} placeholders)
-   * @param args    the arguments to substitute into the message
-   */
-  public void logInfoOrDebug(String message, Object... args) {
-    if (shouldLogAtInfo()) {
-      logger.info(message, args);
-    } else {
-      logger.debug(message, args);
-    }
-  }
-
-  /**
-   * Logs a message at INFO level if it's time to sample, otherwise at DEBUG level.
-   * Uses a Supplier to lazily evaluate arguments
+   * Uses a Supplier to lazily evaluate arguments, avoiding computation when logging is disabled.
    *
    * @param message      the log message (can contain {} placeholders)
    * @param argsSupplier a supplier that provides the arguments to substitute into the message

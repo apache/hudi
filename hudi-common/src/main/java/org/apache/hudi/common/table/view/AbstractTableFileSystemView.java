@@ -399,9 +399,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         try {
           // For metadata table, log at DEBUG. For data table, log at INFO.
           if (metaClient.isMetadataTable()) {
-            LOG.debug("Building file system view for partitions: {}", partitionSet);
+            LOG.debug("Building file system view for {} partition(s)", partitionSet.size());
           } else {
-            LOG.info("Building file system view for partitions: {}", partitionSet);
+            LOG.info("Building file system view for {} partition(s)", partitionSet.size());
           }
 
           // Pairs of relative partition path and absolute partition path

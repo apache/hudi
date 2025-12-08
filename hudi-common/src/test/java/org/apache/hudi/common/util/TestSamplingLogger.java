@@ -22,18 +22,18 @@ package org.apache.hudi.common.util;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-class TestSamplingLogger {
+public class TestSamplingLogger {
 
   @Test
-  void testShouldLogAtInfoWithFrequency5() {
+  public void testShouldLogAtInfoWithFrequency5() {
     Logger mockLogger = mock(Logger.class);
     SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);
 
@@ -57,7 +57,7 @@ class TestSamplingLogger {
   }
 
   @Test
-  void testShouldLogAtInfoWithFrequency1() {
+  public void testShouldLogAtInfoWithFrequency1() {
     Logger mockLogger = mock(Logger.class);
     SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 1);
 
@@ -68,33 +68,38 @@ class TestSamplingLogger {
   }
 
   @Test
-  void testLogInfoOrDebugCallsCorrectMethod() {
+  public void testLogInfoOrDebugWithSupplierOnlyEvaluatesWhenNeeded() {
     Logger mockLogger = mock(Logger.class);
-    SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);
+    when(mockLogger.isDebugEnabled()).thenReturn(false);
 
-    // Make 10 calls
+    SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);
+    AtomicInteger supplierCallCount = new AtomicInteger(0);
+
     for (int i = 0; i < 10; i++) {
-      samplingLogger.logInfoOrDebug("Test message {}", i);
+      samplingLogger.logInfoOrDebug("Test message {}", () -> {
+        supplierCallCount.incrementAndGet();
+        return new Object[]{"arg"};
+      });
     }
 
-    // Should have called info() 2 times (at calls 5 and 10)
-    verify(mockLogger, times(2)).info(anyString(), any(Object[].class));
-
-    // Should have called debug() 8 times (calls 1-4 and 6-9)
-    verify(mockLogger, times(8)).debug(anyString(), any(Object[].class));
+    assertEquals(2, supplierCallCount.get());
   }
 
   @Test
-  void testLogInfoOrDebugWithMultipleArgs() {
+  public void testLogInfoOrDebugWithSupplierEvaluatesForDebugWhenEnabled() {
     Logger mockLogger = mock(Logger.class);
-    SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 2);
+    when(mockLogger.isDebugEnabled()).thenReturn(true);
 
-    // Call 1 - should be DEBUG
-    samplingLogger.logInfoOrDebug("Message with {} and {}", "arg1", "arg2");
-    verify(mockLogger, times(1)).debug("Message with {} and {}", new Object[]{"arg1", "arg2"});
+    SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);
+    AtomicInteger supplierCallCount = new AtomicInteger(0);
 
-    // Call 2 - should be INFO
-    samplingLogger.logInfoOrDebug("Message with {} and {}", "arg3", "arg4");
-    verify(mockLogger, times(1)).info("Message with {} and {}", new Object[]{"arg3", "arg4"});
+    for (int i = 0; i < 10; i++) {
+      samplingLogger.logInfoOrDebug("Test message {}", () -> {
+        supplierCallCount.incrementAndGet();
+        return new Object[]{"arg"};
+      });
+    }
+
+    assertEquals(10, supplierCallCount.get());
   }
 }
