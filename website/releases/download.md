@@ -146,7 +146,7 @@ The end-of-life (EOL) releases will be archived and the procedures below will be
 
 * The EOL release source artifacts will be removed from [the distribution site](https://downloads.apache.org/hudi/)
 * The EOL release source artifacts will still be available from [the archive site](https://archive.apache.org/dist/hudi/)
-* The EOL release binary artifacts will still be available from package managers, such as Maven central, crates.io, and PyPi.org.
+* The EOL release binary artifacts will still be available from package manager sites, such as [Maven Central](https://central.sonatype.com/), [crates.io](https://crates.io), and [PyPi](https://pypi.org)
 * The EOL release notes will be removed from Hudi website, but kept accessible via `https://hudi.apache.org/releases/release-<EOL-release-version>`
 * The EOL release versioned docs will be removed from Hudi website
 
