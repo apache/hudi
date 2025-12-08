@@ -59,7 +59,7 @@ public class HiveSchemaUtil {
   public static final String DOUBLE_TYPE_NAME = "double";
   public static final String STRING_TYPE_NAME = "string";
   public static final String BINARY_TYPE_NAME = "binary";
-  public static final String DATE_TYPE_NAME = "DATE";
+  public static final String DATE_TYPE_NAME = "date";
 
   /**
    * Get the schema difference between the storage schema and hive table schema.
@@ -228,7 +228,7 @@ public class HiveSchemaUtil {
       case FIXED:
         return BINARY_TYPE_NAME;
       case DATE:
-        return DATE_TYPE_NAME;
+        return "DATE";
       case TIMESTAMP:
         if (!supportTimestamp) {
           return BIGINT_TYPE_NAME;
