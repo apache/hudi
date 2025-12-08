@@ -20,8 +20,8 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
