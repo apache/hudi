@@ -1207,11 +1207,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .newBuilder()
         .withPreCommitValidator(SqlQueryEqualityPreCommitValidator.class.getName())
         .withPrecommitValidatorEqualitySqlQueries(
-            "select " +
-                "sum(hash(driver)) as hash_driver, " +
-                "sum(hash(rider)) as hash_rider, " +
-                "sum(hash(extra_column1)) as hash_extra_column1 " +
-                "from <TABLE_NAME>")
+            "select "
+                + "sum(hash(driver)) as hash_driver, "
+                + "sum(hash(rider)) as hash_rider, "
+                + "sum(hash(extra_column1)) as hash_extra_column1 "
+                + "from <TABLE_NAME>")
         .build();
     HoodieWriteConfig clusteringWriteConfig =
         getConfigBuilder(latestSchemaStr)
