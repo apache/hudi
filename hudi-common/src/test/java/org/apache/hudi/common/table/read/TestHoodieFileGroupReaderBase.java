@@ -628,7 +628,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertRecordsEqual(schema, record, positionBased.getRecord());
             assertEquals(keyBased.getRecordKey(), recordKey);
             assertEquals(positionBased.getRecordKey(), recordKey);
-            assertEquals(schema, readerContext.getRecordContext().getSchemaFromBufferRecord(keyBased).toAvroSchema());
+            assertEquals(schema, readerContext.getRecordContext().getSchemaFromBufferRecord(keyBased));
             assertEquals(readerContext.getRecordContext().convertValueToEngineType(timestamp), positionBased.getOrderingValue());
           }
         }

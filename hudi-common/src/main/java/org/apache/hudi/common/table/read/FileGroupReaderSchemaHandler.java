@@ -251,7 +251,7 @@ public class FileGroupReaderSchemaHandler<T> {
       requiredFields.add(customDeleteMarkerKeyAndValue.get().getLeft());
     }
     // Add _hoodie_operation if it exists in table schema
-    if (tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
+    if (tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       requiredFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
     }
 
