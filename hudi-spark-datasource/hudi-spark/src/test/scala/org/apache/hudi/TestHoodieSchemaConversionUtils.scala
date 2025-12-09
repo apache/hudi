@@ -22,9 +22,10 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSch
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.spark.sql.types._
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.scalatest.{FunSuite, Matchers}
 
-import scala.collection.JavaConverters._
+import java.util.Arrays
 
 class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
 
@@ -68,8 +69,8 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(convertedStruct.fields(8).dataType == BinaryType)
   }
 
-  test("test HoodieSchema to Spark conversion for all primitive types") {
-    // Create HoodieSchema with all primitive types
+  test("test HoodieSchema to Spark conversion for all primitive types and enum") {
+    // Create HoodieSchema with all primitive types and enum
     val fields = java.util.Arrays.asList(
       HoodieSchemaField.of("bool", HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
       HoodieSchemaField.of("int", HoodieSchema.create(HoodieSchemaType.INT)),
@@ -78,13 +79,15 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
       HoodieSchemaField.of("double", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
       HoodieSchemaField.of("string", HoodieSchema.create(HoodieSchemaType.STRING)),
       HoodieSchemaField.of("bytes", HoodieSchema.create(HoodieSchemaType.BYTES)),
+      HoodieSchemaField.of("fixed", HoodieSchema.createFixed("MD5", "com.example", "MD5 hash", 16)),
+      HoodieSchemaField.of("enum", HoodieSchema.createEnum("Color", "com.example", "Color enum", Arrays.asList("RED", "GREEN", "BLUE"))),
       HoodieSchemaField.of("null", HoodieSchema.create(HoodieSchemaType.NULL))
     )
     val hoodieSchema = HoodieSchema.createRecord("AllPrimitives", "test", null, fields)
 
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
 
-    assert(structType.fields.length == 8)
+    assert(structType.fields.length == 10)
     assert(structType.fields(0).dataType == BooleanType)
     assert(structType.fields(1).dataType == IntegerType)
     assert(structType.fields(2).dataType == LongType)
@@ -92,8 +95,10 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(structType.fields(4).dataType == DoubleType)
     assert(structType.fields(5).dataType == StringType)
     assert(structType.fields(6).dataType == BinaryType)
-    assert(structType.fields(7).dataType == NullType)
-    assert(structType.fields(7).nullable) // Null type is always nullable
+    assert(structType.fields(7).dataType == BinaryType)
+    assert(structType.fields(8).dataType == StringType)
+    assert(structType.fields(9).dataType == NullType)
+    assert(structType.fields(9).nullable) // Null type is always nullable
   }
 
   test("test logical types conversion - date, timestamp, decimal") {
@@ -193,23 +198,23 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
   test("test SchemaType enum values for logical types") {
     // Verify that DATE, TIMESTAMP, DECIMAL are properly recognized as distinct types
     val dateSchema = HoodieSchema.createDate()
-    assert(dateSchema.getType == HoodieSchemaType.DATE)
+    assertEquals(dateSchema.getType, HoodieSchemaType.DATE)
 
     val timestampSchema = HoodieSchema.createTimestampMicros()
-    assert(timestampSchema.getType == HoodieSchemaType.TIMESTAMP)
+    assertEquals(timestampSchema.getType, HoodieSchemaType.TIMESTAMP)
 
     val decimalSchema = HoodieSchema.createDecimal(10, 2)
-    assert(decimalSchema.getType == HoodieSchemaType.DECIMAL)
+    assertEquals(decimalSchema.getType, HoodieSchemaType.DECIMAL)
 
     // Verify conversion to Spark types
     val dateType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(dateSchema)
-    assert(dateType == DateType)
+    assertEquals(dateType, DateType)
 
     val timestampType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(timestampSchema)
-    assert(timestampType == TimestampType)
+    assertEquals(timestampType, TimestampType)
 
     val decimalType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(decimalSchema)
-    assert(decimalType == DecimalType(10, 2))
+    assertEquals(decimalType, DecimalType(10, 2))
   }
 
   test("test conversion error handling with duplicate field names") {
