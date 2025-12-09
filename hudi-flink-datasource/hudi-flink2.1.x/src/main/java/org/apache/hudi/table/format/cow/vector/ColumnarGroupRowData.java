@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.model;
+package org.apache.hudi.table.format.cow.vector;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
@@ -28,127 +28,116 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.types.variant.Variant;
 
-import java.util.Map;
-import java.util.function.Function;
+public class ColumnarGroupRowData implements RowData {
 
-/**
- * RowData implementation used when reading from Flink bootstrapped table. In these tables, the partition values
- * are not always written to the data files, so we need to use the values inferred from the file's partition path.
- */
-public class BootstrapRowData implements RowData {
-  private final RowData row;
-  private final Map<Integer, Object> partitionOrdinalToValues;
+  HeapRowColumnVector vector;
+  int rowId;
+  int index;
 
-  public BootstrapRowData(RowData row, Map<Integer, Object> partitionOrdinalToValues) {
-    this.row = row;
-    this.partitionOrdinalToValues = partitionOrdinalToValues;
+  public ColumnarGroupRowData(HeapRowColumnVector vector, int rowId, int index) {
+    this.vector = vector;
+    this.rowId = rowId;
+    this.index = index;
   }
 
   @Override
   public int getArity() {
-    return row.getArity();
+    return vector.vectors.length;
   }
 
   @Override
   public RowKind getRowKind() {
-    return row.getRowKind();
+    return RowKind.INSERT;
   }
 
   @Override
-  public void setRowKind(RowKind kind) {
-    row.setRowKind(kind);
+  public void setRowKind(RowKind rowKind) {
+    throw new UnsupportedOperationException("Not support the operation!");
   }
 
   @Override
   public boolean isNullAt(int pos) {
-    return !partitionOrdinalToValues.containsKey(pos) && row.isNullAt(pos);
+    return
+        vector.vectors[pos].isNullAt(rowId)
+            || ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).isNullAt(index);
   }
 
   @Override
   public boolean getBoolean(int pos) {
-    return getValue(pos, row::getBoolean);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getBoolean(index);
   }
 
   @Override
   public byte getByte(int pos) {
-    return getValue(pos, row::getByte);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getByte(index);
   }
 
   @Override
   public short getShort(int pos) {
-    return getValue(pos, row::getShort);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getShort(index);
   }
 
   @Override
   public int getInt(int pos) {
-    return getValue(pos, row::getInt);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getInt(index);
   }
 
   @Override
   public long getLong(int pos) {
-    return getValue(pos, row::getLong);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getLong(index);
   }
 
   @Override
   public float getFloat(int pos) {
-    return getValue(pos, row::getFloat);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getFloat(index);
   }
 
   @Override
   public double getDouble(int pos) {
-    return getValue(pos, row::getDouble);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getDouble(index);
   }
 
   @Override
   public StringData getString(int pos) {
-    return getValue(pos, row::getString);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getString(index);
   }
 
   @Override
-  public DecimalData getDecimal(int pos, int precision, int scale) {
-    return getValue(pos, (p) -> row.getDecimal(p, precision, scale));
+  public DecimalData getDecimal(int pos, int i1, int i2) {
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getDecimal(index, i1, i2);
   }
 
   @Override
-  public TimestampData getTimestamp(int pos, int precision) {
-    return getValue(pos, (p) -> row.getTimestamp(p, precision));
+  public TimestampData getTimestamp(int pos, int i1) {
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getTimestamp(index, i1);
   }
 
   @Override
   public <T> RawValueData<T> getRawValue(int pos) {
-    return getValue(pos, row::getRawValue);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getRawValue(index);
   }
 
   @Override
   public byte[] getBinary(int pos) {
-    return getValue(pos, row::getBinary);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getBinary(index);
   }
 
   @Override
   public ArrayData getArray(int pos) {
-    // bootstrap partition values cannot be arrays
-    return row.getArray(pos);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getArray(index);
   }
 
   @Override
   public MapData getMap(int pos) {
-    // bootstrap partition values cannot be maps
-    return row.getMap(pos);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getMap(index);
   }
 
   @Override
   public RowData getRow(int pos, int numFields) {
-    // bootstrap partition values cannot be rows
-    return row.getRow(pos, numFields);
+    return ((HeapArrayVector) (vector.vectors[pos])).getArray(rowId).getRow(index, numFields);
   }
 
-  private <T> T getValue(int pos, Function<Integer, T> getter) {
-    if (row.isNullAt(pos) && partitionOrdinalToValues.containsKey(pos)) {
-      return (T) partitionOrdinalToValues.get(pos);
-    }
-    return getter.apply(pos);
-  }
-
+  @Override
   public Variant getVariant(int i) {
     throw new UnsupportedOperationException("Variant is not supported yet.");
   }
