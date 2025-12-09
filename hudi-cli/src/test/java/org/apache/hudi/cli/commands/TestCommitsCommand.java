@@ -590,17 +590,19 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     // Create inflight commits
-    InstantFileNameGenerator V1_INSTANT_FILE_NAME_GENERATOR = new InstantFileNameGeneratorV1();
+    InstantFileNameGenerator v1InstantNameGenerator = new InstantFileNameGeneratorV1();
     List<String> fileNames = Arrays.asList(
-        V1_INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(oldInstantTime1),
-        V1_INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(
+        v1InstantNameGenerator.makeInflightCommitFileName(oldInstantTime1),
+        v1InstantNameGenerator.makeCommitFileName(
             oldInstantTime2 + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        V1_INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(oldInstantTime3));
+        v1InstantNameGenerator.makeInflightCommitFileName(oldInstantTime3));
     fileNames.forEach(name -> {
       try {
         Path filePath = new Path(basePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
         HoodieTestDataGenerator.createEmptyFile(basePath(), filePath, storageConf());
-      } catch (IOException ignore) {}
+      } catch (IOException ignored) {
+        // Exception ignored.
+      }
     });
 
     // Reload meta client to pick up new instants
