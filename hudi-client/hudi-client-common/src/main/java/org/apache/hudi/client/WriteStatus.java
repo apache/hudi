@@ -29,8 +29,7 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
@@ -49,49 +48,33 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 /**
  * Status of a write operation.
  */
+@Data
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 @Slf4j
 public class WriteStatus implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
-  @Getter
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  @Getter
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   // true if this WriteStatus refers to a write happening in metadata table.
-  @Getter
   private final boolean isMetadataTable;
-  @Getter
-  @Setter
   private Throwable globalError = null;
 
-  @Getter
-  @Setter
   private String fileId = null;
 
-  @Getter
-  @Setter
   private String partitionPath = null;
 
-  @Getter
-  @Setter
   private HoodieWriteStat stat = null;
 
-  @Getter
-  @Setter
   private long totalRecords = 0;
-  @Getter
-  @Setter
   private long totalErrorRecords = 0;
 
-  @Getter
   private final double failureFraction;
   private boolean trackSuccessRecords;
   private final transient Random random;
-  @Getter
   private IndexStats indexStats = new IndexStats();
 
   public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
@@ -239,18 +222,5 @@ public class WriteStatus implements Serializable {
 
   public boolean isTrackingSuccessfulWrites() {
     return trackSuccessRecords;
-  }
-
-  @Override
-  public String toString() {
-    return "WriteStatus {"
-        + "isMetadataTable=" + isMetadataTable
-        + ", fileId=" + fileId
-        + ", writeStat=" + stat
-        + ", globalError='" + globalError + '\''
-        + ", hasErrors='" + hasErrors() + '\''
-        + ", errorCount='" + totalErrorRecords + '\''
-        + ", errorPct='" + (100.0 * totalErrorRecords) / totalRecords + '\''
-        + '}';
   }
 }

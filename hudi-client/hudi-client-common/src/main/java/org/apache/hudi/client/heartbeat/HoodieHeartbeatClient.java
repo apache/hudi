@@ -25,8 +25,8 @@ import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Data;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -71,38 +71,15 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     this.instantToHeartbeatMap = new ConcurrentHashMap<>();
   }
 
+  @Data
   static class Heartbeat {
 
-    @Getter
-    @Setter
     private String instantTime;
     private Boolean isHeartbeatStarted = false;
     private Boolean isHeartbeatStopped = false;
-    @Getter
-    @Setter
     private Long lastHeartbeatTime;
-    @Getter
-    @Setter
     private Integer numHeartbeats = 0;
-    @Getter
-    @Setter
     private Timer timer = new Timer(true);
-
-    public Boolean isHeartbeatStarted() {
-      return isHeartbeatStarted;
-    }
-
-    public void setHeartbeatStarted(Boolean heartbeatStarted) {
-      isHeartbeatStarted = heartbeatStarted;
-    }
-
-    public Boolean isHeartbeatStopped() {
-      return isHeartbeatStopped;
-    }
-
-    public void setHeartbeatStopped(Boolean heartbeatStopped) {
-      isHeartbeatStopped = heartbeatStopped;
-    }
 
     @Override
     public String toString() {
@@ -139,20 +116,16 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   public void start(String instantTime) {
     log.info("Received request to start heartbeat for instant time {}", instantTime);
     Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
-    ValidationUtils.checkArgument(heartbeat == null || !heartbeat.isHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
-    if (heartbeat != null && heartbeat.isHeartbeatStarted()) {
-      // heartbeat already started, NO_OP
-    } else {
-      Heartbeat newHeartbeat = new Heartbeat();
-      newHeartbeat.setHeartbeatStarted(true);
-      instantToHeartbeatMap.put(instantTime, newHeartbeat);
-      // Ensure heartbeat is generated for the first time with this blocking call.
-      // Since timer submits the task to a thread, no guarantee when that thread will get CPU
-      // cycles to generate the first heartbeat.
-      updateHeartbeat(instantTime);
-      newHeartbeat.getTimer().scheduleAtFixedRate(new HeartbeatTask(instantTime), this.heartbeatIntervalInMs,
-          this.heartbeatIntervalInMs);
-    }
+    ValidationUtils.checkArgument(heartbeat == null || !heartbeat.getIsHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
+    Heartbeat newHeartbeat = new Heartbeat();
+    newHeartbeat.setIsHeartbeatStopped(true);
+    instantToHeartbeatMap.put(instantTime, newHeartbeat);
+    // Ensure heartbeat is generated for the first time with this blocking call.
+    // Since timer submits the task to a thread, no guarantee when that thread will get CPU
+    // cycles to generate the first heartbeat.
+    updateHeartbeat(instantTime);
+    newHeartbeat.getTimer().scheduleAtFixedRate(new HeartbeatTask(instantTime), this.heartbeatIntervalInMs,
+        this.heartbeatIntervalInMs);
   }
 
   /**
@@ -188,7 +161,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
    * @throws IOException
    */
   private boolean isHeartbeatStarted(Heartbeat heartbeat) {
-    return heartbeat != null && heartbeat.isHeartbeatStarted() && !heartbeat.isHeartbeatStopped();
+    return heartbeat != null && heartbeat.getIsHeartbeatStarted() && !heartbeat.getIsHeartbeatStopped();
   }
 
   /**
@@ -199,7 +172,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   private void stopHeartbeatTimer(Heartbeat heartbeat) {
     log.info("Stopping heartbeat for instant {}", heartbeat.getInstantTime());
     heartbeat.getTimer().cancel();
-    heartbeat.setHeartbeatStopped(true);
+    heartbeat.setIsHeartbeatStopped(true);
     log.info("Stopped heartbeat for instant {}", heartbeat.getInstantTime());
   }
 

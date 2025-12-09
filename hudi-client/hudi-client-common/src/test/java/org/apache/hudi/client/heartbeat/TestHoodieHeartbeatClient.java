@@ -111,6 +111,6 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stopHeartbeatTimers();
     assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
-    assertTrue(hoodieHeartbeatClient.getHeartbeat(instantTime1).isHeartbeatStopped());
+    assertTrue(hoodieHeartbeatClient.getHeartbeat(instantTime1).getIsHeartbeatStopped());
   }
 }

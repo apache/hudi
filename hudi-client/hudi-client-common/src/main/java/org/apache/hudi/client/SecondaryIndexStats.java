@@ -18,8 +18,7 @@
 
 package org.apache.hudi.client;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
 import java.io.Serializable;
 
@@ -27,8 +26,7 @@ import java.io.Serializable;
  * Class used to hold secondary index metadata stats. These stats are generated from
  * various write handles during write.
  */
-@Getter
-@Setter
+@Data
 public class SecondaryIndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 

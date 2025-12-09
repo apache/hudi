@@ -30,22 +30,17 @@ import java.util.List;
  * name, min record key and max record key.
  */
 @Getter
+@Setter
 class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
   private final List<String> fileNameList = new ArrayList<>();
   private final String minRecordKey;
   private final String maxRecordKey;
-  @Setter
   private String rightSubTreeMax = null;
-  @Setter
   private String leftSubTreeMax = null;
-  @Setter
   private String rightSubTreeMin = null;
-  @Setter
   private String leftSubTreeMin = null;
-  @Setter
   private KeyRangeNode left = null;
-  @Setter
   private KeyRangeNode right = null;
 
   /**
