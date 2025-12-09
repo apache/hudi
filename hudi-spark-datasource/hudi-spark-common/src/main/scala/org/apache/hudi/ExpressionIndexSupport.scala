@@ -243,6 +243,13 @@ class ExpressionIndexSupport(spark: SparkSession,
     //       instead of simply filtering in the ones we're interested in the schema
     val (indexSchema, targetIndexedColumns) = composeIndexSchema(sortedTargetColumnsSet.toSeq, indexedColumns, tableSchema, expressionIndexQuery)
 
+    // Extract the expression result type from indexSchema (e.g., IntegerType for hour(ts))
+    // The schema contains fields like {colName}_minValue with the correct data type
+    val expressionResultType: DataType = indexSchema.fields
+      .find(field => field.name.endsWith(s"_${HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE}"))
+      .map(_.dataType)
+      .getOrElse(throw new IllegalStateException(s"Could not find minValue field in index schema: ${indexSchema.fieldNames.mkString(", ")}"))
+
     // Here we perform complex transformation which requires us to modify the layout of the rows
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
@@ -264,7 +271,10 @@ class ExpressionIndexSupport(spark: SparkSession,
           checkState(minValueWrapper != null && maxValueWrapper != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
 
           val colName = r.getColumnName
-          val colType = tableSchemaFieldMap(colName).dataType
+          // For expression indexes, use the expression result type (e.g., IntegerType for hour(ts))
+          // instead of the source column type (e.g., TimestampType for ts)
+          // This is critical for expressions that change the data type
+          val colType = expressionResultType
 
           val valueMetadata = getValueMetadata(r.getValueType)
           val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata, useJava8api)
@@ -327,7 +337,11 @@ class ExpressionIndexSupport(spark: SparkSession,
     val dataType: DataType = expressionIndexQuery match {
       case eq: EqualTo => eq.right.asInstanceOf[Literal].dataType
       case in: In => in.list(0).asInstanceOf[Literal].dataType
-      case _ => targetIndexedFields(0).dataType
+      case _ =>
+        // For expression indexes, use the expression's return type (e.g., IntegerType for hour(ts))
+        // instead of the source column type (e.g., TimestampType for ts)
+        // This is critical for expressions that change the data type
+        expressionIndexQuery.dataType
     }
 
     (StructType(
