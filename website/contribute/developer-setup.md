@@ -111,17 +111,17 @@ with multi-threaded, could get your compilation in 1.5 to 2 mins.
 
 If you wish to run any single test class in java. 
 ```shell
-mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner -Dspark3.5
 ```
 
 If you wish to run a single test method in java. 
 ```shell
-mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR 
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR -Dspark3.5
 ```
 
 To filter particular scala test:
 ```shell
-mvn -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " -Dtest=abc -DfailIfNoTests=false test -pl packaging/hudi-spark-bundle -am
+mvn -Dsuites="org.apache.spark.sql.hudi.ddl.TestSpark3DDL @Test Chinese table " -Dtest=abc -DfailIfNoTests=false test -pl packaging/hudi-spark-bundle -am -Dspark3.5
 ```
 -Dtest=abc will assist in skipping all java tests.
 -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " filters for a single scala test.
@@ -129,7 +129,7 @@ mvn -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " -Dte
 - Run an Integration Test
 
 ```shell
-mvn -T 2C -Pintegration-tests -DfailIfNoTests=false -Dit.test=ITTestHoodieSanity#testRunHoodieJavaAppOnMultiPartitionKeysMORTable verify
+mvn -T 2C -Pintegration-tests -DfailIfNoTests=false -Dit.test=ITTestHoodieSanity#testRunHoodieJavaAppOnMultiPartitionKeysMORTable verify -Dspark3.5
 ```
 
 `verify` phase runs the integration test and cleans up the docker cluster after execution. To retain the docker cluster use
