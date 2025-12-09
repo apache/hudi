@@ -124,7 +124,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, HoodieSchema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient);
+  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, HoodieSchema schema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient);
 
   public abstract String getCustomPayload();
 

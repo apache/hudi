@@ -583,7 +583,6 @@ public final class HoodieSchemaUtils {
    * @return projected schema containing only specified fields
    */
   public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
-    // TODO add test cases for this method
     return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
   }
 }

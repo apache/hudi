@@ -185,7 +185,7 @@ public class SparkRecordMergingUtils {
    * @param newSchema    New schema.
    * @param readerSchema Reader schema containing all the fields to read.
    * @return The ID to {@link StructField} instance mapping of the merged schema, and the
-   * {@link StructType} and schema of the merged schema.
+   * {@link StructType} and {@link HoodieSchema} of the merged schema.
    */
   public static Pair<Map<Integer, StructField>, Pair<StructType, HoodieSchema>> getCachedMergedSchema(HoodieSchema oldSchema,
                                                                                                       HoodieSchema newSchema,
