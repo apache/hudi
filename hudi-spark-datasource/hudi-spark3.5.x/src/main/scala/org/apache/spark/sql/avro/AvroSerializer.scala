@@ -26,7 +26,8 @@ import org.apache.hudi.common.schema.HoodieSchemaType
 import org.apache.hudi.common.schema.HoodieSchemaType._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
-import org.apache.spark.sql.avro.AvroUtils.{AvroMatchedField, toFieldStr}
+import org.apache.spark.sql.avro.AvroUtils.toFieldStr
+import org.apache.spark.sql.avro.{HoodieSchemaHelper, HoodieMatchedField}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
@@ -303,19 +304,18 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
                                  catalystPath: Seq[String],
                                  avroPath: Seq[String]): InternalRow => Record = {
 
-    //TODO do we also need to replace this with HoodieSchema at some point?
-    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(
-      hoodieStruct.toAvroSchema, catalystStruct, avroPath, catalystPath, positionalFieldMatch)
+    val hoodieSchemaHelper = new HoodieSchemaHelper(
+      hoodieStruct, catalystStruct, avroPath, catalystPath, positionalFieldMatch)
 
-    avroSchemaHelper.validateNoExtraCatalystFields(ignoreNullable = false)
-    avroSchemaHelper.validateNoExtraRequiredAvroFields()
+    hoodieSchemaHelper.validateNoExtraCatalystFields(ignoreNullable = false)
+    hoodieSchemaHelper.validateNoExtraRequiredHoodieFields()
 
-    val (avroIndices, fieldConverters) = avroSchemaHelper.matchedFields.map {
-      case AvroMatchedField(catalystField, _, avroField) =>
+    val (avroIndices, fieldConverters) = hoodieSchemaHelper.matchedFields.map {
+      case HoodieMatchedField(catalystField, _, hoodieField) =>
         val converter = newConverter(catalystField.dataType,
-          resolveNullableType(HoodieSchema.fromAvroSchema(avroField.schema()), catalystField.nullable),
-          catalystPath :+ catalystField.name, avroPath :+ avroField.name)
-        (avroField.pos(), converter)
+          resolveNullableType(hoodieField.schema(), catalystField.nullable),
+          catalystPath :+ catalystField.name, avroPath :+ hoodieField.name())
+        (hoodieField.pos(), converter)
     }.toArray.unzip
 
     val numFields = catalystStruct.length
