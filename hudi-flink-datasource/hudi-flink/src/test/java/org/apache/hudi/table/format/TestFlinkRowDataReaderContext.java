@@ -56,6 +56,7 @@ class TestFlinkRowDataReaderContext {
           HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
           HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
       ));
+
   private FlinkRowDataReaderContext readerContext;
 
   @BeforeEach

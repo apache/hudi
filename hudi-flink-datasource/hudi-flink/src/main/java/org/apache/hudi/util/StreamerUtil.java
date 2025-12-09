@@ -71,7 +71,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -609,19 +608,19 @@ public class StreamerUtil {
     return (long) conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
   }
 
-  public static Schema getTableAvroSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
+  public static HoodieSchema getTableSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    return schemaUtil.getTableAvroSchema(includeMetadataFields);
+    return schemaUtil.getTableSchema(includeMetadataFields);
   }
 
-  public static Schema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
+  public static HoodieSchema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
     if (StringUtils.isNullOrEmpty(path) || !StreamerUtil.tableExists(path, hadoopConf)) {
       return null;
     }
 
     try {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
-      return getTableAvroSchema(metaClient, false);
+      return getTableSchema(metaClient, false);
     } catch (Exception e) {
       LOG.error("Failed to resolve the latest table schema", e);
     }

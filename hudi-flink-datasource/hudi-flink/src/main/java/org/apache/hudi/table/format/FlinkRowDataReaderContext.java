@@ -108,7 +108,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema.toAvroSchema(), getSafePredicates(requiredSchema.toAvroSchema()));
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema.toAvroSchema()));
   }
 
   @Override

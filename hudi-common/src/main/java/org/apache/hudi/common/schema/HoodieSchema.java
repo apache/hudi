@@ -144,6 +144,17 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Parses an InputStream and returns the corresponding HoodieSchema.
+   *
+   * @param inputStream the InputStream to parse
+   * @return parsed HoodieSchema
+   * @throws HoodieAvroSchemaException if the schema string is invalid
+   */
+  public static HoodieSchema parse(InputStream inputStream) {
+    return new HoodieSchema.Parser().parse(inputStream);
+  }
+
+  /**
    * Creates a schema for the specified primitive type.
    *
    * @param type the primitive schema type

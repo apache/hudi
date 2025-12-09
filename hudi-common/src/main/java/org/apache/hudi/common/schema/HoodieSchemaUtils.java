@@ -18,8 +18,10 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -50,6 +52,9 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public final class HoodieSchemaUtils {
+
+  public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+  public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
@@ -154,6 +159,21 @@ public final class HoodieSchemaUtils {
 
     // Delegate to AvroSchemaUtils
     Schema nullableAvro = AvroSchemaUtils.createNullableSchema(schema.toAvroSchema());
+    return HoodieSchema.fromAvroSchema(nullableAvro);
+  }
+
+  /**
+   * Create a new schema by force changing all the fields as nullable.
+   * This is equivalent to AvroSchemaUtils.asNullable() but operates on HoodieSchema.
+   *
+   * @return a new schema with all the fields updated as nullable
+   * @throws IllegalArgumentException if schema is null
+   */
+  public static HoodieSchema asNullable(HoodieSchema schema) {
+    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+
+    // Delegate to AvroSchemaUtils
+    Schema nullableAvro = AvroSchemaUtils.asNullable(schema.toAvroSchema());
     return HoodieSchema.fromAvroSchema(nullableAvro);
   }
 
@@ -536,4 +556,21 @@ public final class HoodieSchemaUtils {
     HoodieSchema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
     return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
   }
+
+  private static HoodieSchema initRecordKeySchema() {
+    HoodieSchemaField recordKeyField =
+            createNewSchemaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    return HoodieSchema.createRecord(
+            "HoodieRecordKey",
+            "",
+            "",
+            false,
+            Collections.singletonList(recordKeyField)
+    );
+  }
+
+  public static HoodieSchema getRecordKeySchema() {
+    return RECORD_KEY_SCHEMA;
+  }
+
 }

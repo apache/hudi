@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -47,12 +48,11 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.utils.TestData;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -146,13 +146,13 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
     conf.set(FlinkOptions.ORDERING_FIELDS, ConfigUtils.getOrderingFieldsStrDuringWrite(writeConfigs));
     conf.set(FlinkOptions.OPERATION, operation);
-    Schema localSchema = getRecordAvroSchema(schemaStr);
+    HoodieSchema localSchema = getRecordSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
     AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
-        RowDataAvroQueryContexts.fromAvroSchema(localSchema).getAvroToRowDataConverter();
+        RowDataAvroQueryContexts.fromAvroSchema(localSchema.getAvroSchema()).getAvroToRowDataConverter();
     List<RowData> rowDataList = recordList.stream().map(record -> {
       try {
-        return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema, CollectionUtils.emptyProps()).get().getData());
+        return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema.getAvroSchema(), CollectionUtils.emptyProps()).get().getData());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -324,8 +324,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     }
   }
 
-  private static Schema getRecordAvroSchema(String schemaStr) {
-    Schema recordSchema = new Schema.Parser().parse(schemaStr);
-    return AvroSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromAvroSchema(recordSchema).getRowType().getLogicalType());
+  private static HoodieSchema getRecordSchema(String schemaStr) {
+    HoodieSchema recordSchema = new HoodieSchema.Parser().parse(schemaStr);
+    return HoodieSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromAvroSchema(recordSchema.getAvroSchema()).getRowType().getLogicalType());
   }
 }
