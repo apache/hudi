@@ -138,7 +138,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       ClosableIterator<RowData> dataFileIterator,
       HoodieSchema dataRequiredSchema,
       List<Pair<String, Object>> partitionFieldAndValues) {
-    //TODO revisit once HoodieEngineContext takes in HoodieSchema
     Map<Integer, Object> partitionOrdinalToValues = partitionFieldAndValues.stream()
         .collect(Collectors.toMap(
             pair -> dataRequiredSchema.toAvroSchema().getField(pair.getKey()).pos(),

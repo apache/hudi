@@ -87,8 +87,8 @@ public class TestAbstractConnectWriter {
         inputRecords = SchemaTestUtil.generateTestJsonRecords(0, NUM_RECORDS);
         expectedRecords = ((List<String>) inputRecords).stream().map(s -> {
           try {
-            return HoodieAvroUtils.rewriteRecord((GenericRecord) reader.read(null, DecoderFactory.get().jsonDecoder(schema.getAvroSchema(), s)),
-                schema.getAvroSchema());
+            return HoodieAvroUtils.rewriteRecord((GenericRecord) reader.read(null, DecoderFactory.get().jsonDecoder(schema.toAvroSchema(), s)),
+                schema.toAvroSchema());
           } catch (IOException exception) {
             throw new HoodieException("Error converting JSON records to AVRO");
           }
