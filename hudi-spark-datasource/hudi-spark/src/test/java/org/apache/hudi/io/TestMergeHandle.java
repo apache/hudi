@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -42,6 +41,8 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -66,7 +67,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -384,7 +384,7 @@ public class TestMergeHandle extends BaseTestHandle {
     // validate event time metadata if enabled
     if (validateEventTimeMetadata) {
       List<HoodieRecord> records = new ArrayList<>(inputAndExpectedDataSet.getExpectedRecordsMap().values());
-      validateEventTimeMetadata(writeStatus, writerProps.get("hoodie.payload.event.time.field").toString(), AVRO_SCHEMA, config, properties, records);
+      validateEventTimeMetadata(writeStatus, writerProps.get("hoodie.payload.event.time.field").toString(), HOODIE_SCHEMA, config, properties, records);
     } else {
       validateEventTimeMetadataNotSet(writeStatus);
     }
@@ -428,7 +428,7 @@ public class TestMergeHandle extends BaseTestHandle {
     assertNull(writeStatus.getStat().getMaxEventTime());
   }
 
-  private void validateEventTimeMetadata(WriteStatus writeStatus, String eventTimeFieldName, Schema schema, HoodieWriteConfig config,
+  private void validateEventTimeMetadata(WriteStatus writeStatus, String eventTimeFieldName, HoodieSchema schema, HoodieWriteConfig config,
                                          TypedProperties props, List<HoodieRecord> records) {
     long actualMinEventTime = writeStatus.getStat().getMinEventTime();
     long actualMaxEventTime = writeStatus.getStat().getMaxEventTime();
@@ -439,13 +439,13 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // Append event_time.
     records.forEach(record -> {
-      Object eventTimeValue = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
+      Object eventTimeValue = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
       if (eventTimeValue != null) {
         // Append event_time.
-        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema, eventTimeFieldName);
+        Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTimeValue = record.convertColumnValueForLogicalType(
-            field.get().schema(), eventTimeValue, keepConsistentLogicalTimestamp);
+            field.get().schema().toAvroSchema(), eventTimeValue, keepConsistentLogicalTimestamp);
         int length = eventTimeValue.toString().length();
         Long millisEventTime = null;
         if (length == 10) {

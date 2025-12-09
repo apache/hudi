@@ -21,6 +21,10 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.HadoopConfigUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -30,7 +34,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -66,9 +69,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -121,7 +121,7 @@ public class HoodieRealtimeRecordReaderUtils {
   /**
    * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
    */
-  public static Schema generateProjectionSchema(Schema writeSchema, Map<String, Schema.Field> schemaFieldsMap,
+  public static HoodieSchema generateProjectionSchema(HoodieSchema writeSchema, Map<String, HoodieSchemaField> schemaFieldsMap,
                                                 List<String> fieldNames) {
     /**
      * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
@@ -133,24 +133,23 @@ public class HoodieRealtimeRecordReaderUtils {
      * lower-cases
      *
      */
-    List<Schema.Field> projectedFields = new ArrayList<>();
+    List<HoodieSchemaField> projectedFields = new ArrayList<>();
     for (String fn : fieldNames) {
-      Schema.Field field = schemaFieldsMap.get(fn.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase());
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(createNewSchemaField(field));
+        projectedFields.add(HoodieSchemaUtils.createNewSchemaField(field));
       }
     }
 
-    Schema projectedSchema = Schema.createRecord(writeSchema.getName(), writeSchema.getDoc(),
-        writeSchema.getNamespace(), writeSchema.isError());
-    projectedSchema.setFields(projectedFields);
+    HoodieSchema projectedSchema = HoodieSchema.createRecord(writeSchema.getName(), writeSchema.getDoc().orElse(null),
+        writeSchema.getNamespace().orElse(null), writeSchema.isError(), projectedFields);
     return projectedSchema;
   }
 
-  public static Map<String, Schema.Field> getNameToFieldMap(Schema schema) {
+  public static Map<String, HoodieSchemaField> getNameToFieldMap(HoodieSchema schema) {
     return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
@@ -300,9 +299,9 @@ public class HoodieRealtimeRecordReaderUtils {
    *
    * @param schema Schema to be changed
    */
-  public static Schema addPartitionFields(Schema schema, List<String> partitioningFields) {
+  public static HoodieSchema addPartitionFields(HoodieSchema schema, List<String> partitioningFields) {
     final Set<String> firstLevelFieldNames =
-        schema.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toSet());
+        schema.getFields().stream().map(HoodieSchemaField::name).map(String::toLowerCase).collect(Collectors.toSet());
     List<String> fieldsToAdd = partitioningFields.stream().map(String::toLowerCase)
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
@@ -317,12 +316,12 @@ public class HoodieRealtimeRecordReaderUtils {
         .getFileReader(hoodieConfig, convertToStoragePath(path));
   }
 
-  private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
-    List<Schema.Field> newFields = new ArrayList<>();
+  private static HoodieSchema appendNullSchemaFields(HoodieSchema schema, List<String> newFieldNames) {
+    List<HoodieSchemaField> newFields = new ArrayList<>();
     for (String newField : newFieldNames) {
-      newFields.add(new Schema.Field(newField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
+      newFields.add(HoodieSchemaField.of(newField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE));
     }
-    return appendFieldsToSchema(schema, newFields);
+    return HoodieSchemaUtils.appendFieldsToSchema(schema, newFields);
   }
 
   private static HiveDecimalWritable toHiveDecimalWritable(byte[] bytes, Schema schema) {

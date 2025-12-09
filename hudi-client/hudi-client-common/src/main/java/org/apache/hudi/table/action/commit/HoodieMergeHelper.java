@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -56,8 +57,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @Slf4j
@@ -96,7 +95,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
     boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
-        && isStrictProjectionOf(readerSchema.toAvroSchema(), writerSchema.toAvroSchema());
+        && HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
     boolean shouldRewriteInWriterSchema = !isPureProjection

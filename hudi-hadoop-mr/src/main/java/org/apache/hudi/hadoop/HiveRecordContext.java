@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
+import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
@@ -163,6 +163,6 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   @Override
   public UnaryOperator<ArrayWritable> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
-    return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from.toAvroSchema(), to.toAvroSchema(), renamedColumns);
+    return record -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, from, to, renamedColumns);
   }
 }

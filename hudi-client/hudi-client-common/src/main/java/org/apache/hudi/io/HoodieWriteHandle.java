@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -56,7 +56,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -357,10 +356,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       Object eventTime = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
       if (eventTime != null) {
         // Append event_time.
-        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema.toAvroSchema(), eventTimeFieldName);
+        Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTime = record.convertColumnValueForLogicalType(
-            field.get().schema(), eventTime, keepConsistentLogicalTimestamp);
+            field.get().schema().toAvroSchema(), eventTime, keepConsistentLogicalTimestamp);
         Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
         metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
         return Option.of(metadata);
