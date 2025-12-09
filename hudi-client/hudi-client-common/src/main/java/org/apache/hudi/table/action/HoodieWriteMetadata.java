@@ -34,29 +34,22 @@ import java.util.Map;
 /**
  * Contains metadata, write-statuses and latency times corresponding to a commit/delta-commit action.
  */
+@Getter
 @NoArgsConstructor
 public class HoodieWriteMetadata<O> {
 
-  @Getter
   @Setter
   private O writeStatuses;
-  @Getter
   private Option<Duration> indexLookupDuration = Option.empty();
-  @Getter
   private Option<Long> sourceReadAndIndexDurationMs = Option.empty();
 
   // Will be set when auto-commit happens
   @Setter
-  @Getter
   private boolean isCommitted;
-  @Getter
   @Setter
   private Option<HoodieCommitMetadata> commitMetadata = Option.empty();
-  @Getter
   private Option<List<HoodieWriteStat>> writeStats = Option.empty();
-  @Getter
   private Option<Duration> indexUpdateDuration = Option.empty();
-  @Getter
   private Option<Duration> finalizeDuration = Option.empty();
   private Option<Map<String, List<String>>> partitionToReplaceFileIds = Option.empty();
 

@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.io.Serializable;
 
@@ -33,6 +34,7 @@ import java.io.Serializable;
 @AllArgsConstructor
 @Getter
 @NoArgsConstructor
+@ToString
 public class OperationResult<T> implements Serializable {
 
   private T operation;
@@ -45,11 +47,5 @@ public class OperationResult<T> implements Serializable {
     this.success = success;
     this.exception = exception;
     this.executed = true;
-  }
-
-  @Override
-  public String toString() {
-    return "OperationResult{operation=" + operation + ", executed=" + executed + ", success=" + success
-        + ", exception=" + exception + '}';
   }
 }

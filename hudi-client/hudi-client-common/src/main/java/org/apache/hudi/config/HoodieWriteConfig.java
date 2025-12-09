@@ -123,6 +123,7 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
 /**
  * Class storing configs for the HoodieWriteClient.
  */
+@Getter
 @Immutable
 @Slf4j
 @ConfigClassProperty(name = "Write Configurations",
@@ -930,36 +931,24 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
 
-  @Getter
   @Setter
   private ConsistencyGuardConfig consistencyGuardConfig;
-  @Getter
   private FileSystemRetryConfig fileSystemRetryConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
   // We keep track of original config and rewritten config
-  @Getter
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
-  @Getter
   @Setter
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
-  @Getter
   private HoodieMetadataConfig metadataConfig;
-  @Getter
   private HoodieMetricsConfig metricsConfig;
   private HoodieMetaserverConfig metaserverConfig;
-  @Getter
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
-  @Getter
   private HoodieCommonConfig commonConfig;
-  @Getter
   private HoodieStorageConfig storageConfig;
-  @Getter
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  @Getter
   private HoodieIndexingConfig indexingConfig;
-  @Getter
   private final EngineType engineType;
 
   /**

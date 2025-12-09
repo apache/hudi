@@ -18,8 +18,11 @@
 
 package org.apache.hudi.client.transaction.lock.models;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+@AllArgsConstructor
+@Getter
 public enum LockUpsertResult {
   // Lock was successfully created/updated with code 0
   SUCCESS(0),
@@ -28,10 +31,5 @@ public enum LockUpsertResult {
   // Unable to determine lock state due to transient errors with code 2
   UNKNOWN_ERROR(2);
 
-  @Getter
   private final int code;
-
-  LockUpsertResult(int code) {
-    this.code = code;
-  }
 }

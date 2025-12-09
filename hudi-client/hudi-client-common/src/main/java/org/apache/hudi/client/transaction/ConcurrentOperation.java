@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import lombok.Getter;
+import lombok.ToString;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -53,6 +54,7 @@ import static org.apache.hudi.common.util.CommitUtils.getPartitionAndFileIdWitho
  * Since we interchange payload types between AVRO specific records and POJO's, this object serves as
  * a common payload to manage these conversions.
  */
+@ToString(onlyExplicitlyIncluded = true)
 public class ConcurrentOperation {
 
   @Getter
@@ -60,8 +62,11 @@ public class ConcurrentOperation {
   private final HoodieMetadataWrapper metadataWrapper;
   @Getter
   private final Option<HoodieCommitMetadata> commitMetadataOption;
+  @ToString.Include
   private final String actionState;
+  @ToString.Include
   private final String actionType;
+  @ToString.Include
   private final String instantTime;
   @Getter
   private Set<Pair<String, String>> mutatedPartitionAndFileIds = Collections.emptySet();
@@ -183,14 +188,5 @@ public class ConcurrentOperation {
         .flatMap(ig -> ig.getSlices().stream())
         .map(fileSlice -> Pair.of(fileSlice.getPartitionPath(), fileSlice.getFileId()))
         .collect(Collectors.toSet());
-  }
-
-  @Override
-  public String toString() {
-    return "{"
-        + "actionType=" + this.getInstantActionType()
-        + ", instantTime=" + this.getInstantTimestamp()
-        + ", actionState=" + this.getInstantActionState()
-        + '\'' + '}';
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.io.Serializable;
@@ -31,6 +32,7 @@ import java.util.Map;
 /**
  * Base callback message, which contains commitTime and tableName only for now.
  */
+@AllArgsConstructor
 @Getter
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieWriteCommitCallbackMessage implements Serializable {
@@ -72,19 +74,5 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
                                           String basePath,
                                           List<HoodieWriteStat> hoodieWriteStat) {
     this(commitTime, tableName, basePath, hoodieWriteStat, Option.empty(), Option.empty());
-  }
-
-  public HoodieWriteCommitCallbackMessage(String commitTime,
-                                          String tableName,
-                                          String basePath,
-                                          List<HoodieWriteStat> hoodieWriteStat,
-                                          Option<String> commitActionType,
-                                          Option<Map<String, String>> extraMetadata) {
-    this.commitTime = commitTime;
-    this.tableName = tableName;
-    this.basePath = basePath;
-    this.hoodieWriteStat = hoodieWriteStat;
-    this.commitActionType = commitActionType;
-    this.extraMetadata = extraMetadata;
   }
 }
