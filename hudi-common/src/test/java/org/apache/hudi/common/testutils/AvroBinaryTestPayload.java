@@ -27,6 +27,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * The implementation of {@link HoodieRecordPayload} base on avro for testing.
@@ -56,5 +57,11 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  }
+
+  @Override
+  public boolean hasInsertValue(Schema schema, Properties properties) throws IOException {
+    // If there is no record bytes, then there is no insert value
+    return recordBytes.length != 0;
   }
 }

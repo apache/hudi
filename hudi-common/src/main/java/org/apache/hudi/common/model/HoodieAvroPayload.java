@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * This is a payload to wrap a existing Hoodie Avro Record. Useful to create a HoodieRecord over existing GenericRecords
@@ -74,5 +75,11 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   @Override
   public Comparable<?> getOrderingValue() {
     return orderingVal;
+  }
+
+  @Override
+  public boolean hasInsertValue(Schema schema, Properties properties) throws IOException {
+    // If there is no record bytes, then there is no insert value
+    return recordBytes.length != 0;
   }
 }

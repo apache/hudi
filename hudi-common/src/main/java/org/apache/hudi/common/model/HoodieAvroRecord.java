@@ -201,7 +201,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     } else if (this.data instanceof HoodieMetadataPayload) {
       return ((HoodieMetadataPayload) this.data).isDeleted();
     } else {
-      return !this.data.getInsertValue(deleteContext.getReaderSchema(), props).isPresent();
+      return !this.data.hasInsertValue(deleteContext.getReaderSchema(), props);
     }
   }
 

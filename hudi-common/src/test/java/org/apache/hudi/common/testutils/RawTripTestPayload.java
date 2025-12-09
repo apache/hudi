@@ -33,6 +33,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -136,5 +138,26 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     try (InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data))) {
       return FileIOUtils.readAsUTFString(iis, dataSize);
     }
+  }
+
+  public RawTripTestPayload clone() {
+    try {
+      return new RawTripTestPayload(unCompressData(jsonDataCompressed), rowKey, partitionPath, null);
+    } catch (IOException e) {
+      return null;
+    }
+  }
+
+  public HoodieRecord toHoodieRecord() {
+    return new HoodieAvroRecord(new HoodieKey(getRowKey(), getPartitionPath()), this);
+  }
+
+  public static String extractPartitionFromTimeField(String timeField) {
+    return timeField.split("T")[0].replace("-", "/");
+  }
+
+  @Override
+  public boolean hasInsertValue(Schema schema, Properties properties) throws IOException {
+    return !isDeleted;
   }
 }
