@@ -483,7 +483,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc = new HoodieLogBlock.HoodieLogBlockContentLocation(
         HoodieTestUtils.getStorage(basePath), null, 0, dataBlockContentBytes.length, 0);
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, Option.ofNullable(dataBlockContentBytes), false,
-        logBlockContentLoc, Option.ofNullable(getSimpleSchema().toAvroSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        logBlockContentLoc, Option.ofNullable(getSimpleSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
     long writtenSize = 0;
     int logBlockWrittenNum = 0;
     while (writtenSize < Integer.MAX_VALUE) {
@@ -581,7 +581,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         "Read records size should be equal to the written records size");
     assertEquals(convertAvroToSerializableIndexedRecords(copyOfRecords1), recordsRead1,
         "Both records lists should be the same. (ordering guaranteed)");
-    assertEquals(dataBlockRead.getSchema(), getSimpleSchema().toAvroSchema());
+    assertEquals(dataBlockRead.getSchema(), getSimpleSchema());
 
     reader.hasNext();
     nextBlock = reader.next();
@@ -619,24 +619,24 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         + "{\"name\":\"name\",\"type\":[\"string\",\"null\"]},"
         + "{\"name\":\"ts\",\"type\":[\"long\",\"null\"]}"
         + "]}";
-    Schema dataSchema = new Schema.Parser().parse(dataSchemaString);
-    Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+    HoodieSchema dataSchema = HoodieSchema.parse(dataSchemaString);
+    HoodieSchema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
         HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER, dataSchema);
-    GenericRecord insertedRecord = new GenericData.Record(dataSchema);
+    GenericRecord insertedRecord = new GenericData.Record(dataSchema.toAvroSchema());
     insertedRecord.put("uuid", 1);
     insertedRecord.put("name", "apple");
     insertedRecord.put("ts", 1100L);
 
-    GenericRecord updateBeforeImageRecord = new GenericData.Record(dataSchema);
+    GenericRecord updateBeforeImageRecord = new GenericData.Record(dataSchema.toAvroSchema());
     updateBeforeImageRecord.put("uuid", 2);
     updateBeforeImageRecord.put("name", "banana");
     updateBeforeImageRecord.put("ts", 1000L);
-    GenericRecord updateAfterImageRecord = new GenericData.Record(dataSchema);
+    GenericRecord updateAfterImageRecord = new GenericData.Record(dataSchema.toAvroSchema());
     updateAfterImageRecord.put("uuid", 2);
     updateAfterImageRecord.put("name", "blueberry");
     updateAfterImageRecord.put("ts", 1100L);
 
-    GenericRecord deletedRecord = new GenericData.Record(dataSchema);
+    GenericRecord deletedRecord = new GenericData.Record(dataSchema.toAvroSchema());
     deletedRecord.put("uuid", 3);
     deletedRecord.put("name", "cherry");
     deletedRecord.put("ts", 1000L);
@@ -655,7 +655,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), cdcSchema);
+    Reader reader = HoodieLogFormat.newReader(storage, writer.getLogFile(), cdcSchema.toAvroSchema());
     assertTrue(reader.hasNext());
     HoodieLogBlock block = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) block;
@@ -2797,7 +2797,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           "Read records size should be equal to the written records size");
       assertEquals(expectedRecords, recordsRead,
           "Both records lists should be the same. (ordering guaranteed)");
-      assertEquals(dataBlockRead.getSchema(), projectedSchema);
+      assertEquals(dataBlockRead.getSchema().toAvroSchema(), projectedSchema);
 
       int bytesRead = (int) BenchmarkCounter.getBytesRead();
 

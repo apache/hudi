@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger}
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.serialization.DefaultSerializer
 import org.apache.hudi.common.table.{HoodieTableMetaClient, PartialUpdateMode}
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
@@ -132,18 +133,21 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val recordMerger: HoodieRecordMerger = readerContext.getRecordMerger().get()
 
-  protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)
+  private val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
+
+  // TODO: This can be removed, it involves interfaces changes
+  protected override val avroSchema: Schema = schema.toAvroSchema
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
   private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
-  private lazy val cdcAvroSchema: Schema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
+  private lazy val cdcHoodieSchema: HoodieSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
     cdcSupplementalLoggingMode,
-    HoodieAvroUtils.removeMetadataFields(avroSchema)
+    HoodieSchemaUtils.removeMetadataFields(schema)
   )
 
-  private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcAvroSchema)
+  private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcHoodieSchema.toAvroSchema)
 
   private lazy val sparkPartitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
 
@@ -159,7 +163,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
    */
   private lazy val cdcRecordDeserializer: HoodieAvroDeserializer = {
-    sparkAdapter.createAvroDeserializer(cdcAvroSchema, cdcSparkSchema)
+    sparkAdapter.createAvroDeserializer(cdcHoodieSchema.toAvroSchema, cdcSparkSchema)
   }
 
   private lazy val projection: Projection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
@@ -418,7 +422,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
           recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
             toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
-            .map(record => BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext, orderingFieldNames, false))
+            .map(record => BufferedRecords.fromEngineRecord(record, HoodieSchema.fromAvroSchema(avroSchema), readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
           recordIter = loadFileSlice(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -447,7 +451,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           val cdcLogFiles = currentCDCFileSplit.getCdcFiles.asScala.map { cdcFile =>
             new HoodieLogFile(storage.getPathInfo(new StoragePath(basePath, cdcFile)))
           }.toArray
-          cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcAvroSchema)
+          cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcHoodieSchema.toAvroSchema)
         case REPLACE_COMMIT =>
           if (currentCDCFileSplit.getBeforeFileSlice.isPresent) {
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -561,7 +565,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    */
   private def convertBufferedRecordToJsonString(record: BufferedRecord[InternalRow]): UTF8String = {
     internalRowToJsonStringConverterMap.getOrElseUpdate(record.getSchemaId,
-      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId))))
+      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId).toAvroSchema)))
       .convert(record.getRecord)
   }
 

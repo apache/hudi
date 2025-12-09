@@ -358,7 +358,7 @@ public class TableSchemaResolver {
           lastBlock = (HoodieDataBlock) block;
         }
       }
-      return lastBlock != null ? lastBlock.getSchema() : null;
+      return lastBlock != null ? lastBlock.getSchema().toAvroSchema() : null;
     }
   }
 

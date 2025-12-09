@@ -38,12 +38,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.spark.util.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -62,9 +61,8 @@ import scala.collection.JavaConverters;
  * CLI command to display and trigger repair options.
  */
 @ShellComponent
+@Slf4j
 public class RepairsCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RepairsCommand.class);
   public static final String DEDUPLICATE_RETURN_PREFIX = "Deduplicated files placed in:  ";
 
   @ShellMethod(key = "repair deduplicate",
@@ -194,17 +192,17 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTimeline cleanerTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline().getCleanerTimeline();
-    LOG.info("Inspecting pending clean metadata in timeline for corrupted files");
+    log.info("Inspecting pending clean metadata in timeline for corrupted files");
     cleanerTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
       try {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
-        LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+        log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
             instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
-          LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+          log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
           TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
               instant, client.getInstantFileNameGenerator());
         } else {
@@ -218,7 +216,7 @@ public class RepairsCommand {
   public void showFailedCommits() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
-    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> LOG.warn("Empty Commit: " + hoodieInstant.toString()));
+    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> log.warn("Empty Commit: " + hoodieInstant.toString()));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "

@@ -50,12 +50,12 @@ import static org.mockito.Mockito.when;
 class TestFlinkRowDataReaderContext {
   private final StorageConfiguration<?> storageConfig = mock(StorageConfiguration.class);
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-  private static final List<HoodieSchemaField> FIELDS = Arrays.asList(
+  private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
+      Arrays.asList(
           HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
           HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
           HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
-  );
-  private static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.createRecord("TestRecord", null, null, FIELDS);
+      ));
 
   private FlinkRowDataReaderContext readerContext;
 
@@ -72,7 +72,7 @@ class TestFlinkRowDataReaderContext {
   @Test
   void testConstructEngineRecordWithFieldValues() {
     Object[] fieldVals = new Object[] {1, StringData.fromString("Alice"), true};
-    RowData row = readerContext.getRecordContext().constructEngineRecord(HOODIE_SCHEMA.getAvroSchema(), fieldVals);
+    RowData row = readerContext.getRecordContext().constructEngineRecord(SCHEMA, fieldVals);
     assertEquals(fieldVals[0], row.getInt(0));
     assertEquals(fieldVals[1], row.getString(1));
     assertEquals(fieldVals[2], row.getBoolean(2));
@@ -83,7 +83,7 @@ class TestFlinkRowDataReaderContext {
     RowData base = createBaseRow(1, "Alice", true);
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(HOODIE_SCHEMA.getAvroSchema(), updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0));
     assertEquals("Alice", result.getString(1).toString());
@@ -97,7 +97,7 @@ class TestFlinkRowDataReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, StringData.fromString("Bob"));
 
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(HOODIE_SCHEMA.getAvroSchema(), updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0)); // unchanged
     assertEquals("Bob", result.getString(1).toString()); // updated
@@ -112,7 +112,7 @@ class TestFlinkRowDataReaderContext {
     updates.put(0, 42);
     updates.put(1, StringData.fromString("Zoe"));
     updates.put(2, false);
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(HOODIE_SCHEMA.getAvroSchema(), updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(42, result.getInt(0));
     assertEquals("Zoe", result.getString(1).toString());
@@ -125,7 +125,7 @@ class TestFlinkRowDataReaderContext {
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, null);
-    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(HOODIE_SCHEMA.getAvroSchema(), updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
 
     assertEquals(5, result.getInt(0));
     assertTrue(result.isNullAt(1));

@@ -137,6 +137,13 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Parses a JSON schema string and returns the corresponding HoodieSchema allowing validateDefaults to be configured
+   */
+  public static HoodieSchema parse(String jsonSchema, boolean validateDefaults) {
+    return new HoodieSchema.Parser(validateDefaults).parse(jsonSchema);
+  }
+
+  /**
    * Parses an InputStream and returns the corresponding HoodieSchema.
    *
    * @param inputStream the InputStream to parse
@@ -642,6 +649,20 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Returns the key schema for map types.
+   *
+   * @return the key schema
+   * @throws IllegalStateException if this is not a map schema
+   */
+  public HoodieSchema getKeyType() {
+    if (type != HoodieSchemaType.MAP) {
+      throw new IllegalStateException("Cannot get key type from non-map schema: " + type);
+    }
+
+    return new HoodieSchema(Schema.create(Schema.Type.STRING));
+  }
+
+  /**
    * Returns the value schema for map types.
    *
    * @return the value schema
@@ -853,6 +874,10 @@ public class HoodieSchema implements Serializable {
      */
     public Parser() {
       this.avroParser = new Schema.Parser();
+    }
+
+    public Parser(boolean validateDefaults) {
+      this.avroParser = new Schema.Parser().setValidateDefaults(validateDefaults);
     }
 
     /**

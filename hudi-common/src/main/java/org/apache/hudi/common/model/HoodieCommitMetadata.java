@@ -386,6 +386,16 @@ public class HoodieCommitMetadata implements Serializable {
     return totalLogFiles;
   }
 
+  public Long getTotalLogBlocksCompacted() {
+    Long totalLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalLogBlocks += writeStat.getTotalLogBlocks();
+      }
+    }
+    return totalLogBlocks;
+  }
+
   public Long getTotalCompactedRecordsUpdated() {
     Long totalUpdateRecords = 0L;
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {

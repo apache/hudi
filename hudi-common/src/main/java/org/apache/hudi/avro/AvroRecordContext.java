@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
@@ -91,7 +92,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
+  public Object getValue(IndexedRecord record, HoodieSchema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, fieldName);
   }
 
@@ -128,17 +129,17 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+  public IndexedRecord extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
     try {
-      return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
+      return record.toIndexedRecord(schema.toAvroSchema(), properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
     } catch (IOException e) {
       throw new HoodieException("Failed to extract data from record: " + record, e);
     }
   }
 
   @Override
-  public IndexedRecord constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
-    GenericData.Record record = new GenericData.Record(recordSchema);
+  public IndexedRecord constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
+    GenericData.Record record = new GenericData.Record(recordSchema.toAvroSchema());
     for (int i = 0; i < fieldValues.length; i++) {
       record.put(i, fieldValues[i]);
     }
@@ -146,7 +147,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord mergeWithEngineRecord(Schema schema,
+  public IndexedRecord mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<IndexedRecord> baseRecord) {
     IndexedRecord engineRecord = baseRecord.getRecord();
@@ -162,7 +163,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
+  public GenericRecord convertToAvroRecord(IndexedRecord record, HoodieSchema schema) {
     return (GenericRecord) record;
   }
 
@@ -177,13 +178,13 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
+  public IndexedRecord toBinaryRow(HoodieSchema schema, IndexedRecord record) {
     return record;
   }
 
   @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
+  public UnaryOperator<IndexedRecord> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to.toAvroSchema(), renamedColumns);
   }
 
   @Override
