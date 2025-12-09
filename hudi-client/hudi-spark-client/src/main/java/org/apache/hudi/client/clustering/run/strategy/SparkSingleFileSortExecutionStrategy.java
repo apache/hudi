@@ -26,6 +26,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
@@ -62,7 +63,7 @@ public class SparkSingleFileSortExecutionStrategy<T>
                                                                    int numOutputGroups,
                                                                    String instantTime,
                                                                    Map<String, String> strategyParams,
-                                                                   Schema schema,
+                                                                   HoodieSchema schema,
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
@@ -78,7 +79,7 @@ public class SparkSingleFileSortExecutionStrategy<T>
     // Since clustering will write to single file group using HoodieUnboundedCreateHandle, set max file size to a large value.
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
-    BulkInsertPartitioner<Dataset<Row>> partitioner = getRowPartitioner(strategyParams, schema);
+    BulkInsertPartitioner<Dataset<Row>> partitioner = getRowPartitioner(strategyParams, schema.toAvroSchema());
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,

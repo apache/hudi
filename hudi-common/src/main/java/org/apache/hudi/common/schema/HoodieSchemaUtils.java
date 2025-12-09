@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -26,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 
 import java.math.BigDecimal;
@@ -573,4 +573,17 @@ public final class HoodieSchemaUtils {
     return RECORD_KEY_SCHEMA;
   }
 
+  /**
+   * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
+   * the top level field, b is at second level and so on.
+   * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
+   *
+   * @param fileSchema the original schema
+   * @param fields     list of fields to project
+   * @return projected schema containing only specified fields
+   */
+  public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
+    // TODO add test cases for this method
+    return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
+  }
 }

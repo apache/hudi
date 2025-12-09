@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -64,7 +65,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
                                                                    int numOutputGroups,
                                                                    String instantTime,
                                                                    Map<String, String> strategyParams,
-                                                                   Schema schema,
+                                                                   HoodieSchema schema,
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {

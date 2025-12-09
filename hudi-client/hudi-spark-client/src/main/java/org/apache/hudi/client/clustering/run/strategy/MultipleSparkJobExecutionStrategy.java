@@ -27,7 +27,6 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.LazyConcatenatingIterator;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -37,6 +36,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -149,7 +150,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                             final int numOutputGroups,
                                                                             final String instantTime,
                                                                             final Map<String, String> strategyParams,
-                                                                            final Schema schema,
+                                                                            final HoodieSchema schema,
                                                                             final List<HoodieFileGroupId> fileGroupIdList,
                                                                             final boolean shouldPreserveHoodieMetadata,
                                                                             final Map<String, String> extraMetadata);
@@ -252,9 +253,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                                        ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());      // incase of MIT, config.getSchema may not contain the full table schema
-      Schema tableSchemaWithMetaFields = null;
+      HoodieSchema tableSchemaWithMetaFields = null;
       try {
-        tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new TableSchemaResolver(getHoodieTable().getMetaClient()).getTableAvroSchema(false),
+        tableSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(new TableSchemaResolver(getHoodieTable().getMetaClient()).getTableSchema(false),
             getWriteConfig().allowOperationMetadataField());
       } catch (Exception e) {
         throw new HoodieException("Failed to get table schema during clustering", e);
@@ -294,7 +295,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc,
                                                 HoodieClusteringGroup clusteringGroup,
                                                 String instantTime,
-                                                Schema tableSchemaWithMetaFields) {
+                                                HoodieSchema tableSchemaWithMetaFields) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
     String basePath = getWriteConfig().getBasePath();
@@ -304,23 +305,21 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     final boolean enableLogBlocksScan = getWriteConfig().enableOptimizedLogBlocksScan();
     String internalSchemaStr = getWriteConfig().getInternalSchema();
-    SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
     // broadcast reader context.
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
     ReaderContextFactory<InternalRow> readerContextFactory = getEngineContext().getReaderContextFactory(metaClient);
-    StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
+    StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields.toAvroSchema());
 
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
       @Override
       public Iterator<InternalRow> call(ClusteringOperation clusteringOperation) throws Exception {
         FileSlice fileSlice = clusteringOperationToFileSlice(basePath, clusteringOperation);
         // instantiate other supporting cast
-        Schema readerSchema = serializableTableSchemaWithMetaFields.get();
         Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
 
         // instantiate FG reader
-        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, readerSchema, internalSchemaOption,
+        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, tableSchemaWithMetaFields, internalSchemaOption,
             readerContextFactory, instantTime, readerProperties, usePosition, enableLogBlocksScan);
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());

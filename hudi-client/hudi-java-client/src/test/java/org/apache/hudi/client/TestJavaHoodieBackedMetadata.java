@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -50,6 +49,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -878,7 +879,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     verifyMetadataRawRecords(table, logFiles, enableMetaFields);
 
     // Verify the in-memory materialized and merged records
-    verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp, enableMetaFields);
+    verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp);
   }
 
   /**
@@ -941,14 +942,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param metadataMetaClient    - Metadata table meta client
    * @param logFiles              - Metadata table log files
    * @param latestCommitTimestamp
-   * @param enableMetaFields      - Enable meta fields
    */
   private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<HoodieLogFile> logFiles,
-                                           String latestCommitTimestamp, boolean enableMetaFields) {
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-    if (enableMetaFields) {
-      schema = HoodieAvroUtils.addMetadataFields(schema);
-    }
+                                           String latestCommitTimestamp) {
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
     HoodieAvroReaderContext readerContext = new HoodieAvroReaderContext(metadataMetaClient.getStorageConf(), metadataMetaClient.getTableConfig(), Option.empty(), Option.empty(),
         new TypedProperties());
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()

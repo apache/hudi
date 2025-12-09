@@ -124,7 +124,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA.toAvroSchema(), SCHEMA.toAvroSchema(), Option.empty(),
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
         properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
@@ -189,7 +189,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
   }
 
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
-    when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
+    when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(0);

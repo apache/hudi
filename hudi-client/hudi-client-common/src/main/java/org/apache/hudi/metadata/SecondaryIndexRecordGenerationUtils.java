@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -35,6 +34,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -288,14 +288,14 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 TypedProperties props,
                                                                                                 boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = indexDefinition.getSourceFieldsKey();
-    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
+    HoodieSchema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext)
         .withFileSlice(fileSlice)
         .withHoodieTableMetaClient(metaClient)
         .withProps(props)
         .withLatestCommitTime(instantTime)
-        .withDataSchema(tableSchema.toAvroSchema())
+        .withDataSchema(tableSchema)
         .withRequestedSchema(requestedSchema)
         .withAllowInflightInstants(allowInflightInstants)
         .build();
@@ -318,9 +318,9 @@ public class SecondaryIndexRecordGenerationUtils {
 
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
-          Object secondaryKey = readerContext.getRecordContext().getValue(record, HoodieSchema.fromAvroSchema(requestedSchema), secondaryKeyField);
+          Object secondaryKey = readerContext.getRecordContext().getValue(record, requestedSchema, secondaryKeyField);
             nextValidRecord = Pair.of(
-                readerContext.getRecordContext().getRecordKey(record, HoodieSchema.fromAvroSchema(requestedSchema)),
+                readerContext.getRecordContext().getRecordKey(record, requestedSchema),
                 secondaryKey == null ? null : secondaryKey.toString()
             );
           return true;
@@ -342,7 +342,7 @@ public class SecondaryIndexRecordGenerationUtils {
     };
   }
 
-  private static Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, HoodieSchema tableSchema, String secondaryKeyField) {
+  private static HoodieSchema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, HoodieSchema tableSchema, String secondaryKeyField) {
     String[] recordKeyFields;
     if (tableSchema.getField(RECORD_KEY_METADATA_FIELD) != null) {
       recordKeyFields = new String[] {RECORD_KEY_METADATA_FIELD};
@@ -351,6 +351,6 @@ public class SecondaryIndexRecordGenerationUtils {
     }
     String[] projectionFields = Arrays.copyOf(recordKeyFields, recordKeyFields.length + 1);
     projectionFields[recordKeyFields.length] = secondaryKeyField;
-    return HoodieAvroUtils.projectSchema(tableSchema.toAvroSchema(), Arrays.asList(projectionFields));
+    return HoodieSchemaUtils.projectSchema(tableSchema, Arrays.asList(projectionFields));
   }
 }

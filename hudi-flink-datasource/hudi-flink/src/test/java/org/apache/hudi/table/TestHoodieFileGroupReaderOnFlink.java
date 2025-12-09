@@ -19,7 +19,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -109,7 +108,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public HoodieReaderContext<RowData> getHoodieReaderContext(
       String tablePath,
-      Schema avroSchema,
+      HoodieSchema schema,
       StorageConfiguration<?> storageConf,
       HoodieTableMetaClient metaClient) {
     return new FlinkRowDataReaderContext(
@@ -129,10 +128,10 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   protected void readWithFileGroupReader(
       HoodieFileGroupReader<RowData> fileGroupReader,
       List<RowData> recordList,
-      Schema recordSchema,
+      HoodieSchema recordSchema,
       HoodieReaderContext<RowData> readerContext,
       boolean sortOutput) throws IOException {
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema.toAvroSchema());
     try (ClosableIterator<RowData> iterator = fileGroupReader.getClosableIterator()) {
       while (iterator.hasNext()) {
         RowData rowData = rowDataSerializer.copy(iterator.next());
@@ -166,15 +165,15 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   @Override
-  public void assertRecordsEqual(Schema schema, RowData expected, RowData actual) {
+  public void assertRecordsEqual(HoodieSchema schema, RowData expected, RowData actual) {
     TestData.assertRowDataEquals(
         Collections.singletonList(actual),
         Collections.singletonList(expected),
-        RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType());
+        RowDataAvroQueryContexts.fromAvroSchema(schema.toAvroSchema()).getRowType());
   }
 
   @Override
-  public void assertRecordMatchesSchema(Schema schema, RowData record) {
+  public void assertRecordMatchesSchema(HoodieSchema schema, RowData record) {
     // TODO: Add support for RowData
   }
 

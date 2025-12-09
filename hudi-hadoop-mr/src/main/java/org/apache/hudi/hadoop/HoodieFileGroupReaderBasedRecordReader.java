@@ -19,12 +19,13 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -122,8 +123,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .setBasePath(tableBasePath)
         .build();
     String latestCommitTime = getLatestCommitTime(split, metaClient);
-    Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
-    Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
+    HoodieSchema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
+    HoodieSchema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
     this.readerContext = new HiveHoodieReaderContext(readerCreator,
         getStoredPartitionFieldNames(jobConfCopy, tableSchema), new HadoopStorageConfiguration(jobConfCopy),
         metaClient.getTableConfig());
@@ -159,7 +160,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .build()
         .getClosableIterator();
     // it expects the partition columns to be at the end
-    Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
+    HoodieSchema outputSchema = HoodieSchemaUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),
             partitionColumns.stream()).collect(Collectors.toList()));
     this.reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(requestedSchema, outputSchema);
@@ -233,8 +234,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
    * List of partition fields that are actually written to the file
    */
   @VisibleForTesting
-  static List<String> getStoredPartitionFieldNames(JobConf jobConf, Schema writerSchema) {
-    return getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
+  static List<String> getStoredPartitionFieldNames(JobConf jobConf, HoodieSchema writerSchema) {
+    return getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n).isPresent()).collect(Collectors.toList());
   }
 
   public RealtimeSplit getSplit() {
@@ -245,12 +246,12 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return jobConfCopy;
   }
 
-  private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
+  private static HoodieSchema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
       Schema schema = tableSchemaResolver.getTableAvroSchema(latestCommitTime);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-      return HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf));
+      return HoodieSchema.fromAvroSchema(HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf)));
     } catch (Exception e) {
       throw new RuntimeException("Unable to get table schema", e);
     }
@@ -312,12 +313,11 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   }
 
   @VisibleForTesting
-  public static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
+  public static HoodieSchema createRequestedSchema(HoodieSchema tableSchema, JobConf jobConf) {
     String readCols = jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
     if (StringUtils.isNullOrEmpty(readCols)) {
-      Schema emptySchema = Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(),
-          tableSchema.getNamespace(), tableSchema.isError());
-      emptySchema.setFields(Collections.emptyList());
+      HoodieSchema emptySchema = HoodieSchema.createRecord(tableSchema.getName(), tableSchema.getDoc().orElse(null),
+          tableSchema.getNamespace().orElse(null), tableSchema.isError(), Collections.emptyList());
       return emptySchema;
     }
     // hive will handle the partition cols
@@ -330,7 +330,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     }
     // if they are actually written to the file, then it is ok to read them from the file
     tableSchema.getFields().forEach(f -> partitionColumns.remove(f.name().toLowerCase(Locale.ROOT)));
-    return HoodieAvroUtils.generateProjectionSchema(tableSchema,
+    return HoodieSchemaUtils.generateProjectionSchema(tableSchema,
         // The READ_COLUMN_NAMES_CONF_STR includes all columns from the query, including those used in the WHERE clause,
         // so any column referenced in the filter (non-partition) will appear twice if already present in the project schema,
         // here distinct() is used here to deduplicate the read columns.

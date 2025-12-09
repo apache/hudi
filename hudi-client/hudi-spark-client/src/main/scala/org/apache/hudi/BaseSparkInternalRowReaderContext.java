@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -98,7 +99,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     super.setSchemaHandler(schemaHandler);
     // init ordering value converter: java -> engine type
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
-    Schema schema = schemaHandler.getRequiredSchema();
+    HoodieSchema schema = schemaHandler.getRequiredSchema();
     ((BaseSparkInternalRecordContext) recordContext).initOrderingValueConverter(schema, orderingFieldNames);
   }
 }

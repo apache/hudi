@@ -21,8 +21,6 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.avro.Schema;
-
 import java.util.List;
 
 /**
@@ -33,7 +31,7 @@ public interface BufferedRecordConverter<T> {
   BufferedRecord<T> convert(T record);
 
   static <T> BufferedRecordConverter<T> createConverter(
-      IteratorMode iteratorMode, Schema readerSchema, RecordContext<T> recordContext, List<String> orderingFieldNames) {
+      IteratorMode iteratorMode, HoodieSchema readerSchema, RecordContext<T> recordContext, List<String> orderingFieldNames) {
     switch (iteratorMode) {
       case ENGINE_RECORD:
         return new BufferedRecordConverter<T>() {
@@ -54,7 +52,7 @@ public interface BufferedRecordConverter<T> {
 
           @Override
           public BufferedRecord<T> convert(T record) {
-            String recordKey = recordContext.getRecordKey(record, HoodieSchema.fromAvroSchema(readerSchema));
+            String recordKey = recordContext.getRecordKey(record, readerSchema);
             return reusedBufferedRecord.replaceRecordKey(recordKey);
           }
         };
@@ -62,7 +60,7 @@ public interface BufferedRecordConverter<T> {
         return new BufferedRecordConverter<T>() {
           @Override
           public BufferedRecord<T> convert(T record) {
-            return BufferedRecords.fromEngineRecord(record, HoodieSchema.fromAvroSchema(readerSchema), recordContext, orderingFieldNames, false);
+            return BufferedRecords.fromEngineRecord(record, readerSchema, recordContext, orderingFieldNames, false);
           }
         };
     }

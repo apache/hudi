@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
@@ -53,6 +51,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -89,7 +89,6 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,8 +114,8 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.getRecordKeySchema;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.getRecordKeySchema;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -872,9 +871,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
-      Schema dataSchema = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
-      Schema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
-          : HoodieAvroUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
+      HoodieSchema dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
+      HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
+          : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
       HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
           .withReaderContext(readerContext)
@@ -890,7 +889,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .build();
       String baseFileInstantTime = fileSlice.getBaseInstantTime();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
-        String recordKey = readerContext.getRecordContext().getRecordKey(record, HoodieSchema.fromAvroSchema(requestedSchema));
+        String recordKey = readerContext.getRecordContext().getRecordKey(record, requestedSchema);
         return HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
             baseFileInstantTime, 0);
       });

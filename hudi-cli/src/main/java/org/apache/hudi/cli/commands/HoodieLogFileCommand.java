@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -217,13 +218,13 @@ public class HoodieLogFileCommand {
     checkArgument(logFilePaths.size() > 0, "There is no log file");
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
-    Schema readerSchema = null;
+    HoodieSchema readerSchema = null;
     // get schema from last log file
     for (int i = logFilePaths.size() - 1; i >= 0; i--) {
       Schema schema = TableSchemaResolver.readSchemaFromLogFile(
           storage, new StoragePath(logFilePaths.get(i)));
       if (schema != null) {
-        readerSchema = schema;
+        readerSchema = HoodieSchema.fromAvroSchema(schema);
         break;
       }
     }

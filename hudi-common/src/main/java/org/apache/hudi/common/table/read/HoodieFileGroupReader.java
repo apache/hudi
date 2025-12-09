@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
@@ -47,8 +48,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-
-import org.apache.avro.Schema;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -90,7 +89,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private BufferedRecordConverter<T> bufferedRecordConverter;
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                                String latestCommitTime, Schema dataSchema, Schema requestedSchema,
+                                String latestCommitTime, HoodieSchema dataSchema, HoodieSchema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 ReaderParameters readerParameters, InputSplit inputSplit, Option<BaseFileUpdateCallback<T>> updateCallback,
                                 FileGroupRecordBufferLoader<T> recordBufferLoader) {
@@ -157,13 +156,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (baseFileStoragePathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, inputSplit.getStart(), inputSplit.getLength(),
-          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getTableSchema()),
-          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()), storage);
+          readerContext.getSchemaHandler().getTableSchema(),
+          readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
       recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), inputSplit.getStart(), inputSplit.getLength(),
-          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getTableSchema()),
-          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()), storage);
+          readerContext.getSchemaHandler().getTableSchema(),
+          readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
     return readerContext.getInstantRange().isPresent()
         ? readerContext.applyInstantRangeFilter(recordIterator)
@@ -172,11 +171,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
-    Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = readerContext.getSchemaHandler().getBootstrapRequiredFields();
-    Pair<List<Schema.Field>, List<Schema.Field>> allFields = readerContext.getSchemaHandler().getBootstrapDataFields();
-    Option<Pair<ClosableIterator<T>, Schema>> dataFileIterator =
+    Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> requiredFields = readerContext.getSchemaHandler().getBootstrapRequiredFields();
+    Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> allFields = readerContext.getSchemaHandler().getBootstrapDataFields();
+    Option<Pair<ClosableIterator<T>, HoodieSchema>> dataFileIterator =
         makeBootstrapBaseFileIteratorHelper(requiredFields.getRight(), allFields.getRight(), dataFile);
-    Option<Pair<ClosableIterator<T>, Schema>> skeletonFileIterator =
+    Option<Pair<ClosableIterator<T>, HoodieSchema>> skeletonFileIterator =
         makeBootstrapBaseFileIteratorHelper(requiredFields.getLeft(), allFields.getLeft(), baseFile);
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
@@ -192,7 +191,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, inputSplit.getPartitionPath(), readerContext.getSchemaHandler().getTableSchema());
       // filter out the partition values that are not required by the data schema
       List<Pair<String, Object>> partitionPathFieldsAndValues = partitionPathFields.map(partitionFields -> {
-        Schema dataSchema = dataFileIterator.get().getRight();
+        HoodieSchema dataSchema = dataFileIterator.get().getRight();
         List<Pair<String, Object>> filterFieldsAndValues = new ArrayList<>(partitionFields.length);
         for (int i = 0; i < partitionFields.length; i++) {
           String field = partitionFields[i];
@@ -202,8 +201,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         }
         return filterFieldsAndValues;
       }).orElseGet(Collections::emptyList);
-      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), HoodieSchema.fromAvroSchema(skeletonFileIterator.get().getRight()),
-          dataFileIterator.get().getLeft(), HoodieSchema.fromAvroSchema(dataFileIterator.get().getRight()), partitionPathFieldsAndValues);
+      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
+          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight(), partitionPathFieldsAndValues);
     }
   }
 
@@ -215,24 +214,24 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @param file           file to be read
    * @return pair of the record iterator of the file, and the schema of the data being read
    */
-  private Option<Pair<ClosableIterator<T>, Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
-                                                                                        List<Schema.Field> allFields,
-                                                                                        BaseFile file) throws IOException {
+  private Option<Pair<ClosableIterator<T>, HoodieSchema>> makeBootstrapBaseFileIteratorHelper(List<HoodieSchemaField> requiredFields,
+                                                                                              List<HoodieSchemaField> allFields,
+                                                                                              BaseFile file) throws IOException {
     if (requiredFields.isEmpty()) {
       return Option.empty();
     }
-    Schema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
+    HoodieSchema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
       return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
-          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().createSchemaFromFields(allFields)), HoodieSchema.fromAvroSchema(requiredSchema), storage), requiredSchema));
+          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
       long fileLength = file.getFileLen() >= 0
           ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
       return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
-          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().createSchemaFromFields(allFields)), HoodieSchema.fromAvroSchema(requiredSchema), storage), requiredSchema));
+          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     }
   }
 
@@ -365,8 +364,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private HoodieStorage storage;
     private String tablePath;
     private String latestCommitTime;
-    private Schema dataSchema;
-    private Schema requestedSchema;
+    private HoodieSchema dataSchema;
+    private HoodieSchema requestedSchema;
     private Option<InternalSchema> internalSchemaOpt = Option.empty();
     private HoodieTableMetaClient hoodieTableMetaClient;
     private TypedProperties props;
@@ -422,12 +421,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withDataSchema(Schema dataSchema) {
+    public Builder<T> withDataSchema(HoodieSchema dataSchema) {
       this.dataSchema = dataSchema;
       return this;
     }
 
-    public Builder<T> withRequestedSchema(Schema requestedSchema) {
+    public Builder<T> withRequestedSchema(HoodieSchema requestedSchema) {
       this.requestedSchema = requestedSchema;
       return this;
     }

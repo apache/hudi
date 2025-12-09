@@ -367,8 +367,8 @@ public class HoodieIndexUtils {
           .withHoodieTableMetaClient(metaClient)
           .withLatestCommitTime(instantTime.get())
           .withFileSlice(fileSlice)
-          .withDataSchema(dataSchema.toAvroSchema())
-          .withRequestedSchema(dataSchema.toAvroSchema())
+          .withDataSchema(dataSchema)
+          .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
           .withEnableOptimizedLogBlockScan(config.enableOptimizedLogBlocksScan())
@@ -555,7 +555,7 @@ public class HoodieIndexUtils {
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        writerSchema.toAvroSchema(),
+        writerSchema,
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
         properties,
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());

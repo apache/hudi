@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
@@ -142,9 +141,9 @@ public interface UpdateProcessor<T> {
           if (hoodieRecord.shouldIgnore(recordSchema.toAvroSchema(), properties)) {
             return null;
           } else {
-            Schema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
+            HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
             // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), properties, readerSchema).toIndexedRecord(readerSchema, properties)
+            hoodieRecord.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), properties, readerSchema.toAvroSchema()).toIndexedRecord(readerSchema.toAvroSchema(), properties)
                 .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
           }
         } catch (IOException e) {

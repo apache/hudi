@@ -82,7 +82,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           recordMergeMode,
           true,
           recordMerger,
-          readerSchema.toAvroSchema(),
+          readerSchema,
           payloadClasses,
           props,
           partialUpdateModeOpt);

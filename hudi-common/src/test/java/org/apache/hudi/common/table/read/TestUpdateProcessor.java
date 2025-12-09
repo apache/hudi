@@ -164,7 +164,7 @@ class TestUpdateProcessor {
     } else {
       when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA))
           .thenReturn((GenericRecord) ((SerializableIndexedRecord) merged.getRecord()).getData());
-      when(readerContext.getSchemaHandler().getRequestedSchema()).thenReturn(SCHEMA.toAvroSchema());
+      when(readerContext.getSchemaHandler().getRequestedSchema()).thenReturn(SCHEMA);
       when(recordContext.convertAvroRecord(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
     }
 

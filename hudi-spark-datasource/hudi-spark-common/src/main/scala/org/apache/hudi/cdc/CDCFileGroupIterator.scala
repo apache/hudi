@@ -104,7 +104,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
-    payloadClass, avroSchema, props, partialUpdateModeOpt)
+    payloadClass, schema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage
 
@@ -524,8 +524,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withReaderContext(readerContext)
       .withHoodieTableMetaClient(metaClient)
       .withFileSlice(fileSlice)
-      .withDataSchema(avroSchema)
-      .withRequestedSchema(avroSchema)
+      .withDataSchema(schema)
+      .withRequestedSchema(schema)
       .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
@@ -539,7 +539,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerContext.setHasBootstrapBaseFile(false)
     readerContext.setHasLogFiles(true)
     readerContext.setSchemaHandler(
-      new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema, Option.empty(), readerProperties, metaClient))
+      new FileGroupReaderSchemaHandler[InternalRow](readerContext, schema, schema, Option.empty(), readerProperties, metaClient))
     val stats = new HoodieReadStats
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
