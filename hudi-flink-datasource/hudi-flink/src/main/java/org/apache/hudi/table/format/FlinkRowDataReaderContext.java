@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -95,8 +96,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       StoragePath filePath,
       long start,
       long length,
-      Schema dataSchema,
-      Schema requiredSchema,
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
     boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
@@ -106,8 +107,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
+    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema.toAvroSchema(), getSafePredicates(requiredSchema.toAvroSchema()));
   }
 
   @Override
@@ -133,13 +134,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public ClosableIterator<RowData> mergeBootstrapReaders(
       ClosableIterator<RowData> skeletonFileIterator,
-      Schema skeletonRequiredSchema,
+      HoodieSchema skeletonRequiredSchema,
       ClosableIterator<RowData> dataFileIterator,
-      Schema dataRequiredSchema,
+      HoodieSchema dataRequiredSchema,
       List<Pair<String, Object>> partitionFieldAndValues) {
     Map<Integer, Object> partitionOrdinalToValues = partitionFieldAndValues.stream()
         .collect(Collectors.toMap(
-            pair -> dataRequiredSchema.getField(pair.getKey()).pos(),
+            pair -> dataRequiredSchema.toAvroSchema().getField(pair.getKey()).pos(),
             Pair::getValue));
     return new ClosableIterator<RowData>() {
       final JoinedRowData joinedRow = new JoinedRowData();

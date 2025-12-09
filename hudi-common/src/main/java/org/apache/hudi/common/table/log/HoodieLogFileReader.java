@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -189,7 +190,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
           return new HoodieAvroDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
-              getTargetReaderSchemaForBlock(), header, footer, keyField);
+              getTargetReaderSchemaForBlock().isEmpty() ? Option.empty() : Option.of(HoodieSchema.fromAvroSchema(getTargetReaderSchemaForBlock().get())), header, footer, keyField);
         }
 
       case HFILE_DATA_BLOCK:
@@ -197,14 +198,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
             String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
-            Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath());
+            Option.ofNullable(HoodieSchema.fromAvroSchema(readerSchema)), header, footer, enableRecordLookups, logFile.getPath());
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
             String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
         return new HoodieParquetDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
-            getTargetReaderSchemaForBlock(), header, footer, keyField);
+            getTargetReaderSchemaForBlock().isEmpty() ? Option.empty() : Option.of(HoodieSchema.fromAvroSchema(getTargetReaderSchemaForBlock().get())), header, footer, keyField);
 
       case DELETE_BLOCK:
         return new HoodieDeleteBlock(content, () -> getDataInputStream(storage, this.logFile, bufferSize), true, Option.of(logBlockContentLoc), header, footer);
@@ -213,7 +214,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return new HoodieCommandBlock(content, () -> getDataInputStream(storage, this.logFile, bufferSize), true, Option.of(logBlockContentLoc), header, footer);
 
       case CDC_DATA_BLOCK:
-        return new HoodieCDCDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc, readerSchema, header, keyField);
+        return new HoodieCDCDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc, HoodieSchema.fromAvroSchema(readerSchema), header, keyField);
 
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);

@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -179,8 +181,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadInputSplit inputSplit = fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
         return new RemoveBaseFileIterator(tableState, getFileSliceIterator(inputSplit));
       case AS_IS:
-        Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableState.getAvroSchema()));
-        Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
+        HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(HoodieSchema.parse(tableState.getAvroSchema()));
+        HoodieSchema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
         switch (mode) {
           case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
@@ -338,7 +340,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
   // accounting to HoodieCDCInferenceCase.LOG_FILE
   static class DataLogFileIterator implements ClosableIterator<RowData> {
-    private final Schema tableSchema;
+    private final HoodieSchema tableSchema;
     private final long maxCompactionMemoryInBytes;
     private final ImageManager imageManager;
     private final RowDataProjection projection;
@@ -360,7 +362,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadTableState tableState,
         ClosableIterator<HoodieRecord<RowData>> logRecordIterator,
         HoodieTableMetaClient metaClient) throws IOException {
-      this.tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
+      this.tableSchema = HoodieSchema.parse(tableState.getAvroSchema());
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.imageManager = imageManager;
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
@@ -376,7 +378,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           readerContext.getMergeMode(),
           false,
           Option.of(imageManager.writeConfig.getRecordMerger()),
-          tableSchema,
+          tableSchema.toAvroSchema(),
           Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
           props,
           metaClient.getTableConfig().getPartialUpdateMode());
@@ -490,7 +492,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         MergeOnReadTableState tableState,
-        Schema cdcSchema,
+        HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit) {
       this.requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
       this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
@@ -506,7 +508,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           throw new HoodieIOException("Fail to call getFileStatus", e);
         }
       }).toArray(HoodieLogFile[]::new);
-      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
+      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema.toAvroSchema());
     }
 
     private int[] getRequiredPos(String tableSchema, Schema required) {
@@ -585,7 +587,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String tablePath,
         MergeOnReadTableState tableState,
         org.apache.hadoop.conf.Configuration hadoopConf,
-        Schema cdcSchema,
+        HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit) {
       super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
     }
@@ -615,7 +617,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         MergeOnReadTableState tableState,
-        Schema cdcSchema,
+        HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit,
         ImageManager imageManager) throws IOException {
       super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
@@ -656,7 +658,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         org.apache.hadoop.conf.Configuration hadoopConf,
         String tablePath,
         MergeOnReadTableState tableState,
-        Schema cdcSchema,
+        HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit,
         ImageManager imageManager) throws IOException {
       super(flinkConf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);

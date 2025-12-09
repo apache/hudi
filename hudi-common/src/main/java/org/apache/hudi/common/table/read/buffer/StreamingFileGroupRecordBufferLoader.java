@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -39,8 +40,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -64,8 +63,8 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    Schema recordSchema = AvroSchemaCache.intern(getRecordSchema(readerContext, props));
-    readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema);
+    HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema(readerContext, props));
+    readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema.toAvroSchema());
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
@@ -95,13 +94,13 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     return Pair.of(recordBuffer, Collections.emptyList());
   }
 
-  private static <T> Schema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
+  private static <T> HoodieSchema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
     Option<Pair<String, String>> payloadClasses = readerContext.getPayloadClasses(props);
     if (payloadClasses.isPresent() && payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
       String schemaStr = props.getString("hoodie.payload.record.schema");
-      return new Schema.Parser().parse(schemaStr);
+      return HoodieSchema.parse(schemaStr);
     } else {
-      return HoodieAvroUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
+      return HoodieSchemaUtils.removeMetadataFields(HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequestedSchema()));
     }
   }
 }

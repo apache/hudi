@@ -25,7 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,11 +57,10 @@ public class FlinkConcatHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
+    HoodieSchema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    String key = oldRecord.getRecordKey(oldSchema.toAvroSchema(), keyGeneratorOpt);
     try {
-      //TODO boundary to revisit in follow up to use HoodieSchema directly
-      fileWriter.write(key, oldRecord, HoodieSchema.fromAvroSchema(oldSchema));
+      fileWriter.write(key, oldRecord, oldSchema);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",

@@ -22,6 +22,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
@@ -61,18 +62,18 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
       if (older.isDelete() || newer.isDelete()) {
         return older;
       }
-      Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-      Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-      return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) newer, newSchema,
-          (BufferedRecord<InternalRow>) older, oldSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
+      HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+      HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+      return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) newer, newSchema.toAvroSchema(),
+          (BufferedRecord<InternalRow>) older, oldSchema.toAvroSchema(), readerSchema, (RecordContext<InternalRow>) recordContext);
     } else {
       if (newer.isDelete() || older.isDelete()) {
         return newer;
       }
-      Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-      Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-      return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema,
-          (BufferedRecord<InternalRow>) newer, newSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
+      HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+      HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+      return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema.toAvroSchema(),
+          (BufferedRecord<InternalRow>) newer, newSchema.toAvroSchema(), readerSchema, (RecordContext<InternalRow>) recordContext);
     }
   }
 }

@@ -222,7 +222,7 @@ public class HoodieTableMetadataUtil {
   private static final int DECIMAL_MAX_PRECISION = 30;
   private static final int DECIMAL_MAX_SCALE = 15;
 
-  private static final DeleteContext DELETE_CONTEXT = DeleteContext.fromRecordSchema(CollectionUtils.emptyProps(), HoodieMetadataRecord.getClassSchema());
+  private static final DeleteContext DELETE_CONTEXT = DeleteContext.fromRecordSchema(CollectionUtils.emptyProps(), HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
 
   private HoodieTableMetadataUtil() {
   }
