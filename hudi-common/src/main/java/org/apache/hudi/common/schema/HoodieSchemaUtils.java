@@ -386,4 +386,154 @@ public final class HoodieSchemaUtils {
           ));
     }
   }
+
+  /**
+   * Generates a projection schema from the original schema, including only the specified fields.
+   * This is equivalent to HoodieAvroUtils.generateProjectionSchema() but operates on HoodieSchema.
+   *
+   * @param originalSchema the source schema
+   * @param fieldNames     the list of field names to include in the projection
+   * @return new HoodieSchema containing only the specified fields
+   * @throws IllegalArgumentException if schema is null or not a record type
+   * @since 1.2.0
+   */
+  public static HoodieSchema generateProjectionSchema(HoodieSchema originalSchema, List<String> fieldNames) {
+    ValidationUtils.checkArgument(originalSchema != null, "Original schema cannot be null");
+    ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
+
+    // Delegate to HoodieAvroUtils
+    Schema projectedAvro = HoodieAvroUtils.generateProjectionSchema(originalSchema.toAvroSchema(), fieldNames);
+    return HoodieSchema.fromAvroSchema(projectedAvro);
+  }
+
+  /**
+   * Prunes the data schema to only include fields that are required by the required schema,
+   * plus any mandatory fields specified.
+   * This is equivalent to {@link AvroSchemaUtils#pruneDataSchema(Schema, Schema, Set)} but operates on HoodieSchema.
+   *
+   * @param dataSchema      the full data schema
+   * @param requiredSchema  the schema containing required fields
+   * @param mandatoryFields set of field names that must be included regardless
+   * @return new HoodieSchema with pruned fields
+   * @throws IllegalArgumentException if either schema is null
+   * @since 1.2.0
+   */
+  public static HoodieSchema pruneDataSchema(HoodieSchema dataSchema, HoodieSchema requiredSchema, Set<String> mandatoryFields) {
+    ValidationUtils.checkArgument(dataSchema != null, "Data schema cannot be null");
+    ValidationUtils.checkArgument(requiredSchema != null, "Required schema cannot be null");
+
+    Set<String> mandatorySet = mandatoryFields != null ? mandatoryFields : Collections.emptySet();
+
+    // Delegate to AvroSchemaUtils
+    Schema prunedAvro = AvroSchemaUtils.pruneDataSchema(
+        dataSchema.toAvroSchema(),
+        requiredSchema.toAvroSchema(),
+        mandatorySet);
+    return HoodieSchema.fromAvroSchema(prunedAvro);
+  }
+
+  /**
+   * Checks if two schemas are projection equivalent (i.e., they have the same fields and types
+   * for projection purposes, ignoring certain metadata differences).
+   * This is equivalent to {@link AvroSchemaUtils#areSchemasProjectionEquivalent(Schema, Schema)} but operates on HoodieSchema.
+   *
+   * @param schema1 the first schema
+   * @param schema2 the second schema
+   * @return true if schemas are projection equivalent
+   * @throws IllegalArgumentException if either schema is null
+   * @since 1.2.0
+   */
+  public static boolean areSchemasProjectionEquivalent(HoodieSchema schema1, HoodieSchema schema2) {
+    // Delegate to AvroSchemaUtils
+    return AvroSchemaUtils.areSchemasProjectionEquivalent(schema1 == null ? null : schema1.toAvroSchema(), schema2 == null ? null : schema2.toAvroSchema());
+  }
+
+  /**
+   * Adds newFields to the schema. Will add nested fields without duplicating the field
+   * For example if your schema is "a.b.{c,e}" and newfields contains "a.{b.{d,e},x.y}",
+   * It will stitch them together to be "a.{b.{c,d,e},x.y}
+   * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchemaDedupNested(Schema, List)} but operates on HoodieSchema.
+   *
+   * @param schema    the original schema
+   * @param newFields list of new fields to add
+   * @return the updated schema with new fields added
+   */
+  public static HoodieSchema appendFieldsToSchemaDedupNested(HoodieSchema schema, List<HoodieSchemaField> newFields) {
+    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.appendFieldsToSchemaDedupNested(schema.toAvroSchema(),
+        newFields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())));
+  }
+
+  /**
+   * Create a new schema but maintain all meta info from the old schema.
+   * This is equivalent to {@link AvroSchemaUtils#createNewSchemaFromFieldsWithReference(Schema, List)} but operates on HoodieSchema.
+   *
+   * @param schema schema to get the meta info from
+   * @param fields list of fields in order that will be in the new schema
+   *
+   * @return schema with fields from fields, and metadata from schema
+   */
+  public static HoodieSchema createNewSchemaFromFieldsWithReference(HoodieSchema schema, List<HoodieSchemaField> fields) {
+    if (schema == null) {
+      throw new IllegalArgumentException("Schema must not be null");
+    }
+    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.createNewSchemaFromFieldsWithReference(
+        schema.toAvroSchema(),
+        fields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())
+    ));
+  }
+
+  /**
+   * Get gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
+   * @return the field, including its lineage.
+   * For example, if you have a schema: record(a:int, b:record(x:int, y:long, z:record(z1: int, z2: float, z3: double), c:bool)
+   * "fieldName" | output
+   * ---------------------------------
+   * "a"         | a:int
+   * "b"         | b:record(x:int, y:long, z:record(z1: int, z2: int, z3: int)
+   * "c"         | c:bool
+   * "b.x"       | b:record(x:int)
+   * "b.z.z2"    | b:record(z:record(z2:float))
+   *
+   * this is intended to be used with appendFieldsToSchemaDedupNested
+   */
+  public static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String fieldName) {
+    return findNestedField(schema, fieldName.split("\\."), 0);
+  }
+
+  private static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String[] fieldParts, int index) {
+    if (schema.getType() == HoodieSchemaType.UNION) {
+      Option<HoodieSchemaField> notUnion = findNestedField(getNonNullTypeFromUnion(schema), fieldParts, index);
+      if (!notUnion.isPresent()) {
+        return Option.empty();
+      }
+      HoodieSchemaField nu = notUnion.get();
+      return Option.of(createNewSchemaField(nu));
+    }
+    if (fieldParts.length <= index) {
+      return Option.empty();
+    }
+
+    Option<HoodieSchemaField> foundFieldOpt = schema.getField(fieldParts[index]);
+    if (foundFieldOpt.isEmpty()) {
+      return Option.empty();
+    }
+    HoodieSchemaField foundField = foundFieldOpt.get();
+
+    if (index == fieldParts.length - 1) {
+      return Option.of(createNewSchemaField(foundField));
+    }
+
+    HoodieSchema foundSchema = foundField.schema();
+    Option<HoodieSchemaField> nestedPart = findNestedField(foundSchema, fieldParts, index + 1);
+    if (!nestedPart.isPresent()) {
+      return Option.empty();
+    }
+    boolean isUnion = false;
+    if (foundSchema.getType() == HoodieSchemaType.UNION) {
+      isUnion = true;
+      foundSchema = getNonNullTypeFromUnion(foundSchema);
+    }
+    HoodieSchema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
+    return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
+  }
 }
