@@ -143,7 +143,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void testSnapshotState() throws Exception {
     splitProvider.onDiscoveredSplits(Arrays.asList(split1, split2));
 
-    HoodieEnumeratorState state = enumerator.snapshotState(1L);
+    HoodieSplitEnumeratorState state = enumerator.snapshotState(1L);
 
     assertNotNull(state, "Snapshot state should not be null");
   }

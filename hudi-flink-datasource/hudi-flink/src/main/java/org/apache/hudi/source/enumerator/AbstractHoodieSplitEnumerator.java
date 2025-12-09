@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Abstract class for Hoodie SourceSplit enumerator.
  */
 abstract class AbstractHoodieSplitEnumerator
-    implements SplitEnumerator<HoodieSourceSplit, HoodieEnumeratorState>,
+    implements SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState>,
     SupportsHandleExecutionAttemptSourceEvent {
   private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieSplitEnumerator.class);
 
@@ -115,8 +115,8 @@ abstract class AbstractHoodieSplitEnumerator
   }
 
   @Override
-  public HoodieEnumeratorState snapshotState(long checkpointId) throws Exception {
-    return new HoodieEnumeratorState(splitProvider.state());
+  public HoodieSplitEnumeratorState snapshotState(long checkpointId) throws Exception {
+    return new HoodieSplitEnumeratorState(splitProvider.state());
   }
 
   @Override

@@ -26,10 +26,10 @@ import java.util.Collection;
 /**
  * State of Hoodie split enumerator. Mainly include the states of pending splits of split provider.
  */
-public class HoodieEnumeratorState implements Serializable {
+public class HoodieSplitEnumeratorState implements Serializable {
   private final Collection<HoodieSourceSplitState> pendingSplitStates;
 
-  public HoodieEnumeratorState(Collection<HoodieSourceSplitState> pendingSplitStates) {
+  public HoodieSplitEnumeratorState(Collection<HoodieSourceSplitState> pendingSplitStates) {
     this.pendingSplitStates = pendingSplitStates;
   }
 

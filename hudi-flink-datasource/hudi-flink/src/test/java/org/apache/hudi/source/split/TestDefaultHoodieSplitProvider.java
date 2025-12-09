@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link DefaultHoodieSplitProvider}.
  */
-public class TestHoodieDefaultSplitProvider {
+public class TestDefaultHoodieSplitProvider {
   private DefaultHoodieSplitProvider provider;
   private HoodieSourceSplit split1;
   private HoodieSourceSplit split2;
