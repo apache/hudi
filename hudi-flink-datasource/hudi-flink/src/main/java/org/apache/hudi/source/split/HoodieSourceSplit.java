@@ -31,8 +31,8 @@ import java.util.List;
  * Hoodie SourceSplit implementation for source V2.
  */
 public class HoodieSourceSplit implements SourceSplit, Serializable {
+  public static int SPLIT_COUNTER = 0;
   private static final long serialVersionUID = 1L;
-
   private static final long NUM_NO_CONSUMPTION = 0L;
 
   // the split number
