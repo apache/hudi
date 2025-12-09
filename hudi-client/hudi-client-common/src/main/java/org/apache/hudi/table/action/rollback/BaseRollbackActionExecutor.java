@@ -185,7 +185,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     // If there is a commit in-between or after that is not rolled back, then abort
     // this condition may not hold good for metadata table. since the order of commits applied to MDT in data table commits and the ordering could be different.
     if ((instantTimeToRollback != null) && !commitTimeline.empty()
-      && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
+        && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
       // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
       try {
         if (!HoodieHeartbeatClient.heartbeatExists(table.getStorage(), config.getBasePath(), instantTimeToRollback)) {
@@ -198,13 +198,13 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     }
 
     List<String> inflights = pendingCommitsTimeline.getInstantsAsStream()
-      .filter(instant -> !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantGenerator))
-      .map(HoodieInstant::requestedTime)
-      .collect(Collectors.toList());
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantGenerator))
+        .map(HoodieInstant::requestedTime)
+        .collect(Collectors.toList());
     if ((instantTimeToRollback != null) && !inflights.isEmpty()
-      && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
-    throw new HoodieRollbackException(
-        "Found in-flight commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
+        && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
+      throw new HoodieRollbackException(
+          "Found in-flight commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
     }
   }
 
