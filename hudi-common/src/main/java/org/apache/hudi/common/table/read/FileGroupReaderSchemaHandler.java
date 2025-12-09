@@ -170,8 +170,7 @@ public class FileGroupReaderSchemaHandler<T> {
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
-        List<HoodieSchemaField> addedFields = new ArrayList<>();
-        addedFields.add(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        List<HoodieSchemaField> addedFields = Collections.singletonList(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
         return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
       }
       return requestedSchema;
@@ -288,11 +287,9 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public HoodieSchema createSchemaFromFields(List<HoodieSchemaField> fields) {
     //fields have positions set, so we need to remove them due to avro setFields implementation
-    for (int i = 0; i < fields.size(); i++) {
-      HoodieSchemaField curr = fields.get(i);
-      fields.set(i, createNewSchemaField(curr));
-    }
-    return createNewSchemaFromFieldsWithReference(tableSchema, fields);
+    List<HoodieSchemaField> newFields = new ArrayList<>(fields.size());
+    fields.forEach(f -> newFields.add(createNewSchemaField(f)));
+    return createNewSchemaFromFieldsWithReference(tableSchema, newFields);
   }
 
   /**
@@ -300,9 +297,6 @@ public class FileGroupReaderSchemaHandler<T> {
    */
   private static HoodieSchemaField getField(HoodieSchema schema, String fieldName) {
     Option<HoodieSchemaField> foundFieldOpt = findNestedField(schema, fieldName);
-    if (!foundFieldOpt.isPresent()) {
-      throw new IllegalArgumentException("Field: " + fieldName + " does not exist in the table schema");
-    }
-    return foundFieldOpt.get();
+    return foundFieldOpt.orElseThrow(() -> new IllegalArgumentException("Field: " + fieldName + " does not exist in the table schema"));
   }
 }
