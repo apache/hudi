@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.util.HoodieInflightCommitsUtil;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.NumericUtils;
@@ -39,13 +39,16 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -363,12 +366,25 @@ public class CommitsCommand {
 
   @ShellMethod(key = "commits show_infights", value = "Show inflight instants that are left longer than a certain duration")
   public String showInflightCommits(
-      @ShellOption(value = {"durationInMins"}, help = "Commit to show", defaultValue = "0") final long durationInMins) {
+      @ShellOption(value = {"--durationInMins"}, help = "Commits to show", defaultValue = "0") final Long durationInMins) {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     // Fetch inflight commits.
-    List<HoodieInstant> inflightInstants = HoodieInflightCommitsUtil
-        .inflightWriteCommitsOlderThan(metaClient, durationInMins, true);
+    long goBackMs = Duration.ofMinutes(durationInMins).getSeconds() * 1000;
+    String oldestAllowedTimestamp = HoodieInstantTimeGenerator
+        .formatDate(new Date(System.currentTimeMillis() - goBackMs));
+
+    List<HoodieInstant> l = metaClient
+        .reloadActiveTimeline()
+        .getWriteTimeline()
+        .filterInflightsAndRequested().getInstants();
+
+    List<HoodieInstant> inflightInstants =  metaClient
+        .reloadActiveTimeline()
+        .getWriteTimeline()
+        .filterInflightsAndRequested()
+        .findInstantsBefore(oldestAllowedTimestamp)
+        .getInstants();
 
     // Create a table out of inflight commits.
     List<String[]> data = new ArrayList<>();
