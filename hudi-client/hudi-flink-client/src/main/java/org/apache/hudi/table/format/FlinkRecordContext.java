@@ -39,6 +39,7 @@ import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -61,6 +62,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   // for DELETE cases, it'll not be initialized if primary key semantics is lost.
   // For e.g, if the pk fields are [a, b] but user only select a, then the pk
   // semantics is lost.
+  @Setter
   private RecordKeyToRowDataConverter recordKeyRowConverter;
   private OrderingValueEngineTypeConverter orderingValueConverter;
 
@@ -199,10 +201,6 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to.toAvroSchema()).getRowType().getLogicalType();
     RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
-  }
-
-  public void setRecordKeyRowConverter(RecordKeyToRowDataConverter recordKeyRowConverter) {
-    this.recordKeyRowConverter = recordKeyRowConverter;
   }
 
   public void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {

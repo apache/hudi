@@ -25,8 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -38,9 +37,9 @@ import java.util.Iterator;
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
+@Slf4j
 public class FlinkConcatHandle<T, I, K, O>
     extends FlinkMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatHandle.class);
 
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
@@ -65,7 +64,7 @@ public class FlinkConcatHandle<T, I, K, O>
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, oldSchema.toString(true));
-      LOG.debug("Old record is {}", oldRecord);
+      log.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;

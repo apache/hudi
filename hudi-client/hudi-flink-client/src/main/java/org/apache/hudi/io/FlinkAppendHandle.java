@@ -28,8 +28,7 @@ import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 import java.util.List;
@@ -44,10 +43,9 @@ import java.util.List;
  * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
  * or the file size hits the configured threshold).
  */
+@Slf4j
 public class FlinkAppendHandle<T, I, K, O>
     extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
 
   private boolean isClosed = false;
   private final WriteMarkers writeMarkers;
@@ -119,7 +117,7 @@ public class FlinkAppendHandle<T, I, K, O>
     } catch (Throwable throwable) {
       // The intermediate log file can still append based on the incremental MERGE semantics,
       // there is no need to delete the file.
-      LOG.warn("Failed to close the APPEND handle", throwable);
+      log.warn("Failed to close the APPEND handle", throwable);
     }
   }
 
