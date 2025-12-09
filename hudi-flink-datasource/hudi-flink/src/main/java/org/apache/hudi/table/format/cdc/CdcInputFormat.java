@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format.cdc;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.TypedProperties;
