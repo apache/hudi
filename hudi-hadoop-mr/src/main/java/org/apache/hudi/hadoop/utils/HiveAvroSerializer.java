@@ -65,8 +65,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.isMetadataField;
 
 /**
@@ -194,7 +192,7 @@ public class HiveAvroSerializer {
 
     int fieldIdx = schemaField.pos();
     TypeInfo fieldTypeInfo = fieldTypes.get(fieldIdx);
-    Schema fieldSchema = getNonNullTypeFromUnion(schemaField.schema());
+    Schema fieldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schemaField.schema());
 
     StructField structField = structObjectInspector.getStructFieldRef(fieldName);
     if (structField == null) {
@@ -288,7 +286,7 @@ public class HiveAvroSerializer {
       return null;
     }
 
-    schema = getNonNullTypeFromUnion(schema);
+    schema = AvroSchemaUtils.getNonNullTypeFromUnion(schema);
 
     /* Because we use Hive's 'string' type when Avro calls for enum, we have to expressly check for enum-ness */
     if (Schema.Type.ENUM.equals(schema.getType())) {
@@ -429,7 +427,7 @@ public class HiveAvroSerializer {
     ObjectInspector listElementObjectInspector = fieldOI.getListElementObjectInspector();
     // NOTE: We have to resolve nullable schema, since Avro permits array elements
     //       to be null
-    Schema arrayNestedType = getNonNullTypeFromUnion(schema.getElementType());
+    Schema arrayNestedType = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getElementType());
     Schema elementType;
     if (listElementObjectInspector.getCategory() == ObjectInspector.Category.PRIMITIVE) {
       elementType = arrayNestedType;
@@ -495,7 +493,7 @@ public class HiveAvroSerializer {
       Object newFieldValue;
       if (fieldValue instanceof GenericRecord) {
         GenericRecord record = (GenericRecord) fieldValue;
-        newFieldValue = rewriteRecordIgnoreResultCheck(record, resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
+        newFieldValue = rewriteRecordIgnoreResultCheck(record, AvroSchemaUtils.resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
       } else {
         newFieldValue = fieldValue;
       }

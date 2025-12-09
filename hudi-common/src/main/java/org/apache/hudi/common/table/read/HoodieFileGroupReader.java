@@ -188,7 +188,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         throw new IllegalArgumentException("Filegroup reader is doing bootstrap merge but we are not reading from the start of the base file");
       }
       PartitionPathParser partitionPathParser = new PartitionPathParser();
-      Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, inputSplit.getPartitionPath(), readerContext.getSchemaHandler().getTableSchema());
+      Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, inputSplit.getPartitionPath(),
+          readerContext.getSchemaHandler().getTableSchema());
       // filter out the partition values that are not required by the data schema
       List<Pair<String, Object>> partitionPathFieldsAndValues = partitionPathFields.map(partitionFields -> {
         HoodieSchema dataSchema = dataFileIterator.get().getRight();

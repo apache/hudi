@@ -23,8 +23,6 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
-
 public class AvroSchemaComparatorForRecordProjection extends AvroSchemaComparatorForSchemaEvolution {
 
   private static final AvroSchemaComparatorForRecordProjection INSTANCE = new AvroSchemaComparatorForRecordProjection();
@@ -41,7 +39,7 @@ public class AvroSchemaComparatorForRecordProjection extends AvroSchemaComparato
     if (s1 == null || s2 == null) {
       return false;
     }
-    return super.schemaEqualsInternal(getNonNullTypeFromUnion(s1), getNonNullTypeFromUnion(s2));
+    return super.schemaEqualsInternal(AvroSchemaUtils.getNonNullTypeFromUnion(s1), AvroSchemaUtils.getNonNullTypeFromUnion(s2));
   }
 
   @Override
