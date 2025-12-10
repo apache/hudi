@@ -59,6 +59,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession, SQLContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
+import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
@@ -756,7 +757,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
   def convertToAvroSchema(structSchema: StructType, tableName: String ): Schema = {
     val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-    sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
+    HoodieSparkAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
   }
 
   def getPartitionPath(fileStatus: FileStatus): Path =

@@ -29,6 +29,7 @@ import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
@@ -154,8 +155,7 @@ object AvroConversionUtils {
                                     structName: String,
                                     recordNamespace: String): Schema = {
     try {
-      val schemaConverters = sparkAdapter.getAvroSchemaConverters
-      schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+      HoodieSparkAvroSchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
     } catch {
       case a: AvroRuntimeException => throw new HoodieSchemaException(a.getMessage, a)
       case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)
@@ -168,8 +168,7 @@ object AvroConversionUtils {
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     val loader: java.util.function.Function[Schema, StructType] = key => {
       try {
-        val schemaConverters = sparkAdapter.getAvroSchemaConverters
-        schemaConverters.toSqlType(key) match {
+        HoodieSparkAvroSchemaConverters.toSqlType(key) match {
           case (dataType, _) => dataType.asInstanceOf[StructType]
         }
       } catch {
@@ -184,8 +183,7 @@ object AvroConversionUtils {
    */
   def convertAvroSchemaToDataType(avroSchema: Schema): DataType = {
     try {
-      val schemaConverters = sparkAdapter.getAvroSchemaConverters
-      schemaConverters.toSqlType(avroSchema) match {
+      HoodieSparkAvroSchemaConverters.toSqlType(avroSchema) match {
         case (dataType, _) => dataType
       }
     } catch {

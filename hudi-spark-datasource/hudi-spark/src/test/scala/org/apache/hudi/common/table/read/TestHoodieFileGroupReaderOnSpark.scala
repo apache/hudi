@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.hoodieRecordsToIndexedRecords
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.util.{Option => HOption, OrderingValues}
+import org.apache.hudi.common.util.{OrderingValues, Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -41,6 +41,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -137,7 +138,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def assertRecordsEqual(schema: Schema, expected: InternalRow, actual: InternalRow): Unit = {
     assertEquals(expected.numFields, actual.numFields)
-    val expectedStruct = sparkAdapter.getAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
+    val expectedStruct = HoodieSparkAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
 
     expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).zipWithIndex.foreach {
       case ((v1, v2), i) =>
