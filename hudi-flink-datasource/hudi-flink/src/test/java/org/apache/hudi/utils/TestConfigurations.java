@@ -184,6 +184,19 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
 
+  public static final ResolvedSchema TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE  = SchemaBuilder.instance()
+      .fields(ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getFieldNames(), ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getChildren())
+      .build();
+
+  public static final DataType PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = DataTypes.ROW(
+          DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("f_date", DataTypes.DATE()),
+          DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(38, 18)),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
+
   public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
 
   public static final DataType ROW_DATA_TYPE_BIGINT = DataTypes.ROW(

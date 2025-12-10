@@ -304,7 +304,7 @@ public class TestHoodieTableSource {
 
     // test timestamp filtering
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf1);
-    HoodieTableSource tableSource1 = createHoodieTableSource(conf1);
+    HoodieTableSource tableSource1 = createHoodieTableSource(conf1, TestConfigurations.TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE);
     tableSource1.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f1, 0, DataTypes.TIMESTAMP(3).notNull(),
             LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")))));
@@ -321,7 +321,7 @@ public class TestHoodieTableSource {
     conf2.set(FlinkOptions.RECORD_KEY_FIELD, f2);
     conf2.set(FlinkOptions.ORDERING_FIELDS, f2);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf2);
-    HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
+    HoodieTableSource tableSource2 = createHoodieTableSource(conf2, TestConfigurations.TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE);
     tableSource2.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f2, 1, DataTypes.DATE().notNull(), LocalDate.ofEpochDay(1))));
 
@@ -337,7 +337,8 @@ public class TestHoodieTableSource {
     conf3.set(FlinkOptions.RECORD_KEY_FIELD, f3);
     conf3.set(FlinkOptions.ORDERING_FIELDS, f3);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf3);
-    HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
+    HoodieTableSource tableSource3 = createHoodieTableSource(conf3, TestConfigurations.TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE);
+
     tableSource3.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f3, 1, DataTypes.DECIMAL(3, 2).notNull(),
             new BigDecimal("1.11"))));
@@ -538,6 +539,15 @@ public class TestHoodieTableSource {
 
   private HoodieTableSource createHoodieTableSource(Configuration conf) {
     return createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA);
+  }
+
+  private HoodieTableSource createHoodieTableSource(Configuration conf, ResolvedSchema resolvedSchema) {
+    return new HoodieTableSource(
+        SerializableSchema.create(resolvedSchema),
+        new StoragePath(conf.get(FlinkOptions.PATH)),
+        Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
+        "default-par",
+        conf);
   }
 
   private HoodieTableSource createHoodieTableSource(Configuration conf, ResolvedSchema resolvedSchema) {

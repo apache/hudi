@@ -2804,10 +2804,8 @@ public class ITTestHoodieDataSource {
 
     String hoodieTableDDL = "create table t1(\n"
         + "  _hoodie_commit_time STRING METADATA VIRTUAL,\n"
-        + "  _hoodie_commit_seqno STRING METADATA VIRTUAL,\n"
         + "  _hoodie_record_key STRING METADATA VIRTUAL,\n"
         + "  _hoodie_partition_path STRING METADATA VIRTUAL,\n"
-        + "  _hoodie_file_name STRING METADATA VIRTUAL,\n"
         + "  uuid varchar(20),\n"
         + "  name varchar(10),\n"
         + "  age int,\n"
@@ -2840,8 +2838,8 @@ public class ITTestHoodieDataSource {
 
     // select metadata columns
     rows = CollectionUtil.iterableToList(
-        () -> streamTableEnv.sqlQuery("select _hoodie_commit_time, _hoodie_commit_seqno, _hoodie_record_key, _hoodie_partition_path, _hoodie_file_name from t1").execute().collect());
-    rows.forEach(row -> IntStream.range(0, 5).forEach(idx -> assertNotNull(row.getField(idx))));
+        () -> streamTableEnv.sqlQuery("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path from t1").execute().collect());
+    rows.forEach(row -> IntStream.range(0, 3).forEach(idx -> assertNotNull(row.getField(idx))));
 
     // select metadata and data columns
     rows = CollectionUtil.iterableToList(

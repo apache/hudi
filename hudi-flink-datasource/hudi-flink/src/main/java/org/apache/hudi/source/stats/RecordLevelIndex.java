@@ -34,13 +34,19 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -52,7 +58,7 @@ import java.util.stream.Collectors;
 /**
  * An index support implementation that leverages Record Level Index to prune file slices.
  */
-public class RecordLevelIndex implements FlinkBaseIndex {
+public class RecordLevelIndex implements FlinkMetadataIndex {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(RecordLevelIndex.class);
 
@@ -113,7 +119,13 @@ public class RecordLevelIndex implements FlinkBaseIndex {
     }
   }
 
-  public static Option<RecordLevelIndex> create(String basePath, Configuration conf, HoodieTableMetaClient metaClient, List<ExpressionEvaluators.Evaluator> evaluators) {
+  public static Option<RecordLevelIndex> create(
+      String basePath,
+      Configuration conf,
+      HoodieTableMetaClient metaClient,
+      List<ExpressionEvaluators.Evaluator> evaluators,
+      RowType rowType,
+      boolean consistentLogicalTimestampEnabled) {
     if (evaluators.isEmpty() || !FlinkOptions.QUERY_TYPE_SNAPSHOT.equalsIgnoreCase(conf.get(FlinkOptions.QUERY_TYPE))) {
       return Option.empty();
     }
@@ -126,38 +138,54 @@ public class RecordLevelIndex implements FlinkBaseIndex {
 
     String[] recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);
     if (recordKeyFields.length == 0) {
+      LOG.warn("The table do not have record keys, skipping the rli pruning.");
       return Option.empty();
     }
-    List<String> hoodieKeysFromFilter = computeHoodieKeyFromFilters(conf, metaClient, evaluators, recordKeyFields);
-    if (hoodieKeysFromFilter.isEmpty() || hoodieKeysFromFilter.size() > conf.get(FlinkOptions.RECORD_INDEX_KEYS_MAX_COUNT)) {
-      LOG.info("Hoodie keys from query predicate: {}, key number: {}, maximum value: {}.",
-          hoodieKeysFromFilter, hoodieKeysFromFilter.size(), conf.get(FlinkOptions.RECORD_INDEX_KEYS_MAX_COUNT));
+    List<String> hoodieKeysFromFilter = computeHoodieKeyFromFilters(conf, metaClient, evaluators, recordKeyFields, rowType, consistentLogicalTimestampEnabled);
+    if (hoodieKeysFromFilter.isEmpty()) {
+      LOG.warn("The number of keys from query predicate is empty, skipping the rli pruning.");
+      return Option.empty();
+    }
+    int maxKeyNum = conf.get(FlinkOptions.READ_DATA_SKIPPING_RLI_KEYS_MAX_NUM);
+    if (hoodieKeysFromFilter.size() > maxKeyNum) {
+      LOG.warn("The number of keys from query predicate: {} exceeds the upper threshold: {}, skipping the rli pruning, the keys: {}",
+          hoodieKeysFromFilter.size(), maxKeyNum, hoodieKeysFromFilter);
       return Option.empty();
     }
     return Option.of(new RecordLevelIndex(basePath, conf, metaClient, hoodieKeysFromFilter));
   }
 
   /**
-   * Given query filters, it filters the EqualTo and IN queries on record key columns and
+   * Given query filters, it filters the EqualTo, IN and OR queries on record key columns and
    * returns the list of record key literals present in the query, for example:
    * <p>
    * filter1: `key1` = 'val1', returns {"val1"}
    * filter2: `key1` in ('val1', 'val2', 'val3'), returns {"val1", "vale", "val3"}
-   * filter2: `key1` = 'val1' AND `key2` in ('val2', 'val3'), returns {"key1:val1,key2:val2", "key1:val1,key2:val3"}
+   * filter3: `key1` = 'val1' OR `key1` = 'val2' or `key1` = 'val3', returns {"val1", "vale", "val3"}
+   * filter4: `key1` = 'val1' AND `key2` in ('val2', 'val3'), returns {"key1:val1,key2:val2", "key1:val1,key2:val3"}
    */
   @VisibleForTesting
   public static List<String> computeHoodieKeyFromFilters(
-      Configuration conf, HoodieTableMetaClient metaClient, List<ExpressionEvaluators.Evaluator> evaluators, String[] keyFields) {
+      Configuration conf,
+      HoodieTableMetaClient metaClient,
+      List<ExpressionEvaluators.Evaluator> evaluators,
+      String[] keyFields,
+      RowType rowType,
+      boolean consistentLogicalTimestampEnabled) {
     String[] partitionFields = metaClient.getTableConfig().getPartitionFields().orElse(new String[0]);
     // align with the check logic in RowDataKeyGen
     boolean isComplexRecordKey = keyFields.length > 1 || partitionFields.length > 1 && !OptionsResolver.useComplexKeygenNewEncoding(conf);
     List<String> hoodieKeys = new ArrayList<>();
+    List<String> fieldNames = rowType.getFieldNames();
     for (String keyField: keyFields) {
       List<String> recordKeys = new ArrayList<>();
+      LogicalType fieldType = rowType.getTypeAt(fieldNames.indexOf(keyField));
       for (ExpressionEvaluators.Evaluator evaluator: evaluators) {
         // if there exists multiple ref fields in an evaluator, ignore this evaluator, e.g., key = 'key1' or age = 20
         List<Object> literals = collectLiterals(evaluator, keyField);
-        literals.forEach(val -> recordKeys.add(isComplexRecordKey ? keyField + KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR + val : val.toString()));
+        literals.forEach(val -> recordKeys.add(isComplexRecordKey
+            ? keyField + KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR + normalizeLiteral(val, keyField, fieldType, consistentLogicalTimestampEnabled)
+            : normalizeLiteral(val, keyField, fieldType, consistentLogicalTimestampEnabled)));
       }
       if (recordKeys.isEmpty()) {
         LOG.info("No literals found for the record key: {}, therefore filtering can not be performed", keyField);
@@ -207,5 +235,28 @@ public class RecordLevelIndex implements FlinkBaseIndex {
     } else {
       return Collections.emptyList();
     }
+  }
+
+  /**
+   * Normalize literal values before used to get record index locations.
+   */
+  private static String normalizeLiteral(Object value, String keyField, LogicalType fieldType, boolean consistentLogicalTimestampEnabled) {
+    switch (fieldType.getTypeRoot()) {
+      case DECIMAL:
+        // the scale of decimal data in predicate may not be aligned with that in record index, padding 0 if necessary,
+        // e.g., 1.11 with target scale 5, return 1.11000
+        BigDecimal decimal = (BigDecimal) value;
+        int targetScale = ((DecimalType) fieldType).getScale();
+        value = decimal.scale() >= targetScale ? value : decimal.setScale(targetScale);
+        break;
+      case TIMESTAMP_WITHOUT_TIME_ZONE:
+        // the original value is extracted from literal by ExpressionUtils#getValueFromLiteral, which is epoch millis
+        // convert it back to TimestampData before reusing key generating logic in RowDataKeyGen.
+        value = TimestampData.fromEpochMillis((Long) value);
+        break;
+      default:
+        break;
+    }
+    return RowDataKeyGen.getRecordKey(value, keyField, consistentLogicalTimestampEnabled);
   }
 }

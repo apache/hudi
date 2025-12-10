@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
@@ -93,7 +94,8 @@ public class FileIndex implements Serializable {
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
     List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
-    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators);
+    boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
+    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType, consistentLogicalTimestampEnabled);
     this.metaClient = metaClient;
   }
 
@@ -191,7 +193,9 @@ public class FileIndex implements Serializable {
 
     // data skipping based on record index
     if (recordLevelIndex.isPresent()) {
+      int prevSize = filteredFileSlices.size();
       filteredFileSlices = recordLevelIndex.get().computeCandidateFileSlices(filteredFileSlices);
+      logPruningMsg(prevSize, filteredFileSlices.size(), "record level index pruning");
     }
 
     // data skipping based on column stats
