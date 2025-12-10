@@ -50,6 +50,7 @@ github:
     - PavithranRick
     - linliu-code
     - vamsikarnika
+    - rahil-c
     - hudi-bot
 notifications:
   commits:      commits@hudi.apache.org
