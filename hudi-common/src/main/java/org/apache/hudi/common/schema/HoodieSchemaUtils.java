@@ -598,6 +598,12 @@ public final class HoodieSchemaUtils {
     HoodieSchema currentSchema = schema;
     for (String part : parts) {
       HoodieSchema nonNullSchema = getNonNullTypeFromUnion(currentSchema);
+      if (nonNullSchema.getType() != HoodieSchemaType.RECORD) {
+        if (allowsMissingField) {
+          return Option.empty();
+        }
+        throw new HoodieSchemaException(fieldName + " not a field in " + schema);
+      }
       Option<HoodieSchemaField> foundFieldOpt = nonNullSchema.getField(part);
       if (foundFieldOpt.isEmpty()) {
         if (allowsMissingField) {
@@ -633,7 +639,7 @@ public final class HoodieSchemaUtils {
    * @since 1.2.0
    */
   public static boolean containsFieldInSchema(HoodieSchema schema, String fieldName) {
-    if (schema == null || fieldName == null) {
+    if (schema == null || fieldName == null || fieldName.isEmpty()) {
       return false;
     }
     return schema.getField(fieldName).isPresent();
