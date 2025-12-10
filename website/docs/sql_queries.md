@@ -492,6 +492,69 @@ WITH (
 | `mode`             | `false`  | `dfs`     | Specify as `hms` to keep the table metadata with Hive metastore                                                        |
 | `table.external`   | `false`  | `false`   | Whether to create external tables, only valid under `hms` mode                                                         |
 
+### Query Metadata Columns
+Flink SQL now supports querying the virtual metadata columns from Hudi tables. These special columns provide access to 
+internal Hudi metadata such as commit time, record key, and partition path. The following virtual metadata columns are supported:
+
+| Metadata Column Name     | Description                                                                    |
+|--------------------------|--------------------------------------------------------------------------------|
+| `_hoodie_commit_time`    | The commit time when the record was committed                                |
+| `_hoodie_commit_seqno`   | The commit requence number of the record                                     |
+| `_hoodie_record_key`     | The record key of the record                                                  |
+| `_hoodie_partition_path` | The partition path of the record                                          |
+| `_hoodie_file_name`      | The file name where the record is stored                                       |
+| `_hoodie_operation`      | The changelog operation of the record, enabled by 'changelog.enabled' = 'true' |
+
+Before selecting these columns in your SQL queries, you have to define them in the DDL through the [virtual metadata 
+column](https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql/create/#columns) syntax of Flink SQL.
+
+Example usage:
+
+```sql
+CREATE TABLE hudi_table(
+    _hoodie_commit_time STRING METADATA VIRTUAL,
+    _hoodie_record_key STRING METADATA VIRTUAL,
+    ts BIGINT,
+    uuid VARCHAR(40) PRIMARY KEY NOT ENFORCED,
+    rider VARCHAR(20),
+    driver VARCHAR(20),
+    fare DOUBLE,
+    city VARCHAR(20)
+)
+PARTITIONED BY (`city`)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'file:///tmp/hudi_table',
+  'table.type' = 'MERGE_ON_READ'
+);
+
+-- Insert some records into the table
+INSERT INTO hudi_table
+VALUES
+(1695159649087,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+(1695091554788,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco'),
+(1695046462179,'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco'),
+(1695332066204,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+(1695516137016,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'),
+(1695376420876,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo'),
+(1695173887231,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'),
+(1695115999911,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
+
+-- Query a Hudi table with virtual metadata columns
+SELECT
+    _hoodie_commit_time,
+    _hoodie_record_key,
+    uuid,
+    rider,
+    fare
+FROM hudi_table;
+```
+
+:::note
+Virtual metadata columns are read-only, which means you can simply ignore them in an INSERT statement and only provide 
+values for the regular data columns.
+:::
+
 ## Hive
 
 [Hive](https://hive.apache.org/) has support for snapshot and incremental queries (with limitations) on Hudi tables.
