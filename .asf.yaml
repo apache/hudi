@@ -51,6 +51,7 @@ github:
     - linliu-code
     - vamsikarnika
     - rahil-c
+    - lokeshj1703
     - hudi-bot
 notifications:
   commits:      commits@hudi.apache.org
