@@ -47,6 +47,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
+import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
@@ -205,9 +206,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       // and therefore if we convert to Avro directly we'll lose logical type-info.
       MessageType messageType = getFileSchema();
       StructType structType = getStructSchema();
-      schemaOption = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter()
-          .getAvroSchemaConverters()
-          .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
+      schemaOption = Option.of(HoodieSparkAvroSchemaConverters.toAvroType(
+          structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
     }
     //TODO boundary to revisit using HoodieSchema directly
     return HoodieSchema.fromAvroSchema(schemaOption.get());
