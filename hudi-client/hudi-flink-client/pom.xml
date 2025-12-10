@@ -126,6 +126,12 @@
             <artifactId>kryo-shaded</artifactId>
         </dependency>
 
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
         <!-- Hoodie - Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>

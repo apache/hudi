@@ -34,14 +34,13 @@ import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -63,10 +62,9 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
+@Slf4j
 public abstract class BaseFlinkCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, Iterator<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseFlinkCommitActionExecutor.class);
 
   protected HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 
@@ -182,7 +180,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       }
     } catch (Throwable t) {
       String msg = "Error upserting bucketType " + bucketType + " for partition :" + partitionPath;
-      LOG.error(msg, t);
+      log.error(msg, t);
       throw new HoodieUpsertException(msg, t);
     }
   }
