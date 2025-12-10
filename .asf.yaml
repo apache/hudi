@@ -47,6 +47,9 @@ github:
     - rangareddy
     - deepakpanda93
     - cshuo
+    - PavithranRick
+    - linliu-code
+    - vamsikarnika
     - hudi-bot
 notifications:
   commits:      commits@hudi.apache.org
