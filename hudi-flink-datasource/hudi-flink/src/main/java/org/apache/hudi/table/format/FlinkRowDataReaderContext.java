@@ -190,7 +190,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       return;
     }
     // primary key semantic is lost if not all primary key fields are included in the request schema.
-    boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k) == null);
+    boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k).isEmpty());
     if (pkSemanticLost) {
       return;
     }

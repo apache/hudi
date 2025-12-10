@@ -344,7 +344,7 @@ public class SecondaryIndexRecordGenerationUtils {
 
   private static HoodieSchema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, HoodieSchema tableSchema, String secondaryKeyField) {
     String[] recordKeyFields;
-    if (tableSchema.getField(RECORD_KEY_METADATA_FIELD) != null) {
+    if (tableSchema.getField(RECORD_KEY_METADATA_FIELD).isPresent()) {
       recordKeyFields = new String[] {RECORD_KEY_METADATA_FIELD};
     } else {
       recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);

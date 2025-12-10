@@ -195,7 +195,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         List<Pair<String, Object>> filterFieldsAndValues = new ArrayList<>(partitionFields.length);
         for (int i = 0; i < partitionFields.length; i++) {
           String field = partitionFields[i];
-          if (dataSchema.getField(field) != null) {
+          if (dataSchema.getField(field).isPresent()) {
             filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertPartitionValueToEngineType((Comparable) partitionValues[i])));
           }
         }
