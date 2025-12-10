@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema;
 import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -503,7 +504,7 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Get gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
+   * Gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
    * @return the field, including its lineage.
    * For example, if you have a schema: record(a:int, b:record(x:int, y:long, z:record(z1: int, z2: float, z3: double), c:bool)
    * "fieldName" | output
@@ -573,4 +574,52 @@ public final class HoodieSchemaUtils {
     return RECORD_KEY_SCHEMA;
   }
 
+  /**
+   * Finds the schema of a nested field given a dot-separated field name.
+   * This is equivalent to {@link AvroSchemaUtils#findNestedFieldSchema(Schema, String, boolean)} but operates on HoodieSchema.
+   *
+   * <p>Unlike {@link #findNestedField(HoodieSchema, String)}, this method returns just the schema
+   * of the leaf field (unwrapped from union if nullable), not the field with its parent lineage.
+   *
+   * @param schema            the schema to search in
+   * @param fieldName         the dot-separated field name (e.g., "user.profile.name")
+   * @param allowsMissingField if true, returns Option.empty() when field is not found;
+   *                           if false, throws HoodieSchemaException
+   * @return Option containing the schema of the nested field, or Option.empty() if not found and allowsMissingField is true
+   * @throws HoodieSchemaException if field is not found and allowsMissingField is false
+   * @since 1.2.0
+   */
+  public static Option<HoodieSchema> findNestedFieldSchema(HoodieSchema schema, String fieldName, boolean allowsMissingField) {
+    if (fieldName == null || fieldName.isEmpty()) {
+      return Option.empty();
+    }
+    String[] parts = fieldName.split("\\.");
+
+    HoodieSchema currentSchema = schema;
+    for (String part : parts) {
+      HoodieSchema nonNullSchema = getNonNullTypeFromUnion(currentSchema);
+      Option<HoodieSchemaField> foundFieldOpt = nonNullSchema.getField(part);
+      if (foundFieldOpt.isEmpty()) {
+        if (allowsMissingField) {
+          return Option.empty();
+        }
+        throw new HoodieSchemaException(fieldName + " not a field in " + schema);
+      }
+      currentSchema = foundFieldOpt.get().schema();
+    }
+    return Option.of(getNonNullTypeFromUnion(currentSchema));
+  }
+
+  /**
+   * Finds the type of a nested field given a dot-separated field name.
+   * This is equivalent to {@link AvroSchemaUtils#findNestedFieldType(Schema, String)} but operates on HoodieSchema.
+   *
+   * @param schema    the schema to search in
+   * @param fieldName the dot-separated field name (e.g., "user.profile.name")
+   * @return Option containing the HoodieSchemaType of the nested field, or Option.empty() if not found
+   * @since 1.2.0
+   */
+  public static Option<HoodieSchemaType> findNestedFieldType(HoodieSchema schema, String fieldName) {
+    return findNestedFieldSchema(schema, fieldName, false).map(HoodieSchema::getType);
+  }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -1244,5 +1245,291 @@ public class TestHoodieSchemaUtils {
     assertEquals(1, newSchema.getFields().size());
     assertEquals("value1", newSchema.getProp("prop1"));
     assertEquals("newField", newSchema.getFields().get(0).name());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaTopLevel() {
+    // Create simple schema with top-level fields
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("count", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    // Test getting top-level field schema
+    Option<HoodieSchema> result = HoodieSchemaUtils.findNestedFieldSchema(schema, "id", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.STRING, result.get().getType());
+
+    result = HoodieSchemaUtils.findNestedFieldSchema(schema, "count", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.INT, result.get().getType());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaSingleLevel() {
+    // Create schema with nested record
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("zipcode", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)
+        )
+    );
+
+    // Test getting nested field schema
+    Option<HoodieSchema> result = HoodieSchemaUtils.findNestedFieldSchema(schema, "address.city", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.STRING, result.get().getType());
+
+    result = HoodieSchemaUtils.findNestedFieldSchema(schema, "address.zipcode", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.INT, result.get().getType());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaMultiLevel() {
+    // Create 3-level nested schema
+    HoodieSchema coordinatesSchema = HoodieSchema.createRecord(
+        "Coordinates",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("lat", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
+            HoodieSchemaField.of("lng", HoodieSchema.create(HoodieSchemaType.DOUBLE))
+        )
+    );
+
+    HoodieSchema locationSchema = HoodieSchema.createRecord(
+        "Location",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("coordinates", coordinatesSchema)
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Event",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("event_id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("location", locationSchema)
+        )
+    );
+
+    // Test getting deeply nested field schema
+    Option<HoodieSchema> result = HoodieSchemaUtils.findNestedFieldSchema(schema, "location.coordinates.lat", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.DOUBLE, result.get().getType());
+
+    result = HoodieSchemaUtils.findNestedFieldSchema(schema, "location.name", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.STRING, result.get().getType());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaWithNullableFields() {
+    // Create schema with nullable nested fields
+    HoodieSchema profileSchema = HoodieSchema.createRecord(
+        "Profile",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("bio", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING))),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "User",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("profile", HoodieSchema.createNullable(profileSchema))
+        )
+    );
+
+    // Test getting nested field schema through nullable parent - should return unwrapped schema
+    Option<HoodieSchema> result = HoodieSchemaUtils.findNestedFieldSchema(schema, "profile.bio", false);
+    assertTrue(result.isPresent());
+    // Should return the non-null type (STRING), not the union
+    assertEquals(HoodieSchemaType.STRING, result.get().getType());
+
+    result = HoodieSchemaUtils.findNestedFieldSchema(schema, "profile.age", false);
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.INT, result.get().getType());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaMissingFieldAllowed() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test with allowsMissingField=true - should return empty Option
+    Option<HoodieSchema> result = HoodieSchemaUtils.findNestedFieldSchema(schema, "nonexistent", true);
+    assertFalse(result.isPresent());
+
+    result = HoodieSchemaUtils.findNestedFieldSchema(schema, "id.nested", true);
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaMissingFieldNotAllowed() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test with allowsMissingField=false - should throw exception
+    assertThrows(HoodieSchemaException.class,
+        () -> HoodieSchemaUtils.findNestedFieldSchema(schema, "nonexistent", false));
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaEmptyOrNullFieldName() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test with empty field name - should return empty Option
+    Option<HoodieSchema> result = HoodieSchemaUtils.findNestedFieldSchema(schema, "", false);
+    assertFalse(result.isPresent());
+
+    // Test with null field name - should return empty Option
+    result = HoodieSchemaUtils.findNestedFieldSchema(schema, null, false);
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testFindNestedFieldSchemaReturnsLeafSchema() {
+    // This test verifies that findNestedFieldSchema returns the leaf field's schema,
+    // NOT the field with its parent lineage (which is what findNestedField does)
+    HoodieSchema innerSchema = HoodieSchema.createRecord(
+        "Inner",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Outer",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("inner", innerSchema)
+        )
+    );
+
+    // findNestedFieldSchema should return just the LONG schema
+    Option<HoodieSchema> schemaResult = HoodieSchemaUtils.findNestedFieldSchema(schema, "inner.value", false);
+    assertTrue(schemaResult.isPresent());
+    assertEquals(HoodieSchemaType.LONG, schemaResult.get().getType());
+
+    // Compare with findNestedField which returns the field with lineage
+    Option<HoodieSchemaField> fieldResult = HoodieSchemaUtils.findNestedField(schema, "inner.value");
+    assertTrue(fieldResult.isPresent());
+    // findNestedField returns a field named "inner" containing a record with just "value"
+    assertEquals("inner", fieldResult.get().name());
+    assertEquals(HoodieSchemaType.RECORD, fieldResult.get().schema().getType());
+  }
+
+  @Test
+  public void testFindNestedFieldTypeTopLevel() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("count", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+        )
+    );
+
+    // Test findNestedFieldType
+    Option<HoodieSchemaType> result = HoodieSchemaUtils.findNestedFieldType(schema, "id");
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.STRING, result.get());
+
+    result = HoodieSchemaUtils.findNestedFieldType(schema, "count");
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.LONG, result.get());
+
+    result = HoodieSchemaUtils.findNestedFieldType(schema, "active");
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.BOOLEAN, result.get());
+  }
+
+  @Test
+  public void testFindNestedFieldTypeNested() {
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("number", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)
+        )
+    );
+
+    // Test findNestedFieldType for nested fields
+    Option<HoodieSchemaType> result = HoodieSchemaUtils.findNestedFieldType(schema, "address.street");
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.STRING, result.get());
+
+    result = HoodieSchemaUtils.findNestedFieldType(schema, "address.number");
+    assertTrue(result.isPresent());
+    assertEquals(HoodieSchemaType.INT, result.get());
   }
 }
