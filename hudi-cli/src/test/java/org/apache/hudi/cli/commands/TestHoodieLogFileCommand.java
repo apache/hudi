@@ -238,7 +238,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withStorage(storage)
         .withBasePath(tablePath)
         .withLogFilePaths(logFilePaths)
-        .withReaderSchema(schema.toAvroSchema())
+        .withReaderSchema(schema)
         .withLatestInstantTime(INSTANT_TIME)
         .withMaxMemorySizeInBytes(
             HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)

@@ -142,7 +142,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, HoodieFileGroupRecordBuffer<T> recordBuffer,
                                       boolean allowInflightInstants) {
     this.readerContext = readerContext;
-    this.readerSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getRequiredSchema() : null;
+    this.readerSchema = readerContext.getSchemaHandler() != null ? HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()) : null;
     this.latestInstantTime = readerContext.getLatestCommitTime();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     // load class from the payload fully qualified class name

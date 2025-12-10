@@ -23,6 +23,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
@@ -743,11 +744,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     val logFilePathList: List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
     Collections.sort(logFilePathList)
 
-    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until expectedNumLogFile) {
       val logReader = new HoodieLogFileReader(
         metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        avroSchema, 1024 * 1024, false, false,
+        schema, 1024 * 1024, false, false,
         "id", null)
       assertTrue(logReader.hasNext)
       val logBlockHeader = logReader.next().getLogBlockHeader
@@ -758,9 +759,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       } else {
         assertFalse(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
       }
-      val actualSchema = new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
-      val expectedSchema = HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
-        avroSchema, changedFields(i).asJava), false)
+      val actualSchema = HoodieSchema.parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
+      val expectedSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.generateProjectionSchema(
+        schema, changedFields(i).asJava), false)
       assertEquals(expectedSchema, actualSchema)
     }
   }

@@ -412,11 +412,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
+  public HoodieAvroDataBlock(List<HoodieRecord> records, HoodieSchema schema) {
     super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
-  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema) throws IOException {
     return getBlock(content, readerSchema, InternalSchema.getEmptyInternalSchema());
   }
 
@@ -425,7 +425,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema, InternalSchema internalSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema, InternalSchema internalSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
 
@@ -434,16 +434,17 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     byte[] compressedSchema = new byte[schemaLength];
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(decompress(compressedSchema));
+    Schema readerAvroSchema = readerSchema != null ? readerSchema.toAvroSchema() : null;
 
     if (readerSchema == null) {
-      readerSchema = writerSchema;
+      readerAvroSchema = writerSchema;
     }
 
     if (!internalSchema.isEmptySchema()) {
-      readerSchema = writerSchema;
+      readerAvroSchema = writerSchema;
     }
 
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerAvroSchema);
     // 2. Get the total records
     int totalRecords = dis.readInt();
     List<HoodieRecord> records = new ArrayList<>(totalRecords);

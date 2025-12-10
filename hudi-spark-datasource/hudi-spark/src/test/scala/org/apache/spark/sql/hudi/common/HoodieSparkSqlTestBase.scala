@@ -454,11 +454,11 @@ object HoodieSparkSqlTestBase {
     val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
     Collections.sort(logFilePathList)
     var deleteLogBlockFound = false
-    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until logFilePathList.size()) {
       val logReader = new HoodieLogFileReader(
         metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        avroSchema, 1024 * 1024, false, false,
+        schema, 1024 * 1024, false, false,
         "id", null)
       assertTrue(logReader.hasNext)
       val logBlock = logReader.next()
