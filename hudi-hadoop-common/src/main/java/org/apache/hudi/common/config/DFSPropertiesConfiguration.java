@@ -68,7 +68,10 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       DEFAULT_CONF_FILE_DIR, DEFAULT_PROPERTIES_FILE);
 
   // props read from hudi-defaults.conf
-  private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
+  // Lazy initialization to avoid class poisoning when S3/credentials not ready during static init
+  private static volatile TypedProperties GLOBAL_PROPS = null;
+  private static volatile boolean globalPropsInitialized = false;
+  private static final Object INIT_LOCK = new Object();
 
   @Nullable
   private final Configuration hadoopConfig;
@@ -130,11 +133,21 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   public static void refreshGlobalProps() {
-    GLOBAL_PROPS = loadGlobalProps();
+    synchronized (INIT_LOCK) {
+      try {
+        GLOBAL_PROPS = loadGlobalProps();
+        globalPropsInitialized = true;
+      } catch (Exception e) {
+        LOG.warn("Failed to refresh global props, keeping existing configuration.", e);
+      }
+    }
   }
 
   public static void clearGlobalProps() {
-    GLOBAL_PROPS = new TypedProperties();
+    synchronized (INIT_LOCK) {
+      GLOBAL_PROPS = new TypedProperties();
+      globalPropsInitialized = true;
+    }
   }
 
   /**
@@ -209,6 +222,24 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   public static TypedProperties getGlobalProps() {
+    if (!globalPropsInitialized) {
+      synchronized (INIT_LOCK) {
+        if (!globalPropsInitialized) {
+          try {
+            GLOBAL_PROPS = loadGlobalProps();
+            globalPropsInitialized = true;  // Only mark as initialized on success
+          } catch (Exception e) {
+            LOG.warn("Failed to load global props, using empty configuration. "
+                + "Will retry on next call.", e);
+            // Do NOT set globalPropsInitialized = true here to allow retry on next call
+          }
+        }
+      }
+    }
+    // Always return something (even if GLOBAL_PROPS is still null)
+    if (GLOBAL_PROPS == null) {
+      return new TypedProperties();
+    }
     final TypedProperties globalProps = new TypedProperties();
     globalProps.putAll(GLOBAL_PROPS);
     return globalProps;
@@ -216,8 +247,16 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
 
   // test only
   public static TypedProperties addToGlobalProps(String key, String value) {
-    GLOBAL_PROPS.put(key, value);
-    return GLOBAL_PROPS;
+    if (!globalPropsInitialized) {
+      getGlobalProps();  // Trigger initialization
+    }
+    synchronized (INIT_LOCK) {
+      if (GLOBAL_PROPS == null) {
+        GLOBAL_PROPS = new TypedProperties();
+      }
+      GLOBAL_PROPS.put(key, value);
+      return GLOBAL_PROPS;
+    }
   }
 
   public TypedProperties getProps() {

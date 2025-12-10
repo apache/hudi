@@ -230,4 +230,59 @@ public class TestDFSPropertiesConfiguration {
       cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t4.props"));
     });
   }
+
+  @Test
+  public void testLazyInitializationWithFailureAndRetry() {
+    // Clear global props to reset state
+    DFSPropertiesConfiguration.clearGlobalProps();
+
+    // Set HUDI_CONF_DIR to non-existent path (simulates S3/network failure)
+    String badPath = "/non/existent/path/that/does/not/exist";
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, badPath);
+
+    // First call should return empty config (not throw exception)
+    TypedProperties props1 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(0, props1.size(), "Should return empty config when load fails");
+
+    // Second call should also return empty (still fails, retries each time)
+    TypedProperties props2 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(0, props2.size(), "Should return empty config on retry when load still fails");
+
+    // Now fix the path to a valid config directory
+    String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
+
+    // Call refreshGlobalProps to manually trigger reload
+    DFSPropertiesConfiguration.refreshGlobalProps();
+
+    // Now getGlobalProps should return the loaded properties
+    TypedProperties props3 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(5, props3.size(), "Should load config after refresh with valid path");
+    assertEquals("jdbc:hive2://localhost:10000", props3.get("hoodie.datasource.hive_sync.jdbcurl"));
+  }
+
+  @Test
+  public void testClassInitializationNeverThrows() {
+    // This test verifies that static initialization never throws exceptions
+    // even when global props fail to load
+
+    // Clear and set bad environment
+    DFSPropertiesConfiguration.clearGlobalProps();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, "/this/path/does/not/exist/at/all");
+
+    // Call static method that triggers lazy initialization
+    // Should NOT throw ExceptionInInitializerError or NoClassDefFoundError
+    TypedProperties props = DFSPropertiesConfiguration.getGlobalProps();
+
+    // Should return empty config, not throw
+    assertEquals(0, props.size(), "Should return empty config without throwing");
+
+    // Verify we can call it multiple times without errors
+    TypedProperties props2 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(0, props2.size(), "Multiple calls should work without class poisoning");
+
+    // Verify other methods still work
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
+    assertEquals(0, cfg.getGlobalProperties().size());
+  }
 }
