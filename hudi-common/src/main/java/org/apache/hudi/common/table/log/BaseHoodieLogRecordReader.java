@@ -377,7 +377,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage, logFiles,
-          readerSchema.toAvroSchema(), reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema == null ? null : readerSchema.toAvroSchema(), reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.
