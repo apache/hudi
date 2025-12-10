@@ -29,8 +29,13 @@ import scala.collection.JavaConverters._
 /**
  * This object contains methods that are used to convert HoodieSchema to Spark SQL schemas and vice versa.
  *
- * NOTE: This provides direct conversion between HoodieSchema and Spark DataType
+ * This provides direct conversion between HoodieSchema and Spark DataType
  * without going through Avro Schema intermediary.
+ *
+ * NOTE: the package of this class is intentionally kept as "org.apache.spark.sql.avro" which is similar to the existing
+ * Spark Avro connector's SchemaConverters.scala
+ * (https://github.com/apache/spark/blob/master/connector/avro/src/main/scala/org/apache/spark/sql/avro/SchemaConverters.scala).
+ * The reason for this is so that Spark 3.3 is able to access private spark sql type classes like TimestampNTZType.
  */
 
 @DeveloperApi
@@ -46,7 +51,7 @@ object HoodieSparkSchemaConverters {
     (result.dataType, result.nullable)
   }
 
-  def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String = ""): HoodieSchema = {
+  def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): HoodieSchema = {
     val schema = catalystType match {
       // Primitive types
       case BooleanType => HoodieSchema.create(HoodieSchemaType.BOOLEAN)
