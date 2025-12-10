@@ -105,6 +105,11 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   if [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
     IMAGE_TAG=flink200hive313spark351
     FLINK_VERSION=2.0.0
+    REPO=icshuo
+  elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
+    IMAGE_TAG=flink211hive313spark351
+    FLINK_VERSION=2.1.1
+    REPO=icshuo
   else
     IMAGE_TAG=flink1170hive313spark351
     FLINK_VERSION=1.17.0
@@ -198,6 +203,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle
   elif [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.0-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.1-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
@@ -233,6 +240,7 @@ docker build \
 --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
 --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
+--build-arg REPO=$REPO \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
