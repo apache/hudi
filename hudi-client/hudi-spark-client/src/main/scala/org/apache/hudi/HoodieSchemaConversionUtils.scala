@@ -129,7 +129,7 @@ object HoodieSchemaConversionUtils {
 
           field.dataType match {
             case structType: StructType =>
-              val nestedSchema = unwrapNullableSchema(hoodieField.schema())
+              val nestedSchema = hoodieField.schema().getNonNullType
               if (nestedSchema.getType == HoodieSchemaType.RECORD) {
                 alignedField.copy(dataType = alignFieldsNullability(structType, nestedSchema))
               } else {
@@ -137,7 +137,7 @@ object HoodieSchemaConversionUtils {
               }
 
             case ArrayType(elementType, _) =>
-              val arraySchema = unwrapNullableSchema(hoodieField.schema())
+              val arraySchema = hoodieField.schema().getNonNullType
               if (arraySchema.getType == HoodieSchemaType.ARRAY) {
                 val elemSchema = arraySchema.getElementType
                 val newElementType = updateElementType(elementType, elemSchema)
@@ -147,7 +147,7 @@ object HoodieSchemaConversionUtils {
               }
 
             case MapType(keyType, valueType, _) =>
-              val mapSchema = unwrapNullableSchema(hoodieField.schema())
+              val mapSchema = hoodieField.schema().getNonNullType
               if (mapSchema.getType == HoodieSchemaType.MAP) {
                 val valueSchema = mapSchema.getValueType
                 val newValueType = updateElementType(valueType, valueSchema)
@@ -164,13 +164,6 @@ object HoodieSchemaConversionUtils {
     }
 
     StructType(alignedFields)
-  }
-
-  /**
-   * Unwraps nullable schema (union with null) to get the non-null type.
-   */
-  private def unwrapNullableSchema(schema: HoodieSchema): HoodieSchema = {
-    if (schema.isNullable) schema.getNonNullType else schema
   }
 
   /**

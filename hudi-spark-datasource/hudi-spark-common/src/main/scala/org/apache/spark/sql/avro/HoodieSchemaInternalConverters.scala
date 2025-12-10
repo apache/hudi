@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 
 import scala.collection.JavaConverters._
 
@@ -105,10 +106,7 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
             HoodieSchemaField.of(f.name, fieldSchema, doc)
           }
 
-          val fieldsJava = new java.util.ArrayList[HoodieSchemaField]()
-          fields.foreach(fieldsJava.add)
-
-          HoodieSchema.createRecord(recordName, nameSpace, null, fieldsJava)
+          HoodieSchema.createRecord(recordName, nameSpace, null, fields.asJava)
         }
 
       case other => throw new IncompatibleSchemaException(s"Unexpected Spark DataType: $other")
@@ -243,16 +241,5 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
       st.forall { f =>
         f.name.matches("member\\d+") && f.nullable
       }
-  }
-
-  /**
-   * Calculates the minimum number of bytes needed to store a decimal with the given precision.
-   */
-  private def minBytesForPrecision(precision: Int): Int = {
-    var numBytes = 1
-    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
-      numBytes += 1
-    }
-    numBytes
   }
 }
