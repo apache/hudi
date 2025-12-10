@@ -52,6 +52,8 @@ github:
     - vamsikarnika
     - rahil-c
     - lokeshj1703
+    - CTTY
+    - mansipp
     - hudi-bot
 notifications:
   commits:      commits@hudi.apache.org
