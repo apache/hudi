@@ -609,7 +609,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // Reload meta client to pick up new instants
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
-    Object lookupBackInZeroMinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 0");
+    Object lookupBackInZeroMinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 0");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackInZeroMinsResult));
 
     // All three instants should be shown when duration is 0
@@ -619,21 +619,21 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     assertTrue(output.contains(oldInstantTime3));
 
     // Only one instants should be shown when duration is 15 since 2nd commit is a completed commit.
-    Object lookupBackIn15MinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 15");
+    Object lookupBackIn15MinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 15");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn15MinsResult));
     output = lookupBackIn15MinsResult.toString();
     assertTrue(output.contains(oldInstantTime1));
     assertFalse(output.contains(oldInstantTime2));
 
     // Only one instant should be shown when duration is 50
-    Object lookupBackIn50MinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 50");
+    Object lookupBackIn50MinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 50");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn50MinsResult));
     output = lookupBackIn50MinsResult.toString();
     assertTrue(output.contains(oldInstantTime1));
     assertFalse(output.contains(oldInstantTime2));
 
     // No instants should be shown when duration is > 60
-    Object lookupBackIn70MinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 70");
+    Object lookupBackIn70MinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 70");
     assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn70MinsResult));
     output = lookupBackIn70MinsResult.toString();
     assertTrue(output.contains(oldInstantTime1));
