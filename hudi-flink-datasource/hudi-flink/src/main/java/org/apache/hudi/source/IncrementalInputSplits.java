@@ -63,7 +63,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -406,15 +405,6 @@ public class IncrementalInputSplits implements Serializable {
             new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath().toString(), maxCompactionMemoryInBytes,
                 splits.getKey().getFileId(), splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new)))
         .collect(Collectors.toList());
-  }
-
-  private static Stream<FileSlice> getFileSlices(
-      HoodieTableFileSystemView fsView,
-      String relPartitionPath,
-      String endInstant,
-      boolean skipBaseFiles) {
-    return skipBaseFiles ? fsView.getAllLogsMergedFileSliceBeforeOrOn(relPartitionPath, endInstant)
-        : fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
   }
 
   private FileIndex getFileIndex(HoodieTableMetaClient metaClient) {
