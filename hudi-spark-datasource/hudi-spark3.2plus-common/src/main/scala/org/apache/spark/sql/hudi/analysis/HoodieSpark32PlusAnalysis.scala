@@ -111,7 +111,13 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       lazy val analyzer = spark.sessionState.analyzer
       val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
-      val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
+      val originalMergeInto = mO.asInstanceOf[MergeIntoTable]
+      val m = originalMergeInto.copy(
+        targetTable = targetTable,
+        sourceTable = sourceTable,
+        mergeCondition = originalMergeInto.mergeCondition,
+        matchedActions = originalMergeInto.matchedActions,
+        notMatchedActions = originalMergeInto.notMatchedActions)
       // END: custom Hudi change
       EliminateSubqueryAliases(targetTable) match {
         case r: NamedRelation if r.skipSchemaResolution =>
