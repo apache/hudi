@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConverters, Spark3HoodiePartitionCDCFileGroupMapping, Spark3HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark3HoodiePartitionCDCFileGroupMapping, Spark3HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark3HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -67,8 +67,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
-
-  override def getHoodieSchemaConverters: HoodieSchemaConverters = HoodieSparkSchemaConverters
 
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
     cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))

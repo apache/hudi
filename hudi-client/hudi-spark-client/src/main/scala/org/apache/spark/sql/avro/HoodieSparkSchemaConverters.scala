@@ -1,12 +1,13 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,13 +18,11 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.HoodieSchemaConverters
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
-
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
+import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
 
@@ -35,19 +34,19 @@ import scala.collection.JavaConverters._
  */
 
 @DeveloperApi
-private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverters {
+object HoodieSparkSchemaConverters {
 
   /**
    * Internal wrapper for SQL data type and nullability.
    */
   case class SchemaType(dataType: DataType, nullable: Boolean)
 
-  override def toSqlType(hoodieSchema: HoodieSchema): (DataType, Boolean) = {
+  def toSqlType(hoodieSchema: HoodieSchema): (DataType, Boolean) = {
     val result = toSqlTypeHelper(hoodieSchema, Set.empty)
     (result.dataType, result.nullable)
   }
 
-  override def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): HoodieSchema = {
+  def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String = ""): HoodieSchema = {
     val schema = catalystType match {
       // Primitive types
       case BooleanType => HoodieSchema.create(HoodieSchemaType.BOOLEAN)
@@ -88,14 +87,9 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
             toHoodieType(f.dataType, nullable = false, f.name, childNameSpace)
           }
           val unionFieldTypes = if (nullable) {
-            val types = new java.util.ArrayList[HoodieSchema]()
-            types.add(HoodieSchema.create(HoodieSchemaType.NULL))
-            nonNullUnionFieldTypes.foreach(types.add)
-            types
+            (HoodieSchema.create(HoodieSchemaType.NULL) +: nonNullUnionFieldTypes).asJava
           } else {
-            val types = new java.util.ArrayList[HoodieSchema]()
-            nonNullUnionFieldTypes.foreach(types.add)
-            types
+            nonNullUnionFieldTypes.asJava
           }
           HoodieSchema.createUnion(unionFieldTypes)
         } else {
@@ -243,3 +237,5 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
       }
   }
 }
+
+private[avro] class IncompatibleSchemaException(msg: String, ex: Throwable = null) extends Exception(msg, ex)

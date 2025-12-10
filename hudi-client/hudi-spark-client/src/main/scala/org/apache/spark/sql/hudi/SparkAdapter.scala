@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConverters}
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -106,11 +106,6 @@ trait SparkAdapter extends Serializable {
    * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
    */
   def getAvroSchemaConverters: HoodieAvroSchemaConverters
-
-  /**
-   * Creates instance of [[HoodieSchemaConverters]] allowing to convert b/w HoodieSchema and Catalyst schemas
-   */
-  def getHoodieSchemaConverters: HoodieSchemaConverters
 
   /**
    * Create the hoodie's extended spark sql parser.
