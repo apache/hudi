@@ -638,4 +638,19 @@ public final class HoodieSchemaUtils {
     }
     return schema.getField(fieldName).isPresent();
   }
+
+  /**
+   * Creates a formatted error message string that includes the error message along with
+   * the writer and table schemas for debugging purposes.
+   * This is equivalent to {@link AvroSchemaUtils#createSchemaErrorString(String, Schema, Schema)} but operates on HoodieSchema.
+   *
+   * @param errorMessage the error message describing the issue
+   * @param writerSchema the writer schema involved in the error
+   * @param tableSchema  the table schema involved in the error
+   * @return formatted error string containing the message and both schemas
+   * @since 1.2.0
+   */
+  public static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
+    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
+  }
 }

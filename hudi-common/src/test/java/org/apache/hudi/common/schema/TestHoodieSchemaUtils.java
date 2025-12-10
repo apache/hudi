@@ -1623,4 +1623,115 @@ public class TestHoodieSchemaUtils {
     assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "city"));
     assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "address.street"));
   }
+
+  // ==================== createSchemaErrorString tests ====================
+
+  @Test
+  public void testCreateSchemaErrorStringBasic() {
+    HoodieSchema writerSchema = HoodieSchema.createRecord(
+        "Writer",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema tableSchema = HoodieSchema.createRecord(
+        "Table",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    String errorMessage = "Schema incompatibility detected";
+    String result = HoodieSchemaUtils.createSchemaErrorString(errorMessage, writerSchema, tableSchema);
+
+    // Verify the result contains all components
+    assertTrue(result.contains(errorMessage));
+    assertTrue(result.contains("writerSchema:"));
+    assertTrue(result.contains("tableSchema:"));
+    assertTrue(result.contains("Writer"));
+    assertTrue(result.contains("Table"));
+  }
+
+  @Test
+  public void testCreateSchemaErrorStringFormat() {
+    HoodieSchema writerSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema tableSchema = HoodieSchema.create(HoodieSchemaType.INT);
+
+    String errorMessage = "Type mismatch";
+    String result = HoodieSchemaUtils.createSchemaErrorString(errorMessage, writerSchema, tableSchema);
+
+    // Verify the format matches the expected pattern
+    String expectedFormat = errorMessage + "\nwriterSchema: " + writerSchema + "\ntableSchema: " + tableSchema;
+    assertEquals(expectedFormat, result);
+  }
+
+  @Test
+  public void testCreateSchemaErrorStringWithNullSchemas() {
+    String errorMessage = "Test error";
+
+    // Test with null writer schema
+    String result1 = HoodieSchemaUtils.createSchemaErrorString(errorMessage, null, HoodieSchema.create(HoodieSchemaType.STRING));
+    assertTrue(result1.contains("writerSchema: null"));
+
+    // Test with null table schema
+    String result2 = HoodieSchemaUtils.createSchemaErrorString(errorMessage, HoodieSchema.create(HoodieSchemaType.STRING), null);
+    assertTrue(result2.contains("tableSchema: null"));
+
+    // Test with both null schemas
+    String result3 = HoodieSchemaUtils.createSchemaErrorString(errorMessage, null, null);
+    assertTrue(result3.contains("writerSchema: null"));
+    assertTrue(result3.contains("tableSchema: null"));
+  }
+
+  @Test
+  public void testCreateSchemaErrorStringWithComplexSchemas() {
+    // Create a complex nested schema
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema writerSchema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)
+        )
+    );
+
+    HoodieSchema tableSchema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema),
+            HoodieSchemaField.of("email", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    String errorMessage = "Missing field 'email' in writer schema";
+    String result = HoodieSchemaUtils.createSchemaErrorString(errorMessage, writerSchema, tableSchema);
+
+    // Verify the nested schema is included in the output
+    assertTrue(result.contains(errorMessage));
+    assertTrue(result.contains("Person"));
+    assertTrue(result.contains("Address"));
+    assertTrue(result.contains("street"));
+  }
 }
