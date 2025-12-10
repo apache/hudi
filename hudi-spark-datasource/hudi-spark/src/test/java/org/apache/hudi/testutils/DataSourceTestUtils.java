@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -62,12 +63,21 @@ public class DataSourceTestUtils {
 
   private static final Random RANDOM = new Random(0xDAADDEED);
 
+  //TODO to remove these
   public static Schema getStructTypeExampleSchema() throws IOException {
     return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
   }
 
   public static Schema getStructTypeExampleEvolvedSchema() throws IOException {
     return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
+  }
+
+  public static HoodieSchema getStructTypeExampleHoodieSchema() throws IOException {
+    return HoodieSchema.parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
+  }
+
+  public static HoodieSchema getStructTypeExampleEvolvedHoodieSchema() throws IOException {
+    return HoodieSchema.parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
   }
 
   public static List<Row> generateRandomRows(int count) {

@@ -386,4 +386,41 @@ public final class HoodieSchemaUtils {
           ));
     }
   }
+
+  /**
+   * Converts field values for specific data types with logical type handling.
+   * This is equivalent to HoodieAvroUtils.convertValueForSpecificDataTypes() but operates on HoodieSchema.
+   * <p>
+   * Handles special conversions for Avro logical types:
+   * <ul>
+   *   <li>Date type - converts epoch day integer to LocalDate</li>
+   *   <li>Timestamp types - converts epoch milliseconds/microseconds to Timestamp</li>
+   *   <li>Decimal type - converts bytes/fixed to BigDecimal</li>
+   * </ul>
+   *
+   * @param fieldSchema the field schema
+   * @param fieldValue the field value to convert
+   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp handling
+   * @return converted value for logical types, or original value
+   * @throws IllegalStateException if fieldValue is null but schema is not nullable
+   * @since 1.2.0
+   */
+  public static Object convertValueForSpecificDataTypes(HoodieSchema fieldSchema,
+                                                        Object fieldValue,
+                                                        boolean consistentLogicalTimestampEnabled) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    } else if (fieldValue == null) {
+      ValidationUtils.checkState(fieldSchema.isNullable(),
+          "Field value is null but schema is not nullable");
+      return null;
+    }
+
+    // Delegate to existing Avro utility
+    return HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema.toAvroSchema(),
+        fieldValue,
+        consistentLogicalTimestampEnabled
+    );
+  }
 }
