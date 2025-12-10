@@ -24,7 +24,7 @@ import java.io.Serializable;
  * Base support that leverages Metadata Table's indexes, such as Column Stats Index,
  * Partition Stats Index, Record Level Index to prune files, file slice and partitions.
  */
-public interface FlinkBaseIndex extends Serializable {
+public interface FlinkMetadataIndex extends Serializable {
   /**
    * Returns the partition name of the index.
    */
