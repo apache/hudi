@@ -373,11 +373,6 @@ public class CommitsCommand {
     String oldestAllowedTimestamp = HoodieInstantTimeGenerator
         .formatDate(new Date(System.currentTimeMillis() - goBackMs));
 
-    List<HoodieInstant> l = metaClient
-        .reloadActiveTimeline()
-        .getWriteTimeline()
-        .filterInflightsAndRequested().getInstants();
-
     List<HoodieInstant> inflightInstants =  metaClient
         .reloadActiveTimeline()
         .getWriteTimeline()

@@ -77,6 +77,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -584,7 +585,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     String oldInstantTime2 = HoodieInstantTimeGenerator.formatDate(
         new Date(System.currentTimeMillis() - 1000 * 60 * 45)); // 45 mins ago
     String oldInstantTime3 = HoodieInstantTimeGenerator.formatDate(
-        new Date(System.currentTimeMillis() - 1000 * 60 * 5));  // 5 mins ago
+        new Date(System.currentTimeMillis() - 1000 * 60 * 5));  //  5 mins ago
 
     // Reload meta client to pick up new instants
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
@@ -608,30 +609,34 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // Reload meta client to pick up new instants
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
-    Object result1 = shell.evaluate(() -> "commits show_infights --durationInMins 0");
-    assertTrue(ShellEvaluationResultUtil.isSuccess(result1));
+    Object lookupBackInZeroMinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 0");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackInZeroMinsResult));
 
     // All three instants should be shown when duration is 0
-    String output1 = result1.toString();
-    assertTrue(output1.contains(oldInstantTime1));
-    assertTrue(output1.contains(oldInstantTime3));
+    String output = lookupBackInZeroMinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
+    assertTrue(output.contains(oldInstantTime3));
 
     // Only one instants should be shown when duration is 15 since 2nd commit is a completed commit.
-    Object result2 = shell.evaluate(() -> "commits show_infights --durationInMins 15");
-    assertTrue(ShellEvaluationResultUtil.isSuccess(result2));
-    String output2 = result1.toString();
-    assertTrue(output2.contains(oldInstantTime1));
+    Object lookupBackIn15MinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 15");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn15MinsResult));
+    output = lookupBackIn15MinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
 
     // Only one instant should be shown when duration is 50
-    Object result3 = shell.evaluate(() -> "commits show_infights --durationInMins 50");
-    assertTrue(ShellEvaluationResultUtil.isSuccess(result3));
-    String output3 = result1.toString();
-    assertTrue(output3.contains(oldInstantTime1));
+    Object lookupBackIn50MinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 50");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn50MinsResult));
+    output = lookupBackIn50MinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
 
     // No instants should be shown when duration is > 60
-    Object result4 = shell.evaluate(() -> "commits show_infights --durationInMins 70");
-    assertTrue(ShellEvaluationResultUtil.isSuccess(result4));
-    String output4 = result1.toString();
-    assertTrue(output4.contains(oldInstantTime1));
+    Object lookupBackIn70MinsResult = shell.evaluate(() -> "commits show_infights --durationInMins 70");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn70MinsResult));
+    output = lookupBackIn70MinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
   }
 }
