@@ -145,16 +145,22 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
       HoodieSchemaField.of("date", HoodieSchema.createDate()),
       HoodieSchemaField.of("timestamp_micros", HoodieSchema.createTimestampMicros()),
       HoodieSchemaField.of("timestamp_ntz", HoodieSchema.createLocalTimestampMicros()),
-      HoodieSchemaField.of("decimal", HoodieSchema.createDecimal(15, 3))
+      HoodieSchemaField.of("decimal", HoodieSchema.createDecimal(15, 3)),
+      HoodieSchemaField.of("time_millis", HoodieSchema.createTimeMillis()),
+      HoodieSchemaField.of("time_micros", HoodieSchema.createTimeMicros()),
+      HoodieSchemaField.of("uuid", HoodieSchema.createUUID())
     )
     val hoodieSchema = HoodieSchema.createRecord("LogicalTypes", "test", null, fields)
 
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
 
-    assert(structType.fields.length == 4)
+    assert(structType.fields.length == 7)
     assert(structType.fields(0).dataType == DateType)
     assert(structType.fields(1).dataType == TimestampType)
     assert(structType.fields(3).dataType == DecimalType(15, 3))
+    assert(structType.fields(4).dataType == IntegerType)  // time_millis -> INT
+    assert(structType.fields(5).dataType == LongType)     // time_micros -> LONG
+    assert(structType.fields(6).dataType == StringType)   // uuid -> STRING
   }
 
   test("test binary type handling") {

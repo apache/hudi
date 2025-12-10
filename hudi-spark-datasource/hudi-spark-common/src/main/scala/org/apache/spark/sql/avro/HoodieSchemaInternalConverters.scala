@@ -19,6 +19,7 @@ package org.apache.spark.sql.avro
 
 import org.apache.hudi.HoodieSchemaConverters
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types._
@@ -153,6 +154,21 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
             throw new IncompatibleSchemaException(
               s"DECIMAL type must be HoodieSchema.Decimal instance, got: ${hoodieSchema.getClass}")
         }
+
+      case HoodieSchemaType.TIME =>
+        hoodieSchema match {
+          case time: HoodieSchema.Time =>
+            time.getPrecision match {
+              case TimePrecision.MILLIS => SchemaType(IntegerType, nullable = false)
+              case TimePrecision.MICROS => SchemaType(LongType, nullable = false)
+            }
+          case _ =>
+            throw new IncompatibleSchemaException(
+              s"TIME type must be HoodieSchema.Time instance, got: ${hoodieSchema.getClass}")
+        }
+
+      case HoodieSchemaType.UUID =>
+        SchemaType(StringType, nullable = false)
 
       // Complex types
       case HoodieSchemaType.RECORD =>
