@@ -1532,4 +1532,95 @@ public class TestHoodieSchemaUtils {
     assertTrue(result.isPresent());
     assertEquals(HoodieSchemaType.INT, result.get());
   }
+
+  @Test
+  public void testContainsFieldInSchemaExists() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    // Test existing fields
+    assertTrue(HoodieSchemaUtils.containsFieldInSchema(schema, "id"));
+    assertTrue(HoodieSchemaUtils.containsFieldInSchema(schema, "name"));
+    assertTrue(HoodieSchemaUtils.containsFieldInSchema(schema, "age"));
+  }
+
+  @Test
+  public void testContainsFieldInSchemaNotExists() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test non-existing fields
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "nonexistent"));
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "age"));
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, ""));
+  }
+
+  @Test
+  public void testContainsFieldInSchemaNullInputs() {
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Test null schema
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(null, "id"));
+
+    // Test null field name
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, null));
+
+    // Test both null
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(null, null));
+  }
+
+  @Test
+  public void testContainsFieldInSchemaDoesNotCheckNestedFields() {
+    // Create schema with nested record
+    HoodieSchema addressSchema = HoodieSchema.createRecord(
+        "Address",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("street", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("address", addressSchema)
+        )
+    );
+
+    // containsFieldInSchema only checks top-level fields
+    assertTrue(HoodieSchemaUtils.containsFieldInSchema(schema, "name"));
+    assertTrue(HoodieSchemaUtils.containsFieldInSchema(schema, "address"));
+
+    // Nested field names should not be found (use findNestedFieldSchema for that)
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "street"));
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "city"));
+    assertFalse(HoodieSchemaUtils.containsFieldInSchema(schema, "address.street"));
+  }
 }

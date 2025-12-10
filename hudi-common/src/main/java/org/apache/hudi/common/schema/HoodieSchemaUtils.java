@@ -622,4 +622,20 @@ public final class HoodieSchemaUtils {
   public static Option<HoodieSchemaType> findNestedFieldType(HoodieSchema schema, String fieldName) {
     return findNestedFieldSchema(schema, fieldName, false).map(HoodieSchema::getType);
   }
+
+  /**
+   * Returns true if the schema contains a field with the provided name.
+   * This is equivalent to {@link AvroSchemaUtils#containsFieldInSchema(Schema, String)} but operates on HoodieSchema.
+   *
+   * @param schema    the schema to search in
+   * @param fieldName the field name to check for
+   * @return true if the field exists in the schema, false otherwise
+   * @since 1.2.0
+   */
+  public static boolean containsFieldInSchema(HoodieSchema schema, String fieldName) {
+    if (schema == null || fieldName == null) {
+      return false;
+    }
+    return schema.getField(fieldName).isPresent();
+  }
 }
