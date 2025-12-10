@@ -19,22 +19,23 @@ package org.apache.spark.sql.hudi.command.payload
 
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToStructType, convertStructTypeToHoodieSchema}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.{getNonNullTypeFromUnion, isNullable}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, OrderingValues, StringUtils, ValidationUtils, Option => HOption}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaUtils}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.util.JFunction
+
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToStructType, convertStructTypeToHoodieSchema}
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaUtils}
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
@@ -47,6 +48,7 @@ import org.apache.spark.sql.types.{BooleanType, DataType, StructType}
 import java.nio.ByteBuffer
 import java.util.{Base64, Objects, Properties}
 import java.util.function.{Function, Supplier}
+
 import scala.collection.JavaConverters._
 
 /**
@@ -244,7 +246,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       if (conditionEvalResult) {
         val writerSchema = getWriterSchema(properties, false)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
-        val resultingAvroRecord = getAvroSerializerFor(writerSchema)
+        val resultingAvroRecord = getAvroSerializerFor(writerSchema.getAvroSchema)
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
@@ -539,7 +541,7 @@ object ExpressionPayload {
 
     val shouldValidate = props.getProperty(PAYLOAD_SHOULD_VALIDATE_COMBINED_SCHEMA, "false").toBoolean
     if (shouldValidate) {
-      val expectedSchema = convertStructTypeToHoodieSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
+      val expectedSchema = convertStructTypeToHoodieSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace.orElse(null))
       // NOTE: Since compared schemas are produced by essentially combining (joining)
       //       2 schemas together, field names might not be appropriate and therefore
       //       just structural compatibility will be checked (ie based on ordering of
@@ -549,8 +551,8 @@ object ExpressionPayload {
         .zipWithIndex
         .foreach {
           case ((expectedField, targetField), idx) =>
-            val expectedFieldSchema = getNonNullTypeFromUnion(expectedField)
-            val targetFieldSchema = getNonNullTypeFromUnion(targetField)
+            val expectedFieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(expectedField.schema())
+            val targetFieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(targetField.schema())
 
             val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
             ValidationUtils.checkState(equal,
@@ -566,12 +568,12 @@ object ExpressionPayload {
   private def mergeSchema(a: HoodieSchema, b: HoodieSchema): HoodieSchema = {
     val mergedFields =
       a.getFields.asScala.map(field =>
-        createNewSchemaField("source_" + field.name,
-          field.schema, field.doc, field.defaultVal, field.order)) ++
+        HoodieSchemaField.of("source_" + field.name(),
+          field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null), field.order())) ++
         b.getFields.asScala.map(field =>
-          createNewSchemaField("target_" + field.name,
-            field.schema, field.doc, field.defaultVal, field.order))
-    HoodieSchema.createRecord(a.getName, a.getDoc, a.getNamespace, a.isError, mergedFields.asJava)
+          HoodieSchemaField.of("target_" + field.name(),
+            field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null), field.order()))
+    HoodieSchema.createRecord(a.getName, a.getDoc.orElse(null), a.getNamespace.orElse(null), a.isError, mergedFields.asJava)
   }
 
 

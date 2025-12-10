@@ -17,17 +17,18 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.LogicalTypes
-import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
-import org.apache.avro.util.Utf8
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.HoodieSchemaType
 import org.apache.hudi.common.schema.HoodieSchemaType._
+
+import org.apache.avro.Conversions.DecimalConversion
+import org.apache.avro.LogicalTypes
+import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
+import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.{HoodieMatchedField, HoodieSchemaHelper}
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
 import org.apache.spark.sql.avro.AvroUtils.toFieldStr
-import org.apache.spark.sql.avro.{HoodieSchemaHelper, HoodieMatchedField}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
@@ -37,6 +38,7 @@ import org.apache.spark.sql.types._
 
 import java.nio.ByteBuffer
 import java.util.TimeZone
+
 import scala.collection.JavaConverters._
 
 /**

@@ -18,10 +18,12 @@
 package org.apache.spark.sql.avro
 
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 /**

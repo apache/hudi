@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.table.HoodieSparkTable
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Row, SparkSession}
