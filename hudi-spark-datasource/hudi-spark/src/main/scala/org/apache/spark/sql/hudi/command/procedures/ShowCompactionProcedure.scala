@@ -143,9 +143,9 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
       throw new IllegalArgumentException("Cannot show compaction on a Non Merge On Read table.")
     }
 
-    val activeResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime, "ACTIVE")
+    val activeResults = getCombinedCompactionsWithPartitionMetadata(limit, metaClient, startTime, endTime, "ACTIVE")
     val finalResults = if (showArchived) {
-      val archivedResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime, "ARCHIVED")
+      val archivedResults = getCombinedCompactionsWithPartitionMetadata(limit, metaClient, startTime, endTime, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -163,8 +163,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     applyFilter(finalResults, filter, outputType)
   }
 
-  private def getCombinedCompactionsWithPartitionMetadata(timeline: HoodieTimeline,
-                                                          limit: Int,
+  private def getCombinedCompactionsWithPartitionMetadata(limit: Int,
                                                           metaClient: HoodieTableMetaClient,
                                                           startTime: String,
                                                           endTime: String,
@@ -172,6 +171,12 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     import scala.collection.mutable.ListBuffer
 
     val allRows = ListBuffer[Row]()
+
+    val timeline = if (timelineType == "ACTIVE") {
+      metaClient.getActiveTimeline
+    } else {
+      metaClient.getArchivedTimeline
+    }
 
     val filteredCompactionInstants = timeline.getInstants.iterator().asScala
       .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION || p.getAction == HoodieTimeline.COMMIT_ACTION)
@@ -192,13 +197,14 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
       if (compactionInstant.getState == HoodieInstant.State.COMPLETED) {
         Try {
           val compactionMetadata = timeline.readCommitMetadata(compactionInstant)
+          val operationSize = Try {
+            val compactionPlan = CompactionUtils.getCompactionPlan(metaClient, compactionInstant.requestedTime)
+            compactionPlan.getOperations.size()
+          }.getOrElse(null)
+
           compactionMetadata.getPartitionToWriteStats.entrySet.asScala.foreach { partitionEntry =>
             val partitionPath = partitionEntry.getKey
             val writeStats = partitionEntry.getValue.asScala
-            val operationSize = Try {
-              val compactionPlan = CompactionUtils.getCompactionPlan(metaClient, compactionInstant.requestedTime)
-              compactionPlan.getOperations.size()
-            }.getOrElse(null)
 
             writeStats.foreach { writeStat =>
               val row = Row(
@@ -218,11 +224,6 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
             }
           }
           if (compactionMetadata.getPartitionToWriteStats.isEmpty) {
-            val operationSize = Try {
-              val compactionPlan = CompactionUtils.getCompactionPlan(metaClient, compactionInstant.requestedTime)
-              compactionPlan.getOperations.size()
-            }.getOrElse(null)
-
             val totalLogFilesCompacted = compactionMetadata.getTotalLogFilesCompacted
             val totalUpdatedRecordsCompacted = compactionMetadata.fetchTotalUpdateRecordsWritten
             val totalLogSizeCompacted = compactionMetadata.getTotalLogFilesSize
