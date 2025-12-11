@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.avro.Schema
@@ -178,7 +179,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(struct, "SchemaName", "SchemaNS")
 
     val expectedSchemaStr = complexSchemaStr
-    val expectedAvroSchema = new Schema.Parser().parse(expectedSchemaStr)
+    val expectedAvroSchema = HoodieSchema.parse(expectedSchemaStr).toAvroSchema
 
     assert(avroSchema.equals(expectedAvroSchema))
   }
@@ -394,14 +395,15 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
         }
     """
 
-    val expectedAvroSchema = new Schema.Parser().parse(expectedSchemaStr)
+    val expectedAvroSchema = HoodieSchema.parse(expectedSchemaStr).toAvroSchema
 
     assert(avroSchema.equals(expectedAvroSchema))
   }
 
   test("test converter with binary") {
-    val avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
+    val hoodieSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
       + ":[{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null}]}")
+    val avroSchema = hoodieSchema.toAvroSchema
     val sparkSchema = StructType(List(StructField("col9", BinaryType, nullable = true)))
     // create a test record with avroSchema
     val avroRecord = new GenericData.Record(avroSchema)

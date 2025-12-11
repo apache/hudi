@@ -21,6 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -514,7 +515,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     val metaClient = createMetaClient(spark, tablePath)
     val schemaResolver = new TableSchemaResolver(metaClient)
     val nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(expectedType))
-    assertEquals(nullableSchema, schemaResolver.getTableAvroSchema(true).getField(fieldName).schema())
+    assertEquals(nullableSchema, schemaResolver.getTableSchema(true).toAvroSchema().getField(fieldName).schema())
   }
 
   private def testInserts(tableName: String,
