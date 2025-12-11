@@ -351,7 +351,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
       if (!logFiles.isEmpty()) {
         try {
           StoragePath path = logFiles.get(0).getPath();
-          LOG.info("Finished scanning log files. FileId: {}, BaseInstantTime: {}, "
+          LOG.info("Finished scanning log files. FileId: {}, LogFileInstantTime: {}, "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
               FSUtils.getFileIdFromLogPath(path), FSUtils.getDeltaCommitTimeFromLogPath(path),
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
@@ -583,7 +583,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
       if (!logFiles.isEmpty()) {
         try {
           StoragePath path = logFiles.get(0).getPath();
-          LOG.info("Finished scanning log files. FileId: {}, BaseInstantTime: {}, "
+          LOG.info("Finished scanning log files. FileId: {}, LogFileInstantTime: {}, "
                   + "Total log files: {}, Total log blocks: {}, Total rollbacks: {}, Total corrupt blocks: {}",
               FSUtils.getFileIdFromLogPath(path), FSUtils.getDeltaCommitTimeFromLogPath(path),
               totalLogFiles.get(), totalLogBlocks.get(), totalRollbacks.get(), totalCorruptBlocks.get());
