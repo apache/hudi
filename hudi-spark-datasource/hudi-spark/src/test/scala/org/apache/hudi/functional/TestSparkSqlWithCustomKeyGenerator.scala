@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -30,7 +30,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.SparkKeyGenUtils
 
-import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.joda.time.DateTime
@@ -240,7 +239,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
               )
 
               // Validate ts field is still of type int in the table
-              validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+              validateTsFieldSchema(tablePath, "ts", HoodieSchemaType.INT)
               if (useOlderPartitionFieldFormat) {
                 val metaClient = createMetaClient(spark, tablePath)
                 assertEquals(metaClient.getTableConfig.getPartitionFieldProp, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).orElse(""))
@@ -314,8 +313,8 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
           testSecondRoundInserts(tableNameCustom2, customPartitionFunc)
 
           // Validate ts field is still of type int in the table
-          validateTsFieldSchema(tablePathCustom1, "ts", Schema.Type.INT)
-          validateTsFieldSchema(tablePathCustom2, "ts", Schema.Type.INT)
+          validateTsFieldSchema(tablePathCustom1, "ts", HoodieSchemaType.INT)
+          validateTsFieldSchema(tablePathCustom2, "ts", HoodieSchemaType.INT)
         }
         }
       }
@@ -374,7 +373,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
           testFirstRoundInserts(tableName, customPartitionFunc)
 
           // Validate ts field is still of type int in the table
-          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+          validateTsFieldSchema(tablePath, "ts", HoodieSchemaType.INT)
         }
         }
       }
@@ -416,7 +415,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                | """.stripMargin).count())
 
           // Validate ts field is still of type int in the table
-          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+          validateTsFieldSchema(tablePath, "ts", HoodieSchemaType.INT)
         }
         }
       }
@@ -459,7 +458,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                | """.stripMargin).count())
 
           // Validate ts field is still of type int in the table
-          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+          validateTsFieldSchema(tablePath, "ts", HoodieSchemaType.INT)
         }
         }
       }
@@ -503,7 +502,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
       testInserts(tableName, tsGenFunc, customPartitionFunc)
 
       // Validate ts field is still of type int in the table
-      validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+      validateTsFieldSchema(tablePath, "ts", HoodieSchemaType.INT)
 
       val metaClient = createMetaClient(spark, tablePath)
       assertEquals(KeyGeneratorType.CUSTOM.getClassName, metaClient.getTableConfig.getKeyGeneratorClassName)
@@ -511,10 +510,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     }
   }
 
-  private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: Schema.Type): Unit = {
+  private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: HoodieSchemaType): Unit = {
     val metaClient = createMetaClient(spark, tablePath)
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(expectedType))
+    val nullableSchema = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.valueOf(expectedType.name())))
     assertEquals(nullableSchema, schemaResolver.getTableSchema(true).toAvroSchema().getField(fieldName).schema())
   }
 

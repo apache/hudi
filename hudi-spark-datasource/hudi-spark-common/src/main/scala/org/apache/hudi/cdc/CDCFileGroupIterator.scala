@@ -45,7 +45,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter

@@ -19,11 +19,10 @@ package org.apache.spark.sql.hudi.command.payload
 
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToStructType, convertStructTypeToHoodieSchema}
+import org.apache.hudi.HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.{getNonNullTypeFromUnion, isNullable}
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaUtils}
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
