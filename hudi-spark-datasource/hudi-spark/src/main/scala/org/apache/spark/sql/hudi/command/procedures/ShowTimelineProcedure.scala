@@ -41,10 +41,10 @@ import scala.collection.JavaConverters._
  * - `table`: Optional. The name of the Hudi table to query (mutually exclusive with `path`)
  * - `path`: Optional. The base path of the Hudi table (mutually exclusive with `table`)
  * - `limit`: Optional. Maximum number of timeline entries to return (default: 20)
- * - `showArchived`: Optional. Whether to include archived timeline data (default: false)
+ * - `show_archived`: Optional. Whether to include archived timeline data (default: false)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
- * - `startTime`: Optional. Start timestamp for filtering results (format: yyyyMMddHHmmss)
- * - `endTime`: Optional. End timestamp for filtering results (format: yyyyMMddHHmmss)
+ * - `start_time`: Optional. Start timestamp for filtering results (format: yyyyMMddHHmmss)
+ * - `end_time`: Optional. End timestamp for filtering results (format: yyyyMMddHHmmss)
  *
  * == Output Schema ==
  * - `instant_time`: Timestamp when the operation was performed
@@ -75,7 +75,7 @@ import scala.collection.JavaConverters._
  * CALL show_timeline(table => 'hudi_table', limit => 50)
  *
  * -- Include archived timeline data
- * CALL show_timeline(table => 'hudi_table', showArchived => true)
+ * CALL show_timeline(table => 'hudi_table', show_archived => true)
  *
  * -- Filter for specific actions
  * CALL show_timeline(
@@ -86,8 +86,8 @@ import scala.collection.JavaConverters._
  * -- Show timeline with time range and filtering
  * CALL show_timeline(
  *   table => 'hudi_table',
- *   startTime => '20251201000000',
- *   endTime => '20251231235959',
+ *   start_time => '20251201000000',
+ *   end_time => '20251231235959',
  *   filter => "action = 'commit' AND state = 'COMPLETED'"
  * )
  * }}}
@@ -100,10 +100,10 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
-    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "show_archived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(5, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(5, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(6, "end_time", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

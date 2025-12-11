@@ -42,8 +42,8 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     ProcedureParameter.required(2, "log_file_path_pattern", DataTypes.StringType),
     ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(5, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(5, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(6, "end_time", DataTypes.StringType, "")
   )
 
   override def outputType: StructType = StructType(Array[StructField](

@@ -313,19 +313,19 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
             .collect()
 
-          // showArchived=false (default - active timeline only)
-          val activeCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)")
+          // show_archived=false (default - active timeline only)
+          val activeCleans = spark.sql(s"call show_cleans(table => '$tableName', show_archived => false)")
             .collect()
-          spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)").show(false)
+          spark.sql(s"call show_cleans(table => '$tableName', show_archived => false)").show(false)
 
-          // showArchived=true (both active + archived timelines merged)
-          val allCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)")
+          // show_archived=true (both active + archived timelines merged)
+          val allCleans = spark.sql(s"call show_cleans(table => '$tableName', show_archived => true)")
             .collect()
-          spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)").show(false)
+          spark.sql(s"call show_cleans(table => '$tableName', show_archived => true)").show(false)
 
           assert(activeCleans.length >= 1, "Active timeline should have clean instances")
 
-          // showArchived=true should include at least the same data as active timeline
+          // show_archived=true should include at least the same data as active timeline
           assert(allCleans.length >= activeCleans.length, "Active + Archived should have at least as many instances as active only")
           // verify that show_cleans includes both completed and pending operations
           val completedCleansActive = activeCleans.filter(_.getString(2) == "COMPLETED")
@@ -553,7 +553,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
           spark.sql(s"call run_clean(table => '$tableName', retain_commits => 2)").collect()
 
-          val allCleansDF = spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)")
+          val allCleansDF = spark.sql(s"call show_cleans(table => '$tableName', show_archived => true)")
           allCleansDF.show(false)
 
           val filterTests = Seq(

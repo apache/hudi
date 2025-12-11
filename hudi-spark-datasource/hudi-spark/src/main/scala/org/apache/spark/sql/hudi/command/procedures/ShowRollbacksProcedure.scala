@@ -42,10 +42,10 @@ import scala.util.Try
  * - `table`: Required. The name of the Hudi table to query
  * - `path`: Optional. The path of the Hudi table (anyone of `table` or `path` must be provided)
  * - `limit`: Optional. Maximum number of rollback operations to return (default: 10)
- * - `showArchived`: Optional. Whether to include archived rollback operations (default: false)
+ * - `show_archived`: Optional. Whether to include archived rollback operations (default: false)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
- * - `startTime`: Optional. Start time for rollbacks (format: yyyyMMddHHmmss, default: empty)
- * - `endTime`: Optional. End time for rollbacks (format: yyyyMMddHHmmss, default: empty)
+ * - `start_time`: Optional. Start time for rollbacks (format: yyyyMMddHHmmss, default: empty)
+ * - `end_time`: Optional. End time for rollbacks (format: yyyyMMddHHmmss, default: empty)
  *
  * == Output Schema ==
  * - `rollback_time`: Timestamp when the rollback operation was initiated
@@ -102,10 +102,10 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "show_archived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(5, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(5, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(6, "end_time", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

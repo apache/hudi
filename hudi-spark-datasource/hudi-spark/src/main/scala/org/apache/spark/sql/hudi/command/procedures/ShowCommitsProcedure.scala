@@ -42,10 +42,10 @@ import scala.util.Try
  * - `table`: Required. The name of the Hudi table to query
  * - `path`: Optional. The path of the Hudi table (alternative to table name)
  * - `limit`: Optional. Maximum number of commit operations to return (default: 20)
- * - `showArchived`: Optional. Whether to include archived commit operations (default: false)
+ * - `show_archived`: Optional. Whether to include archived commit operations (default: false)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
- * - `startTime`: Optional. Start time for commits (format: yyyyMMddHHmmss, default: empty)
- * - `endTime`: Optional. End time for commits (format: yyyyMMddHHmmss, default: empty)
+ * - `start_time`: Optional. Start time for commits (format: yyyyMMddHHmmss, default: empty)
+ * - `end_time`: Optional. End time for commits (format: yyyyMMddHHmmss, default: empty)
  *
  * == Output Schema ==
  * - `commit_time`: Timestamp when the commit operation was initiated
@@ -80,11 +80,11 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
-    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "showFiles", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "show_archived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "show_files", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(7, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(6, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(7, "end_time", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

@@ -63,7 +63,7 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
-      val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', endTime => '$endTs')""").collect()
+      val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_time => '$endTs')""").collect()
       assertResult(4) {
         archivedCommits.length
       }

@@ -34,10 +34,10 @@ import scala.collection.JavaConverters._
  * - `table`: Required. The name of the Hudi table to query
  * - `path`: Optional. The path of the Hudi table (anyone of `table` or `path` must be provided)
  * - `limit`: Optional. Maximum number of savepoint operations to return (default: 10, ignored if time range specified)
- * - `showArchived`: Optional. Whether to include archived savepoint operations (default: false)
+ * - `show_archived`: Optional. Whether to include archived savepoint operations (default: false)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
- * - `startTime`: Optional. Start time for savepoints (format: yyyyMMddHHmmss, default: empty)
- * - `endTime`: Optional. End time for savepoints (format: yyyyMMddHHmmss, default: empty)
+ * - `start_time`: Optional. Start time for savepoints (format: yyyyMMddHHmmss, default: empty)
+ * - `end_time`: Optional. End time for savepoints (format: yyyyMMddHHmmss, default: empty)
  *
  * == Output Schema ==
  * - `savepoint_time`: Timestamp when the savepoint was created
@@ -57,19 +57,19 @@ import scala.collection.JavaConverters._
  * CALL show_savepoints(table => 'my_table')
  *
  * -- Include archived savepoint operations
- * CALL show_savepoints(table => 'my_table', showArchived => true)
+ * CALL show_savepoints(table => 'my_table', show_archived => true)
  *
  * -- Show savepoints within a time range (ignores limit)
  * CALL show_savepoints(
  *   table => 'my_table',
- *   startTime => '20231201000000',
- *   endTime => '20231205235959'
+ *   start_time => '20231201000000',
+ *   end_time => '20231205235959'
  * )
  *
  * -- Show recent savepoints with limit
  * CALL show_savepoints(
  *   table => 'my_table',
- *   startTime => '20231204000000',
+ *   start_time => '20231204000000',
  *   limit => 5
  * )
  *
@@ -91,10 +91,10 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "show_archived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(5, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(5, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(6, "end_time", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

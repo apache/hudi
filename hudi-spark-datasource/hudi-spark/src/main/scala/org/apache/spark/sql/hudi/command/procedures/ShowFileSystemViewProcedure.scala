@@ -48,8 +48,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     ProcedureParameter.optional(6, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(7, "path_regex", DataTypes.StringType, ALL_PARTITIONS),
     ProcedureParameter.optional(8, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(9, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(10, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(9, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(10, "end_time", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE_ALL: StructType = StructType(Array[StructField](

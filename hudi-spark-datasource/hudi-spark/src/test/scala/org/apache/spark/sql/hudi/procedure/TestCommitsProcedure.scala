@@ -51,7 +51,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
 
       // Check required fields
-      checkExceptionContain(s"""call show_commits(limit => 10, showArchived => true)""")(
+      checkExceptionContain(s"""call show_commits(limit => 10, show_archived => true)""")(
         s"Table name or table path must be given one")
 
       val activeCommits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
@@ -63,12 +63,12 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       val allCommits = spark.sql(
         s"""call show_commits(
            |  table => '$tableName',
-           |  showArchived => true,
-           |  endTime => '$endTs'
+           |  show_archived => true,
+           |  end_time => '$endTs'
            |)""".stripMargin).collect()
 
       assert(allCommits.length > activeCommits.length,
-        s"Should have more commits with showArchived=true (${allCommits.length}) than without (${activeCommits.length})")
+        s"Should have more commits with show_archived=true (${allCommits.length}) than without (${activeCommits.length})")
 
       val archivedCommitsCount = allCommits.length - activeCommits.length
       assertResult(2) {
@@ -109,7 +109,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
 
       // Check required fields
-      checkExceptionContain(s"""call show_commits(limit => 10, showArchived => true, showFiles => true)""")(
+      checkExceptionContain(s"""call show_commits(limit => 10, show_archived => true, show_files => true)""")(
         s"Table name or table path must be given one")
 
       // collect active commits for table
@@ -122,9 +122,9 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       val archivedCommitsWithMetadata = spark.sql(
         s"""call show_commits(
            |  table => '$tableName',
-           |  showArchived => true,
-           |  showFiles => true,
-           |  endTime => '$endTs'
+           |  show_archived => true,
+           |  show_files => true,
+           |  end_time => '$endTs'
            |)""".stripMargin).collect()
 
       assert(archivedCommitsWithMetadata.length > 0, "Should have archived commits with file metadata")
@@ -216,7 +216,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       val commitFiles = spark.sql(
         s"""call show_commits(
            |  table => '$tableName',
-           |  showFiles => true,
+           |  show_files => true,
            |  filter => "commit_time = '$instant_time'"
            |)""".stripMargin).collect()
 
