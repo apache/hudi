@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -41,7 +41,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
@@ -720,7 +719,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     val structSchema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
-    val hoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(structSchema, "record", ""))
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structSchema, "record", "")
     val inputDF = spark.createDataFrame(
       spark.sparkContext.parallelize(Seq(Row(1, "v1"), Row(2, "v2"), Row(3, null), Row(4, "v4"))),
       structSchema)
@@ -1101,8 +1100,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testDeserialize(description: String, expected: JBigDecimal, wrapperCreator: WrapperCreator): Unit = {
     val dt = DecimalType(10, 2)
     // Get the schema from the DecimalWrapper's Avro definition.
-    val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
-    val wrapper = wrapperCreator.create(expected, schema)
+    val schema: HoodieSchema = HoodieSchema.fromAvroSchema(DecimalWrapper.SCHEMA$.getField("value").schema())
+    val wrapper = wrapperCreator.create(expected, schema.toAvroSchema)
     // Extract the underlying value.
     val unwrapped = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
     // Optionally, for the "ByteBuffer Test" case, verify that the unwrapped value is a ByteBuffer.

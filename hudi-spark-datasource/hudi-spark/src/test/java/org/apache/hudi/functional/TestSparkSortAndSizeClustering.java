@@ -19,17 +19,17 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -50,7 +50,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -167,16 +166,16 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   }
 
   private void validateDateAndTimestampFields(List<Row> rows, long ts) {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSchema(), false);
     Timestamp timestamp = new Timestamp(ts);
     // sanity check date field is within expected range
     Date startDate = Date.valueOf(LocalDate.now().minusDays(3));
     Date endDate = Date.valueOf(LocalDate.now().plusDays(1));
-    int dateFieldIndex = schema.getField("date_nullable_field").pos();
-    int tsMillisFieldIndex = schema.getField("timestamp_millis_field").pos();
-    int tsMicrosNullableFieldIndex = schema.getField("timestamp_micros_nullable_field").pos();
-    int tsLocalMillisFieldIndex = schema.getField("timestamp_local_millis_nullable_field").pos();
-    int tsLocalMicrosFieldIndex = schema.getField("timestamp_local_micros_field").pos();
+    int dateFieldIndex = schema.getField("date_nullable_field").get().pos();
+    int tsMillisFieldIndex = schema.getField("timestamp_millis_field").get().pos();
+    int tsMicrosNullableFieldIndex = schema.getField("timestamp_micros_nullable_field").get().pos();
+    int tsLocalMillisFieldIndex = schema.getField("timestamp_local_millis_nullable_field").get().pos();
+    int tsLocalMicrosFieldIndex = schema.getField("timestamp_local_micros_field").get().pos();
     for (Row row : rows) {
       assertEquals(timestamp, row.get(tsMillisFieldIndex));
       if (!row.isNullAt(tsMicrosNullableFieldIndex)) {
@@ -269,14 +268,14 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   }
 
   private List<HoodieRecord> generateInserts(String instant, long ts, int count) {
-    Schema schema = getSchema();
-    Schema decimalSchema = schema.getField("decimal_field").schema();
-    Schema nestedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("nested_record").schema());
-    Schema enumSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("enum_field").schema());
+    HoodieSchema schema = getSchema();
+    HoodieSchema decimalSchema = schema.getField("decimal_field").get().schema();
+    HoodieSchema nestedSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(schema.getField("nested_record").get().schema());
+    HoodieSchema enumSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(schema.getField("enum_field").get().schema());
     Random random = new Random(0);
     return IntStream.range(0, count)
         .mapToObj(i -> {
-          GenericRecord record = new GenericData.Record(schema);
+          GenericRecord record = new GenericData.Record(schema.toAvroSchema());
           String key = "key_" + i;
           String partition = "partition_" + (i % 3);
           record.put("_row_key", key);
@@ -289,7 +288,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           record.put("long_field", random.nextLong());
           record.put("string_field", instant);
           record.put("bytes_field", ByteBuffer.wrap(instant.getBytes(StandardCharsets.UTF_8)));
-          GenericRecord nestedRecord = new GenericData.Record(nestedSchema);
+          GenericRecord nestedRecord = new GenericData.Record(nestedSchema.toAvroSchema());
           nestedRecord.put("nested_int", random.nextInt());
           nestedRecord.put("nested_string", "nested_" + instant);
           nestedRecord.put("nested_timestamp_millis_field", ts);
@@ -299,7 +298,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           // logical types
           BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", random.nextFloat()));
           Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-          GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
+          GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema.toAvroSchema(), LogicalTypes.decimal(10, 6));
           record.put("decimal_field", genericFixed);
           record.put("date_nullable_field", random.nextBoolean() ? null : LocalDate.now().minusDays(random.nextInt(3)));
           record.put("timestamp_millis_field", ts);
@@ -307,7 +306,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           record.put("timestamp_local_millis_nullable_field", random.nextBoolean() ? null : ts);
           record.put("timestamp_local_micros_field", ts * 1000);
           record.put("enum_field", new GenericData.EnumSymbol(
-              enumSchema,
+              enumSchema.toAvroSchema(),
               enumSchema
                   .getEnumSymbols()
                   .get(random.nextInt(enumSchema.getEnumSymbols().size()))));
@@ -316,10 +315,10 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         .collect(Collectors.toList());
   }
 
-  private Schema getSchema() {
+  private HoodieSchema getSchema() {
     try {
-      String schema = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
-      return new Schema.Parser().parse(schema);
+      String schemaStr = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      return HoodieSchema.parse(schemaStr);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
