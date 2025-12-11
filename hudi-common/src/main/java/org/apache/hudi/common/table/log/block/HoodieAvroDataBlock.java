@@ -434,16 +434,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     byte[] compressedSchema = new byte[schemaLength];
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(decompress(compressedSchema));
-    Schema readerAvroSchema = readerSchema != null ? readerSchema.toAvroSchema() : null;
 
-    if (readerSchema == null) {
-      readerAvroSchema = writerSchema;
+    if (readerSchema == null || !internalSchema.isEmptySchema()) {
+      readerSchema = HoodieSchema.fromAvroSchema(writerSchema);
     }
 
-    if (!internalSchema.isEmptySchema()) {
-      readerAvroSchema = writerSchema;
-    }
-
+    Schema readerAvroSchema = readerSchema.toAvroSchema();
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerAvroSchema);
     // 2. Get the total records
     int totalRecords = dis.readInt();
