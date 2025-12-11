@@ -71,6 +71,7 @@ import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.function.FlatMapGroupsFunction;
 import org.apache.spark.api.java.function.MapFunction;
@@ -86,8 +87,6 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -123,9 +122,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 /**
  * Utility methods for writing metadata for expression index.
  */
+@Slf4j
 public class SparkMetadataWriterUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataWriterUtils.class);
 
   public static Column[] getExpressionIndexColumns() {
     return new Column[] {
@@ -412,7 +410,7 @@ public class SparkMetadataWriterUtils {
       }
 
       // Step 2: Compute expression index records for the modified partitions
-      LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
+      log.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
       List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(commitMetadata.getWriteStats().stream()
           .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
           .values());

@@ -60,14 +60,13 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -104,9 +103,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Slf4j
 public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieBackedTableMetadata.class);
 
   public static List<Arguments> testTableOperationsArgs() {
     return Arrays.asList(
@@ -181,7 +179,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
           }
           filesNumber.addAndGet(files.size());
         } catch (Exception e) {
-          LOG.warn("Catch Exception while reading data files from MDT.", e);
+          log.warn("Catch Exception while reading data files from MDT.", e);
           flag.compareAndSet(false, true);
         }
       });

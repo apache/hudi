@@ -35,6 +35,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
@@ -42,8 +43,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -58,9 +57,8 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestTimelineServerBasedWriteMarkers.class);
   protected static final int DEFAULT_READ_TIMEOUT_SECS = 60;
 
   TimelineService timelineService = null;
@@ -76,7 +74,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.markerFolderPath = new StoragePath(metaClient.getMarkerFolderPath("000"));
 
     restartServerAndClient(0);
-    LOG.info("Connecting to Timeline Server :" + timelineService.getServerPort());
+    log.info("Connecting to Timeline Server :" + timelineService.getServerPort());
   }
 
   @AfterEach
@@ -110,7 +108,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   @EnumSource(value = FileSystemViewStorageType.class)
   public void testCreationWithTimelineServiceRetries(FileSystemViewStorageType storageType) throws Exception {
     restartServerAndClient(0, storageType);
-    LOG.info("Connecting to Timeline Server :" + timelineService.getServerPort());
+    log.info("Connecting to Timeline Server :" + timelineService.getServerPort());
     // Validate marker creation/ deletion work without any failures in the timeline service.
     createSomeMarkers(true);
     assertTrue(storage.exists(markerFolderPath));

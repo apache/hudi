@@ -19,6 +19,8 @@
 
 package org.apache.hudi.data;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.storage.StorageLevel;
 
@@ -28,6 +30,7 @@ import java.util.Set;
 /**
  * Utility class for Spark RDD operations in Hudi.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class HoodieSparkRDDUtils {
 
   /**
@@ -59,9 +62,5 @@ public class HoodieSparkRDDUtils {
       org.apache.spark.Dependency<?> dep = iter.next();
       unpersistRDDWithDependenciesInternal(dep.rdd(), visitedRddIds);
     }
-  }
-
-  private HoodieSparkRDDUtils() {
-
   }
 }

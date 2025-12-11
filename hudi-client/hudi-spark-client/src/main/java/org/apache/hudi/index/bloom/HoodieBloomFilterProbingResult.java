@@ -19,17 +19,14 @@
 
 package org.apache.hudi.index.bloom;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.List;
 
+@AllArgsConstructor
+@Getter
 class HoodieBloomFilterProbingResult {
 
   private final List<String> candidateKeys;
-
-  HoodieBloomFilterProbingResult(List<String> candidateKeys) {
-    this.candidateKeys = candidateKeys;
-  }
-
-  public List<String> getCandidateKeys() {
-    return candidateKeys;
-  }
 }

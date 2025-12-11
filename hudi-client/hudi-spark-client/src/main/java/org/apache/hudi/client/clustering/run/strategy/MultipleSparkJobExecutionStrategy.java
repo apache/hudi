@@ -63,6 +63,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -72,8 +73,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -92,9 +91,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Clustering strategy to submit multiple spark jobs and union the results.
  */
+@Slf4j
 public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(MultipleSparkJobExecutionStrategy.class);
 
   public MultipleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
@@ -279,7 +278,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
-      LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+      log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> getRecordIterator(readerContextFactory, clusteringOp, instantTime, maxMemoryPerCompaction);
         suppliers.add(iteratorSupplier);
