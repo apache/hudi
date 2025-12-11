@@ -1064,8 +1064,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
   /**
    * Test if cleaner will fall back to full clean if commit for incremental clean is archived.
    */
-  @Test
-  public void testIncrementalFallbackToFullClean() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testIncrementalFallbackToFullClean(boolean archiveKeepCleanPlanRetainInstant) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withCleanConfig(
             HoodieCleanConfig.newBuilder()
@@ -1077,7 +1078,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
                 .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withArchivalConfig(
             HoodieArchivalConfig.newBuilder()
-                .archiveCommitsWith(4, 5).build())
+                .archiveCommitsWith(4, 5)
+                .withArchiveKeepCleanPlanRetainInstant(archiveKeepCleanPlanRetainInstant)
+                .build())
         .withMarkersType(MarkerType.DIRECT.name())
         .withPath(basePath)
         .build();
@@ -1103,7 +1106,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       commitWithMdt("20", part1ToFileId, testTable, config);
 
       // add clean instant
-      HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
+      HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("20", COMMIT_ACTION, State.COMPLETED.name()),
           "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
       HoodieCleanMetadata cleanMeta = new HoodieCleanMetadata("", 0L, 0,
           "20", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), Collections.emptyMap());
@@ -1135,16 +1138,17 @@ public class TestCleaner extends HoodieCleanerTestBase {
       commitWithMdt("60", part2ToFileId, testTable, config);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      // archive commit 1, 2
+      // trigger archive
       new TimelineArchiverV2<>(config, HoodieSparkTable.create(config, context, metaClient))
           .archiveIfRequired(context, false);
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertFalse(metaClient.getActiveTimeline().containsInstant("10"));
-      assertFalse(metaClient.getActiveTimeline().containsInstant("20"));
+      // If archival consider to keep clean plan retain instant, then this instant will be kept in the active timeline
+      assertEquals(archiveKeepCleanPlanRetainInstant, metaClient.getActiveTimeline().containsInstant("20"));
 
       runCleaner(config);
-      assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
-      assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
+      assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1");
+      assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1");
       assertFalse(testTable.baseFileExists(p2, "30", file3P2), "Clean old FileSlice in p2");
       assertFalse(testTable.baseFileExists(p2, "30", file4P2), "Clean old FileSlice in p2");
       assertTrue(testTable.baseFileExists(p1, "20", file1P1), "Latest FileSlice exists");
