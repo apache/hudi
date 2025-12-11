@@ -64,10 +64,14 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
         fileComparisonPairs.collectAsList().stream()
             .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
     Option<String> lastInstant = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime);
+    if (lastInstant.isEmpty()) {
+      // No completed instants implies the table is empty. Return empty result.
+      return context.emptyHoodiePairData();
+    }
 
     List<HoodieKeyLookupResult> keyLookupResults =
         CollectionUtils.toStream(
-            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight, lastInstant)
+            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight, lastInstant.get())
                 .apply(fileComparisonPairList.iterator())
             )
             .flatMap(Collection::stream)

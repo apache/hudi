@@ -50,8 +50,8 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   private long totalKeysChecked;
 
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                               Pair<String, String> partitionPathFileIDPair, Option<String> instantTime) {
-    super(config, instantTime, hoodieTable, partitionPathFileIDPair);
+                               Pair<String, String> partitionPathFileIDPair, String instantTime) {
+    super(config, Option.of(instantTime), hoodieTable, partitionPathFileIDPair);
     this.candidateRecordKeys = new ArrayList<>();
     this.totalKeysChecked = 0;
     this.bloomFilter = getBloomFilter();

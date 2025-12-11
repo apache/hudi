@@ -107,6 +107,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;
 
     Option<String> lastInstant = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime);
+    if (lastInstant.isEmpty()) {
+      // No completed instants implies the table is empty. Return empty result.
+      return context.emptyHoodiePairData();
+    }
     if (config.getBloomIndexUseMetadata()
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
@@ -175,15 +179,15 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .repartitionAndSortWithinPartitions(partitioner, new FileGroupIdComparator())
           .map(Tuple2::_1)
-          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, lastInstant), true);
+          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, lastInstant.get()), true);
     } else if (config.isBloomIndexFileGroupIdKeySortingEnabled()) {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, targetParallelism)
           .map(Tuple2::_1)
-          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, lastInstant), true);
+          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, lastInstant.get()), true);
     } else {
       keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, targetParallelism)
-          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, lastInstant), true);
+          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config, lastInstant.get()), true);
     }
 
     return HoodieJavaPairRDD.of(keyLookupResultRDD.flatMap(List::iterator)
@@ -335,7 +339,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
     public HoodieSparkBloomIndexCheckFunction(HoodieTable hoodieTable,
                                               HoodieWriteConfig config,
-                                              Option<String> lastInstant) {
+                                              String lastInstant) {
       super(hoodieTable, config, t -> t._1, t -> t._2, lastInstant);
     }
 

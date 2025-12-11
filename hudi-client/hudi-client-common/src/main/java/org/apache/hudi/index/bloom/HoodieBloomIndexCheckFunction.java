@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -50,13 +49,13 @@ public class HoodieBloomIndexCheckFunction<I>
   private final HoodieWriteConfig config;
   private final SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor;
   private final SerializableFunction<I, String> recordKeyExtractor;
-  private final Option<String> lastInstant;
+  private final String lastInstant;
 
   public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
                                        HoodieWriteConfig config,
                                        SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor,
                                        SerializableFunction<I, String> recordKeyExtractor,
-                                       Option<String> lastInstant) {
+                                       String lastInstant) {
     this.hoodieTable = hoodieTable;
     this.config = config;
     this.fileGroupIdExtractor = fileGroupIdExtractor;

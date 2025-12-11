@@ -36,12 +36,6 @@ public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
     super(config, hoodieTable, partitionPathFilePair);
   }
 
-  public String[] getMinMaxKeys() throws IOException {
-    try (HoodieFileReader reader = createNewFileReader()) {
-      return reader.readMinMaxRecordKeys();
-    }
-  }
-
   public String[] getMinMaxKeys(HoodieBaseFile baseFile) throws IOException {
     try (HoodieFileReader reader = createNewFileReader(baseFile)) {
       return reader.readMinMaxRecordKeys();

@@ -64,9 +64,6 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   protected HoodieBaseFile getLatestBaseFile() {
-    if (instantTime.isEmpty()) {
-      return hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight()).get();
-    }
     return hoodieTable.getBaseFileOnlyView().getBaseFileOn(partitionPathFileIDPair.getLeft(), instantTime, partitionPathFileIDPair.getRight()).get();
   }
 
