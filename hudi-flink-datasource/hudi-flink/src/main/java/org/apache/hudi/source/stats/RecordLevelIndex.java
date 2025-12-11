@@ -124,8 +124,7 @@ public class RecordLevelIndex implements FlinkMetadataIndex {
       Configuration conf,
       HoodieTableMetaClient metaClient,
       List<ExpressionEvaluators.Evaluator> evaluators,
-      RowType rowType,
-      boolean consistentLogicalTimestampEnabled) {
+      RowType rowType) {
     if (evaluators.isEmpty() || !FlinkOptions.QUERY_TYPE_SNAPSHOT.equalsIgnoreCase(conf.get(FlinkOptions.QUERY_TYPE))) {
       return Option.empty();
     }
@@ -141,6 +140,7 @@ public class RecordLevelIndex implements FlinkMetadataIndex {
       LOG.warn("The table do not have record keys, skipping the rli pruning.");
       return Option.empty();
     }
+    boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     List<String> hoodieKeysFromFilter = computeHoodieKeyFromFilters(conf, metaClient, evaluators, recordKeyFields, rowType, consistentLogicalTimestampEnabled);
     if (hoodieKeysFromFilter.isEmpty()) {
       LOG.warn("The number of keys from query predicate is empty, skipping the rli pruning.");

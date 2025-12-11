@@ -94,8 +94,7 @@ public class FileIndex implements Serializable {
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
     List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
-    boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
-    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType, consistentLogicalTimestampEnabled);
+    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
     this.metaClient = metaClient;
   }
 
