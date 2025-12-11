@@ -59,6 +59,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
@@ -317,6 +318,16 @@ public class TestFileIndex {
         DataTypes.BOOLEAN());
     ColumnStatsProbe probeTimestamp = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprTimestamp));
 
+    // TIME data type tests - using the TIME config with appropriate record key
+    CallExpression equalExprTime = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_time", DataTypes.TIME(), 0, 0),
+            new ValueLiteralExpression(LocalTime.ofSecondOfDay(1), DataTypes.TIME().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probeTime = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprTime));
+
     // DATE data type tests - using the date config with appropriate record key
     CallExpression equalExprDate = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
@@ -349,6 +360,8 @@ public class TestFileIndex {
         {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe2, 2, 4},
         // key type is TIMESTAMP
         {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_timestamp", probeTimestamp, 8, 1},
+        // key type is TIME
+        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_time", probeTime, 8, 1},
         // key type is DATE
         {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_date", probeDate, 8, 1},
         // key type is DECIMAL

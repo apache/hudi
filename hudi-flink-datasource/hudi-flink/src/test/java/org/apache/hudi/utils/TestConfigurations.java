@@ -190,6 +190,7 @@ public class TestConfigurations {
 
   public static final DataType PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = DataTypes.ROW(
           DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("f_time", DataTypes.TIME()),
           DataTypes.FIELD("f_date", DataTypes.DATE()),
           DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(38, 18)),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
