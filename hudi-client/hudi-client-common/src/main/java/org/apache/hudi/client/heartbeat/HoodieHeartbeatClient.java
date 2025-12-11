@@ -117,8 +117,13 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     log.info("Received request to start heartbeat for instant time {}", instantTime);
     Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
     ValidationUtils.checkArgument(heartbeat == null || !heartbeat.getIsHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
+    if (heartbeat != null && heartbeat.getIsHeartbeatStarted()) {
+      // heartbeat already started, NO_OP
+      return;
+    }
+
     Heartbeat newHeartbeat = new Heartbeat();
-    newHeartbeat.setIsHeartbeatStopped(true);
+    newHeartbeat.setIsHeartbeatStarted(true);
     instantToHeartbeatMap.put(instantTime, newHeartbeat);
     // Ensure heartbeat is generated for the first time with this blocking call.
     // Since timer submits the task to a thread, no guarantee when that thread will get CPU
