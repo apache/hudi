@@ -197,9 +197,7 @@ export default function BlogList() {
           const { date, title, authors, permalink, description } = metadata || {};
           const image = assets?.image ?? frontMatter?.image ?? "/assets/images/hudi.png";
 
-          if (!title || !permalink) {
-            return null;
-          }
+          if (!title || !permalink)  return null;
 
           const dateTimeFormat = useDateTimeFormat({
             day: 'numeric',
