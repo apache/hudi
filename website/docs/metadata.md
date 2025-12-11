@@ -92,6 +92,7 @@ cleaned up, before re-enabling the metadata table again.
 ## Leveraging metadata during queries
 
 ### files index
+
 Metadata based listing using *files_index* can be leveraged on the read side by setting appropriate configs/session properties
 from different engines as shown below:
 
@@ -100,10 +101,11 @@ from different engines as shown below:
 | Spark DataSource, Spark SQL, Strucured Streaming | hoodie.metadata.enable | When set to `true` enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.<br /> |
 | Flink DataStream, Flink SQL            | metadata.enabled | When set to `true` from DDL uses the internal metadata table to serves table metadata like level file listings                |
 | Presto                                           | [hudi.metadata-table-enabled](https://prestodb.io/docs/current/connector/hudi.html)             | When set to `true` fetches the list of file names and sizes from Hudi’s metadata table rather than storage.                   |
-| Trino                                            | N/A | Support for reading from the metadata table [has been dropped in Trino 419](https://issues.apache.org/jira/browse/HUDI-7020). |
+| Trino                                            | N/A | Support for reading from the metadata table [has been dropped in Trino 419](https://github.com/apache/hudi/issues/16286). |
 | Athena                                           | [hudi.metadata-listing-enabled](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) | When this table property is set to `TRUE` enables the Hudi metadata table and the related file listing functionality          |
 
 ### column_stats index and data skipping
+
 Enabling metadata table and column stats index is a prerequisite to enabling data skipping capabilities. Following are the 
 corresponding configs across Spark and Flink readers.
 

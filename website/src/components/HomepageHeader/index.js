@@ -52,11 +52,11 @@ function HomepageHeader() {
               </h1>
               <FeatureRender/>
               <div className={styles.buttons}>
-                <LinkButton to="/releases/release-1.1.0">
+                <LinkButton to="/docs/quick-start-guide">
                   Get Started
                 </LinkButton>
-                <LinkButton type="secondary" to="/docs/quick-start-guide">
-                  Read Docs
+                <LinkButton type="secondary" to="/community/get-involved">
+                  Community
                 </LinkButton>
               </div>
             </div>

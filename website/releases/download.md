@@ -9,6 +9,10 @@ toc: true
 
 * Source Release : [Apache Hudi 1.1.0 Source Release](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.1.0](/releases/release-1.1.0))
+
+<!--
+TODO: keep this commented out until 1.1.1 is released
+TODO: replace repository.apache.org link with maven.org links when updating this for 1.1.1
 * Maven Artifacts:
 
   <details>
@@ -94,6 +98,7 @@ toc: true
     * [hudi-metaserver-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-metaserver-server-bundle/1.1.0/hudi-metaserver-server-bundle-1.1.0.jar)
 
   </details>
+-->
 
 ## Release 1.0.2
 
@@ -135,13 +140,15 @@ toc: true
 * Source Release : [Apache Hudi 0.14.0 Source Release](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 0.14.0](/releases/release-0.14.0))
 
-## End-of-life releases
+## End-of-life Releases
 
-The end-of-life releases will be archived:
+The end-of-life (EOL) releases will be archived and the procedures below will be carried out accordingly:
 
-* The release artifacts are still available at [the archive repo](https://archive.apache.org/dist/hudi/)
-* The release notes' links will be removed from this download page, but kept accessible via `https://hudi.apache.org/releases/release-<release-version>`
-* The corresponding versioned docs will be removed from the website
+* The EOL release source artifacts will be removed from [the distribution site](https://downloads.apache.org/hudi/)
+* The EOL release source artifacts will still be available from [the archive site](https://archive.apache.org/dist/hudi/)
+* The EOL release binary artifacts will still be available from package manager sites, such as [Maven Central](https://central.sonatype.com/), [crates.io](https://crates.io), and [PyPi](https://pypi.org)
+* The EOL release notes will be removed from Hudi website, but kept accessible via `https://hudi.apache.org/releases/release-<EOL-release-version>`
+* The EOL release versioned docs will be removed from Hudi website
 
 ## Verify Release
 

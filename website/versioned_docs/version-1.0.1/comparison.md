@@ -53,4 +53,4 @@ of PrestoDB/SparkSQL/Hive for your queries.
 More advanced use cases revolve around the concepts of [incremental processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop), which effectively
 uses Hudi even inside the `processing` engine to speed up typical batch pipelines. For e.g: Hudi can be used as a state store inside a processing DAG (similar
 to how [rocksDB](https://ci.apache.org/projects/flink/flink-docs-release-1.2/ops/state_backends.html#the-rocksdbstatebackend) is used by Flink). This is an item on the roadmap
-and will eventually happen as a [Beam Runner](https://issues.apache.org/jira/browse/HUDI-60)
+and will eventually happen as a [Beam Runner](https://github.com/apache/hudi/issues/14452)
