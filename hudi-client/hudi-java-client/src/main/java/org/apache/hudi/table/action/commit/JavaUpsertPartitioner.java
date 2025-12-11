@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 /**
  * Packs incoming records to be upserted, into buckets.
  */
-public class JavaUpsertPartitioner<T> implements Partitioner  {
+public class JavaUpsertPartitioner<T> implements JavaPartitioner {
 
   private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPartitioner.class);
 
@@ -264,6 +264,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     return smallFileLocations;
   }
 
+  @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
     return bucketInfoMap.get(bucketNumber);
   }
@@ -336,6 +337,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     return avgSize;
   }
 
+  @Override
   public List<String> getSmallFileIds() {
     return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
         .collect(Collectors.toList());
