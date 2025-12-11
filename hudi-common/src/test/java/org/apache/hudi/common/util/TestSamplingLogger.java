@@ -35,6 +35,7 @@ public class TestSamplingLogger {
   @Test
   public void testShouldLogAtInfoWithFrequency5() {
     Logger mockLogger = mock(Logger.class);
+    when(mockLogger.getName()).thenReturn("TestLogger");
     SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);
 
     // Calls 1-4 should return false (DEBUG)
@@ -59,6 +60,7 @@ public class TestSamplingLogger {
   @Test
   public void testShouldLogAtInfoWithFrequency1() {
     Logger mockLogger = mock(Logger.class);
+    when(mockLogger.getName()).thenReturn("TestLogger");
     SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 1);
 
     // Every call should return true (always INFO)
@@ -70,6 +72,7 @@ public class TestSamplingLogger {
   @Test
   public void testLogInfoOrDebugWithSupplierOnlyEvaluatesWhenNeeded() {
     Logger mockLogger = mock(Logger.class);
+    when(mockLogger.getName()).thenReturn("TestLogger");
     when(mockLogger.isDebugEnabled()).thenReturn(false);
 
     SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);
@@ -88,6 +91,7 @@ public class TestSamplingLogger {
   @Test
   public void testLogInfoOrDebugWithSupplierEvaluatesForDebugWhenEnabled() {
     Logger mockLogger = mock(Logger.class);
+    when(mockLogger.getName()).thenReturn("TestLogger");
     when(mockLogger.isDebugEnabled()).thenReturn(true);
 
     SamplingLogger samplingLogger = new SamplingLogger(mockLogger, 5);

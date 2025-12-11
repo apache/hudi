@@ -19,7 +19,9 @@
 package org.apache.hudi.common.util;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -28,9 +30,12 @@ import java.util.function.Supplier;
  * This is useful for reducing log volume while still maintaining periodic visibility
  * into frequently executed code paths.
  */
-public class SamplingLogger {
+public class SamplingLogger implements Serializable {
 
-  private final Logger logger;
+  private static final long serialVersionUID = 1L;
+
+  private final String loggerName;
+  private transient Logger logger;
   private final int sampleFrequency;
   private final AtomicInteger counter;
 
@@ -41,9 +46,20 @@ public class SamplingLogger {
    * @param sampleFrequency log at INFO level once every N calls (e.g., 5 means every 5th call)
    */
   public SamplingLogger(Logger logger, int sampleFrequency) {
+    this.loggerName = logger.getName();
     this.logger = logger;
     this.sampleFrequency = sampleFrequency;
     this.counter = new AtomicInteger(0);
+  }
+
+  /**
+   * Gets the logger, recreating it if necessary after deserialization.
+   */
+  private Logger getLogger() {
+    if (logger == null) {
+      logger = LoggerFactory.getLogger(loggerName);
+    }
+    return logger;
   }
 
   /**
@@ -66,9 +82,9 @@ public class SamplingLogger {
    */
   public void logInfoOrDebug(String message, Supplier<Object[]> argsSupplier) {
     if (shouldLogAtInfo()) {
-      logger.info(message, argsSupplier.get());
-    } else if (logger.isDebugEnabled()) {
-      logger.debug(message, argsSupplier.get());
+      getLogger().info(message, argsSupplier.get());
+    } else if (getLogger().isDebugEnabled()) {
+      getLogger().debug(message, argsSupplier.get());
     }
   }
 }
