@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -29,7 +31,6 @@ import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.util.RowDataProjection;
 
-import org.apache.avro.Schema;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
@@ -62,12 +63,12 @@ public abstract class RecordIterators {
       StorageConfiguration<?> conf,
       InternalSchemaManager internalSchemaManager,
       DataType dataType,
-      Schema requestedSchema,
+      HoodieSchema requestedSchema,
       StoragePath path,
       List<Predicate> predicates) throws IOException {
     List<String> fieldNames = ((RowType) dataType.getLogicalType()).getFieldNames();
     List<DataType> fieldTypes = dataType.getChildren();
-    int[] selectedFields = requestedSchema.getFields().stream().map(Schema.Field::name)
+    int[] selectedFields = requestedSchema.getFields().stream().map(HoodieSchemaField::name)
         .map(fieldNames::indexOf)
         .mapToInt(i -> i)
         .toArray();

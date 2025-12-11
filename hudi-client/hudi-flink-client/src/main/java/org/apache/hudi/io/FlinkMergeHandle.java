@@ -30,8 +30,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -47,11 +46,10 @@ import java.util.Iterator;
  * the file path when the data buffer writes finish. When next data buffer write starts,
  * {@link FlinkIncrementalMergeHandle} will be used to write records into a rollover file.
  */
+@Slf4j
 public class FlinkMergeHandle<T, I, K, O>
     extends HoodieWriteMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandle.class);
 
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -98,7 +96,7 @@ public class FlinkMergeHandle<T, I, K, O>
     }
     try {
       if (storage.exists(path)) {
-        LOG.info("Deleting invalid MERGE base file due to task retry: {}", lastDataFileName);
+        log.info("Deleting invalid MERGE base file due to task retry: {}", lastDataFileName);
         storage.deleteFile(path);
       }
     } catch (IOException e) {
@@ -114,7 +112,7 @@ public class FlinkMergeHandle<T, I, K, O>
 
   @Override
   protected void initIncomingRecordsMap() {
-    LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
+    log.info("Initialize on-heap keyToNewRecords for incoming records.");
     // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
     // in Flink write buffer, so there is no need to use ExternalSpillableMap.
     this.keyToNewRecords = new HashMap<>();
@@ -135,13 +133,13 @@ public class FlinkMergeHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.error("Failed to close the MERGE handle", throwable);
+      log.error("Failed to close the MERGE handle", throwable);
       try {
         storage.deleteFile(newFilePath);
-        LOG.info("Successfully deleted the intermediate MERGE data file: {}", newFilePath);
+        log.info("Successfully deleted the intermediate MERGE data file: {}", newFilePath);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Failed to delete the intermediate MERGE data file: {}", newFilePath, e);
+        log.warn("Failed to delete the intermediate MERGE data file: {}", newFilePath, e);
       }
     }
   }

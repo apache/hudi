@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.v2.utils.PipelinesV2;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.JsonDeserializationFunction;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
@@ -114,7 +114,7 @@ public class ITTestDataStreamV2Write {
 
     // Read from file source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf).toAvroSchema())
+            (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
     String sourcePath = Objects.requireNonNull(Thread.currentThread()

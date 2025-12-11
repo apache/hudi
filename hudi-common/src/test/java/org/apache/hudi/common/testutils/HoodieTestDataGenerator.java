@@ -940,7 +940,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
+  public static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     OutputStream os = storage.create(new StoragePath(filePath.toUri()), true);
     os.close();

@@ -22,6 +22,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
@@ -44,8 +45,7 @@ object HoodieSchemaConversionUtils {
    */
   def convertHoodieSchemaToStructType(hoodieSchema: HoodieSchema): StructType = {
     try {
-      val schemaConverters = sparkAdapter.getHoodieSchemaConverters
-      schemaConverters.toSqlType(hoodieSchema) match {
+      HoodieSparkSchemaConverters.toSqlType(hoodieSchema) match {
         case (dataType, _) => dataType.asInstanceOf[StructType]
       }
     } catch {
@@ -63,8 +63,7 @@ object HoodieSchemaConversionUtils {
    */
   def convertHoodieSchemaToDataType(hoodieSchema: HoodieSchema): DataType = {
     try {
-      val schemaConverters = sparkAdapter.getHoodieSchemaConverters
-      schemaConverters.toSqlType(hoodieSchema) match {
+      HoodieSparkSchemaConverters.toSqlType(hoodieSchema) match {
         case (dataType, _) => dataType
       }
     } catch {
@@ -106,8 +105,7 @@ object HoodieSchemaConversionUtils {
                                       structName: String,
                                       recordNamespace: String): HoodieSchema = {
     try {
-      val schemaConverters = sparkAdapter.getHoodieSchemaConverters
-      schemaConverters.toHoodieType(structType, nullable = false, structName, recordNamespace)
+      HoodieSparkSchemaConverters.toHoodieType(structType, nullable = false, structName, recordNamespace)
     } catch {
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert struct type to HoodieSchema: $structType", e)
@@ -131,7 +129,7 @@ object HoodieSchemaConversionUtils {
 
           field.dataType match {
             case structType: StructType =>
-              val nestedSchema = unwrapNullableSchema(hoodieField.schema())
+              val nestedSchema = hoodieField.schema().getNonNullType
               if (nestedSchema.getType == HoodieSchemaType.RECORD) {
                 alignedField.copy(dataType = alignFieldsNullability(structType, nestedSchema))
               } else {
@@ -139,7 +137,7 @@ object HoodieSchemaConversionUtils {
               }
 
             case ArrayType(elementType, _) =>
-              val arraySchema = unwrapNullableSchema(hoodieField.schema())
+              val arraySchema = hoodieField.schema().getNonNullType
               if (arraySchema.getType == HoodieSchemaType.ARRAY) {
                 val elemSchema = arraySchema.getElementType
                 val newElementType = updateElementType(elementType, elemSchema)
@@ -149,7 +147,7 @@ object HoodieSchemaConversionUtils {
               }
 
             case MapType(keyType, valueType, _) =>
-              val mapSchema = unwrapNullableSchema(hoodieField.schema())
+              val mapSchema = hoodieField.schema().getNonNullType
               if (mapSchema.getType == HoodieSchemaType.MAP) {
                 val valueSchema = mapSchema.getValueType
                 val newValueType = updateElementType(valueType, valueSchema)
@@ -168,12 +166,6 @@ object HoodieSchemaConversionUtils {
     StructType(alignedFields)
   }
 
-  /**
-   * Unwraps nullable schema (union with null) to get the non-null type.
-   */
-  private def unwrapNullableSchema(schema: HoodieSchema): HoodieSchema = {
-    if (schema.isNullable) schema.getNonNullType else schema
-  }
 
   /**
    * Recursively updates element types for complex types (arrays, maps, structs).

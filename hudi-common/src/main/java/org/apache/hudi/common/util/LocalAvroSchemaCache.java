@@ -32,6 +32,7 @@ import java.util.Map;
  * A map of {version_id, schema} is maintained.
  */
 @NotThreadSafe
+@Deprecated
 public class LocalAvroSchemaCache implements Serializable {
 
   private static final long serialVersionUID = 1L;

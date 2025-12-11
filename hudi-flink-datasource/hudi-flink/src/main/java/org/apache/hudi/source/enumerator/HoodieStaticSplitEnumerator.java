@@ -16,24 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.avro
+package org.apache.hudi.source.enumerator;
 
-import org.apache.avro.Schema
-import org.apache.spark.sql.avro.SchemaConverters.SchemaType
-import org.apache.spark.sql.types.DataType
+import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.source.split.HoodieSplitProvider;
+
+import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 
 /**
- * This interface is simply a facade abstracting away Spark's [[SchemaConverters]] implementation, allowing
- * the rest of the code-base to not depend on it directly
+ *  Static Hoodie split enumerator that only handles with a bounded number of hudi commits.
  */
-object HoodieSparkAvroSchemaConverters extends HoodieAvroSchemaConverters {
+public class HoodieStaticSplitEnumerator extends AbstractHoodieSplitEnumerator {
 
-  override def toSqlType(avroSchema: Schema): (DataType, Boolean) =
-    SchemaConverters.toSqlType(avroSchema) match {
-      case SchemaType(dataType, nullable) => (dataType, nullable)
-    }
+  public HoodieStaticSplitEnumerator(
+      SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext, HoodieSplitProvider provider) {
+    super(enumeratorContext, provider);
+  }
 
-  override def toAvroType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): Schema =
-    SchemaConverters.toAvroType(catalystType, nullable, recordName, nameSpace)
-
+  @Override
+  protected boolean shouldWaitForMoreSplits() {
+    return false;
+  }
 }

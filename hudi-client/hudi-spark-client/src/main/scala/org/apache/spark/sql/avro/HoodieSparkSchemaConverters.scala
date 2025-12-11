@@ -1,12 +1,13 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,10 +18,10 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.HoodieSchemaConverters
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
-
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
@@ -28,24 +29,29 @@ import scala.collection.JavaConverters._
 /**
  * This object contains methods that are used to convert HoodieSchema to Spark SQL schemas and vice versa.
  *
- * NOTE: This provides direct conversion between HoodieSchema and Spark DataType
+ * This provides direct conversion between HoodieSchema and Spark DataType
  * without going through Avro Schema intermediary.
+ *
+ * NOTE: the package of this class is intentionally kept as "org.apache.spark.sql.avro" which is similar to the existing
+ * Spark Avro connector's SchemaConverters.scala
+ * (https://github.com/apache/spark/blob/master/connector/avro/src/main/scala/org/apache/spark/sql/avro/SchemaConverters.scala).
+ * The reason for this is so that Spark 3.3 is able to access private spark sql type classes like TimestampNTZType.
  */
 
 @DeveloperApi
-private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverters {
+object HoodieSparkSchemaConverters {
 
   /**
    * Internal wrapper for SQL data type and nullability.
    */
   case class SchemaType(dataType: DataType, nullable: Boolean)
 
-  override def toSqlType(hoodieSchema: HoodieSchema): (DataType, Boolean) = {
+  def toSqlType(hoodieSchema: HoodieSchema): (DataType, Boolean) = {
     val result = toSqlTypeHelper(hoodieSchema, Set.empty)
     (result.dataType, result.nullable)
   }
 
-  override def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): HoodieSchema = {
+  def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): HoodieSchema = {
     val schema = catalystType match {
       // Primitive types
       case BooleanType => HoodieSchema.create(HoodieSchemaType.BOOLEAN)
@@ -86,14 +92,9 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
             toHoodieType(f.dataType, nullable = false, f.name, childNameSpace)
           }
           val unionFieldTypes = if (nullable) {
-            val types = new java.util.ArrayList[HoodieSchema]()
-            types.add(HoodieSchema.create(HoodieSchemaType.NULL))
-            nonNullUnionFieldTypes.foreach(types.add)
-            types
+            (HoodieSchema.create(HoodieSchemaType.NULL) +: nonNullUnionFieldTypes).asJava
           } else {
-            val types = new java.util.ArrayList[HoodieSchema]()
-            nonNullUnionFieldTypes.foreach(types.add)
-            types
+            nonNullUnionFieldTypes.asJava
           }
           HoodieSchema.createUnion(unionFieldTypes)
         } else {
@@ -104,10 +105,7 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
             HoodieSchemaField.of(f.name, fieldSchema, doc)
           }
 
-          val fieldsJava = new java.util.ArrayList[HoodieSchemaField]()
-          fields.foreach(fieldsJava.add)
-
-          HoodieSchema.createRecord(recordName, nameSpace, null, fieldsJava)
+          HoodieSchema.createRecord(recordName, nameSpace, null, fields.asJava)
         }
 
       case other => throw new IncompatibleSchemaException(s"Unexpected Spark DataType: $other")
@@ -153,6 +151,21 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
             throw new IncompatibleSchemaException(
               s"DECIMAL type must be HoodieSchema.Decimal instance, got: ${hoodieSchema.getClass}")
         }
+
+      case HoodieSchemaType.TIME =>
+        hoodieSchema match {
+          case time: HoodieSchema.Time =>
+            time.getPrecision match {
+              case TimePrecision.MILLIS => SchemaType(IntegerType, nullable = false)
+              case TimePrecision.MICROS => SchemaType(LongType, nullable = false)
+            }
+          case _ =>
+            throw new IncompatibleSchemaException(
+              s"TIME type must be HoodieSchema.Time instance, got: ${hoodieSchema.getClass}")
+        }
+
+      case HoodieSchemaType.UUID =>
+        SchemaType(StringType, nullable = false)
 
       // Complex types
       case HoodieSchemaType.RECORD =>
@@ -227,16 +240,5 @@ private[sql] object HoodieSchemaInternalConverters extends HoodieSchemaConverter
       st.forall { f =>
         f.name.matches("member\\d+") && f.nullable
       }
-  }
-
-  /**
-   * Calculates the minimum number of bytes needed to store a decimal with the given precision.
-   */
-  private def minBytesForPrecision(precision: Int): Int = {
-    var numBytes = 1
-    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
-      numBytes += 1
-    }
-    numBytes
   }
 }

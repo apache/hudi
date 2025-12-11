@@ -131,16 +131,19 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val recordMerger: HoodieRecordMerger = readerContext.getRecordMerger().get()
 
-  protected override val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
+  private val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
+
+  // TODO: This can be removed, it involves interfaces changes
+  protected override val avroSchema: Schema = schema.toAvroSchema
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
   private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
-  private lazy val cdcHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(HoodieCDCUtils.schemaBySupplementalLoggingMode(
+  private lazy val cdcHoodieSchema: HoodieSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
     cdcSupplementalLoggingMode,
-    HoodieSchemaUtils.removeMetadataFields(schema).getAvroSchema
-  ))
+    HoodieSchemaUtils.removeMetadataFields(schema)
+  )
 
   private lazy val cdcSparkSchema: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(cdcHoodieSchema)
 
@@ -560,7 +563,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    */
   private def convertBufferedRecordToJsonString(record: BufferedRecord[InternalRow]): UTF8String = {
     internalRowToJsonStringConverterMap.getOrElseUpdate(record.getSchemaId,
-      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId))))
+      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId).toAvroSchema)))
       .convert(record.getRecord)
   }
 

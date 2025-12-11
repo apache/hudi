@@ -21,7 +21,6 @@ package org.apache.hudi.io.v2;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -43,8 +42,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -69,10 +67,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
  * <p>The back-up writer may roll over to a new log file if there already exists a log file for the
  * given file group and instant.
  */
+@Slf4j
 public class RowDataLogWriteHandle<T, I, K, O>
     extends FlinkAppendHandle<T, I, K, O> implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RowDataLogWriteHandle.class);
 
   public RowDataLogWriteHandle(
       HoodieWriteConfig config,
@@ -113,7 +110,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
       HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields))),
+              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
               Option.of(HoodieRecord.HoodieRecordType.FLINK), indexVersion).keySet());
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata;
@@ -133,7 +130,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
     }
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;
-    LOG.info("WriteHandle for partitionPath {} filePath {}, took {} ms.",
+    log.info("WriteHandle for partitionPath {} filePath {}, took {} ms.",
         partitionPath, stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
     timer.startTimer();
   }

@@ -21,13 +21,14 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
 import org.apache.hudi.adapter.TableFunctionProviderAdapter;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -70,15 +71,14 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.table.lookup.HoodieLookupFunction;
 import org.apache.hudi.table.lookup.HoodieLookupTableReader;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.ExpressionUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -439,8 +439,8 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> getBatchInputFormat() {
-    final Schema tableAvroSchema = getTableAvroSchema();
-    final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+    final HoodieSchema tableSchema = getTableSchema();
+    final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
@@ -456,7 +456,7 @@ public class HoodieTableSource implements
               LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
-            return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+            return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
                 rowDataType, inputSplits, false);
           case COPY_ON_WRITE:
             return baseFileOnlyInputFormat();
@@ -480,9 +480,9 @@ public class HoodieTableSource implements
           LOG.info("No input splits generated for incremental read. Returning empty collection");
           return InputFormats.EMPTY_INPUT_FORMAT;
         } else if (cdcEnabled) {
-          return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, result.getInputSplits());
+          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, result.getInputSplits());
         } else {
-          return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+          return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
               rowDataType, result.getInputSplits(), false);
         }
       default:
@@ -494,8 +494,8 @@ public class HoodieTableSource implements
 
   private InputFormat<RowData, ?> getStreamInputFormat() {
     // if table does not exist or table data does not exist, use schema from the DDL
-    Schema tableAvroSchema = (this.metaClient == null || !tableDataExists()) ? inferSchemaFromDdl() : getTableAvroSchema();
-    final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+    HoodieSchema tableSchema = (this.metaClient == null || !tableDataExists()) ? inferSchemaFromDdl() : getTableSchema();
+    final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
@@ -506,9 +506,9 @@ public class HoodieTableSource implements
         final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
         boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
         if (this.conf.get(FlinkOptions.CDC_ENABLED)) {
-          return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, Collections.emptyList());
+          return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, Collections.emptyList());
         } else {
-          return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
+          return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
               rowDataType, Collections.emptyList(), emitDelete);
         }
       default:
@@ -530,14 +530,14 @@ public class HoodieTableSource implements
   private MergeOnReadInputFormat cdcInputFormat(
       RowType rowType,
       RowType requiredRowType,
-      Schema tableAvroSchema,
+      HoodieSchema tableSchema,
       DataType rowDataType,
       List<MergeOnReadInputSplit> inputSplits) {
     final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
         rowType,
         requiredRowType,
-        tableAvroSchema.toString(),
-        AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+        tableSchema.toString(),
+        HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
         inputSplits,
         conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
     return CdcInputFormat.builder()
@@ -555,7 +555,7 @@ public class HoodieTableSource implements
   private MergeOnReadInputFormat mergeOnReadInputFormat(
       RowType rowType,
       RowType requiredRowType,
-      Schema tableAvroSchema,
+      HoodieSchema tableAvroSchema,
       DataType rowDataType,
       List<MergeOnReadInputSplit> inputSplits,
       boolean emitDelete) {
@@ -563,7 +563,7 @@ public class HoodieTableSource implements
         rowType,
         requiredRowType,
         tableAvroSchema.toString(),
-        AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+        HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
         inputSplits,
         conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
     return MergeOnReadInputFormat.builder()
@@ -608,9 +608,9 @@ public class HoodieTableSource implements
     );
   }
 
-  private Schema inferSchemaFromDdl() {
-    Schema schema = AvroSchemaConverter.convertToSchema(this.tableRowType);
-    return HoodieAvroUtils.addMetadataFields(schema, conf.get(FlinkOptions.CHANGELOG_ENABLED));
+  private HoodieSchema inferSchemaFromDdl() {
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(this.tableRowType);
+    return HoodieSchemaUtils.addMetadataFields(schema, conf.get(FlinkOptions.CHANGELOG_ENABLED));
   }
 
   private FileIndex getOrBuildFileIndex() {
@@ -648,10 +648,10 @@ public class HoodieTableSource implements
   }
 
   @VisibleForTesting
-  public Schema getTableAvroSchema() {
+  public HoodieSchema getTableSchema() {
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-      return schemaResolver.getTableAvroSchema();
+      return schemaResolver.getTableSchema();
     } catch (Throwable e) {
       // table exists but has no written data
       LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);

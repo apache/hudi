@@ -18,18 +18,20 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
+import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
-import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -86,25 +88,16 @@ public class RowDataAvroQueryContexts {
     });
   }
 
+  @AllArgsConstructor
   public static class RowDataQueryContext {
+    @Getter
     private final DataType rowType;
     private final Map<String, FieldQueryContext> contextMap;
     private final RowData.FieldGetter[] fieldGetters;
+    @Getter
     private final RowDataToAvroConverter rowDataToAvroConverter;
+    @Getter
     private final AvroToRowDataConverter avroToRowDataConverter;
-
-    private RowDataQueryContext(
-        DataType rowType,
-        Map<String, FieldQueryContext> contextMap,
-        RowData.FieldGetter[] fieldGetters,
-        RowDataToAvroConverter rowDataAvroConverter,
-        AvroToRowDataConverter avroToRowDataConverter) {
-      this.rowType = rowType;
-      this.contextMap = contextMap;
-      this.fieldGetters = fieldGetters;
-      this.rowDataToAvroConverter = rowDataAvroConverter;
-      this.avroToRowDataConverter = avroToRowDataConverter;
-    }
 
     public static RowDataQueryContext create(
         DataType rowType,
@@ -122,22 +115,12 @@ public class RowDataAvroQueryContexts {
     public RowData.FieldGetter[] fieldGetters() {
       return fieldGetters;
     }
-
-    public RowDataToAvroConverter getRowDataToAvroConverter() {
-      return rowDataToAvroConverter;
-    }
-
-    public AvroToRowDataConverter getAvroToRowDataConverter() {
-      return avroToRowDataConverter;
-    }
-
-    public DataType getRowType() {
-      return this.rowType;
-    }
   }
 
   public static class FieldQueryContext {
+    @Getter
     private final LogicalType logicalType;
+    @Getter
     private final RowData.FieldGetter fieldGetter;
     private final Function<Object, Object> javaTypeConverter;
     private FieldQueryContext(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
@@ -148,14 +131,6 @@ public class RowDataAvroQueryContexts {
 
     public static FieldQueryContext create(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
       return new FieldQueryContext(logicalType, fieldGetter, utcTimezone);
-    }
-
-    public LogicalType getLogicalType() {
-      return logicalType;
-    }
-
-    public RowData.FieldGetter getFieldGetter() {
-      return fieldGetter;
     }
 
     public Object getValAsJava(RowData rowData) {

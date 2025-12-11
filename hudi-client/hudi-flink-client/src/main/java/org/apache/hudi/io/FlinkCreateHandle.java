@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -30,9 +31,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,10 +46,9 @@ import java.util.List;
  *
  * @see FlinkIncrementalMergeHandle
  */
+@Slf4j
 public class FlinkCreateHandle<T, I, K, O>
     extends HoodieCreateHandle<T, I, K, O> implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkCreateHandle.class);
 
   private boolean isClosed = false;
 
@@ -61,7 +59,7 @@ public class FlinkCreateHandle<T, I, K, O>
   }
 
   public FlinkCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           String partitionPath, String fileId, Option<Schema> schemaOption,
+                           String partitionPath, String fileId, Option<HoodieSchema> schemaOption,
                            TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, schemaOption,
         taskContextSupplier);
@@ -92,7 +90,7 @@ public class FlinkCreateHandle<T, I, K, O>
     final StoragePath path = makeNewFilePath(partitionPath, lastDataFileName);
     try {
       if (storage.exists(path)) {
-        LOG.info("Deleting invalid INSERT file due to task retry: " + lastDataFileName);
+        log.info("Deleting invalid INSERT file due to task retry: " + lastDataFileName);
         storage.deleteFile(path);
       }
     } catch (IOException e) {
@@ -118,7 +116,7 @@ public class FlinkCreateHandle<T, I, K, O>
       while (storage.exists(path)) {
         StoragePath existing = path;
         path = newFilePathWithRollover(rollNumber++);
-        LOG.warn("Duplicate write for INSERT bucket with path: {}. Will write to new path [{}] instead", existing, path);
+        log.warn("Duplicate write for INSERT bucket with path: {}. Will write to new path [{}] instead", existing, path);
       }
       return path;
     } catch (IOException e) {
@@ -157,13 +155,13 @@ public class FlinkCreateHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.error("Failed to close the CREATE handle", throwable);
+      log.error("Failed to close the CREATE handle", throwable);
       try {
         storage.deleteFile(path);
-        LOG.info("Successfully deleted the intermediate CREATE data file: {}", path);
+        log.info("Successfully deleted the intermediate CREATE data file: {}", path);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Failed to delete the intermediate CREATE data file: {}", path, e);
+        log.warn("Failed to delete the intermediate CREATE data file: {}", path, e);
       }
     }
   }

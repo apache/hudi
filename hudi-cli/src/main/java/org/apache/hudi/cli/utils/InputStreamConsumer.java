@@ -18,8 +18,7 @@
 
 package org.apache.hudi.cli.utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -29,9 +28,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * This class is responsible to read a Process output.
  */
+@Slf4j
 public class InputStreamConsumer extends Thread {
-
-  private static final Logger LOG = LoggerFactory.getLogger(InputStreamConsumer.class);
   private final InputStream is;
 
   public InputStreamConsumer(InputStream is) {
@@ -43,9 +41,9 @@ public class InputStreamConsumer extends Thread {
     try {
       InputStreamReader isr = new InputStreamReader(is, StandardCharsets.UTF_8);
       BufferedReader br = new BufferedReader(isr);
-      br.lines().forEach(LOG::info);
+      br.lines().forEach(log::info);
     } catch (Exception e) {
-      LOG.warn(e.toString());
+      log.warn(e.toString());
       e.printStackTrace();
     }
   }

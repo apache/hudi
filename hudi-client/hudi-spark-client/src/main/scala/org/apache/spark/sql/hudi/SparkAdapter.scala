@@ -104,16 +104,6 @@ trait SparkAdapter extends Serializable {
   def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
 
   /**
-   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
-   */
-  def getAvroSchemaConverters: HoodieAvroSchemaConverters
-
-  /**
-   * Creates instance of [[HoodieSchemaConverters]] allowing to convert b/w HoodieSchema and Catalyst schemas
-   */
-  def getHoodieSchemaConverters: HoodieSchemaConverters
-
-  /**
    * Create the hoodie's extended spark sql parser.
    */
   def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface

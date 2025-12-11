@@ -16,22 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.avro
+package org.apache.hudi.source.enumerator;
 
-import org.apache.hudi.HoodieSchemaConverters
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.source.split.HoodieSourceSplitState;
 
-import org.apache.spark.sql.types.DataType
+import java.io.Serializable;
+import java.util.Collection;
 
 /**
- * This interface is simply a facade abstracting away Spark's [[HoodieSchemaConverters]] implementation, allowing
- * the rest of the code-base to not depend on it directly
+ * State of Hoodie split enumerator. Mainly include the states of pending splits of split provider.
  */
-object HoodieSparkSchemaConverters extends HoodieSchemaConverters {
+public class HoodieSplitEnumeratorState implements Serializable {
+  private final Collection<HoodieSourceSplitState> pendingSplitStates;
 
-  override def toSqlType(hoodieSchema: HoodieSchema): (DataType, Boolean) =
-    HoodieSchemaInternalConverters.toSqlType(hoodieSchema)
+  public HoodieSplitEnumeratorState(Collection<HoodieSourceSplitState> pendingSplitStates) {
+    this.pendingSplitStates = pendingSplitStates;
+  }
 
-  override def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): HoodieSchema =
-    HoodieSchemaInternalConverters.toHoodieType(catalystType, nullable, recordName, nameSpace)
+  public Collection<HoodieSourceSplitState> getPendingSplitStates() {
+    return pendingSplitStates;
+  }
 }

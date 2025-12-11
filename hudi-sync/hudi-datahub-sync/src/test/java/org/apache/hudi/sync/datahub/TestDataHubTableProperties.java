@@ -21,6 +21,9 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -28,11 +31,9 @@ import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -68,8 +69,8 @@ class TestDataHubTableProperties {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(metaClient.getTableType().name()).thenReturn(HoodieTableType.MERGE_ON_READ.name());
     when(metaClient.getTableConfig().getTableVersion()).thenReturn(HoodieTableVersion.SIX);
-    MessageType messageType = new MessageType("record", new PrimitiveType(Type.Repetition.REQUIRED, PrimitiveType.PrimitiveTypeName.INT32, "int_field"));
-    DataHubTableProperties.HoodieTableMetadata tableMetadata = new DataHubTableProperties.HoodieTableMetadata(metaClient, messageType);
+    HoodieSchema schema = HoodieSchema.createRecord("record", null, null, Collections.singletonList(HoodieSchemaField.of("int_field", HoodieSchema.create(HoodieSchemaType.INT))));
+    DataHubTableProperties.HoodieTableMetadata tableMetadata = new DataHubTableProperties.HoodieTableMetadata(metaClient, schema);
     Map<String, String> actual = DataHubTableProperties.getTableProperties(config, tableMetadata);
 
     assertEquals(expected, actual);

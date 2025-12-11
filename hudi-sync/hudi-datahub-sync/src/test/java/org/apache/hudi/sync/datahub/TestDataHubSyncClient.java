@@ -20,6 +20,7 @@
 package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -31,7 +32,6 @@ import com.linkedin.mxe.MetadataChangeProposal;
 import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -77,18 +77,15 @@ public class TestDataHubSyncClient {
   @TempDir
   static java.nio.file.Path tmpDir;
 
-  private static String TRIP_EXAMPLE_SCHEMA;
-  private static Schema avroSchema;
+  private static HoodieSchema schema;
   private static String tableBasePath;
-  private static String DATABASE_NAME = "database";
-  private static String TABLE_NAME = "table";
 
   @BeforeAll
   public static void beforeAll() throws IOException {
-    TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
-            + "{\"name\": \"ts\",\"type\": \"long\"}]}";
+    String tripExampleSchema = "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
+        + "{\"name\": \"ts\",\"type\": \"long\"}]}";
 
-    avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+    schema = HoodieSchema.parse(tripExampleSchema);
 
     Properties props = new Properties();
     props.put("hoodie.table.name", "some_table");
@@ -316,8 +313,8 @@ public class TestDataHubSyncClient {
     }
 
     @Override
-    Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
-      return avroSchema;
+    HoodieSchema getTableSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+      return schema;
     }
 
     @Override

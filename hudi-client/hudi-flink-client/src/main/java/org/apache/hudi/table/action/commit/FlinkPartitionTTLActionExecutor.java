@@ -31,16 +31,14 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.ttl.strategy.HoodiePartitionTTLStrategyFactory;
 import org.apache.hudi.table.action.ttl.strategy.PartitionTTLStrategy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+@Slf4j
 public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkPartitionTTLActionExecutor.class);
 
   public FlinkPartitionTTLActionExecutor(HoodieEngineContext context,
                                          HoodieWriteConfig config,
@@ -60,10 +58,10 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
       if (expiredPartitions.isEmpty()) {
         return emptyResult;
       }
-      LOG.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
+      log.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
       return new FlinkAutoCommitActionExecutor(new FlinkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions)).execute();
     } catch (HoodieDeletePartitionPendingTableServiceException deletePartitionPendingTableServiceException) {
-      LOG.info("Partition is under table service, do nothing, call delete partition next time.");
+      log.info("Partition is under table service, do nothing, call delete partition next time.");
       return emptyResult;
     } catch (IOException e) {
       throw new HoodieIOException("Error executing hoodie partition ttl: ", e);

@@ -145,7 +145,7 @@ public class TestMergeHandle extends BaseTestHandle {
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     if (!useFileGroupReader) {
       // legacy merge handle expects HoodieAvroPayload
-      DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), HOODIE_SCHEMA.getAvroSchema()).withReaderSchema(HOODIE_SCHEMA.getAvroSchema());
+      DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), HOODIE_SCHEMA).withReaderSchema(HOODIE_SCHEMA);
       newRecords = newRecords.stream()
           .map(avroIndexedRecord -> {
             HoodieRecord hoodieRecord = new HoodieAvroRecord<>(avroIndexedRecord.getKey(), new DefaultHoodieRecordPayload(Option.of((GenericRecord) avroIndexedRecord.getData())),
@@ -259,9 +259,9 @@ public class TestMergeHandle extends BaseTestHandle {
 
     AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
     String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
-    HoodieSchema cdcSchema = HoodieSchema.fromAvroSchema(schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, AVRO_SCHEMA));
+    HoodieSchema cdcSchema = schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, HOODIE_SCHEMA);
     int recordKeyFieldIndex = cdcSchema.getField("record_key").get().pos();
-    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(cdcFilePath), cdcSchema.getAvroSchema())) {
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(cdcFilePath), cdcSchema.toAvroSchema())) {
       while (reader.hasNext()) {
         HoodieLogBlock logBlock = reader.next();
         if (logBlock instanceof HoodieDataBlock) {

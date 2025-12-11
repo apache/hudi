@@ -42,11 +42,10 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -70,9 +69,8 @@ import java.util.stream.Collectors;
  * The instants are exported in the json format.
  */
 @ShellComponent
+@Slf4j
 public class ExportCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ExportCommand.class);
 
   @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
@@ -173,7 +171,7 @@ public class ExportCommand {
 
               final String instantTime = archiveEntryRecord.get("commitTime").toString();
               if (metadata == null) {
-                LOG.error("Could not load metadata for action " + action + " at instant time " + instantTime);
+                log.error("Could not load metadata for action " + action + " at instant time " + instantTime);
                 continue;
               }
               final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;

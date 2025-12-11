@@ -71,10 +71,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 
-  override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
-
-  override def getHoodieSchemaConverters: HoodieSchemaConverters = HoodieSparkSchemaConverters
-
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
     cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
   }

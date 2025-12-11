@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.hoodieRecordsToIndexedRecords
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
@@ -40,6 +41,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -136,7 +138,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def assertRecordsEqual(schema: Schema, expected: InternalRow, actual: InternalRow): Unit = {
     assertEquals(expected.numFields, actual.numFields)
-    val expectedStruct = sparkAdapter.getAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
+    val expectedStruct = HoodieSparkAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
 
     expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).zipWithIndex.foreach {
       case ((v1, v2), i) =>
@@ -309,7 +311,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, avroSchema, Collections.singletonList(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, HoodieSchema.fromAvroSchema(avroSchema), Collections.singletonList(orderingColumn)))
   }
 
   @Test
@@ -327,7 +329,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "my_key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -349,7 +351,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("other")))
-    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -364,7 +366,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, HoodieSchema.fromAvroSchema(schema)))
   }
 
   @Test
@@ -377,7 +379,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schema: Schema = buildMultiLevelSchema
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, schema, "outer1.field1").toString)
+    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, HoodieSchema.fromAvroSchema(schema), "outer1.field1").toString)
   }
 
   private def buildMultiLevelSchema = {

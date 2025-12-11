@@ -35,8 +35,6 @@ import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -683,18 +681,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
   public List<String> getValidBlockInstants() {
     return validBlockInstants;
-  }
-
-  private Pair<ClosableIterator<T>, Schema> getRecordsIterator(
-      HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    ClosableIterator<T> blockRecordsIterator;
-    if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
-    } else {
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
-    }
-    return Pair.of(blockRecordsIterator, dataBlock.getSchema());
   }
 
   /**
