@@ -69,13 +69,10 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       DEFAULT_CONF_FILE_DIR, DEFAULT_PROPERTIES_FILE);
 
   /**
-   * Lazy initialization holder class idiom for thread-safe, lock-free initialization.
-   * The JVM guarantees that GlobalPropsHolder is initialized exactly once when first accessed.
-   * This avoids class poisoning when S3/credentials are not ready during static initialization.
-   * Starts as null - actual loading happens on first access to getGlobalProps().
+   * Holder class for lazy initialization of global properties.
+   * Initialized on first access to avoid exceptions during class loading.
    */
   private static class GlobalPropsHolder {
-    // Start with null to avoid any static initialization that could throw
     static final AtomicReference<TypedProperties> INSTANCE = new AtomicReference<>(null);
   }
 
@@ -138,19 +135,11 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     return conf.getProps();
   }
 
-  /**
-   * Refresh global properties by reloading from configuration files.
-   * Uses lock-free atomic update. Can throw if config loading fails.
-   */
   public static void refreshGlobalProps() {
-    TypedProperties fresh = loadGlobalProps();  // Let exceptions propagate
+    TypedProperties fresh = loadGlobalProps();
     GlobalPropsHolder.INSTANCE.set(fresh);
   }
 
-  /**
-   * Clear global properties (set to empty). For testing only.
-   * Uses lock-free atomic update.
-   */
   public static void clearGlobalProps() {
     GlobalPropsHolder.INSTANCE.set(new TypedProperties());
   }
@@ -226,52 +215,27 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     return getGlobalProps();
   }
 
-  /**
-   * Get global properties with lock-free lazy initialization.
-   * Uses the lazy initialization holder class idiom for optimal performance.
-   * On first access, loads configuration from hudi-defaults.conf.
-   * Returns a defensive copy to prevent mutation of shared state.
-   *
-   * @return TypedProperties containing global configuration (never null)
-   * @throws HoodieException if config file is invalid
-   * @throws HoodieIOException if config file cannot be read
-   */
   public static TypedProperties getGlobalProps() {
     TypedProperties props = GlobalPropsHolder.INSTANCE.get();
 
-    // Lazy initialization on first access
     if (props == null) {
-      // Load configuration - exceptions propagate to caller for proper error handling
       TypedProperties loaded = loadGlobalProps();
-
-      // Use compareAndSet to ensure only one thread initializes
-      // If another thread wins the race, we just use their result
       if (GlobalPropsHolder.INSTANCE.compareAndSet(null, loaded)) {
         LOG.info("Loaded global properties from configuration");
       }
       props = GlobalPropsHolder.INSTANCE.get();
     }
 
-    // Return defensive copy to prevent mutation of shared state
     final TypedProperties copy = new TypedProperties();
     copy.putAll(props);
     return copy;
   }
 
-  /**
-   * Add a property to global props. For testing only.
-   * Initializes global props if not already loaded.
-   *
-   * @param key property key
-   * @param value property value
-   * @return updated TypedProperties
-   */
+  // test only
   public static TypedProperties addToGlobalProps(String key, String value) {
-    // Ensure global props are initialized first
     if (GlobalPropsHolder.INSTANCE.get() == null) {
-      getGlobalProps();  // Trigger lazy initialization
+      getGlobalProps();
     }
-
     TypedProperties current = GlobalPropsHolder.INSTANCE.get();
     TypedProperties updated = new TypedProperties();
     updated.putAll(current);

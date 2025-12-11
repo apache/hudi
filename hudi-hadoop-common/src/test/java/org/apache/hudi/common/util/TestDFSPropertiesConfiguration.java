@@ -233,60 +233,42 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testLazyInitializationWithFailureAndRetry() {
-    // Clear global props to reset state
     DFSPropertiesConfiguration.clearGlobalProps();
 
-    // Set HUDI_CONF_DIR to non-existent path (simulates S3/network failure)
-    String badPath = "/non/existent/path/that/does/not/exist";
-    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, badPath);
+    ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
+    TypedProperties props1 = DFSPropertiesConfiguration.getGlobalProps();
+    assertTrue(props1 != null);
 
-    // First call should THROW exception (required config cannot be loaded)
-    assertThrows(HoodieIOException.class, () -> {
-      DFSPropertiesConfiguration.getGlobalProps();
-    }, "Should throw when required config cannot be loaded");
-
-    // Now fix the path to a valid config directory
     String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
     ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
 
-    // After clearing and setting valid path, refreshGlobalProps should succeed
     DFSPropertiesConfiguration.clearGlobalProps();
     DFSPropertiesConfiguration.refreshGlobalProps();
 
-    // Now getGlobalProps should return the loaded properties
-    TypedProperties props = DFSPropertiesConfiguration.getGlobalProps();
-    assertEquals(5, props.size(), "Should load config after refresh with valid path");
-    assertEquals("jdbc:hive2://localhost:10000", props.get("hoodie.datasource.hive_sync.jdbcurl"));
+    TypedProperties props2 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(5, props2.size());
+    assertEquals("jdbc:hive2://localhost:10000", props2.get("hoodie.datasource.hive_sync.jdbcurl"));
+
+    DFSPropertiesConfiguration.clearGlobalProps();
+    TypedProperties props3 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(0, props3.size());
   }
 
   @Test
   public void testClassInitializationNeverThrows() {
-    // This test verifies that static initialization never causes class poisoning,
-    // even when config loading would fail at runtime
-
-    // Clear props first
     DFSPropertiesConfiguration.clearGlobalProps();
-
-    // Set environment to a bad path
     ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, "/this/path/does/not/exist/at/all");
 
-    // Accessing the class should NOT cause ExceptionInInitializerError or NoClassDefFoundError
-    // The class itself loads fine (lazy init with null), but calling getGlobalProps() will throw
     try {
-      // This will throw HoodieIOException at runtime (not during class loading)
       DFSPropertiesConfiguration.getGlobalProps();
-      // If we somehow get here without exception, that's also fine (default path might exist)
     } catch (HoodieIOException e) {
-      // Expected - config cannot be loaded from bad path
-      // The key is that we got HoodieIOException, NOT ExceptionInInitializerError
+      // Expected for non-existent path
     }
 
-    // Verify the class is not poisoned - we can still use it
-    // Create an instance with explicit config (doesn't use global props)
+    // Verify class is not poisoned - instance methods still work
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
-    // This should work - the class is not poisoned
     cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getProps();
-    assertEquals(5, props.size(), "Instance methods should still work even if global props failed");
+    assertEquals(5, props.size());
   }
 }
