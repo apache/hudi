@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -980,7 +979,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     public HoodieSchema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
       int id = record.getSchemaId();
       if (id >= 1 && id <= SCHEMAS.size()) {
-        return SCHEMAS.get(id - 1).toAvroSchema();
+        return SCHEMAS.get(id - 1);
       } else {
         throw new RuntimeException("Schema id is illegal: " + id);
       }

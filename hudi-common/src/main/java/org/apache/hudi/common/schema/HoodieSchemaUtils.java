@@ -572,8 +572,7 @@ public final class HoodieSchemaUtils {
   public static HoodieSchema getRecordKeySchema() {
     return RECORD_KEY_SCHEMA;
   }
-
-
+  
   /**
    * Converts field values for specific data types with logical type handling.
    * This is equivalent to HoodieAvroUtils.convertValueForSpecificDataTypes() but operates on HoodieSchema.

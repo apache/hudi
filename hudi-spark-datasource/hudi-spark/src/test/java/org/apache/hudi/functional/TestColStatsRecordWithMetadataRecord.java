@@ -207,7 +207,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     // write the record to hfile.
     HoodieSchema writeSchema = HoodieSchemaCache.intern(HoodieSchema.parse(mdtWriteConfig.getSchema()));
     TypedProperties properties = new TypedProperties();
-    columnStatsRecords.forEach(record -> handle.write(record, writeSchema.toAvroSchema(), properties));
+    columnStatsRecords.forEach(record -> handle.write(record, writeSchema, properties));
     WriteStatus writeStatus = (WriteStatus) handle.close().get(0);
     String filePath = writeStatus.getStat().getPath();
 

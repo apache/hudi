@@ -45,6 +45,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
@@ -131,10 +132,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val recordMerger: HoodieRecordMerger = readerContext.getRecordMerger().get()
 
-  private val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
-
-  // TODO: This can be removed, it involves interfaces changes
-  protected override val avroSchema: Schema = schema.toAvroSchema
+  protected override val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
@@ -420,7 +418,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
           recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
             toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
-            .map(record => BufferedRecords.fromEngineRecord(record, schema.getAvroSchema, readerContext.getRecordContext, orderingFieldNames, false))
+            .map(record => BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
           recordIter = loadFileSlice(currentCDCFileSplit.getBeforeFileSlice.get)
