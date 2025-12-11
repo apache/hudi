@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
+
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
@@ -26,9 +29,6 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;

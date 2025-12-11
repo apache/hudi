@@ -349,7 +349,6 @@ public class SparkMetadataWriterUtils {
         .withBaseFileOption(baseFileOption)
         .withLogFiles(logFileStream)
         .withPartitionPath(partition)
-        .withEnableOptimizedLogBlockScan(dataWriteConfig.enableOptimizedLogBlocksScan())
         .build();
     try {
       ClosableIterator<InternalRow> rowsForFilePath = fileGroupReader.getClosableIterator();

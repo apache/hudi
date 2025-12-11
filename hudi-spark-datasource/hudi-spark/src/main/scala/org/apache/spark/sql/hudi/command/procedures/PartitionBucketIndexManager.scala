@@ -114,8 +114,7 @@ class PartitionBucketIndexManager extends BaseProcedure
 
       config = config ++ Map(OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL,
         HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.BUCKET_RESCALE.value(),
-        ENABLE_ROW_WRITER.key() -> "true",
-        HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key -> writeClient.getConfig.enableOptimizedLogBlocksScan.toString)
+        ENABLE_ROW_WRITER.key() -> "true")
 
       // Determine which operation to perform
       if (showConfig) {
@@ -228,9 +227,6 @@ class PartitionBucketIndexManager extends BaseProcedure
           // instantiate other supporting cast
           val readerSchema = serializableTableSchemaWithMetaFields.get
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
-          // get this value from config, which has obtained this from write client
-          val enableOptimizedLogBlockScan = config.getOrElse(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-            HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()).toBoolean
           // instantiate FG reader
           val fileGroupReader = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContextFactory.getContext)
@@ -242,7 +238,6 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
-            .withEnableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
             .build()
           val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)

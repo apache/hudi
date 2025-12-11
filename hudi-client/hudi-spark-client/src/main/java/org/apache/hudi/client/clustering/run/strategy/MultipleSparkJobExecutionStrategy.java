@@ -302,7 +302,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(getEngineContext().getTaskContextSupplier(), writeConfig);
     TypedProperties readerProperties = getReaderProperties(maxMemoryPerCompaction);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    final boolean enableLogBlocksScan = getWriteConfig().enableOptimizedLogBlocksScan();
     String internalSchemaStr = getWriteConfig().getInternalSchema();
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
@@ -321,7 +320,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
         // instantiate FG reader
         HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, readerSchema, internalSchemaOption,
-            readerContextFactory, instantTime, readerProperties, usePosition, enableLogBlocksScan);
+            readerContextFactory, instantTime, readerProperties, usePosition);
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }

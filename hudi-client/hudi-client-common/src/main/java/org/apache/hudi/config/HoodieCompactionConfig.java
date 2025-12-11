@@ -35,8 +35,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
-
 /**
  * Compaction related config.
  */
@@ -473,11 +471,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withLogCompactionBlocksThreshold(int logCompactionBlocksThreshold) {
       compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, String.valueOf(logCompactionBlocksThreshold));
-      return this;
-    }
-
-    public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
-      compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
       return this;
     }
 
