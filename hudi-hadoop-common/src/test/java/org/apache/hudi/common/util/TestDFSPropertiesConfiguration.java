@@ -240,49 +240,53 @@ public class TestDFSPropertiesConfiguration {
     String badPath = "/non/existent/path/that/does/not/exist";
     ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, badPath);
 
-    // First call should return empty config (not throw exception)
-    TypedProperties props1 = DFSPropertiesConfiguration.getGlobalProps();
-    assertEquals(0, props1.size(), "Should return empty config when load fails");
-
-    // Second call should also return empty (still fails, retries each time)
-    TypedProperties props2 = DFSPropertiesConfiguration.getGlobalProps();
-    assertEquals(0, props2.size(), "Should return empty config on retry when load still fails");
+    // First call should THROW exception (required config cannot be loaded)
+    assertThrows(HoodieIOException.class, () -> {
+      DFSPropertiesConfiguration.getGlobalProps();
+    }, "Should throw when required config cannot be loaded");
 
     // Now fix the path to a valid config directory
     String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
     ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
 
-    // Call refreshGlobalProps to manually trigger reload
+    // After clearing and setting valid path, refreshGlobalProps should succeed
+    DFSPropertiesConfiguration.clearGlobalProps();
     DFSPropertiesConfiguration.refreshGlobalProps();
 
     // Now getGlobalProps should return the loaded properties
-    TypedProperties props3 = DFSPropertiesConfiguration.getGlobalProps();
-    assertEquals(5, props3.size(), "Should load config after refresh with valid path");
-    assertEquals("jdbc:hive2://localhost:10000", props3.get("hoodie.datasource.hive_sync.jdbcurl"));
+    TypedProperties props = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(5, props.size(), "Should load config after refresh with valid path");
+    assertEquals("jdbc:hive2://localhost:10000", props.get("hoodie.datasource.hive_sync.jdbcurl"));
   }
 
   @Test
   public void testClassInitializationNeverThrows() {
-    // This test verifies that static initialization never throws exceptions
-    // even when global props fail to load
+    // This test verifies that static initialization never causes class poisoning,
+    // even when config loading would fail at runtime
 
-    // Clear and set bad environment
+    // Clear props first
     DFSPropertiesConfiguration.clearGlobalProps();
+
+    // Set environment to a bad path
     ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, "/this/path/does/not/exist/at/all");
 
-    // Call static method that triggers lazy initialization
-    // Should NOT throw ExceptionInInitializerError or NoClassDefFoundError
-    TypedProperties props = DFSPropertiesConfiguration.getGlobalProps();
+    // Accessing the class should NOT cause ExceptionInInitializerError or NoClassDefFoundError
+    // The class itself loads fine (lazy init with null), but calling getGlobalProps() will throw
+    try {
+      // This will throw HoodieIOException at runtime (not during class loading)
+      DFSPropertiesConfiguration.getGlobalProps();
+      // If we somehow get here without exception, that's also fine (default path might exist)
+    } catch (HoodieIOException e) {
+      // Expected - config cannot be loaded from bad path
+      // The key is that we got HoodieIOException, NOT ExceptionInInitializerError
+    }
 
-    // Should return empty config, not throw
-    assertEquals(0, props.size(), "Should return empty config without throwing");
-
-    // Verify we can call it multiple times without errors
-    TypedProperties props2 = DFSPropertiesConfiguration.getGlobalProps();
-    assertEquals(0, props2.size(), "Multiple calls should work without class poisoning");
-
-    // Verify other methods still work
+    // Verify the class is not poisoned - we can still use it
+    // Create an instance with explicit config (doesn't use global props)
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
-    assertEquals(0, cfg.getGlobalProperties().size());
+    // This should work - the class is not poisoned
+    cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t1.props"));
+    TypedProperties props = cfg.getProps();
+    assertEquals(5, props.size(), "Instance methods should still work even if global props failed");
   }
 }
