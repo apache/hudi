@@ -231,6 +231,11 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 
 .navbar__logo {
   height: 130%;
+  display: flex;
+  @media(max-width: 1350px) {
+    max-height: 100px;
+    width: 100px;
+  }
 }
 
 .data-lake h2, .hudi-feature h2 {
