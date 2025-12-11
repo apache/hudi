@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -96,14 +97,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   private static final String PARTITION_PATH = "test_partition";
   private static final long ORDERING_VALUE = 100L;
   private static final String IGNORE_MARKERS_VALUE = "__HUDI_DEFAULT_MARKER__";
-  private static final List<Schema> SCHEMAS = Arrays.asList(
+  private static final List<HoodieSchema> SCHEMAS = Arrays.asList(
       getSchema1(),
       getSchema2(),
       getSchema3(),
       getSchema4(),
       getSchema5(),
       getSchema6());
-  private static final Schema READER_SCHEMA = getSchema6();
+  private static final HoodieSchema READER_SCHEMA = getSchema6();
   private HoodieTableConfig tableConfig;
   private StorageConfiguration<?> storageConfig;
   private TypedProperties props;
@@ -321,9 +322,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         (int) ORDERING_VALUE - 1, "newer_id", "Newer Name", 20, "Older City", 500L);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
+      assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
     } else {
-      assertRowEqual(olderRecord, finalResult.getRecord(), READER_SCHEMA);
+      assertRowEqual(olderRecord, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
     }
     // Case 2: new record has higher ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE + 1, "newer_id", "Newer Name");
@@ -331,14 +332,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE + 1, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
     // Case 3: new record has equal ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE, "newer_id", "Newer Name");
     newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newerRecord, 2, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
   }
 
   private void runPartialDeltaMerge(RecordMergeMode mergeMode) throws IOException {
@@ -358,9 +359,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     InternalRow expected = createFullRecordForPartial(
         (int) ORDERING_VALUE - 1, "new_id", "New Name", 25, "Old City", 1000L);
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, mergedRecord.getRecord(), READER_SCHEMA);
+      assertRowEqual(expected, mergedRecord.getRecord(), READER_SCHEMA.toAvroSchema());
     } else {
-      assertRowEqual(oldRecord, mergedRecord.getRecord(), READER_SCHEMA);
+      assertRowEqual(oldRecord, mergedRecord.getRecord(), READER_SCHEMA.toAvroSchema());
     }
     // Test 2: New record has higher columns ordering value.
     newRecord = createPartialRecord((int) ORDERING_VALUE + 1, "new_id", "New Name");
@@ -778,7 +779,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Option.empty(), // payloadClass
-        READER_SCHEMA, // readerSchema
+        READER_SCHEMA.toAvroSchema(), // readerSchema
         props, // props
         partialUpdateModeOpt
     );
@@ -794,13 +795,13 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Option.empty(), // payloadClass
-        READER_SCHEMA, // readerSchema
+        READER_SCHEMA.toAvroSchema(), // readerSchema
         props, // props
         Option.of(PartialUpdateMode.IGNORE_DEFAULTS) // partialUpdateMode
     );
   }
 
-  private static Schema getSchema1() {
+  private static HoodieSchema getSchema1() {
     Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
     List<Schema.Field> fields = Arrays.asList(
         new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
@@ -810,10 +811,10 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
     );
     fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.fromAvroSchema(fullSchema);
   }
 
-  private static Schema getSchema2() {
+  private static HoodieSchema getSchema2() {
     // Create a partial schema with only some fields
     Schema partialSchema = Schema.createRecord("PartialRecord", null, null, false);
     partialSchema.setFields(Arrays.asList(
@@ -821,10 +822,10 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
         new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
     ));
-    return partialSchema;
+    return HoodieSchema.fromAvroSchema(partialSchema);
   }
 
-  private static Schema getSchema3() {
+  private static HoodieSchema getSchema3() {
     Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
     List<Schema.Field> fields = Arrays.asList(
         new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
@@ -833,10 +834,10 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
     );
     fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.fromAvroSchema(fullSchema);
   }
 
-  private static Schema getSchema4() {
+  private static HoodieSchema getSchema4() {
     Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
     List<Schema.Field> fields = Arrays.asList(
         new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
@@ -844,10 +845,10 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
     );
     fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.fromAvroSchema(fullSchema);
   }
 
-  private static Schema getSchema5() {
+  private static HoodieSchema getSchema5() {
     String schemaJson =
         "{\n"
           + "  \"type\": \"record\",\n"
@@ -872,10 +873,10 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
           + "    }\n"
           + "  ]\n"
           + "}";
-    return new Schema.Parser().parse(schemaJson);
+    return HoodieSchema.parse(schemaJson);
   }
 
-  private static Schema getSchema6() {
+  private static HoodieSchema getSchema6() {
     Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
     List<Schema.Field> fields = Arrays.asList(
         new Schema.Field("precombine", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
@@ -886,7 +887,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
     );
     fullSchema.setFields(fields);
-    return fullSchema;
+    return HoodieSchema.fromAvroSchema(fullSchema);
   }
 
   static class DummyRecordContext extends RecordContext<InternalRow> {
@@ -962,7 +963,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     public Schema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
       int id = record.getSchemaId();
       if (id >= 1 && id <= SCHEMAS.size()) {
-        return SCHEMAS.get(id - 1);
+        return SCHEMAS.get(id - 1).toAvroSchema();
       } else {
         throw new RuntimeException("Schema id is illegal: " + id);
       }

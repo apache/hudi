@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.client.SecondaryIndexStats;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -65,7 +67,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -89,6 +90,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -143,7 +145,7 @@ public class TestMergeHandle extends BaseTestHandle {
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     if (!useFileGroupReader) {
       // legacy merge handle expects HoodieAvroPayload
-      DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), AVRO_SCHEMA).withReaderSchema(AVRO_SCHEMA);
+      DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), HOODIE_SCHEMA.getAvroSchema()).withReaderSchema(HOODIE_SCHEMA.getAvroSchema());
       newRecords = newRecords.stream()
           .map(avroIndexedRecord -> {
             HoodieRecord hoodieRecord = new HoodieAvroRecord<>(avroIndexedRecord.getKey(), new DefaultHoodieRecordPayload(Option.of((GenericRecord) avroIndexedRecord.getData())),
@@ -257,9 +259,9 @@ public class TestMergeHandle extends BaseTestHandle {
 
     AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
     String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
-    Schema cdcSchema = schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, AVRO_SCHEMA);
-    int recordKeyFieldIndex = cdcSchema.getField("record_key").pos();
-    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(cdcFilePath), cdcSchema)) {
+    HoodieSchema cdcSchema = HoodieSchema.fromAvroSchema(schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, AVRO_SCHEMA));
+    int recordKeyFieldIndex = cdcSchema.getField("record_key").get().pos();
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(cdcFilePath), cdcSchema.getAvroSchema())) {
       while (reader.hasNext()) {
         HoodieLogBlock logBlock = reader.next();
         if (logBlock instanceof HoodieDataBlock) {
@@ -362,7 +364,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     for (Map.Entry<String, HoodieRecord> entry : inputAndExpectedDataSet.getExpectedRecordsMap().entrySet()) {
       assertTrue(actualRecordsMap.containsKey(entry.getKey()));
-      GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) entry.getValue().getData()).getInsertValue(AVRO_SCHEMA, properties).get();
+      GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) entry.getValue().getData()).getInsertValue(HOODIE_SCHEMA.getAvroSchema(), properties).get();
       assertEquals(genericRecord.get(ORDERING_FIELD).toString(), actualRecordsMap.get(entry.getKey()).get(ORDERING_FIELD).toString());
     }
 
@@ -382,7 +384,7 @@ public class TestMergeHandle extends BaseTestHandle {
     // validate event time metadata if enabled
     if (validateEventTimeMetadata) {
       List<HoodieRecord> records = new ArrayList<>(inputAndExpectedDataSet.getExpectedRecordsMap().values());
-      validateEventTimeMetadata(writeStatus, writerProps.get("hoodie.payload.event.time.field").toString(), AVRO_SCHEMA, config, properties, records);
+      validateEventTimeMetadata(writeStatus, writerProps.get("hoodie.payload.event.time.field").toString(), HOODIE_SCHEMA, config, properties, records);
     } else {
       validateEventTimeMetadataNotSet(writeStatus);
     }
@@ -415,7 +417,7 @@ public class TestMergeHandle extends BaseTestHandle {
             || inputAndExpectedDataSet.getValidUpdates().stream().anyMatch(rec -> rec.getRecordKey().equals(secondaryIndexStat.getRecordKey())));
       } else {
         HoodieRecord record = inputAndExpectedDataSet.expectedRecordsMap.get(secondaryIndexStat.getRecordKey());
-        assertEquals(record.getColumnValueAsJava(AVRO_SCHEMA, "rider", properties).toString(),
+        assertEquals(record.getColumnValueAsJava(HOODIE_SCHEMA.getAvroSchema(), "rider", properties).toString(),
             secondaryIndexStat.getSecondaryKeyValue().toString());
       }
     }
@@ -426,7 +428,7 @@ public class TestMergeHandle extends BaseTestHandle {
     assertNull(writeStatus.getStat().getMaxEventTime());
   }
 
-  private void validateEventTimeMetadata(WriteStatus writeStatus, String eventTimeFieldName, Schema schema, HoodieWriteConfig config,
+  private void validateEventTimeMetadata(WriteStatus writeStatus, String eventTimeFieldName, HoodieSchema schema, HoodieWriteConfig config,
                                          TypedProperties props, List<HoodieRecord> records) {
     long actualMinEventTime = writeStatus.getStat().getMinEventTime();
     long actualMaxEventTime = writeStatus.getStat().getMaxEventTime();
@@ -437,10 +439,10 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // Append event_time.
     records.forEach(record -> {
-      Object eventTimeValue = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
+      Object eventTimeValue = record.getColumnValueAsJava(schema.getAvroSchema(), eventTimeFieldName, props);
       if (eventTimeValue != null) {
         // Append event_time.
-        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema, eventTimeFieldName);
+        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema.toAvroSchema(), eventTimeFieldName);
         // Field should definitely exist.
         eventTimeValue = record.convertColumnValueForLogicalType(
             field.get().schema(), eventTimeValue, keepConsistentLogicalTimestamp);
