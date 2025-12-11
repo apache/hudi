@@ -427,11 +427,11 @@ public class TestData {
   );
 
   public static List<RowData> DATA_SET_WITH_SPECIAL_KEY = Arrays.asList(
-      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(1), 1,
+      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(1), 1000, 1,
           DecimalData.fromBigDecimal(new BigDecimal("1.11"), 38, 18), StringData.fromString("par1")),
-      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(2), 2,
+      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(2), 2000, 2,
           DecimalData.fromBigDecimal(new BigDecimal("2.22"), 38, 18), StringData.fromString("par2")),
-      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(3), 3,
+      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(3), 3000, 3,
           DecimalData.fromBigDecimal(new BigDecimal("3.33"), 38, 18), StringData.fromString("par3")));
 
   // data types handled specifically for Hoodie Key

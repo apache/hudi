@@ -257,6 +257,7 @@ public class RecordLevelIndex implements FlinkMetadataIndex {
       default:
         break;
     }
+    // to align with the hoodie key generating logic in writer side.
     return RowDataKeyGen.getRecordKey(value, keyField, consistentLogicalTimestampEnabled);
   }
 }
