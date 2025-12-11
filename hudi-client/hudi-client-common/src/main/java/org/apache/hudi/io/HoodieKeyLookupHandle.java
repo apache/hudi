@@ -96,7 +96,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   public HoodieKeyLookupResult getLookupResult() {
     LOG.debug("#The candidate row keys for {} => {}", partitionPathFileIDPair, candidateRecordKeys);
 
-    HoodieBaseFile baseFile = getLatestBaseFile();
+    HoodieBaseFile baseFile = getLastCompletedBaseFile();
     List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
         baseFile.getStoragePath(), candidateRecordKeys, hoodieTable.getStorage());
     LOG.info("Total records ({}), bloom filter candidates ({})/fp({}), actual matches ({})", totalKeysChecked,

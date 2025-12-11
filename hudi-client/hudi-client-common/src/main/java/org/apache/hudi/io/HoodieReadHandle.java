@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -63,14 +64,20 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
     return partitionPathFileIDPair.getRight();
   }
 
-  protected HoodieBaseFile getLatestBaseFile() {
-    return hoodieTable.getBaseFileOnlyView().getBaseFileOn(partitionPathFileIDPair.getLeft(), instantTime, partitionPathFileIDPair.getRight()).get();
+  /**
+   * Fetches the latest base file that belongs to a completed commit.
+   * It is important to note that simply calling getLatestBaseFile can return an empty base file if there is an in-flight compaction.
+   * @return the last completed base file as of the provided instant.
+   */
+  protected HoodieBaseFile getLastCompletedBaseFile() {
+    return hoodieTable.getSliceView().getLatestMergedFileSliceBeforeOrOn(partitionPathFileIDPair.getLeft(), instantTime, partitionPathFileIDPair.getRight())
+        .flatMap(FileSlice::getBaseFile).orElseThrow(() -> new IllegalStateException("No base file found for fileId: " + getFileId()));
   }
 
   protected HoodieFileReader createNewFileReader() throws IOException {
     return HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
         .getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, getLatestBaseFile().getStoragePath());
+        .getFileReader(config, getLastCompletedBaseFile().getStoragePath());
   }
 
   protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
