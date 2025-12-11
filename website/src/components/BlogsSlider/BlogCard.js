@@ -19,7 +19,7 @@ const BlogCard = ({ blog }) => {
 
   return (
     <div className={styles.blogsWrapper}>
-      <Link itemProp="url" to={permalink} className={styles.link}>
+      <Link itemProp="url" to={permalink} className={styles.link} target="_blank" rel="noopener noreferrer">
         <div className={styles.cardBlogs}>
           <div>
             <div className={styles.blogImgWrapper}>
