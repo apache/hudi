@@ -32,11 +32,16 @@ import org.apache.flink.table.types.logical.TimestampType;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP;
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
+import static org.apache.hudi.util.DataTypeUtils.METADATA_COLUMNS_WITH_OPERATION;
 
 /**
  * Utility for filtering the column stats metadata payloads.
@@ -75,6 +80,8 @@ public class ColumnStatsProbe implements Serializable {
 
   @Nullable
   public static ColumnStatsProbe newInstance(List<ResolvedExpression> filters) {
+    // filter columns that do not have column stats index.
+    filters = filters.stream().filter(ColumnStatsProbe::isPrunableFilter).collect(Collectors.toList());
     if (filters.isEmpty()) {
       return null;
     }
@@ -141,5 +148,13 @@ public class ColumnStatsProbe implements Serializable {
       default:
         throw new UnsupportedOperationException("Unsupported type: " + colType);
     }
+  }
+
+  /**
+   * Only the following metadata columns have column stats index:_hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path
+   */
+  private static boolean isPrunableFilter(ResolvedExpression expression) {
+    String[] refs = ExpressionUtils.referencedColumns(Collections.singletonList(expression));
+    return Arrays.stream(refs).allMatch(f -> META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP.containsKey(f) || !METADATA_COLUMNS_WITH_OPERATION.containsKey(f));
   }
 }

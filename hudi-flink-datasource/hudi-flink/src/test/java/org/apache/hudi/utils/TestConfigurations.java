@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -68,6 +69,17 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE_DECIMAL_ORDERING =
       (RowType) ROW_DATA_TYPE_DECIMAL_ORDERING.getLogicalType();
+
+  public static final ResolvedSchema TABLE_SCHEMA_WITH_META_COLUMNS =
+      SchemaBuilder.instance()
+          .metaField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.OPERATION_METADATA_FIELD, DataTypes.STRING(), true)
+          .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
+          .build();
 
   public static final ResolvedSchema TABLE_SCHEMA = SchemaBuilder.instance()
       .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())

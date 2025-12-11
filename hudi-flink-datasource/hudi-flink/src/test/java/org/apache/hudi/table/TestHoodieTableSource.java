@@ -32,11 +32,13 @@ import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -184,6 +186,41 @@ public class TestHoodieTableSource {
     HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);
     hoodieTableSource.applyFilters(filters);
     assertEquals(expectedPartitions, hoodieTableSource.getReadPartitions());
+  }
+
+  @Test
+  void testDataSkippingWithMetaColumns() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    // first insert
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+    // second insert
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+
+    HoodieTableSource hoodieTableSource = createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA_WITH_META_COLUMNS);
+    CallExpression filter1 =
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("_hoodie_commit_time", DataTypes.STRING(), 0, 5),
+                new ValueLiteralExpression(firstCommitTime, DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN());
+
+    // will be ignored during columns stats prune
+    CallExpression filter2 =
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.NOT_EQUALS,
+            Arrays.asList(
+                new FieldReferenceExpression("_hoodie_commit_seqno", DataTypes.STRING(), 0, 6),
+                new ValueLiteralExpression("test", DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN());
+
+    hoodieTableSource.applyFilters(Arrays.asList(filter1, filter2));
+    List<FileSlice> fileSlices = hoodieTableSource.getBaseFileOnlyFileSlices();
+    assertThat("There should be 2 file slices in the second insert.", fileSlices.size(), CoreMatchers.is(2));
   }
 
   @ParameterizedTest
@@ -509,8 +546,12 @@ public class TestHoodieTableSource {
   }
 
   private HoodieTableSource createHoodieTableSource(Configuration conf) {
+    return createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA);
+  }
+
+  private HoodieTableSource createHoodieTableSource(Configuration conf, ResolvedSchema resolvedSchema) {
     return new HoodieTableSource(
-        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        SerializableSchema.create(resolvedSchema),
         new StoragePath(conf.get(FlinkOptions.PATH)),
         Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
