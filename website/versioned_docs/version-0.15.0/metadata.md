@@ -134,7 +134,7 @@ from different engines as shown below:
 |----------------------------------------------------------------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | <ul><li>Spark DataSource</li><li>Spark SQL</li><li>Strucured Streaming</li></ul> | hoodie.metadata.enable | When set to `true` enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.<br /> |
 |Presto| [hudi.metadata-table-enabled](https://prestodb.io/docs/current/connector/hudi.html)             | When set to `true` fetches the list of file names and sizes from Hudi’s metadata table rather than storage.                   |
-|Trino| N/A | Support for reading from the metadata table [has been dropped in Trino 419](https://issues.apache.org/jira/browse/HUDI-7020). |
+|Trino| N/A | Support for reading from the metadata table [has been dropped in Trino 419](https://github.com/apache/hudi/issues/16286). |
 |Athena| [hudi.metadata-listing-enabled](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) | When this table property is set to `TRUE` enables the Hudi metadata table and the related file listing functionality          |
 |<ul><li>Flink DataStream</li><li>Flink SQL</li></ul> | metadata.enabled | When set to `true` from DDL uses the internal metadata table to serves table metadata like level file listings                |
 

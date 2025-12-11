@@ -14,14 +14,12 @@ and bring out the different tradeoffs these systems have accepted in their desig
 class support for `upserts`. A key differentiator is that Kudu also attempts to serve as a datastore for OLTP workloads, something that Hudi does not aspire to be.
 Consequently, Kudu does not support incremental pulling (as of early 2017), something Hudi does to enable incremental processing use cases.
 
-
 Kudu diverges from a distributed file system abstraction and HDFS altogether, with its own set of storage servers talking to each  other via RAFT.
 Hudi, on the other hand, is designed to work with an underlying Hadoop compatible filesystem (HDFS,S3 or Ceph) and does not have its own fleet of storage servers,
 instead relying on Apache Spark to do the heavy-lifting. Thus, Hudi can be scaled easily, just like other Spark jobs, while Kudu would require hardware
 & operational support, typical to datastores like HBase or Vertica. We have not at this point, done any head to head benchmarks against Kudu (given RTTable is WIP).
 But, if we were to go with results shared by [CERN](https://db-blog.web.cern.ch/blog/zbigniew-baranowski/2017-01-performance-comparison-different-file-formats-and-storage-engines) ,
 we expect Hudi to positioned at something that ingests parquet with superior performance.
-
 
 ## Hive Transactions
 
@@ -53,4 +51,4 @@ of PrestoDB/SparkSQL/Hive for your queries.
 More advanced use cases revolve around the concepts of [incremental processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop), which effectively
 uses Hudi even inside the `processing` engine to speed up typical batch pipelines. For e.g: Hudi can be used as a state store inside a processing DAG (similar
 to how [rocksDB](https://ci.apache.org/projects/flink/flink-docs-release-1.2/ops/state_backends.html#the-rocksdbstatebackend) is used by Flink). This is an item on the roadmap
-and will eventually happen as a [Beam Runner](https://issues.apache.org/jira/browse/HUDI-60)
+and will eventually happen as a [Beam Runner](https://github.com/apache/hudi/issues/14452)
