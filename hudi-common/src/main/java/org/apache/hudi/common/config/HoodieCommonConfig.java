@@ -63,7 +63,7 @@ public class HoodieCommonConfig extends HoodieConfig {
   @Deprecated
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .deprecatedAfter("0.14.1")
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
