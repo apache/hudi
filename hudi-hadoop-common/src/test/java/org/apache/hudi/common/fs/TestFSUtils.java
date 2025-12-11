@@ -183,7 +183,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String instantTime = TimelineUtils.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName, HoodieCommonTestHarness.BASE_FILE_EXTENSION);
-    assertEquals(fileName, FSUtils.getFileId(fullFileName));
+    assertEquals(fileName, FSUtils.getFileIdFromFileName(fullFileName));
   }
 
   @Test
@@ -378,7 +378,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // data file name
     String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, HoodieCommonTestHarness.BASE_FILE_EXTENSION);
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
-    assertEquals(fileId, FSUtils.getFileId(dataFileName));
+    assertEquals(fileId, FSUtils.getFileIdFromFileName(dataFileName));
 
     String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new StoragePath(logFileName)));
