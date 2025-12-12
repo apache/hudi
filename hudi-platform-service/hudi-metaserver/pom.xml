@@ -36,7 +36,7 @@
         <!-- Thrift related properties -->
         <thrift.home>/usr/local</thrift.home>
         <thrift.install.env>docker</thrift.install.env>
-        <maven-thrift-plugin.version>0.1.11</maven-thrift-plugin.version>
+        <maven-thrift-plugin.version>0.10.0</maven-thrift-plugin.version>
     </properties>
 
     <modules>
