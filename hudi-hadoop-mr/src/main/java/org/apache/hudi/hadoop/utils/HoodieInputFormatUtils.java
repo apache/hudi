@@ -525,7 +525,7 @@ public class HoodieInputFormatUtils {
     } else {
       Path inputPath = ((FileSplit) split).getPath();
       HoodieStorage storage = HoodieStorageUtils.getStorage(
-              new StoragePath(inputPath.toUri()), HadoopFSUtils.getStorageConf(jobConf));
+              convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(jobConf));
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return tablePath.get().toString();
     }
