@@ -53,6 +53,7 @@ elif [[ -n "$MAVEN_BASE_URL" ]]; then
   echo "Downloading bundle jars from maven central - $REPO_BASE_URL ..."
 fi
 
+REPO=apachehudi
 # choose versions based on build profiles
 if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
   HADOOP_VERSION=2.7.7
