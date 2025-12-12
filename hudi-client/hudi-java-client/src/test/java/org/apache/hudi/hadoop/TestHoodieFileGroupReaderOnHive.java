@@ -121,7 +121,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     List<HoodieSchemaField> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
     try {
-      String columnTypes = HiveTypeUtils.generateColumnTypes(schema.toAvroSchema()).stream().map(TypeInfo::getTypeName).collect(Collectors.joining(","));
+      String columnTypes = HiveTypeUtils.generateColumnTypes(schema).stream().map(TypeInfo::getTypeName).collect(Collectors.joining(","));
       jobConf.set("columns.types", columnTypes + ",string");
     } catch (SerDeException e) {
       throw new RuntimeException(e);

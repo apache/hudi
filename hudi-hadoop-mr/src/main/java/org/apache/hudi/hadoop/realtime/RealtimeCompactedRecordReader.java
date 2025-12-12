@@ -218,7 +218,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   }
 
   private GenericRecord convertArrayWritableToHoodieRecord(ArrayWritable arrayWritable) {
-    GenericRecord record = serializer.serialize(arrayWritable, getHiveSchema().toAvroSchema());
+    GenericRecord record = serializer.serialize(arrayWritable, getHiveSchema());
     return record;
   }
 

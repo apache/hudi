@@ -80,14 +80,14 @@ public class TestHoodieArrayWritableSchemaUtils {
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
     ArrayWritable record = convertArrayWritable(dataGen.generateGenericRecord());
-    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from.toAvroSchema());
+    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from);
     Object tripType = fromSerializer.getValue(record, "trip_type");
     Object currentTs = fromSerializer.getValue(record, "current_ts");
     Object weight = fromSerializer.getValue(record, "weight");
 
     //Make sure the projected fields can be read
     ArrayWritable projectedRecord = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, from, to, Collections.emptyMap());
-    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to.toAvroSchema());
+    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to);
     assertEquals(tripType, toSerializer.getValue(projectedRecord, "trip_type"));
     assertEquals(currentTs, toSerializer.getValue(projectedRecord, "current_ts"));
     assertEquals(weight, toSerializer.getValue(projectedRecord, "weight"));
@@ -320,8 +320,8 @@ public class TestHoodieArrayWritableSchemaUtils {
       Writable newWritable,
       HoodieSchema newSchema
   ) throws AvroSerdeException {
-    TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema.toAvroSchema(), Collections.emptySet());
-    TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema.toAvroSchema(), Collections.emptySet());
+    TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema, Collections.emptySet());
+    TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema, Collections.emptySet());
 
     ObjectInspector oldObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(oldTypeInfo);
     ObjectInspector newObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(newTypeInfo);

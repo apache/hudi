@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
@@ -32,7 +33,6 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -70,22 +70,20 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
-    Schema currentSchema = record.getSchema();
+    HoodieSchema currentSchema = HoodieSchema.fromAvroSchema(record.getSchema());
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
-      if (currentSchema.isUnion()) {
-        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
-      }
-      Schema.Field field = currentSchema.getField(path[i]);
-      if (field == null) {
+      currentSchema = currentSchema.getNonNullType();
+      Option<HoodieSchemaField> fieldOpt = currentSchema.getField(path[i]);
+      if (fieldOpt.isEmpty()) {
         return null;
       }
-      Object value = currentRecord.get(field.pos());
+      Object value = currentRecord.get(fieldOpt.get().pos());
       if (i == path.length - 1) {
         return value;
       }
-      currentSchema = field.schema();
+      currentSchema = fieldOpt.get().schema();
       currentRecord = (IndexedRecord) value;
     }
     return null;

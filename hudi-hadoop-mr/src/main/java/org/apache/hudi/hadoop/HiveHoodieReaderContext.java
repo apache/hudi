@@ -101,7 +101,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
     List<TypeInfo> columnTypes;
     try {
-      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema.toAvroSchema());
+      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema);
     } catch (AvroSerdeException e) {
       throw new HoodieAvroSchemaException(String.format("Failed to generate hive column types from schema: %s, due to %s", dataSchema, e));
     }
