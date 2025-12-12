@@ -6,7 +6,6 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.14.0](https://github.com/apache/hudi/releases/tag/release-0.14.0)
 Apache Hudi 0.14.0 marks a significant milestone with a range of new functionalities and enhancements. 
 These include the introduction of Record Level Index, automatic generation of record keys, the `hudi_table_changes` 
 function for incremental reads, and more. Notably, this release also incorporates support for Spark 3.4. On the Flink 
