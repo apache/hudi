@@ -53,7 +53,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-import static org.apache.hudi.common.util.FileIOUtils.readAsByteArray;
+import static org.apache.hudi.io.util.FileIOUtils.readAsByteArray;
 import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 import static org.apache.hudi.io.util.IOUtils.toBytes;

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 

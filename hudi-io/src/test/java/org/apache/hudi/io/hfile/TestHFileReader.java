@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.FileIOUtils.readAsByteArray;
+import static org.apache.hudi.io.util.FileIOUtils.readAsByteArray;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_FILE_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_EOF;

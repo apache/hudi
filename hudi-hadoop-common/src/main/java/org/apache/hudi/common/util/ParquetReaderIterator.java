@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import org.apache.parquet.hadoop.ParquetReader;
 
@@ -50,7 +51,7 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
       }
       return this.next != null;
     } catch (Exception e) {
-      FileIOUtils.closeQuietly(parquetReader);
+      org.apache.hudi.io.util.FileIOUtils.closeQuietly(parquetReader);
       throw new HoodieException("unable to read next record from parquet file ", e);
     }
   }
