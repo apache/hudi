@@ -29,6 +29,7 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <maven.javadoc.skip>true</maven.javadoc.skip>
   </properties>
 
   <build>
