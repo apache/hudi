@@ -59,7 +59,7 @@ import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -183,8 +183,8 @@ public class HoodieTestSuiteJob {
       System.exit(1);
     }
 
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContextWithHiveSync("workload-generator-" + cfg.outputTypeName
+        + "-" + cfg.inputFormatName, cfg.sparkMaster, new HashMap<>());
     new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 
