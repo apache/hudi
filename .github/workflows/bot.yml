@@ -1020,15 +1020,6 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8
-      - name: IT - Bundle Validation - OpenJDK 11
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
         env:

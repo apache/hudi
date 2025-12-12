@@ -20,7 +20,6 @@
 SPARK_PROFILE=$1
 SCALA_PROFILE=$2
 JAVA_RUNTIME_VERSION=openjdk17
-DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 DOCKER_TEST_DIR=${WORKDIR}/docker-test
@@ -42,8 +41,8 @@ change_java_runtime_version () {
 # Function to change Java runtime version to default Java 8
 ##
 use_default_java_runtime () {
-  echo "Use default java runtime under ${DEFAULT_JAVA_HOME}"
-  export JAVA_HOME=${DEFAULT_JAVA_HOME}
+  echo "Change JAVA_HOME to /usr/lib/jvm/java-11-openjdk}"
+  export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
 }
 
 start_datanode () {
