@@ -86,7 +86,6 @@ import org.apache.spark.sql.SparkSessionExtensions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -622,11 +621,11 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
-    fileGroups.forEach(g -> LoggerFactory.getLogger(getClass()).info(g.toString()));
+    fileGroups.forEach(g -> log.info(g.toString()));
     fileGroups.forEach(g -> g.getAllBaseFiles()
-        .forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
+        .forEach(b -> log.info(b.toString())));
     fileGroups.forEach(g -> g.getAllFileSlices()
-        .forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
+        .forEach(s -> log.info(s.toString())));
 
     long numFiles = fileGroups.stream()
         .mapToLong(g -> g.getAllBaseFiles().count()

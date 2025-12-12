@@ -19,9 +19,7 @@
 package org.apache.hudi.client;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.Data;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.Serializable;
@@ -33,9 +31,7 @@ import java.util.Map;
  * Result of a write operation.
  */
 @AllArgsConstructor
-@Getter
-@Setter
-@ToString
+@Data
 public class HoodieWriteResult implements Serializable {
 
   private JavaRDD<WriteStatus> writeStatuses;
