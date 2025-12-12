@@ -4,10 +4,23 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 10 Dec 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 12 Dec 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[From Batch to Streaming: Accelerating Data Freshness in Uber's Data Lake]]></title>
+            <link>https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake</link>
+            <guid>https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake</guid>
+            <pubDate>Fri, 12 Dec 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.uber.com/blog/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake/">here</a></span>]]></content:encoded>
+            <category>streaming</category>
+            <category>apache flink</category>
+            <category>datalake</category>
+            <category>apache hudi</category>
+            <category>uber</category>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi 1.1 Deep Dive: Optimizing Streaming Ingestion with Apache Flink]]></title>
             <link>https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink</link>
@@ -1200,20 +1213,6 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <category>Lakehouse</category>
             <category>use-case</category>
             <category>Uber</category>
-            <category>det</category>
-        </item>
-        <item>
-            <title><![CDATA[Lakehouse Architecture - Apache Hudi and Apache Iceberg]]></title>
-            <link>https://hudi.apache.org/blog/2025/07/02/Lakehouse-Architecture-apache-hudi-and-apache-iceberg</link>
-            <guid>https://hudi.apache.org/blog/2025/07/02/Lakehouse-Architecture-apache-hudi-and-apache-iceberg</guid>
-            <pubDate>Wed, 02 Jul 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/lakehouse-architecture-apache-hudi-iceberg-becloudready-4b1ac/">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>Apache Iceberg</category>
-            <category>Lakehouse</category>
-            <category>use-case</category>
             <category>det</category>
         </item>
     </channel>

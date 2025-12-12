@@ -2,11 +2,27 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2025-12-10T00:00:00.000Z</updated>
+    <updated>2025-12-12T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[From Batch to Streaming: Accelerating Data Freshness in Uber's Data Lake]]></title>
+        <id>https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake</id>
+        <link href="https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake"/>
+        <updated>2025-12-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.uber.com/blog/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake/">here</a></span>]]></content>
+        <author>
+            <name>Uber Engineering</name>
+        </author>
+        <category label="streaming" term="streaming"/>
+        <category label="apache flink" term="apache flink"/>
+        <category label="datalake" term="datalake"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="uber" term="uber"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 1.1 Deep Dive: Optimizing Streaming Ingestion with Apache Flink]]></title>
         <id>https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink</id>
@@ -1256,23 +1272,6 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <category label="Lakehouse" term="Lakehouse"/>
         <category label="use-case" term="use-case"/>
         <category label="Uber" term="Uber"/>
-        <category label="det" term="det"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Lakehouse Architecture - Apache Hudi and Apache Iceberg]]></title>
-        <id>https://hudi.apache.org/blog/2025/07/02/Lakehouse-Architecture-apache-hudi-and-apache-iceberg</id>
-        <link href="https://hudi.apache.org/blog/2025/07/02/Lakehouse-Architecture-apache-hudi-and-apache-iceberg"/>
-        <updated>2025-07-02T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/lakehouse-architecture-apache-hudi-iceberg-becloudready-4b1ac/">here</a></span>]]></content>
-        <author>
-            <name>beCloudReady</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Iceberg" term="Apache Iceberg"/>
-        <category label="Lakehouse" term="Lakehouse"/>
-        <category label="use-case" term="use-case"/>
         <category label="det" term="det"/>
     </entry>
 </feed>
