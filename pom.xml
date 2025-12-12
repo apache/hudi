@@ -93,7 +93,7 @@
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
 
-    <java.version>8</java.version>
+    <java.version>11</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
@@ -545,7 +545,12 @@
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
+            <source>${java.version}</source>
+            <target>${java.version}</target>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+            <args>
+              <arg>-nobootcp</arg>
+            </args>
           </configuration>
         </plugin>
         <plugin>

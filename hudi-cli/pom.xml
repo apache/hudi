@@ -39,21 +39,6 @@
         <filtering>true</filtering>
       </resource>
     </resources>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <groupId>net.alchim31.maven</groupId>
-          <artifactId>scala-maven-plugin</artifactId>
-          <version>${scala-maven-plugin.version}</version>
-          <configuration>
-            <args>
-              <arg>-nobootcp</arg>
-            </args>
-            <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
-          </configuration>
-        </plugin>
-      </plugins>
-    </pluginManagement>
 
     <plugins>
       <plugin>
