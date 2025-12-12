@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.io;
 
+import org.apache.hudi.io.ByteBufferBackedInputStream;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -27,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests {@link ByteBufferBackedInputStream}.
+ * Tests {@link org.apache.hudi.io.ByteBufferBackedInputStream}.
  */
 public class TestByteBufferBackedInputStream {
 
@@ -38,7 +40,7 @@ public class TestByteBufferBackedInputStream {
     ByteBuffer byteBufClone = byteBuf.duplicate();
 
     // ByteBuffer ctor
-    ByteBufferBackedInputStream first = new ByteBufferBackedInputStream(byteBuf);
+    org.apache.hudi.io.ByteBufferBackedInputStream first = new org.apache.hudi.io.ByteBufferBackedInputStream(byteBuf);
 
     assertEquals(first.read(), 0xD);
     assertThrows(IllegalArgumentException.class, first::read);
@@ -46,12 +48,12 @@ public class TestByteBufferBackedInputStream {
     assertEquals(byteBufClone, byteBuf);
 
     // byte[] ctor
-    ByteBufferBackedInputStream second = new ByteBufferBackedInputStream(bytes);
+    org.apache.hudi.io.ByteBufferBackedInputStream second = new org.apache.hudi.io.ByteBufferBackedInputStream(bytes);
 
     assertEquals(second.read(), 0xD);
 
     // byte[] ctor (w/ offset)
-    ByteBufferBackedInputStream third = new ByteBufferBackedInputStream(bytes, 1, 1);
+    org.apache.hudi.io.ByteBufferBackedInputStream third = new org.apache.hudi.io.ByteBufferBackedInputStream(bytes, 1, 1);
 
     assertEquals(third.read(), 0xE);
     assertThrows(IllegalArgumentException.class, third::read);
@@ -61,7 +63,7 @@ public class TestByteBufferBackedInputStream {
   public void testRead() {
     byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xE, 0xE, 0xD };
 
-    ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
+    org.apache.hudi.io.ByteBufferBackedInputStream stream = new org.apache.hudi.io.ByteBufferBackedInputStream(sourceBytes);
 
     int firstByte = stream.read();
     assertEquals(firstByte, 0xD);
@@ -78,7 +80,7 @@ public class TestByteBufferBackedInputStream {
   public void testSeek() {
     byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
 
-    ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes, 1, 7);
+    org.apache.hudi.io.ByteBufferBackedInputStream stream = new org.apache.hudi.io.ByteBufferBackedInputStream(sourceBytes, 1, 7);
 
     // Seek to 2 byte in the stream (3 in the original buffer)
     stream.seek(1);
@@ -98,7 +100,7 @@ public class TestByteBufferBackedInputStream {
   public void testCopyFrom() {
     byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
 
-    ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
+    org.apache.hudi.io.ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
 
     int firstByte = stream.read();
     assertEquals(firstByte, 0xD);

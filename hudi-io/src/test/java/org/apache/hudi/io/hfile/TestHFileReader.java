@@ -20,7 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 
 import org.junit.jupiter.api.Test;
