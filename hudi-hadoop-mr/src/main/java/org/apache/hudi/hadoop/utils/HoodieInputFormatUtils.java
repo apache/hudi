@@ -131,12 +131,6 @@ public class HoodieInputFormatUtils {
   }
 
   public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, boolean usePreApacheFormat) {
-    if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && usePreApacheFormat) {
-      // Parquet input format had an InputFormat class visible under the old naming scheme.
-      return realtime
-          ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
-          : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
-    }
     return getInputFormatClassName(baseFileFormat, realtime);
   }
 
