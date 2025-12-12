@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.common.schema.HoodieSchema
+
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
@@ -49,13 +51,13 @@ import scala.collection.JavaConverters._
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroDeserializer(rootAvroType: Schema,
+private[sql] class AvroDeserializer(rootAvroType: HoodieSchema,
                                     rootCatalystType: DataType,
                                     positionalFieldMatch: Boolean,
                                     datetimeRebaseSpec: RebaseSpec,
                                     filters: StructFilters) {
 
-  def this(rootAvroType: Schema,
+  def this(rootAvroType: HoodieSchema,
            rootCatalystType: DataType,
            datetimeRebaseMode: String) = {
     this(
@@ -82,7 +84,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         val resultRow = new SpecificInternalRow(st.map(_.dataType))
         val fieldUpdater = new RowUpdater(resultRow)
         val applyFilters = filters.skipRow(resultRow, _)
-        val writer = getRecordWriter(rootAvroType, st, Nil, Nil, applyFilters)
+        val writer = getRecordWriter(rootAvroType.toAvroSchema, st, Nil, Nil, applyFilters)
         (data: Any) => {
           val record = data.asInstanceOf[GenericRecord]
           val skipRow = writer(fieldUpdater, record)
@@ -92,7 +94,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
       case _ =>
         val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
         val fieldUpdater = new RowUpdater(tmpRow)
-        val writer = newWriter(rootAvroType, rootCatalystType, Nil, Nil)
+        val writer = newWriter(rootAvroType.toAvroSchema, rootCatalystType, Nil, Nil)
         (data: Any) => {
           writer(fieldUpdater, 0, data)
           Some(tmpRow.get(0, rootCatalystType))

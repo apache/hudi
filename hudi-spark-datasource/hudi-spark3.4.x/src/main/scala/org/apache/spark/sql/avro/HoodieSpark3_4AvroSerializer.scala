@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.Schema
 import org.apache.hudi.common.schema.HoodieSchema
+
 import org.apache.spark.sql.types.DataType
 
 class HoodieSpark3_4AvroSerializer(rootCatalystType: DataType, rootAvroType: HoodieSchema, nullable: Boolean)

@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.common.schema.HoodieSchema
+
 import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
@@ -54,13 +56,13 @@ import scala.collection.JavaConverters._
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroSerializer(rootCatalystType: DataType,
-                                  rootAvroType: Schema,
+                                  rootHoodieType: HoodieSchema,
                                   nullable: Boolean,
                                   positionalFieldMatch: Boolean,
                                   datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
 
-  def this(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) = {
-    this(rootCatalystType, rootAvroType, nullable, positionalFieldMatch = false,
+  def this(rootCatalystType: DataType, rootHoodieType: HoodieSchema, nullable: Boolean) = {
+    this(rootCatalystType, rootHoodieType, nullable, positionalFieldMatch = false,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE,
         LegacyBehaviorPolicy.CORRECTED.toString)))
   }
@@ -76,7 +78,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     datetimeRebaseMode, "Avro")
 
   private val converter: Any => Any = {
-    val actualAvroType = resolveNullableType(rootAvroType, nullable)
+    val actualAvroType = resolveNullableType(rootHoodieType.toAvroSchema, nullable)
     val baseConverter = try {
       rootCatalystType match {
         case st: StructType =>
@@ -90,7 +92,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       }
     } catch {
       case ise: IncompatibleSchemaException => throw new IncompatibleSchemaException(
-        s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootAvroType.", ise)
+        s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootHoodieType.", ise)
     }
     if (nullable) {
       (data: Any) =>
