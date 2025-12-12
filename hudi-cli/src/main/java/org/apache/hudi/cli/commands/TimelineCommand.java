@@ -43,10 +43,11 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -62,8 +63,10 @@ import java.util.stream.Stream;
 @Slf4j
 public class TimelineCommand {
 
-  private static final SimpleDateFormat DATE_FORMAT_DEFAULT = new SimpleDateFormat("MM-dd HH:mm");
-  private static final SimpleDateFormat DATE_FORMAT_SECONDS = new SimpleDateFormat("MM-dd HH:mm:ss");
+  private static final DateTimeFormatter DATE_FORMAT_DEFAULT = DateTimeFormatter.ofPattern("MM-dd HH:mm")
+      .withZone(ZoneId.systemDefault());
+  private static final DateTimeFormatter DATE_FORMAT_SECONDS = DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")
+      .withZone(ZoneId.systemDefault());
 
   @ShellMethod(key = "timeline show active", value = "List all instants in active timeline")
   public String showActive(
@@ -93,7 +96,7 @@ public class TimelineCommand {
           getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
     } catch (IOException e) {
-      e.printStackTrace();
+      log.error("Error showing active timeline", e);
       return e.getMessage();
     }
   }
@@ -116,7 +119,7 @@ public class TimelineCommand {
           getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
     } catch (IOException e) {
-      e.printStackTrace();
+      log.error("Error showing incomplete timeline", e);
       return e.getMessage();
     }
   }
@@ -138,7 +141,7 @@ public class TimelineCommand {
           getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, false);
     } catch (IOException e) {
-      e.printStackTrace();
+      log.error("Error showing metadata table active timeline", e);
       return e.getMessage();
     }
   }
@@ -160,7 +163,7 @@ public class TimelineCommand {
           getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, false);
     } catch (IOException e) {
-      e.printStackTrace();
+      log.error("Error showing metadata table incomplete timeline", e);
       return e.getMessage();
     }
   }
@@ -203,8 +206,8 @@ public class TimelineCommand {
     if (mapping != null && mapping.containsKey(state)) {
       timeMs = mapping.get(state).getModificationTime();
     }
-    SimpleDateFormat sdf = showTimeSeconds ? DATE_FORMAT_SECONDS : DATE_FORMAT_DEFAULT;
-    return timeMs != null ? sdf.format(new Date(timeMs)) : "-";
+    DateTimeFormatter formatter = showTimeSeconds ? DATE_FORMAT_SECONDS : DATE_FORMAT_DEFAULT;
+    return timeMs != null ? formatter.format(Instant.ofEpochMilli(timeMs)) : "-";
   }
 
   private String printTimelineInfo(
@@ -314,8 +317,7 @@ public class TimelineCommand {
         return String.join(",", metadata.getCommitsRollback());
       }
     } catch (IOException e) {
-      log.error(String.format("Error reading rollback info of %s", instant));
-      e.printStackTrace();
+      log.error("Error reading rollback info of {}", instant, e);
       return "-";
     }
   }
@@ -341,8 +343,7 @@ public class TimelineCommand {
           });
         }
       } catch (IOException e) {
-        log.error(String.format("Error reading rollback info of %s", rollbackInstant));
-        e.printStackTrace();
+        log.error("Error reading rollback info of {}", rollbackInstant, e);
       }
     });
     return rollbackInfoMap;
