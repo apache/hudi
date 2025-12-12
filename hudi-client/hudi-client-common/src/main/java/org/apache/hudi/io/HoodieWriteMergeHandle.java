@@ -242,10 +242,6 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  public boolean isEmptyNewRecords() {
-    return keyToNewRecords.isEmpty();
-  }
-
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema) throws IOException {
     boolean isDelete = false;
     if (oldRecord.getData() != combineRecord.getData()) {

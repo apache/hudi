@@ -47,6 +47,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.column.statistics.Statistics;
+import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -86,6 +87,8 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS;
 
 /**
  * Utility functions involving with parquet.
@@ -109,12 +112,20 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   public static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath) {
+    return readMetadata(storage, parquetFilePath, NO_FILTER);
+  }
+
+  public static ParquetMetadata readFileMetadataOnly(HoodieStorage storage, StoragePath parquetFilePath) {
+    return readMetadata(storage, parquetFilePath, SKIP_ROW_GROUPS);
+  }
+
+  private static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath, ParquetMetadataConverter.MetadataFilter metadataFilter) {
     Path parquetFileHadoopPath = new Path(parquetFilePath.toUri());
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
       footer = ParquetFileReader.readFooter(storage.newInstance(
-          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
+          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath, metadataFilter);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
@@ -233,7 +244,7 @@ public class ParquetUtils extends FileFormatUtils {
    * Get the schema of the given parquet file.
    */
   public MessageType readSchema(HoodieStorage storage, StoragePath parquetFilePath) {
-    return readMetadata(storage, parquetFilePath).getFileMetaData().getSchema();
+    return readFileMetadataOnly(storage, parquetFilePath).getFileMetaData().getSchema();
   }
   
   /**
@@ -255,7 +266,7 @@ public class ParquetUtils extends FileFormatUtils {
   public Map<String, String> readFooter(HoodieStorage storage, boolean required,
                                         StoragePath filePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
-    ParquetMetadata footer = readMetadata(storage, filePath);
+    ParquetMetadata footer = readFileMetadataOnly(storage, filePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
     for (String footerName : footerNames) {
       if (metadata.containsKey(footerName)) {

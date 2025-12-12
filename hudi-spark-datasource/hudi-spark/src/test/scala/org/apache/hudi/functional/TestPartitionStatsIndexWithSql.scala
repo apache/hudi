@@ -213,120 +213,126 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
          """.stripMargin
         )
         // set small file limit to 0 and parquet max file size to 1 so that each insert creates a new file
-        spark.sql("set hoodie.parquet.small.file.limit=0")
-        spark.sql("set hoodie.parquet.max.file.size=1")
-        // insert data in below pattern so that multiple records for 'texas' and 'california' partition are in same file
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values (1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K','san_francisco','california'), (1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-F','driver-M','sunnyvale','california')
-             | """.stripMargin
-        )
-        spark.sql(s"INSERT INTO $tableName VALUES (1695332066,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-B','driver-L','new york city','new york')")
-        spark.sql(s"INSERT INTO $tableName VALUES (1695516137,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-D','driver-M','princeton','new jersey')")
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values
-             | (1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-C','driver-P','houston','texas'),
-             | (1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O','austin','texas'),
-             | (1695516138,'e3cf430c-889d-4015-bc98-59bdce1e530d','rider-C','driver-P','houston','texas')
-             | """.stripMargin
-        )
+        withSQLConf(
+          "hoodie.parquet.small.file.limit" -> "0",
+          "hoodie.parquet.max.file.size" -> "1"
+        ) {
+          // insert data in below pattern so that multiple records for 'texas' and 'california' partition are in same file
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K','san_francisco','california'), (1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-F','driver-M','sunnyvale','california')
+               | """.stripMargin
+          )
+          spark.sql(s"INSERT INTO $tableName VALUES (1695332066,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-B','driver-L','new york city','new york')")
+          spark.sql(s"INSERT INTO $tableName VALUES (1695516137,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-D','driver-M','princeton','new jersey')")
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values
+               | (1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-C','driver-P','houston','texas'),
+               | (1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O','austin','texas'),
+               | (1695516138,'e3cf430c-889d-4015-bc98-59bdce1e530d','rider-C','driver-P','houston','texas')
+               | """.stripMargin
+          )
 
-        // Validate partition_stats index exists
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assertResult(tableName)(metaClient.getTableConfig.getTableName)
-        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
-        val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> metaClient.getBasePath.toString))
-        // list files and group by partition
-        val partitionFiles = fileIndex.listFiles(Seq.empty, Seq.empty).map(dir => (dir.values, dir.files))
-          .flatMap(p => p._2.map(f => (p._1, f))).groupBy(f => f._1)
-        // Make sure there are partition(s) with a single file and multiple files
-        assertTrue(partitionFiles.exists(p => p._2.size == 1) && partitionFiles.exists(p => p._2.size > 1))
+          // Validate partition_stats index exists
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(tablePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assertResult(tableName)(metaClient.getTableConfig.getTableName)
+          assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+          val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> metaClient.getBasePath.toString))
+          // list files and group by partition
+          val partitionFiles = fileIndex.listFiles(Seq.empty, Seq.empty).map(dir => (dir.values, dir.files))
+            .flatMap(p => p._2.map(f => (p._1, f))).groupBy(f => f._1)
+          // Make sure there are partition(s) with a single file and multiple files
+          assertTrue(partitionFiles.exists(p => p._2.size == 1) && partitionFiles.exists(p => p._2.size > 1))
 
-        // Test pruning
-        spark.sql("set hoodie.metadata.enable=true")
-        spark.sql("set hoodie.enable.data.skipping=true")
-        spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-        checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-D'")(
-          Seq("1dced545-862b-4ceb-8b43-d2a568f6616b", "rider-E", "austin", "texas"),
-          Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california")
-        )
+          // Test pruning
+          withSQLConf(
+            "hoodie.metadata.enable" -> "true",
+            "hoodie.enable.data.skipping" -> "true",
+            "hoodie.fileIndex.dataSkippingFailureMode" -> "strict"
+          ) {
+            checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-D'")(
+              Seq("1dced545-862b-4ceb-8b43-d2a568f6616b", "rider-E", "austin", "texas"),
+              Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california")
+            )
 
-        verifyFilePruning(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = true)
-        // Include an isNotNull check
-        verifyFilePruningExpressions(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          Seq(IsNotNull(AttributeReference("rider", StringType)()), GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D"))),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = true)
-        // if we predicate on a col which is not indexed, we expect full scan.
-        verifyFilePruning(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O")),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = false)
+            verifyFilePruning(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = true)
+            // Include an isNotNull check
+            verifyFilePruningExpressions(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              Seq(IsNotNull(AttributeReference("rider", StringType)()), GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D"))),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = true)
+            // if we predicate on a col which is not indexed, we expect full scan.
+            verifyFilePruning(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O")),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = false)
 
-        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `AND` operator
-        verifyFilePruning(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          And(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = true) // pruning should happen
+            // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `AND` operator
+            verifyFilePruning(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              And(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = true) // pruning should happen
 
-        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `OR` operator
-        verifyFilePruning(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          Or(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = false)
+            // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `OR` operator
+            verifyFilePruning(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              Or(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = false)
 
-        // Test predicate that does not match any partition, should scan no files
-        checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-Z'")()
-        verifyFilePruning(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-Z")),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = true,
-          isNoScanExpected = true)
-        // Test predicate that matches all partitions, will end up scanning all partitions
-        checkAnswer(s"select uuid, rider, city, state from $tableName where rider < 'rider-Z'")(
-          Seq("334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "san_francisco", "california"),
-          Seq("7a84095f-737f-40bc-b62f-6b69664712d2", "rider-B", "new york city", "new york"),
-          Seq("e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-C", "houston", "texas"),
-          Seq("e3cf430c-889d-4015-bc98-59bdce1e530d", "rider-C", "houston", "texas"),
-          Seq("3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04", "rider-D", "princeton", "new jersey"),
-          Seq("1dced545-862b-4ceb-8b43-d2a568f6616b", "rider-E", "austin", "texas"),
-          Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california")
-        )
+            // Test predicate that does not match any partition, should scan no files
+            checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-Z'")()
+            verifyFilePruning(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-Z")),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = true,
+              isNoScanExpected = true)
+            // Test predicate that matches all partitions, will end up scanning all partitions
+            checkAnswer(s"select uuid, rider, city, state from $tableName where rider < 'rider-Z'")(
+              Seq("334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "san_francisco", "california"),
+              Seq("7a84095f-737f-40bc-b62f-6b69664712d2", "rider-B", "new york city", "new york"),
+              Seq("e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-C", "houston", "texas"),
+              Seq("e3cf430c-889d-4015-bc98-59bdce1e530d", "rider-C", "houston", "texas"),
+              Seq("3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04", "rider-D", "princeton", "new jersey"),
+              Seq("1dced545-862b-4ceb-8b43-d2a568f6616b", "rider-E", "austin", "texas"),
+              Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california")
+            )
 
-        verifyFilePruning(
-          Map(
-            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-            HoodieMetadataConfig.ENABLE.key -> "true"),
-          LessThan(AttributeReference("rider", StringType)(), Literal("rider-Z")),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = false)
+            verifyFilePruning(
+              Map(
+                DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+                HoodieMetadataConfig.ENABLE.key -> "true"),
+              LessThan(AttributeReference("rider", StringType)(), Literal("rider-Z")),
+              HoodieTableMetaClient.reload(metaClient),
+              isDataSkippingExpected = false)
+          }
+        }
       }
     }
   }
@@ -515,33 +521,39 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
       // schedule compaction
       spark.sql(s"refresh table $tableName")
-      spark.sql("set hoodie.compact.inline=false")
-      spark.sql("set hoodie.compact.inline.max.delta.commits=2")
-      spark.sql(s"schedule compaction on $tableName")
-      val compactionRows = spark.sql(s"show compaction on $tableName").collect()
-      val timestamps = compactionRows.map(_.getString(0))
-      assertTrue(timestamps.length == 1)
+      withSQLConf(
+        "hoodie.compact.inline" -> "false",
+        "hoodie.compact.inline.max.delta.commits" -> "2"
+      ) {
+        spark.sql(s"schedule compaction on $tableName")
+        val compactionRows = spark.sql(s"show compaction on $tableName").collect()
+        val timestamps = compactionRows.map(_.getString(0))
+        assertTrue(timestamps.length == 1)
 
-      // update data
-      spark.sql(s"update $tableName set price = price + 1 where id = 6")
-      checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
-        Seq(6, "a6", 4003, 30)
-      )
+        // update data
+        spark.sql(s"update $tableName set price = price + 1 where id = 6")
+        checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
+          Seq(6, "a6", 4003, 30)
+        )
 
-      // complete compaction
-      // set partition stats related configs
-      spark.sql(s"refresh table $tableName")
-      spark.sql("set hoodie.metadata.index.partition.stats.enable=true")
-      spark.sql("set hoodie.metadata.index.column.stats.enable=true")
-      spark.sql("set hoodie.metadata.index.column.stats.column.list=price")
-      spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+        // complete compaction
+        // set partition stats related configs
+        spark.sql(s"refresh table $tableName")
+        withSQLConf(
+          "hoodie.metadata.index.partition.stats.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.column.stats.column.list" -> "price"
+        ) {
+          spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
 
-      // validate partition stats index
-      checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-        Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
-        Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
-        Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4003, true)
-      )
+          // validate partition stats index
+          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4003, true)
+          )
+        }
+      }
     }
   }
 
@@ -573,21 +585,24 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           )
 
           // trigger compaction after update and validate stats
+          var extraConf = Map(
+            "hoodie.metadata.enable" -> "true",
+            "hoodie.enable.data.skipping" -> "true",
+            "hoodie.fileIndex.dataSkippingFailureMode" -> "strict"
+          )
           if (tableType == "mor" && shouldCompact) {
-            spark.sql("set hoodie.compact.inline=true")
-            spark.sql("set hoodie.compact.inline.max.delta.commits=2")
+            extraConf = extraConf + ("hoodie.compact.inline" -> "true") + ("hoodie.compact.inline.max.delta.commits" -> "2")
           }
-          spark.sql("set hoodie.metadata.enable=true")
-          spark.sql("set hoodie.enable.data.skipping=true")
-          spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-          writeAndValidatePartitionStats(tableName, tablePath)
-          if (tableType == "mor" && shouldCompact) {
-            // check partition stats records with tightBound
-            checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-              Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
-              Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
-              Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4001, true)
-            )
+          withSQLConf(extraConf.toSeq: _*) {
+            writeAndValidatePartitionStats(tableName, tablePath)
+            if (tableType == "mor" && shouldCompact) {
+              // check partition stats records with tightBound
+              checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+                Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
+                Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
+                Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4001, true)
+              )
+            }
           }
         }
       }
@@ -610,30 +625,33 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
     assertResult(tableName)(metaClient.getTableConfig.getTableName)
     assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
 
-    spark.sql("set hoodie.metadata.enable=true")
-    spark.sql("set hoodie.enable.data.skipping=true")
-    spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-    checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
-      Seq(6, "a6", 4000, 30)
-    )
+    withSQLConf(
+      "hoodie.metadata.enable" -> "true",
+      "hoodie.enable.data.skipping" -> "true",
+      "hoodie.fileIndex.dataSkippingFailureMode" -> "strict"
+    ) {
+      checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
+        Seq(6, "a6", 4000, 30)
+      )
 
-    // Test price update, assert latest value and ensure file pruning
-    spark.sql(s"update $tableName set price = price + 1 where id = 6")
-    checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
-      Seq(6, "a6", 4001, 30)
-    )
+      // Test price update, assert latest value and ensure file pruning
+      spark.sql(s"update $tableName set price = price + 1 where id = 6")
+      checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
+        Seq(6, "a6", 4001, 30)
+      )
 
-    verifyFilePruning(
-      Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
-      GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
-      HoodieTableMetaClient.reload(metaClient),
-      isDataSkippingExpected = true)
+      verifyFilePruning(
+        Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
+        GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
+        HoodieTableMetaClient.reload(metaClient),
+        isDataSkippingExpected = true)
 
-    verifyFilePruning(
-      Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false", HoodieMetadataConfig.ENABLE.key -> "true"),
-      GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
-      HoodieTableMetaClient.reload(metaClient),
-      isDataSkippingExpected = false)
+      verifyFilePruning(
+        Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false", HoodieMetadataConfig.ENABLE.key -> "true"),
+        GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
+        HoodieTableMetaClient.reload(metaClient),
+        isDataSkippingExpected = false)
+    }
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,

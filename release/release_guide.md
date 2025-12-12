@@ -408,23 +408,43 @@ Set up a few environment variables to simplify Maven commands that follow. This 
    1. This will deploy jar artifacts to the Apache Nexus Repository, which is the staging area for deploying jars to Maven Central.
    2. Review all staged artifacts (https://repository.apache.org/). They should contain all relevant parts for each module, including pom.xml, jar, test jar, source, test source, javadoc, etc. Carefully review any new artifacts.
    3. git checkout ${RELEASE_BRANCH}
-   4. ./scripts/release/deploy_staging_jars.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy.log"
-      1. when prompted for the passphrase, if you have multiple gpg keys in your keyring, make sure that you enter the right passphase corresponding to the same key (FINGERPRINT) as used while generating source release in step f.ii.
-         > If the prompt is not for the same key (by default the maven-gpg-plugin will pick up the first key in your keyring so that could be different), then add the following option to your ~/.gnupg/gpg.conf file
-      2. make sure your IP is not changing while uploading, otherwise it creates a different staging repo
-      3. Use a VPN if you can't prevent your IP from switching
-      4. after uploading, inspect the log to make sure all maven tasks said "BUILD SUCCESS"
-      5. In case you faced any issue while building `hudi-platform-service` or `hudi-metaserver-server` module, please ensure that you have docker daemon running. This is required to build `hudi-metaserver-server` module. See [checklist](#checklist-to-proceed-to-the-next-step). 
-   5. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane. Then find a "open" entry for apachehudi
-   6. Ensure it contains all 2 (2.12 and 2.13) artifacts, mainly hudi-spark-bundle-2.12/2.13, hudi-spark3-bundle-2.12/2.13, hudi-spark-2.12/2.13, hudi-spark3-2.12/2.13, hudi-utilities-bundle_2.12/2.13 and hudi-utilities_2.12/2.13.
+   4. Given that certain bundle jars are built by Java 11 (Flink 2.0 bundle) and Java 17 (Spark 4 bundle), multiple
+      scripts need to be run
+       1. For most modules with Java 8 build, run `export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)` and
+          `/scripts/release/deploy_staging_jars.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy1.log"`
+           1. when prompted for the passphrase, if you have multiple gpg keys in your keyring, make sure that you enter
+              the right passphase corresponding to the same key (FINGERPRINT) as used while generating source release in
+              step 6.2.
+          > If the prompt is not for the same key (by default the maven-gpg-plugin will pick up the first key in your
+          keyring so that could be different), then add the following option to your ~/.gnupg/gpg.conf file
+           2. make sure your IP is not changing while uploading, otherwise it creates a different staging repo
+           3. Use a VPN if you can't prevent your IP from switching
+           4. after uploading, inspect the log to make sure all maven tasks said "BUILD SUCCESS"
+           5. In case you faced any issue while building `hudi-platform-service` or `hudi-metaserver-server` module,
+              please ensure that you have docker daemon running. This is required to build `hudi-metaserver-server`
+              module. See [checklist](#checklist-to-proceed-to-the-next-step).
+       2. Continue with Java 11 build, run `export JAVA_HOME=$(/usr/libexec/java_home -v 11)` and
+          `/scripts/release/deploy_staging_jars_java11.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy2.log"`
+       3. Continue with Java 17 build, run `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` and
+          `/scripts/release/deploy_staging_jars_java17.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy3.log"`
+   5. Note that the artifacts from Java 11 and 17 builds are uploaded to separate staging repos. You need to manually
+      download those artifacts and upload them to the first staging repo so that all artifacts stay in the same repo.
+   6. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane.
+      Then find a "open" entry for apachehudi
+   7. Ensure it contains all 2 (2.12 and 2.13) artifacts, mainly hudi-spark-bundle-2.12/2.13,
+      hudi-spark3-bundle-2.12/2.13, hudi-spark-2.12/2.13, hudi-spark3-2.12/2.13, hudi-utilities-bundle_2.12/2.13 and
+      hudi-utilities_2.12/2.13.
       > With 0.10.1, we had 4 bundles. spark2 with scala11, spark2 with scala12, spark3.0.x bundles and spark3.1.x bundles. Ensure each spark bundle reflects the version correctly. hudi-spark3.1.2-bundle_2.12-0.10.1.jar and hudi-spark3.0.3-bundle_2.12-0.10.1.jar are the respective bundle names for spark3 bundles.
-   7. Once you have ensured everything is good and validation of step 7 succeeds, you can close the staging repo. Until you close, you can re-run deploying to staging multiple times. But once closed, it will create a new staging repo. So ensure you close this, so that the next RC (if need be) is on a new repo. So, once everything is good, close the staging repository on Apache Nexus. When prompted for a description, enter
+   8. Once you have ensured everything is good and validation of step 7 succeeds, you can close the staging repo. Until
+      you close, you can re-run deploying to staging multiple times. But once closed, it will create a new staging repo.
+      So ensure you close this, so that the next RC (if need be) is on a new repo. So, once everything is good, close
+      the staging repository on Apache Nexus. When prompted for a description, enter
       > Apache Hudi, version `${RELEASE_VERSION}`, release candidate `${RC_NUM}`.
-   8. After closing, run the script to validate the staged bundles again:
+   9. After closing, run the script to validate the staged bundles again:
       ```shell
       ./scripts/release/validate_staged_bundles.sh orgapachehudi-<stage_repo_number> ${RELEASE_VERSION}-rc${RC_NUM} 2>&1 | tee -a /tmp/validate_staged_bundles_output.txt
       ```
-   9. Run the release candidate bundle validation in GitHub Action by following the instruction in
+   10. Run the release candidate bundle validation in GitHub Action by following the instruction in
       ["Running Bundle Validation on a Release Candidate"](../packaging/bundle-validation/README.md#running-bundle-validation-on-a-release-candidate).
 
 ## Checklist to proceed to the next step
@@ -555,7 +575,7 @@ Once the release candidate has been reviewed and approved by the community, the 
 1. Drop all RC orgapachehudi-XXX in [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories).
 2. change the version from ${RELEASE_VERSION}-rc${RC_NUM} to ${RELEASE_VERSION} against release branch, use command `mvn versions:set -DnewVersion=${RELEASE_VERSION}`, e.g. change 0.5.1-rc1 to 0.5.1.
 3. Commit and push the version change to release branch.
-   1. git commit -am "[MINOR] Update release version to reflect published version  ${RELEASE_VERSION}"
+    1. git commit -am "chore: Update release version to reflect published version  ${RELEASE_VERSION}"
    2. git push origin release-${RELEASE_VERSION}
 4. Repeat the steps from **_Generate Source Release (f) to Stage source releases on [dist.apache.org](http://dist.apache.org/) (i)_**. Including staging jars with the release version and uploading source release.
    > **Note that make sure remove the -rc${RC_NUM} suffix when repeat the above steps. and please also verify the steps.  Ensure git tag is also done without -rc${RC_NUM}**

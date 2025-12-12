@@ -42,6 +42,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,6 +67,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -502,5 +504,23 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
       writeSupport.add(rowKey);
     }
     writer.close();
+  }
+
+  @Test
+  public void testReadParquetMetadata() throws Exception {
+    List<String> rowKeys = new ArrayList<>();
+    for (int i = 0; i < 1000; i++) {
+      rowKeys.add(UUID.randomUUID().toString());
+    }
+
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
+
+    ParquetMetadata metadata = parquetUtils.readMetadata(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
+    ParquetMetadata metadataWithSkipRowGroups = parquetUtils.readFileMetadataOnly(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
+    assertTrue(metadata.getFileMetaData() != null);
+    assertTrue(metadataWithSkipRowGroups.getFileMetaData() != null);
+    assertFalse(metadata.getBlocks().isEmpty());
+    assertTrue(metadataWithSkipRowGroups.getBlocks().isEmpty());
   }
 }

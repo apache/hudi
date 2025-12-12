@@ -311,6 +311,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     fs.exists(path)
   }
 
+  /**
+   * Please use this method to set SQL conf in a block and restore them after the block.
+   * WARN: Please don't set the SQL conf like `spark.sql("set xxx = yyy")`, replace it with this method.
+   */
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
     val conf = spark.sessionState.conf
     val currentValues = pairs.unzip._1.map { k =>

@@ -245,6 +245,8 @@ trait SparkAdapter extends Serializable {
 
   def getRebaseSpec(policy: String): RebaseSpec
 
+  def enableParquetFilterPushDownStringPredicate(conf: SQLConf): Boolean
+
   /**
    * Gets the [[UTF8String]] factory implementation for the current Spark version.
    * [SPARK-46832] [[UTF8String]] doesn't support compareTo anymore since Spark 4.0

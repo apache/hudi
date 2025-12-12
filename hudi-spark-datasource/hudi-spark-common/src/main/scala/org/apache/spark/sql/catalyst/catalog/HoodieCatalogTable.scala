@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.storage.HoodieStorageUtils
+import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils}
 import org.apache.hudi.util.SparkConfigUtils
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
@@ -82,10 +82,14 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   val tableLocation: String = getTableLocation(table, spark)
 
   /**
+   * hoodie storage based off table's location.
+   */
+  val storage: HoodieStorage = HoodieStorageUtils.getStorage(tableLocation, storageConf)
+
+  /**
    * A flag to whether the hoodie table exists.
    */
-  val hoodieTableExists: Boolean =
-    tableExistsInPath(tableLocation, HoodieStorageUtils.getStorage(tableLocation, storageConf))
+  val hoodieTableExists: Boolean = tableExistsInPath(tableLocation, storage)
 
   /**
    * Meta Client.
@@ -93,6 +97,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder()
     .setBasePath(tableLocation)
     .setConf(storageConf)
+    .setStorage(storage)
     .build()
 
   /**

@@ -54,7 +54,8 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled &&
-      metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS)
+      metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS) &&
+      metaClient.getIndexMetadata.isPresent
   }
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
