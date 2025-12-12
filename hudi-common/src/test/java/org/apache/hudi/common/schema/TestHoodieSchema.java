@@ -28,6 +28,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -929,5 +933,51 @@ public class TestHoodieSchema {
     HoodieSchema retrievedValueSchema = mapSchema.getValueType();
     assertTrue(retrievedValueSchema instanceof HoodieSchema.Time);
     assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Time) retrievedValueSchema).getPrecision());
+  }
+
+  @Test
+  void validateSerialization() throws Exception {
+    HoodieSchema originalSchema = HoodieSchema.parse(SAMPLE_RECORD_SCHEMA);
+    ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+      out.writeObject(originalSchema);
+    }
+    byte[] bytesWritten = byteOut.toByteArray();
+    HoodieSchema deserializedSchema;
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytesWritten))) {
+      deserializedSchema = (HoodieSchema) in.readObject();
+    }
+    assertEquals(originalSchema, deserializedSchema);
+  }
+
+  @Test
+  void validateSerializationOfSubclass() throws Exception {
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(15, 5);
+    ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+      out.writeObject(decimalSchema);
+    }
+    byte[] bytesWritten = byteOut.toByteArray();
+    HoodieSchema deserializedSchema;
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytesWritten))) {
+      deserializedSchema = (HoodieSchema) in.readObject();
+    }
+    assertEquals(decimalSchema, deserializedSchema);
+    assertTrue(deserializedSchema instanceof HoodieSchema.Decimal);
+    assertEquals(15, ((HoodieSchema.Decimal) deserializedSchema).getPrecision());
+    assertEquals(5, ((HoodieSchema.Decimal) deserializedSchema).getScale());
+
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMicros();
+    byteOut = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+      out.writeObject(timestampSchema);
+    }
+    bytesWritten = byteOut.toByteArray();
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytesWritten))) {
+      deserializedSchema = (HoodieSchema) in.readObject();
+    }
+    assertEquals(timestampSchema, deserializedSchema);
+    assertTrue(deserializedSchema instanceof HoodieSchema.Timestamp);
+    assertEquals(HoodieSchema.TimePrecision.MICROS, ((HoodieSchema.Timestamp) deserializedSchema).getPrecision());
   }
 }
