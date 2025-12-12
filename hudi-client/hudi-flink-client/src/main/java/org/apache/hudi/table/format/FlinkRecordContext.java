@@ -203,7 +203,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     return rowProjection::project;
   }
 
-  public void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
+  public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, utcTimezone);
   }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
@@ -211,8 +212,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
-    ClosableIterator<IndexedRecord> recordKeyIterator = getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieAvroUtils.getRecordKeySchema()));
+    ClosableIterator<IndexedRecord> recordKeyIterator = getIndexedRecordIterator(HoodieSchemaUtils.getRecordKeySchema());
     return new ClosableIterator<String>() {
       @Override
       public boolean hasNext() {

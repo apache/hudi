@@ -19,9 +19,10 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -55,7 +56,7 @@ class TestPartitionPathParser {
   @MethodSource("partitionPathCases")
   void testGetPartitionFieldVals(String partitionPath, String[] partitionFields, Object[] expectedValues) {
     PartitionPathParser parser = new PartitionPathParser();
-    Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"TestRecord\",\"fields\":[{\"name\":\"string_field\",\"type\":[\"null\", \"string\"]},"
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"TestRecord\",\"fields\":[{\"name\":\"string_field\",\"type\":[\"null\", \"string\"]},"
         + "{\"name\":\"date_field\",\"type\": {\"type\":\"int\",\"logicalType\": \"date\"}},{\"name\":\"timestamp_field\",\"type\": {\"type\":\"long\",\"logicalType\": \"timestamp-millis\"}}]}");
 
     Object[] result = parser.getPartitionFieldVals(Option.ofNullable(partitionFields), partitionPath, schema);
@@ -67,22 +68,22 @@ class TestPartitionPathParser {
 
   private static Stream<Arguments> fieldCases() {
     return Stream.of(
-        Arguments.of("123", Schema.create(Schema.Type.LONG), 123L),
-        Arguments.of("123", Schema.create(Schema.Type.INT), 123),
-        Arguments.of("123.45", Schema.create(Schema.Type.DOUBLE), 123.45),
-        Arguments.of("123.45", Schema.create(Schema.Type.FLOAT), 123.45f),
-        Arguments.of("false", Schema.create(Schema.Type.BOOLEAN), false),
-        Arguments.of("__HIVE_DEFAULT_PARTITION__", Schema.create(Schema.Type.INT), null),
-        Arguments.of("default", Schema.create(Schema.Type.INT), null),
-        Arguments.of("2025-01-03", Schema.create(Schema.Type.STRING), "2025-01-03"),
-        Arguments.of("value1", Schema.create(Schema.Type.BYTES), "value1".getBytes(StandardCharsets.UTF_8)),
-        Arguments.of("value1", Schema.createFixed("fixed", "docs", null, 50), "value1".getBytes(StandardCharsets.UTF_8))
+        Arguments.of("123", HoodieSchema.create(HoodieSchemaType.LONG), 123L),
+        Arguments.of("123", HoodieSchema.create(HoodieSchemaType.INT), 123),
+        Arguments.of("123.45", HoodieSchema.create(HoodieSchemaType.DOUBLE), 123.45),
+        Arguments.of("123.45", HoodieSchema.create(HoodieSchemaType.FLOAT), 123.45f),
+        Arguments.of("false", HoodieSchema.create(HoodieSchemaType.BOOLEAN), false),
+        Arguments.of("__HIVE_DEFAULT_PARTITION__", HoodieSchema.create(HoodieSchemaType.INT), null),
+        Arguments.of("default", HoodieSchema.create(HoodieSchemaType.INT), null),
+        Arguments.of("2025-01-03", HoodieSchema.create(HoodieSchemaType.STRING), "2025-01-03"),
+        Arguments.of("value1", HoodieSchema.create(HoodieSchemaType.BYTES), "value1".getBytes(StandardCharsets.UTF_8)),
+        Arguments.of("value1", HoodieSchema.createFixed("fixed", "docs", null, 50), "value1".getBytes(StandardCharsets.UTF_8))
     );
   }
 
   @ParameterizedTest
   @MethodSource("fieldCases")
-  void testValueParsing(String value, Schema fieldSchema, Object expected) {
+  void testValueParsing(String value, HoodieSchema fieldSchema, Object expected) {
     if (expected instanceof byte[]) {
       String expectedString = new String((byte[]) expected, StandardCharsets.UTF_8);
       String actualString = new String((byte[]) PartitionPathParser.parseValue(value, fieldSchema));

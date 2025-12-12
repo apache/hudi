@@ -19,7 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -35,6 +34,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -560,7 +561,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    * @param latestCommitTimestamp - Latest commit timestamp
    */
   private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<HoodieLogFile> logFiles, String latestCommitTimestamp, HoodieWriteConfig metadataTableWriteConfig) {
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
     HoodieAvroReaderContext readerContext = new HoodieAvroReaderContext(metadataMetaClient.getStorageConf(), metadataMetaClient.getTableConfig(), Option.empty(), Option.empty());
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)

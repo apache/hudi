@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -48,11 +49,11 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
   public void testCowBootstrapWithPositionMerge() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, true, false, true, false, null);
-    Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
+    HoodieSchema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, true);
     assertTrue(readerContext.getNeedsBootstrapMerge());
     //meta cols must go first in the required schema
-    Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
+    HoodieSchema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Arrays.asList(getField("_hoodie_record_key"), getPositionalMergeField()), bootstrapFields.getLeft());
@@ -100,7 +101,7 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
   }
 
   @Override
-  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema,
+  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, HoodieSchema dataSchema, HoodieSchema requestedSchema,
                                                    boolean supportsParquetRowIndex) {
     return new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), new TypedProperties(), metaClient);

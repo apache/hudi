@@ -98,7 +98,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
                                   UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
     this.updateProcessor = updateProcessor;
-    this.readerSchema = HoodieSchemaCache.intern(HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()));
+    this.readerSchema = HoodieSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateModeOpt = partialUpdateModeOpt;
     this.recordMerger = readerContext.getRecordMerger();
@@ -116,9 +116,9 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, readerSchema.toAvroSchema(), payloadClasses, props, partialUpdateModeOpt);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, readerSchema, payloadClasses, props, partialUpdateModeOpt);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
-    this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema.toAvroSchema(), readerContext.getRecordContext(), orderingFieldNames);
+    this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }
 
   protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) throws IOException {

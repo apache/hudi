@@ -120,7 +120,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           recordMergeMode,
           true,
           recordMerger,
-          readerSchema.toAvroSchema(),
+          readerSchema,
           payloadClasses,
           props,
           partialUpdateModeOpt);

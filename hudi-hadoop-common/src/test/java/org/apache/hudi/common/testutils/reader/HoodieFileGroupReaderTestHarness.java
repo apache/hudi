@@ -47,7 +47,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 
@@ -142,8 +142,8 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime("1000") // Not used internally.
         .withFileSlice(fileSliceOpt.orElseThrow(() -> new IllegalArgumentException("FileSlice is not present")))
-        .withDataSchema(AVRO_SCHEMA)
-        .withRequestedSchema(AVRO_SCHEMA)
+        .withDataSchema(HOODIE_SCHEMA)
+        .withRequestedSchema(HOODIE_SCHEMA)
         .withProps(properties)
         .withShouldUseRecordPosition(shouldReadPositions)
         .withAllowInflightInstants(allowInflightCommits)

@@ -152,10 +152,10 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getShouldMergeUseRecordPosition) {
-        getBootstrapProjection(dataRequiredSchema.toAvroSchema, dataRequiredSchema.toAvroSchema, partitionFieldAndValues)
+        getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
-        getBootstrapProjection(dataRequiredSchema.toAvroSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema.toAvroSchema, rowIndexColumn), partitionFieldAndValues)
+        getBootstrapProjection(dataRequiredSchema,
+          HoodieSchemaUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
       }
 
       //row index will always be the last column
@@ -209,7 +209,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
         }
       }
     } else {
-      val dataProjection = getBootstrapProjection(dataRequiredSchema.toAvroSchema, dataRequiredSchema.toAvroSchema, partitionFieldAndValues)
+      val dataProjection = getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       new ClosableIterator[Any] {
         val combinedRow = new JoinedRow()
 

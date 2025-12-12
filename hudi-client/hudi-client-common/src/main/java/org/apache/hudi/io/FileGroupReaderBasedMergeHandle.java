@@ -317,7 +317,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                                         Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
-        .withDataSchema(writeSchemaWithMetaFields.toAvroSchema()).withRequestedSchema(writeSchemaWithMetaFields.toAvroSchema())
+        .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());

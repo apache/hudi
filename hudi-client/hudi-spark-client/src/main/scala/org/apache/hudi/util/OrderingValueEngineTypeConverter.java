@@ -20,13 +20,13 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ArrayComparable;
+import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.DecimalType;
@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  */
 public class OrderingValueEngineTypeConverter {
   private final List<Function<Comparable, Comparable>> converters;
-  private OrderingValueEngineTypeConverter(Schema dataSchema, List<String> orderingFieldNames) {
+  private OrderingValueEngineTypeConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     this.converters = createConverters(dataSchema, orderingFieldNames);
   }
 
@@ -55,29 +55,29 @@ public class OrderingValueEngineTypeConverter {
         : this.converters.get(0).apply(value);
   }
 
-  public static OrderingValueEngineTypeConverter create(Schema dataSchema, List<String> orderingFieldNames) {
+  public static OrderingValueEngineTypeConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     return new OrderingValueEngineTypeConverter(dataSchema, orderingFieldNames);
   }
 
-  private static List<Function<Comparable, Comparable>> createConverters(Schema dataSchema, List<String> orderingFieldNames) {
+  private static List<Function<Comparable, Comparable>> createConverters(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     if (orderingFieldNames.isEmpty()) {
       return Collections.singletonList(Function.identity());
     }
     return orderingFieldNames.stream().map(f -> {
-      Option<Schema> fieldSchemaOpt = AvroSchemaUtils.findNestedFieldSchema(dataSchema, f, true);
+      Option<HoodieSchema> fieldSchemaOpt = HoodieSchemaUtils.getNestedField(dataSchema, f).map(Pair::getRight).map(HoodieSchemaField::getNonNullSchema);
       if (fieldSchemaOpt.isEmpty()) {
         return Function.<Comparable>identity();
       } else {
-        DataType fieldType = AvroConversionUtils.convertAvroSchemaToDataType(fieldSchemaOpt.get());
+        DataType fieldType = AvroConversionUtils.convertAvroSchemaToDataType(fieldSchemaOpt.get().toAvroSchema());
         return createConverter(fieldType, fieldSchemaOpt.get());
       }
     }).collect(Collectors.toList());
   }
 
-  public static Function<Comparable, Comparable> createConverter(DataType fieldType, Schema fieldSchema) {
+  public static Function<Comparable, Comparable> createConverter(DataType fieldType, HoodieSchema fieldSchema) {
     if (fieldType instanceof TimestampType) {
-      LogicalType logicalType = fieldSchema.getLogicalType();
-      if (logicalType == null || logicalType instanceof LogicalTypes.TimestampMillis) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
+      if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
         return comparable -> formatAsMicros((long) comparable);
       }
     } else if (fieldType instanceof StringType) {
