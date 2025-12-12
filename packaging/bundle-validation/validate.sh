@@ -369,7 +369,7 @@ if [[ "${FLINK_HOME}" == *"2.0"* || "${FLINK_HOME}" == *"2.1"* ]]; then
     if [ "$?" -ne 0 ]; then
         exit 1
     fi
-    echo "::warning::validate.sh done validating flink 2.0 bundle"
+    echo "::warning::validate.sh done validating flink 2.x bundle"
     exit 0
 fi
 
