@@ -142,7 +142,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, HoodieFileGroupRecordBuffer<T> recordBuffer,
                                       boolean allowInflightInstants) {
     this.readerContext = readerContext;
-    this.readerSchema = readerContext.getSchemaHandler() != null ? HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()) : null;
+    this.readerSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getRequiredSchema() : null;
     this.latestInstantTime = readerContext.getLatestCommitTime();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     // load class from the payload fully qualified class name
@@ -215,7 +215,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage, logFiles,
-          readerSchema.toAvroSchema(), reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
@@ -377,7 +377,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage, logFiles,
-          readerSchema == null ? null : readerSchema.toAvroSchema(), reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.
