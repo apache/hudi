@@ -208,7 +208,7 @@ object HoodieSchemaConversionUtils {
    * @return a function that converts GenericRecord to Option[InternalRow]
    */
   def createHoodieSchemaToInternalRowConverter(requiredAvroSchema: HoodieSchema, requiredRowSchema: StructType): GenericRecord => Option[InternalRow] = {
-    val deserializer = sparkAdapter.createAvroDeserializer(requiredAvroSchema.toAvroSchema, requiredRowSchema)
+    val deserializer = sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredRowSchema)
     record => deserializer
       .deserialize(record)
       .map(_.asInstanceOf[InternalRow])

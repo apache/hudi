@@ -158,7 +158,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
    */
   private lazy val cdcRecordDeserializer: HoodieAvroDeserializer = {
-    sparkAdapter.createAvroDeserializer(cdcHoodieSchema.getAvroSchema, cdcSparkSchema)
+    sparkAdapter.createAvroDeserializer(cdcHoodieSchema, cdcSparkSchema)
   }
 
   private lazy val projection: Projection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)

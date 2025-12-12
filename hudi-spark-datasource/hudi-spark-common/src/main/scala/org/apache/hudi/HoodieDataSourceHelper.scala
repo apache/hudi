@@ -91,8 +91,7 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
     protected val structTypeSchema: StructType
 
     private lazy val deserializer: HoodieAvroDeserializer = {
-      //TODO do we need to make a HoodieSchema serde?
-      sparkAdapter.createAvroDeserializer(schema.getAvroSchema, structTypeSchema)
+      sparkAdapter.createAvroDeserializer(schema, structTypeSchema)
     }
 
     protected def deserialize(avroRecord: GenericRecord): InternalRow = {

@@ -235,8 +235,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
   private def convertAvroToRowIterator(closeableFileGroupRecordIterator: ClosableIterator[IndexedRecord],
                                        requestedSchema: HoodieSchema): Iterator[InternalRow] = {
-    //TODO revisit this
-    val converter = sparkAdapter.createAvroDeserializer(requestedSchema.getAvroSchema, requiredSchema.structTypeSchema)
+    val converter = sparkAdapter.createAvroDeserializer(requestedSchema, requiredSchema.structTypeSchema)
     val projection = UnsafeProjection.create(requiredSchema.structTypeSchema)
     new Iterator[InternalRow] with Closeable {
       override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext

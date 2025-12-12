@@ -484,7 +484,7 @@ object ExpressionPayload {
     avroDeserializerCache.get()
       .get(schema, new Function[Schema, HoodieAvroDeserializer] {
         override def apply(t: Schema): HoodieAvroDeserializer =
-          sparkAdapter.createAvroDeserializer(schema, convertAvroSchemaToStructType(schema))
+          sparkAdapter.createAvroDeserializer(HoodieSchema.fromAvroSchema(schema), convertAvroSchemaToStructType(schema))
       })
   }
 
@@ -492,7 +492,7 @@ object ExpressionPayload {
     avroSerializerCache.get()
       .get(schema, new Function[Schema, HoodieAvroSerializer] {
         override def apply(t: Schema): HoodieAvroSerializer =
-          sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), schema, isNullable(schema))
+          sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), HoodieSchema.fromAvroSchema(schema), isNullable(schema))
       })
   }
 

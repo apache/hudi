@@ -18,10 +18,11 @@
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.types.DataType
 
-class HoodieSpark4_0AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
+class HoodieSpark4_0AvroDeserializer(rootAvroType: HoodieSchema, rootCatalystType: DataType)
   extends HoodieAvroDeserializer {
 
   private val avroDeserializer = new AvroDeserializer(rootAvroType, rootCatalystType,
