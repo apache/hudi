@@ -135,7 +135,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: UT hudi-hadoop-common
             inputs:
@@ -143,7 +143,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-hadoop-common
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: UT client/spark-client
@@ -152,7 +152,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -pl hudi-client/hudi-spark-client
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: FT client/spark-client
@@ -163,7 +163,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco2.corrupt -pl hudi-client/hudi-spark-client
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -189,7 +189,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl hudi-spark-datasource/hudi-spark -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: FTA hudi-spark-datasource/hudi-spark
             inputs:
@@ -198,7 +198,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -224,7 +224,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Java UT spark-datasource functional package
             inputs:
@@ -233,7 +233,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -259,7 +259,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Java UT spark-datasource non-functional package
             inputs:
@@ -268,7 +268,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -294,7 +294,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Scala UT spark-datasource DML 1
             inputs:
@@ -303,7 +303,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml.others" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -329,7 +329,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Scala UT spark-datasource DDL & Others
             inputs:
@@ -338,7 +338,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES)" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -413,7 +413,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: Scala UT spark-datasource Hudi SQL features
             inputs:
@@ -421,7 +421,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.feature" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: Scala UT spark-datasource DML 2
@@ -430,7 +430,7 @@ stages:
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml.insert" $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: FTC hudi-spark-datasource/hudi-spark
@@ -440,7 +440,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests-c $(JACOCO_AGENT_DESTFILE3_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -466,7 +466,7 @@ stages:
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark -am
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - task: Maven@4
             displayName: FTB hudi-spark-datasource/hudi-spark
             inputs:
@@ -475,7 +475,7 @@ stages:
               options: $(MVN_OPTS_TEST) -Pfunctional-tests-b $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
               mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
@@ -584,7 +584,7 @@ stages:
               goals: 'clean package'
               options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl $(JACOCO_MODULES)
               publishJUnitResults: false
-              jdkVersionOption: '1.8'
+              jdkVersionOption: '11'
           - script: |
               ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
             displayName: 'Generate JaCoCo Code Coverage Report'
