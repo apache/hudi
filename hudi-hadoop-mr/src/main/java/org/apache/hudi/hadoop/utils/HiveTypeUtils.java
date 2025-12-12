@@ -18,17 +18,17 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.util.ValidationUtils;
 
-import static org.apache.avro.Schema.Type.BOOLEAN;
-import static org.apache.avro.Schema.Type.BYTES;
-import static org.apache.avro.Schema.Type.DOUBLE;
-import static org.apache.avro.Schema.Type.FIXED;
-import static org.apache.avro.Schema.Type.FLOAT;
-import static org.apache.avro.Schema.Type.INT;
-import static org.apache.avro.Schema.Type.LONG;
-import static org.apache.avro.Schema.Type.NULL;
-import static org.apache.avro.Schema.Type.STRING;
+import org.apache.hadoop.hive.serde2.avro.AvroSerDe;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
+import org.apache.hadoop.hive.serde2.avro.InstanceCache;
+import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,13 +38,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.hive.serde2.avro.AvroSerDe;
-import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
-import org.apache.hadoop.hive.serde2.avro.InstanceCache;
-import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
+import static org.apache.hudi.common.schema.HoodieSchemaType.ARRAY;
+import static org.apache.hudi.common.schema.HoodieSchemaType.BOOLEAN;
+import static org.apache.hudi.common.schema.HoodieSchemaType.BYTES;
+import static org.apache.hudi.common.schema.HoodieSchemaType.DATE;
+import static org.apache.hudi.common.schema.HoodieSchemaType.DECIMAL;
+import static org.apache.hudi.common.schema.HoodieSchemaType.DOUBLE;
+import static org.apache.hudi.common.schema.HoodieSchemaType.ENUM;
+import static org.apache.hudi.common.schema.HoodieSchemaType.FIXED;
+import static org.apache.hudi.common.schema.HoodieSchemaType.FLOAT;
+import static org.apache.hudi.common.schema.HoodieSchemaType.INT;
+import static org.apache.hudi.common.schema.HoodieSchemaType.LONG;
+import static org.apache.hudi.common.schema.HoodieSchemaType.MAP;
+import static org.apache.hudi.common.schema.HoodieSchemaType.NULL;
+import static org.apache.hudi.common.schema.HoodieSchemaType.RECORD;
+import static org.apache.hudi.common.schema.HoodieSchemaType.STRING;
+import static org.apache.hudi.common.schema.HoodieSchemaType.UNION;
 
 /**
  * Convert an Avro Schema to a Hive TypeInfo
@@ -66,9 +75,9 @@ public class HiveTypeUtils {
   //                  smallint
 
   // Map of Avro's primitive types to Hives (for those that are supported by both)
-  private static final Map<Schema.Type, TypeInfo> PRIMITIVE_TYPE_TO_TYPE_INFO = initTypeMap();
-  private static Map<Schema.Type, TypeInfo> initTypeMap() {
-    Map<Schema.Type, TypeInfo> theMap = new Hashtable<Schema.Type, TypeInfo>();
+  private static final Map<HoodieSchemaType, TypeInfo> PRIMITIVE_TYPE_TO_TYPE_INFO = initTypeMap();
+  private static Map<HoodieSchemaType, TypeInfo> initTypeMap() {
+    Map<HoodieSchemaType, TypeInfo> theMap = new Hashtable<>();
     theMap.put(NULL, TypeInfoFactory.getPrimitiveTypeInfo("void"));
     theMap.put(BOOLEAN, TypeInfoFactory.getPrimitiveTypeInfo("boolean"));
     theMap.put(INT, TypeInfoFactory.getPrimitiveTypeInfo("int"));
@@ -90,7 +99,7 @@ public class HiveTypeUtils {
    *         from the schema.
    * @throws AvroSerdeException for problems during conversion.
    */
-  public static List<TypeInfo> generateColumnTypes(Schema schema) throws AvroSerdeException {
+  public static List<TypeInfo> generateColumnTypes(HoodieSchema schema) throws AvroSerdeException {
     return generateColumnTypes(schema, null);
   }
 
@@ -105,23 +114,23 @@ public class HiveTypeUtils {
    *         from the schema.
    * @throws AvroSerdeException for problems during conversion.
    */
-  public static List<TypeInfo> generateColumnTypes(Schema schema,
-                                                   Set<Schema> seenSchemas) throws AvroSerdeException {
-    List<Schema.Field> fields = schema.getFields();
+  public static List<TypeInfo> generateColumnTypes(HoodieSchema schema,
+                                                   Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
+    List<HoodieSchemaField> fields = schema.getFields();
 
     List<TypeInfo> types = new ArrayList<TypeInfo>(fields.size());
 
-    for (Schema.Field field : fields) {
+    for (HoodieSchemaField field : fields) {
       types.add(generateTypeInfo(field.schema(), seenSchemas));
     }
 
     return types;
   }
 
-  static InstanceCache<Schema, TypeInfo> typeInfoCache = new InstanceCache<Schema, TypeInfo>() {
+  static InstanceCache<HoodieSchema, TypeInfo> typeInfoCache = new InstanceCache<HoodieSchema, TypeInfo>() {
     @Override
-    protected TypeInfo makeInstance(Schema s,
-                                    Set<Schema> seenSchemas)
+    protected TypeInfo makeInstance(HoodieSchema s,
+                                    Set<HoodieSchema> seenSchemas)
         throws AvroSerdeException {
       return generateTypeInfoWorker(s, seenSchemas);
     }
@@ -134,33 +143,25 @@ public class HiveTypeUtils {
    * @return TypeInfo matching the Avro schema
    * @throws AvroSerdeException for any problems during conversion.
    */
-  public static TypeInfo generateTypeInfo(Schema schema,
-                                          Set<Schema> seenSchemas) throws AvroSerdeException {
+  public static TypeInfo generateTypeInfo(HoodieSchema schema,
+                                          Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
     // For bytes type, it can be mapped to decimal.
-    Schema.Type type = schema.getType();
-    // HUDI MODIFICATION ADDED "|| type == FIXED"
-    if ((type == BYTES || type == FIXED) && AvroSerDe.DECIMAL_TYPE_NAME
-        .equalsIgnoreCase(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
-      int precision = 0;
-      int scale = 0;
-      try {
-        precision = getIntValue(schema.getObjectProp(AvroSerDe.AVRO_PROP_PRECISION));
-        scale = getIntValue(schema.getObjectProp(AvroSerDe.AVRO_PROP_SCALE));
-      } catch (Exception ex) {
-        throw new AvroSerdeException("Failed to obtain scale value from file schema: " + schema, ex);
-      }
-
+    HoodieSchemaType type = schema.getType();
+    if (type == DECIMAL && AvroSerDe.DECIMAL_TYPE_NAME
+        .equalsIgnoreCase((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
+      int precision = decimalSchema.getPrecision();
+      int scale = decimalSchema.getScale();
       try {
         HiveDecimalUtils.validateParameter(precision, scale);
       } catch (Exception ex) {
         throw new AvroSerdeException("Invalid precision or scale for decimal type", ex);
       }
-
       return TypeInfoFactory.getDecimalTypeInfo(precision, scale);
     }
 
     if (type == STRING
-        && AvroSerDe.CHAR_TYPE_NAME.equalsIgnoreCase(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+        && AvroSerDe.CHAR_TYPE_NAME.equalsIgnoreCase((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       int maxLength = 0;
       try {
         maxLength = getIntFromSchema(schema, AvroSerDe.AVRO_PROP_MAX_LENGTH);
@@ -171,7 +172,7 @@ public class HiveTypeUtils {
     }
 
     if (type == STRING && AvroSerDe.VARCHAR_TYPE_NAME
-        .equalsIgnoreCase(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+        .equalsIgnoreCase((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       int maxLength = 0;
       try {
         maxLength = getIntFromSchema(schema, AvroSerDe.AVRO_PROP_MAX_LENGTH);
@@ -181,13 +182,13 @@ public class HiveTypeUtils {
       return TypeInfoFactory.getVarcharTypeInfo(maxLength);
     }
 
-    if (type == INT
-        && AvroSerDe.DATE_TYPE_NAME.equals(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+    if (type == DATE
+        && AvroSerDe.DATE_TYPE_NAME.equals((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       return TypeInfoFactory.dateTypeInfo;
     }
 
     if (type == LONG
-        && AvroSerDe.TIMESTAMP_TYPE_NAME.equals(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+        && AvroSerDe.TIMESTAMP_TYPE_NAME.equals((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       return TypeInfoFactory.timestampTypeInfo;
     }
 
@@ -224,8 +225,8 @@ public class HiveTypeUtils {
   }
 
   // added this from AvroSerdeUtils in hive latest
-  public static int getIntFromSchema(Schema schema, String name) {
-    Object obj = schema.getObjectProp(name);
+  public static int getIntFromSchema(HoodieSchema schema, String name) {
+    Object obj = schema.getProp(name);
     if (obj instanceof String) {
       return Integer.parseInt((String) obj);
     } else if (obj instanceof Integer) {
@@ -236,15 +237,15 @@ public class HiveTypeUtils {
     }
   }
 
-  private static TypeInfo generateTypeInfoWorker(Schema schema,
-                                                 Set<Schema> seenSchemas) throws AvroSerdeException {
-    // Avro requires NULLable types to be defined as unions of some type T
+  private static TypeInfo generateTypeInfoWorker(HoodieSchema schema,
+                                                 Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
+    // HoodieSchema requires NULLable types to be defined as unions of some type T
     // and NULL.  This is annoying and we're going to hide it from the user.
-    if (AvroSchemaUtils.isNullable(schema)) {
-      return generateTypeInfo(AvroSchemaUtils.getNonNullTypeFromUnion(schema), seenSchemas);
+    if (schema.isNullable()) {
+      return generateTypeInfo(schema.getNonNullType(), seenSchemas);
     }
 
-    Schema.Type type = schema.getType();
+    HoodieSchemaType type = schema.getType();
     if (PRIMITIVE_TYPE_TO_TYPE_INFO.containsKey(type)) {
       return PRIMITIVE_TYPE_TO_TYPE_INFO.get(type);
     }
@@ -259,12 +260,12 @@ public class HiveTypeUtils {
     }
   }
 
-  private static TypeInfo generateRecordTypeInfo(Schema schema,
-                                                 Set<Schema> seenSchemas) throws AvroSerdeException {
-    assert schema.getType().equals(Schema.Type.RECORD);
+  private static TypeInfo generateRecordTypeInfo(HoodieSchema schema,
+                                                 Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
+    ValidationUtils.checkArgument(schema.getType() == RECORD, () -> schema + " is not a RECORD");
 
     if (seenSchemas == null) {
-      seenSchemas = Collections.newSetFromMap(new IdentityHashMap<Schema, Boolean>());
+      seenSchemas = Collections.newSetFromMap(new IdentityHashMap<>());
     } else if (seenSchemas.contains(schema)) {
       throw new AvroSerdeException(
           "Recursive schemas are not supported. Recursive schema was " + schema
@@ -272,9 +273,9 @@ public class HiveTypeUtils {
     }
     seenSchemas.add(schema);
 
-    List<Schema.Field> fields = schema.getFields();
-    List<String> fieldNames = new ArrayList<String>(fields.size());
-    List<TypeInfo> typeInfos = new ArrayList<TypeInfo>(fields.size());
+    List<HoodieSchemaField> fields = schema.getFields();
+    List<String> fieldNames = new ArrayList<>(fields.size());
+    List<TypeInfo> typeInfos = new ArrayList<>(fields.size());
 
     for (int i = 0; i < fields.size(); i++) {
       fieldNames.add(i, fields.get(i).name());
@@ -288,33 +289,32 @@ public class HiveTypeUtils {
    * Generate a TypeInfo for an Avro Map.  This is made slightly simpler in that
    * Avro only allows maps with strings for keys.
    */
-  private static TypeInfo generateMapTypeInfo(Schema schema,
-                                              Set<Schema> seenSchemas) throws AvroSerdeException {
-    assert schema.getType().equals(Schema.Type.MAP);
-    Schema valueType = schema.getValueType();
+  private static TypeInfo generateMapTypeInfo(HoodieSchema schema,
+                                              Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
+    ValidationUtils.checkArgument(schema.getType() == MAP, () -> schema + " is not MAP");
+    HoodieSchema valueType = schema.getValueType();
     TypeInfo ti = generateTypeInfo(valueType, seenSchemas);
 
     return TypeInfoFactory.getMapTypeInfo(TypeInfoFactory.getPrimitiveTypeInfo("string"), ti);
   }
 
-  private static TypeInfo generateArrayTypeInfo(Schema schema,
-                                                Set<Schema> seenSchemas) throws AvroSerdeException {
-    assert schema.getType().equals(Schema.Type.ARRAY);
-    Schema itemsType = schema.getElementType();
+  private static TypeInfo generateArrayTypeInfo(HoodieSchema schema,
+                                                Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
+    ValidationUtils.checkArgument(schema.getType() == ARRAY, () -> schema + " is not an ARRAY");
+    HoodieSchema itemsType = schema.getElementType();
     TypeInfo itemsTypeInfo = generateTypeInfo(itemsType, seenSchemas);
 
     return TypeInfoFactory.getListTypeInfo(itemsTypeInfo);
   }
 
-  private static TypeInfo generateUnionTypeInfo(Schema schema,
-                                                Set<Schema> seenSchemas) throws AvroSerdeException {
-    assert schema.getType().equals(Schema.Type.UNION);
-    List<Schema> types = schema.getTypes();
+  private static TypeInfo generateUnionTypeInfo(HoodieSchema schema,
+                                                Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
+    ValidationUtils.checkArgument(schema.getType() == UNION, () -> schema + "is not a UNION");
+    List<HoodieSchema> types = schema.getTypes();
 
+    List<TypeInfo> typeInfos = new ArrayList<>(types.size());
 
-    List<TypeInfo> typeInfos = new ArrayList<TypeInfo>(types.size());
-
-    for (Schema type : types) {
+    for (HoodieSchema type : types) {
       typeInfos.add(generateTypeInfo(type, seenSchemas));
     }
 
@@ -324,8 +324,8 @@ public class HiveTypeUtils {
   // Hive doesn't have an Enum type, so we're going to treat them as Strings.
   // During the deserialize/serialize stage we'll check for enumness and
   // convert as such.
-  private static TypeInfo generateEnumTypeInfo(Schema schema) {
-    assert schema.getType().equals(Schema.Type.ENUM);
+  private static TypeInfo generateEnumTypeInfo(HoodieSchema schema) {
+    ValidationUtils.checkArgument(schema.getType() == ENUM, () -> schema + " is not an ENUM");
 
     return TypeInfoFactory.getPrimitiveTypeInfo("string");
   }

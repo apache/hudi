@@ -18,14 +18,16 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -75,17 +77,16 @@ public class HiveAvroSerializer {
   private final List<String> columnNames;
   private final List<TypeInfo> columnTypes;
   private final ArrayWritableObjectInspector objectInspector;
-  private final Schema recordSchema;
+  private final HoodieSchema recordSchema;
 
   private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
-  public HiveAvroSerializer(Schema schema) {
-    schema = AvroSchemaUtils.getNonNullTypeFromUnion(schema);
-    if (schema.getType() != Schema.Type.RECORD) {
+  public HiveAvroSerializer(HoodieSchema schema) {
+    if (schema.getNonNullType().getType() != HoodieSchemaType.RECORD) {
       throw new IllegalArgumentException("Expected record schema, but got: " + schema);
     }
     this.recordSchema = schema;
-    this.columnNames = schema.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
+    this.columnNames = schema.getFields().stream().map(HoodieSchemaField::name).map(String::toLowerCase).collect(Collectors.toList());
     try {
       this.columnTypes = HiveTypeUtils.generateColumnTypes(schema);
     } catch (AvroSerdeException e) {
@@ -171,7 +172,7 @@ public class HiveAvroSerializer {
             + "', but got " + context.typeInfo.getTypeName());
       }
 
-      if (!(context.schema.getType() == Schema.Type.RECORD)) {
+      if (!(context.schema.getType() == HoodieSchemaType.RECORD)) {
         throw new HoodieException("Expected RecordSchema while resolving '" + path[i]
             + "', but got " + context.schema.getType());
       }
@@ -184,15 +185,13 @@ public class HiveAvroSerializer {
   }
 
   private FieldContext extractFieldFromRecord(ArrayWritable record, StructObjectInspector structObjectInspector,
-                                              List<TypeInfo> fieldTypes, Schema schema, String fieldName) {
-    Schema.Field schemaField = schema.getField(fieldName);
-    if (schemaField == null) {
-      throw new HoodieException("Field '" + fieldName + "' not found in schema: " + schema);
-    }
+                                              List<TypeInfo> fieldTypes, HoodieSchema schema, String fieldName) {
+    HoodieSchemaField schemaField = schema.getField(fieldName)
+        .orElseThrow(() -> new HoodieException("Field '" + fieldName + "' not found in schema: " + schema));
 
     int fieldIdx = schemaField.pos();
     TypeInfo fieldTypeInfo = fieldTypes.get(fieldIdx);
-    Schema fieldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schemaField.schema());
+    HoodieSchema fieldSchema = schemaField.schema().getNonNullType();
 
     StructField structField = structObjectInspector.getStructFieldRef(fieldName);
     if (structField == null) {
@@ -216,9 +215,9 @@ public class HiveAvroSerializer {
     final TypeInfo typeInfo;
     final ObjectInspector objectInspector;
     final Object object;
-    final Schema schema;
+    final HoodieSchema schema;
 
-    FieldContext(Object object, ObjectInspector objectInspector, TypeInfo typeInfo,  Schema schema) {
+    FieldContext(Object object, ObjectInspector objectInspector, TypeInfo typeInfo,  HoodieSchema schema) {
       this.object = object;
       this.objectInspector = objectInspector;
       this.typeInfo = typeInfo;
@@ -226,7 +225,7 @@ public class HiveAvroSerializer {
     }
   }
 
-  private static final Schema STRING_SCHEMA = Schema.create(Schema.Type.STRING);
+  private static final HoodieSchema STRING_SCHEMA = HoodieSchema.create(HoodieSchemaType.STRING);
 
   public GenericRecord serialize(Object o) {
     if (recordSchema == null) {
@@ -235,10 +234,10 @@ public class HiveAvroSerializer {
     return serialize(o, recordSchema);
   }
 
-  public GenericRecord serialize(Object o, Schema schema) {
+  public GenericRecord serialize(Object o, HoodieSchema schema) {
 
     StructObjectInspector soi = objectInspector;
-    GenericData.Record record = new GenericData.Record(schema);
+    GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
 
     List<? extends StructField> outputFieldRefs = soi.getAllStructFieldRefs();
     if (outputFieldRefs.size() != columnNames.size()) {
@@ -251,7 +250,7 @@ public class HiveAvroSerializer {
     List<Object> structFieldsDataAsList = soi.getStructFieldsDataAsList(o);
 
     for (int i = 0; i < size; i++) {
-      Schema.Field field = schema.getFields().get(i);
+      HoodieSchemaField field = schema.getFields().get(i);
       if (i >= columnTypes.size()) {
         break;
       }
@@ -268,28 +267,34 @@ public class HiveAvroSerializer {
     return record;
   }
 
-  private void setUpRecordFieldFromWritable(TypeInfo typeInfo, Object structFieldData, ObjectInspector fieldOI, GenericData.Record record, Schema.Field field) {
+  private void setUpRecordFieldFromWritable(TypeInfo typeInfo, Object structFieldData, ObjectInspector fieldOI, GenericData.Record record, HoodieSchemaField field) {
     Object val = serialize(typeInfo, fieldOI, structFieldData, field.schema());
     if (val == null) {
-      if (field.defaultVal() instanceof JsonProperties.Null) {
+      Option<Object> defaultValOpt = field.defaultVal();
+      // In Avro/HoodieSchema, field.defaultVal() returns:
+      // - JsonProperties.Null / HoodieSchema.NULL_VALUE = if default is explicitly null
+      // - null / isEmpty() = if field has NO default value
+      // - some value = if field has an actual default
+      if (defaultValOpt.isPresent() && defaultValOpt.get() == HoodieSchema.NULL_VALUE) {
         record.put(field.name(), null);
       } else {
-        record.put(field.name(), field.defaultVal());
+        // is not present or has some value
+        record.put(field.name(), defaultValOpt.orElse(null));
       }
     } else {
       record.put(field.name(), val);
     }
   }
 
-  private Object serialize(TypeInfo typeInfo, ObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
+  private Object serialize(TypeInfo typeInfo, ObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
     if (null == structFieldData) {
       return null;
     }
 
-    schema = AvroSchemaUtils.getNonNullTypeFromUnion(schema);
+    schema = schema.getNonNullType();
 
     /* Because we use Hive's 'string' type when Avro calls for enum, we have to expressly check for enum-ness */
-    if (Schema.Type.ENUM.equals(schema.getType())) {
+    if (HoodieSchemaType.ENUM == schema.getType()) {
       assert fieldOI instanceof PrimitiveObjectInspector;
       return serializeEnum((PrimitiveObjectInspector) fieldOI, structFieldData, schema);
     }
@@ -339,48 +344,51 @@ public class HiveAvroSerializer {
     }
   };
 
-  private Object serializeEnum(PrimitiveObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
+  private Object serializeEnum(PrimitiveObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
     try {
-      return enums.retrieve(schema).retrieve(serializePrimitive(fieldOI, structFieldData, schema));
+      return enums.retrieve(schema.toAvroSchema()).retrieve(serializePrimitive(fieldOI, structFieldData, schema));
     } catch (Exception e) {
       throw new HoodieException(e);
     }
   }
 
-  private Object serializeStruct(StructTypeInfo typeInfo, StructObjectInspector ssoi, Object o, Schema schema) {
+  private Object serializeStruct(StructTypeInfo typeInfo, StructObjectInspector ssoi, Object o, HoodieSchema schema) {
     int size = schema.getFields().size();
     List<? extends StructField> allStructFieldRefs = ssoi.getAllStructFieldRefs();
     List<Object> structFieldsDataAsList = ssoi.getStructFieldsDataAsList(o);
-    GenericData.Record record = new GenericData.Record(schema);
+    GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
     ArrayList<TypeInfo> allStructFieldTypeInfos = typeInfo.getAllStructFieldTypeInfos();
 
     for (int i = 0; i < size; i++) {
-      Schema.Field field = schema.getFields().get(i);
+      HoodieSchemaField field = schema.getFields().get(i);
       setUpRecordFieldFromWritable(allStructFieldTypeInfos.get(i), structFieldsDataAsList.get(i),
           allStructFieldRefs.get(i).getFieldObjectInspector(), record, field);
     }
     return record;
   }
 
-  private Object serializePrimitive(PrimitiveObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
+  private Object serializePrimitive(PrimitiveObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
     switch (fieldOI.getPrimitiveCategory()) {
       case BINARY:
-        if (schema.getType() == Schema.Type.BYTES) {
+        if (schema.getType() == HoodieSchemaType.BYTES) {
           return AvroSerdeUtils.getBufferFromBytes((byte[]) fieldOI.getPrimitiveJavaObject(structFieldData));
-        } else if (schema.getType() == Schema.Type.FIXED) {
-          GenericData.Fixed fixed = new GenericData.Fixed(schema, (byte[]) fieldOI.getPrimitiveJavaObject(structFieldData));
+        } else if (schema.getType() == HoodieSchemaType.FIXED) {
+          GenericData.Fixed fixed = new GenericData.Fixed(schema.toAvroSchema(), (byte[]) fieldOI.getPrimitiveJavaObject(structFieldData));
           return fixed;
         } else {
           throw new HoodieException("Unexpected Avro schema for Binary TypeInfo: " + schema.getType());
         }
       case DECIMAL:
         HiveDecimal dec = (HiveDecimal) fieldOI.getPrimitiveJavaObject(structFieldData);
-        LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
+        if (schema.getType() != HoodieSchemaType.DECIMAL) {
+          throw new HoodieException("Unexpected schema type for DECIMAL: " + schema.getType());
+        }
+        HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) schema;
         BigDecimal bd = new BigDecimal(dec.toString()).setScale(decimal.getScale());
-        if (schema.getType() == Schema.Type.BYTES) {
-          return HoodieAvroUtils.DECIMAL_CONVERSION.toBytes(bd, schema, decimal);
+        if (decimal.isFixed()) {
+          return HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, schema.toAvroSchema(), decimal.toAvroSchema().getLogicalType());
         } else {
-          return HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, schema, decimal);
+          return HoodieAvroUtils.DECIMAL_CONVERSION.toBytes(bd, schema.toAvroSchema(), decimal.toAvroSchema().getLogicalType());
         }
       case CHAR:
         HiveChar ch = (HiveChar) fieldOI.getPrimitiveJavaObject(structFieldData);
@@ -396,7 +404,7 @@ public class HiveAvroSerializer {
       case TIMESTAMP:
         return HoodieHiveUtils.getMills(structFieldData);
       case INT:
-        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
+        if (schema.getType() == HoodieSchemaType.DATE) {
           return new WritableDateObjectInspector().getPrimitiveWritableObject(structFieldData).getDays();
         }
         return fieldOI.getPrimitiveJavaObject(structFieldData);
@@ -409,7 +417,7 @@ public class HiveAvroSerializer {
     }
   }
 
-  private Object serializeUnion(UnionTypeInfo typeInfo, UnionObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
+  private Object serializeUnion(UnionTypeInfo typeInfo, UnionObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
     byte tag = fieldOI.getTag(structFieldData);
 
     // Invariant that Avro's tag ordering must match Hive's.
@@ -419,20 +427,21 @@ public class HiveAvroSerializer {
         schema.getTypes().get(tag));
   }
 
-  private Object serializeList(ListTypeInfo typeInfo, ListObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
+  private Object serializeList(ListTypeInfo typeInfo, ListObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
     List<?> list = fieldOI.getList(structFieldData);
-    List<Object> deserialized = new GenericData.Array<Object>(list.size(), schema);
+    List<Object> deserialized = new GenericData.Array<>(list.size(), schema.toAvroSchema());
 
     TypeInfo listElementTypeInfo = typeInfo.getListElementTypeInfo();
     ObjectInspector listElementObjectInspector = fieldOI.getListElementObjectInspector();
     // NOTE: We have to resolve nullable schema, since Avro permits array elements
     //       to be null
-    Schema arrayNestedType = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getElementType());
-    Schema elementType;
+    HoodieSchema arrayNestedType = schema.getElementType().getNonNullType();
+    HoodieSchema elementType;
     if (listElementObjectInspector.getCategory() == ObjectInspector.Category.PRIMITIVE) {
       elementType = arrayNestedType;
     } else {
-      elementType = arrayNestedType.getField("element") == null ? arrayNestedType : arrayNestedType.getField("element").schema();
+      elementType =
+          arrayNestedType.getField("element").map(HoodieSchemaField::schema).orElse(arrayNestedType);
     }
     for (int i = 0; i < list.size(); i++) {
       Object childFieldData = list.get(i);
@@ -445,7 +454,7 @@ public class HiveAvroSerializer {
     return deserialized;
   }
 
-  private Object serializeMap(MapTypeInfo typeInfo, MapObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
+  private Object serializeMap(MapTypeInfo typeInfo, MapObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
     // Avro only allows maps with string keys
     if (!mapHasStringKey(fieldOI.getMapKeyObjectInspector())) {
       throw new HoodieException("Avro only supports maps with keys as Strings.  Current Map is: " + typeInfo.toString());
@@ -456,7 +465,7 @@ public class HiveAvroSerializer {
     TypeInfo mapKeyTypeInfo = typeInfo.getMapKeyTypeInfo();
     TypeInfo mapValueTypeInfo = typeInfo.getMapValueTypeInfo();
     Map<?, ?> map = fieldOI.getMap(structFieldData);
-    Schema valueType = schema.getValueType();
+    HoodieSchema valueType = schema.getValueType();
 
     Map<Object, Object> deserialized = new LinkedHashMap<Object, Object>(fieldOI.getMapSize(structFieldData));
 
@@ -473,10 +482,10 @@ public class HiveAvroSerializer {
         && ((PrimitiveObjectInspector) mapKeyObjectInspector).getPrimitiveCategory().equals(PrimitiveObjectInspector.PrimitiveCategory.STRING);
   }
 
-  public static GenericRecord rewriteRecordIgnoreResultCheck(GenericRecord oldRecord, Schema newSchema) {
-    GenericRecord newRecord = new GenericData.Record(newSchema);
+  public static GenericRecord rewriteRecordIgnoreResultCheck(GenericRecord oldRecord, HoodieSchema newSchema) {
+    GenericRecord newRecord = new GenericData.Record(newSchema.toAvroSchema());
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
-    for (Schema.Field f : newSchema.getFields()) {
+    for (HoodieSchemaField f : newSchema.getFields()) {
       if (!(isSpecificRecord && isMetadataField(f.name()))) {
         copyOldValueOrSetDefault(oldRecord, newRecord, f);
       }
@@ -484,7 +493,7 @@ public class HiveAvroSerializer {
     return newRecord;
   }
 
-  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field field) {
+  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, HoodieSchemaField field) {
     Schema oldSchema = oldRecord.getSchema();
     Object fieldValue = oldSchema.getField(field.name()) == null ? null : oldRecord.get(field.name());
 
@@ -493,12 +502,13 @@ public class HiveAvroSerializer {
       Object newFieldValue;
       if (fieldValue instanceof GenericRecord) {
         GenericRecord record = (GenericRecord) fieldValue;
-        newFieldValue = rewriteRecordIgnoreResultCheck(record, AvroSchemaUtils.resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
+        HoodieSchema fieldSchema = HoodieSchemaUtils.resolveUnionSchema(field.schema(), record.getSchema().getFullName());
+        newFieldValue = rewriteRecordIgnoreResultCheck(record, fieldSchema);
       } else {
         newFieldValue = fieldValue;
       }
       newRecord.put(field.name(), newFieldValue);
-    } else if (field.defaultVal() instanceof JsonProperties.Null) {
+    } else if (field.defaultVal() == HoodieSchema.NULL_VALUE) {
       newRecord.put(field.name(), null);
     } else {
       newRecord.put(field.name(), field.defaultVal());
