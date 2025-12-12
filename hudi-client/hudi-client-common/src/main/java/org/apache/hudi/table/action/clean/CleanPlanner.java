@@ -260,11 +260,23 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
+    List<String> allPartitionPaths;
     try {
-      return hoodieTable.getMetadataTable().getAllPartitionPaths();
+      allPartitionPaths = hoodieTable.getMetadataTable().getAllPartitionPaths();
     } catch (IOException ioe) {
       throw new HoodieIOException("Fetching all partitions failed ", ioe);
     }
+
+    if (!config.getCleanerPartitionRegex().isEmpty()) {
+      if (config.incrementalCleanerModeEnabled()) {
+        throw new IllegalArgumentException("Incremental Cleaning mode is enabled. Partition regex for clean cannot be used.");
+      }
+      LOG.info("Restricting partition to clean using regex " + config.getCleanerPartitionRegex());
+      allPartitionPaths = allPartitionPaths.stream().filter(p -> p.matches(config.getCleanerPartitionRegex()))
+          .collect(Collectors.toList());
+    }
+
+    return allPartitionPaths;
   }
 
   /**
