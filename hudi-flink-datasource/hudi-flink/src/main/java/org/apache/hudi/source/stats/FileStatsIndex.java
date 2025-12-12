@@ -420,4 +420,16 @@ public class FileStatsIndex implements ColumnStatsIndex {
     ).collect(Collectors.toList());
     return projectNestedColStatsColumns(rows);
   }
+
+  @Override
+  public void close() {
+    if (this.metadataTable == null) {
+      return;
+    }
+    try {
+      this.metadataTable.close();
+    } catch (Exception e) {
+      throw new HoodieException("Exception happened during close metadata table.", e);
+    }
+  }
 }

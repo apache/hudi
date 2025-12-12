@@ -426,13 +426,13 @@ public class TestData {
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
-  public static List<RowData> DATA_SET_WITH_SPECIAL_KEY = Arrays.asList(
-      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(1), 1000, 1,
-          DecimalData.fromBigDecimal(new BigDecimal("1.11"), 38, 18), StringData.fromString("par1")),
-      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(2), 2000, 2,
-          DecimalData.fromBigDecimal(new BigDecimal("2.22"), 38, 18), StringData.fromString("par2")),
-      insertRow(TestConfigurations.PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, TimestampData.fromEpochMillis(3), 3000, 3,
-          DecimalData.fromBigDecimal(new BigDecimal("3.33"), 38, 18), StringData.fromString("par3")));
+  public static List<RowData> DATA_SET_WITH_ATOMIC_TYPES = Arrays.asList(
+      insertRow(TestConfigurations.ROW_TYPE_WITH_ATOMIC_TYPES, true, (byte) 1, (short) 11, 111, 1111L, 10.11f, 11.111, TimestampData.fromEpochMillis(1),
+          1000, 1, DecimalData.fromBigDecimal(new BigDecimal("1.11"), 38, 18), StringData.fromString("str1"), StringData.fromString("par1")),
+      insertRow(TestConfigurations.ROW_TYPE_WITH_ATOMIC_TYPES, true, (byte) 2, (short) 22, 222, 2222L, 20.22f, 22.222, TimestampData.fromEpochMillis(2),
+          2000, 2, DecimalData.fromBigDecimal(new BigDecimal("2.22"), 38, 18), StringData.fromString("str2"), StringData.fromString("par2")),
+      insertRow(TestConfigurations.ROW_TYPE_WITH_ATOMIC_TYPES, true, (byte) 3, (short) 33, 333, 3333L, 30.33f, 33.333, TimestampData.fromEpochMillis(3),
+          3000, 3, DecimalData.fromBigDecimal(new BigDecimal("3.33"), 38, 18), StringData.fromString("str3"), StringData.fromString("par3")));
 
   // data types handled specifically for Hoodie Key
   public static List<RowData> DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE = new ArrayList<>();

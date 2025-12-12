@@ -37,13 +37,20 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utils.TestConfigurations.ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -183,6 +190,41 @@ public class TestRecordLevelIndex {
         conf, metaClient, ExpressionEvaluators.fromExpression(expressions), recordKeyFields, ROW_TYPE_MULTI_KEYS, false);
     // For complex keys, the format should be key1:val1,key2:val2
     assertEquals(Arrays.asList("key1:val1" + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + "key2:val2"), result,
+        "Should return composite key with complex record keys");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testComputeHoodieKeyFromFiltersWithSpecialTypeRecordKey(boolean consistentLogicalTimestampEnabled) {
+    // Setup mock table config with multiple record key fields
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"f_timestamp", "f_decimal"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.of(new String[]{"partition"}));
+
+    Configuration conf = new Configuration();
+    // Test with filters on multiple record key fields
+    List<ResolvedExpression> expressions = Arrays.asList(
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.EQUALS,
+            Arrays.asList(
+                new FieldReferenceExpression("f_timestamp", DataTypes.TIMESTAMP(3), 0, 0),
+                new ValueLiteralExpression(LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")), DataTypes.TIMESTAMP(3).notNull())
+            ),
+            DataTypes.BOOLEAN()),
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.EQUALS,
+            Arrays.asList(
+                new FieldReferenceExpression("f_decimal", DataTypes.DECIMAL(3, 2), 0, 2),
+                new ValueLiteralExpression(new BigDecimal("1.1"), DataTypes.DECIMAL(3, 2).notNull())
+            ),
+            DataTypes.BOOLEAN())
+    );
+    String[] recordKeyFields = {"f_timestamp", "f_decimal"};
+    RowType rowType = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
+    List<String> result = RecordLevelIndex.computeHoodieKeyFromFilters(
+        conf, metaClient, ExpressionEvaluators.fromExpression(expressions), recordKeyFields, rowType, consistentLogicalTimestampEnabled);
+    String expectedTimestamp = consistentLogicalTimestampEnabled ? "1970-01-01T00:00:00.001" : "-28799999";
+    assertEquals(Arrays.asList("f_timestamp:" + expectedTimestamp + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + "f_decimal:1.10"), result,
         "Should return composite key with complex record keys");
   }
 

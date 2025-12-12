@@ -230,7 +230,8 @@ public class TestFileIndex {
 
   @ParameterizedTest
   @MethodSource("filtersAndResults")
-  void testFileListingWithRecordLevelIndex(List<RowData> dataset, DataType dataType, String recordFields, ColumnStatsProbe probe, int maxKeyCnt, int expectedCnt) throws Exception {
+  void testFileListingWithRecordLevelIndex(String recordFields, ColumnStatsProbe probe, int maxKeyCnt, int expectedCnt) throws Exception {
+    DataType dataType = TestConfigurations.ROW_DATA_TYPE_WITH_ATOMIC_TYPES;
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
     conf.set(FlinkOptions.METADATA_ENABLED, true);
@@ -241,7 +242,7 @@ public class TestFileIndex {
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
 
     // Write test data
-    TestData.writeData(dataset, conf);
+    TestData.writeData(TestData.DATA_SET_WITH_ATOMIC_TYPES, conf);
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     // Create a filter on the record key 'uuid' with EQUALS operator to trigger record-level index
@@ -260,19 +261,62 @@ public class TestFileIndex {
   }
 
   private static Stream<Arguments> filtersAndResults() {
+    CallExpression equalTinyInt = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_tinyint", DataTypes.TINYINT(), 0, 0),
+            new ValueLiteralExpression((byte) 1, DataTypes.TINYINT().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression equalSmallInt = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_smallint", DataTypes.SMALLINT(), 0, 0),
+            new ValueLiteralExpression((short) 11, DataTypes.SMALLINT().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression equalInt = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_int", DataTypes.INT(), 0, 0),
+            new ValueLiteralExpression(111, DataTypes.INT().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression equalBigInt = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_bigint", DataTypes.BIGINT(), 0, 0),
+            new ValueLiteralExpression(1111L, DataTypes.BIGINT().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression equalFloat = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_float", DataTypes.FLOAT(), 0, 0),
+            new ValueLiteralExpression(10.11f, DataTypes.FLOAT().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression equalDouble = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_double", DataTypes.DOUBLE(), 0, 0),
+            new ValueLiteralExpression(11.111, DataTypes.DOUBLE().notNull())
+        ),
+        DataTypes.BOOLEAN());
+
     CallExpression equalExpr = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(
-            new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
-            new ValueLiteralExpression("id3", DataTypes.STRING().notNull())
+            new FieldReferenceExpression("f_str", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("str1", DataTypes.STRING().notNull())
         ),
         DataTypes.BOOLEAN());
     CallExpression inExpr = CallExpression.permanent(
         BuiltInFunctionDefinitions.IN,
         Arrays.asList(
-            new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
-            new ValueLiteralExpression("id1", DataTypes.STRING().notNull()),
-            new ValueLiteralExpression("id7", DataTypes.STRING().notNull())
+            new FieldReferenceExpression("f_str", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("str2", DataTypes.STRING().notNull()),
+            new ValueLiteralExpression("str3", DataTypes.STRING().notNull())
         ),
         DataTypes.BOOLEAN());
     CallExpression orExpression = CallExpression.permanent(BuiltInFunctionDefinitions.OR, Arrays.asList(inExpr, equalExpr), DataTypes.BOOLEAN());
@@ -280,16 +324,16 @@ public class TestFileIndex {
     CallExpression equalExpr1 = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(
-            new FieldReferenceExpression("name", DataTypes.STRING(), 0, 0),
-            new ValueLiteralExpression("Julian", DataTypes.STRING().notNull())
+            new FieldReferenceExpression("f_int", DataTypes.INT(), 0, 0),
+            new ValueLiteralExpression(111, DataTypes.INT().notNull())
         ),
         DataTypes.BOOLEAN());
     CallExpression inExpr1 = CallExpression.permanent(
         BuiltInFunctionDefinitions.IN,
         Arrays.asList(
-            new FieldReferenceExpression("name", DataTypes.STRING(), 0, 0),
-            new ValueLiteralExpression("Bob", DataTypes.STRING().notNull()),
-            new ValueLiteralExpression("Danny", DataTypes.STRING().notNull())
+            new FieldReferenceExpression("f_int", DataTypes.INT(), 0, 0),
+            new ValueLiteralExpression(333, DataTypes.INT().notNull()),
+            new ValueLiteralExpression(222, DataTypes.INT().notNull())
         ),
         DataTypes.BOOLEAN());
 
@@ -307,6 +351,13 @@ public class TestFileIndex {
     ColumnStatsProbe probe5 = ColumnStatsProbe.newInstance(Arrays.asList(equalExpr, equalExpr1));
     // id in (id1, id7) and name in ('Bob', 'Danny'), number of filtered file slices is 2.
     ColumnStatsProbe probe6 = ColumnStatsProbe.newInstance(Arrays.asList(inExpr, inExpr1));
+
+    ColumnStatsProbe probeTinyInt = ColumnStatsProbe.newInstance(Collections.singletonList(equalTinyInt));
+    ColumnStatsProbe probeSmallInt = ColumnStatsProbe.newInstance(Collections.singletonList(equalSmallInt));
+    ColumnStatsProbe probeInt = ColumnStatsProbe.newInstance(Collections.singletonList(equalInt));
+    ColumnStatsProbe probeBigInt = ColumnStatsProbe.newInstance(Collections.singletonList(equalBigInt));
+    ColumnStatsProbe probeFloat = ColumnStatsProbe.newInstance(Collections.singletonList(equalFloat));
+    ColumnStatsProbe probeDouble = ColumnStatsProbe.newInstance(Collections.singletonList(equalDouble));
 
     // TIMESTAMP data type tests - using the special data type config with f_timestamp as record key
     CallExpression equalExprTimestamp = CallExpression.permanent(
@@ -342,30 +393,42 @@ public class TestFileIndex {
     CallExpression equalExprDecimal = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(
-            new FieldReferenceExpression("f_decimal", DataTypes.DECIMAL(3, 2), 2, 2),
+            new FieldReferenceExpression("f_decimal", DataTypes.DECIMAL(38, 18), 2, 2),
             new ValueLiteralExpression(new BigDecimal("1.11"), DataTypes.DECIMAL(38, 18).notNull())
         ),
         DataTypes.BOOLEAN());
     ColumnStatsProbe probeDecimal = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprDecimal));
 
     Object[][] data = new Object[][] {
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid", probe1, 8, 1},
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid", probe2, 8, 2},
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid", probe3, 8, 3},
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe4, 8, 0},
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe5, 8, 1},
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe6, 8, 2},
-        // the number of hoodie keys inferred from query predicate is 4, which exceed the configured max
+        {"f_str", probe1, 8, 1},
+        {"f_str", probe2, 8, 2},
+        {"f_str", probe3, 8, 3},
+        {"f_str,f_int", probe4, 8, 0},
+        {"f_str,f_int", probe5, 8, 1},
+        {"f_str,f_int", probe6, 8, 2},
+        // the number of hoodie keys inferred from query predicate is 2, which exceed the configured max
         // number of hoodie keys for record index, thus fallback to not using record index.
-        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe2, 2, 4},
+        {"f_str,f_int", probe2, 1, 3},
+        // key type is TINYINT
+        {"f_tinyint", probeTinyInt, 8, 1},
+        // key type is SMALLINT
+        {"f_smallint", probeSmallInt, 8, 1},
+        // key type is INT
+        {"f_int", probeInt, 8, 1},
+        // key type is BIGINT
+        {"f_bigint", probeBigInt, 8, 1},
+        // key type is FLOAT
+        {"f_float", probeFloat, 8, 1},
+        // key type is DOUBLE
+        {"f_double", probeDouble, 8, 1},
         // key type is TIMESTAMP
-        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_timestamp", probeTimestamp, 8, 1},
+        {"f_timestamp", probeTimestamp, 8, 1},
         // key type is TIME
-        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_time", probeTime, 8, 1},
+        {"f_time", probeTime, 8, 1},
         // key type is DATE
-        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_date", probeDate, 8, 1},
+        {"f_date", probeDate, 8, 1},
         // key type is DECIMAL
-        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_decimal", probeDecimal, 8, 1},
+        {"f_decimal", probeDecimal, 8, 1},
     };
     return Stream.of(data).map(Arguments::of);
   }

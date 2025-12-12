@@ -360,7 +360,6 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
-    conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (tableType == HoodieTableType.MERGE_ON_READ) {

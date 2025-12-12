@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  *
  * <p>It caches the partition paths to avoid redundant look up.
  */
-public class FileIndex implements Serializable {
+public class FileIndex implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(FileIndex.class);
@@ -68,7 +68,7 @@ public class FileIndex implements Serializable {
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
   private final org.apache.hadoop.conf.Configuration hadoopConf;
-  private final PartitionPruners.PartitionPruner partitionPruner;  // for partition pruning
+  private final Option<PartitionPruners.PartitionPruner> partitionPruner;  // for partition pruning
   private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
@@ -89,7 +89,7 @@ public class FileIndex implements Serializable {
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
-    this.partitionPruner = partitionPruner;
+    this.partitionPruner = Option.ofNullable(partitionPruner);
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
     List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
@@ -249,12 +249,7 @@ public class FileIndex implements Serializable {
     }
     List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig)
         : Collections.emptyList();
-    if (this.partitionPruner == null) {
-      this.partitionPaths = allPartitionPaths;
-    } else {
-      Set<String> prunedPartitionPaths = this.partitionPruner.filter(allPartitionPaths);
-      this.partitionPaths = new ArrayList<>(prunedPartitionPaths);
-    }
+    this.partitionPaths = partitionPruner.map(pruner -> pruner.filter(allPartitionPaths).stream().collect(Collectors.toList())).orElse(allPartitionPaths);
     return this.partitionPaths;
   }
 
@@ -288,6 +283,13 @@ public class FileIndex implements Serializable {
 
   private static double percentage(double total, double left) {
     return (total - left) / total;
+  }
+
+  @Override
+  public void close() {
+    this.fileStatsIndex.close();
+    this.recordLevelIndex.ifPresent(RecordLevelIndex::close);
+    this.partitionPruner.ifPresent(PartitionPruners.PartitionPruner::close);
   }
 
   // -------------------------------------------------------------------------

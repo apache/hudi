@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -131,6 +132,7 @@ public class RecordLevelIndex implements FlinkMetadataIndex {
     if (metaClient == null) {
       metaClient = StreamerUtil.createMetaClient(conf);
     }
+    // disallow RLI for new encoding with complex key gen when the table version is lower than NINE.
     if (KeyGenUtils.mayUseNewEncodingForComplexKeyGen(metaClient.getTableConfig())) {
       return Option.empty();
     }
@@ -259,5 +261,17 @@ public class RecordLevelIndex implements FlinkMetadataIndex {
     }
     // to align with the hoodie key generating logic in writer side.
     return RowDataKeyGen.getRecordKey(value, keyField, consistentLogicalTimestampEnabled);
+  }
+
+  @Override
+  public void close() {
+    if (this.metadataTable == null) {
+      return;
+    }
+    try {
+      this.metadataTable.close();
+    } catch (Exception e) {
+      throw new HoodieException("Exception happened during close metadata table.", e);
+    }
   }
 }

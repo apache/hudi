@@ -188,15 +188,23 @@ public class TestConfigurations {
       .fields(ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getFieldNames(), ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getChildren())
       .build();
 
-  public static final DataType PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = DataTypes.ROW(
+  public static final DataType ROW_DATA_TYPE_WITH_ATOMIC_TYPES = DataTypes.ROW(
+          DataTypes.FIELD("f_bool", DataTypes.BOOLEAN()),
+          DataTypes.FIELD("f_tinyint", DataTypes.TINYINT()),
+          DataTypes.FIELD("f_smallint", DataTypes.SMALLINT()),
+          DataTypes.FIELD("f_int", DataTypes.INT()),
+          DataTypes.FIELD("f_bigint", DataTypes.BIGINT()),
+          DataTypes.FIELD("f_float", DataTypes.FLOAT()),
+          DataTypes.FIELD("f_double", DataTypes.DOUBLE()),
           DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
           DataTypes.FIELD("f_time", DataTypes.TIME()),
           DataTypes.FIELD("f_date", DataTypes.DATE()),
           DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(38, 18)),
+          DataTypes.FIELD("f_str", DataTypes.STRING()),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
-  public static final RowType PARTITIONED_ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
+  public static final RowType ROW_TYPE_WITH_ATOMIC_TYPES = (RowType) ROW_DATA_TYPE_WITH_ATOMIC_TYPES.getLogicalType();
 
   public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
 
