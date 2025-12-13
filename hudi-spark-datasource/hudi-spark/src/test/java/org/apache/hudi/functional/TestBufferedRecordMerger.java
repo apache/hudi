@@ -324,9 +324,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         (int) ORDERING_VALUE - 1, "newer_id", "Newer Name", 20, "Older City", 500L);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
+      assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
     } else {
-      assertRowEqual(olderRecord, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
+      assertRowEqual(olderRecord, finalResult.getRecord(), READER_SCHEMA);
     }
     // Case 2: new record has higher ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE + 1, "newer_id", "Newer Name");
@@ -334,14 +334,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE + 1, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
     // Case 3: new record has equal ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE, "newer_id", "Newer Name");
     newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newerRecord, 2, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA.toAvroSchema());
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
   }
 
   private void runPartialDeltaMerge(RecordMergeMode mergeMode) throws IOException {
@@ -361,9 +361,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     InternalRow expected = createFullRecordForPartial(
         (int) ORDERING_VALUE - 1, "new_id", "New Name", 25, "Old City", 1000L);
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, mergedRecord.getRecord(), READER_SCHEMA.toAvroSchema());
+      assertRowEqual(expected, mergedRecord.getRecord(), READER_SCHEMA);
     } else {
-      assertRowEqual(oldRecord, mergedRecord.getRecord(), READER_SCHEMA.toAvroSchema());
+      assertRowEqual(oldRecord, mergedRecord.getRecord(), READER_SCHEMA);
     }
     // Test 2: New record has higher columns ordering value.
     newRecord = createPartialRecord((int) ORDERING_VALUE + 1, "new_id", "New Name");
@@ -782,7 +782,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Option.empty(), // payloadClass
-        READER_SCHEMA.toAvroSchema(), // readerSchema
+        READER_SCHEMA, // readerSchema
         props, // props
         partialUpdateModeOpt
     );
@@ -798,7 +798,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Option.empty(), // payloadClass
-        READER_SCHEMA.toAvroSchema(), // readerSchema
+        READER_SCHEMA, // readerSchema
         props, // props
         Option.of(PartialUpdateMode.IGNORE_DEFAULTS) // partialUpdateMode
     );

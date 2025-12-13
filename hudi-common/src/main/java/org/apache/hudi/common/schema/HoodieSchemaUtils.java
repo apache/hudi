@@ -618,6 +618,7 @@ public final class HoodieSchemaUtils {
    * @param fields     list of fields to project
    * @return projected schema containing only specified fields
    */
+
   public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
     return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
   }

@@ -180,7 +180,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
-          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema.toAvroSchema)
+          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
