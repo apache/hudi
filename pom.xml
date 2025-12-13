@@ -84,7 +84,8 @@
     <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
-    <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
+    <!-- bump to 3.5.3 to fix MSHADE-461 -->
+    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
@@ -142,6 +143,7 @@
     <spark3.version>${spark35.version}</spark3.version>
     <spark4.version>4.0.1</spark4.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink2.1.version>2.1.1</flink2.1.version>
     <flink2.0.version>2.0.0</flink2.0.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
@@ -2650,6 +2652,28 @@
       </activation>
     </profile>
 
+    <profile>
+      <id>flink2.1</id>
+      <properties>
+        <flink.version>${flink2.1.version}</flink.version>
+        <hudi.flink.module>hudi-flink2.1.x</hudi.flink.module>
+        <flink.bundle.version>2.1</flink.bundle.version>
+        <!-- check kafka version -->
+        <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
+        <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
+      </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink2.1.x</module>
+      </modules>
+      <activation>
+        <property>
+          <name>flink2.1</name>
+        </property>
+      </activation>
+    </profile>
     <profile>
       <id>flink2.0</id>
       <properties>
