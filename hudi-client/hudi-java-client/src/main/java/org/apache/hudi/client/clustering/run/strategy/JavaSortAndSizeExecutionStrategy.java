@@ -30,9 +30,8 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -42,9 +41,9 @@ import java.util.Map;
  * 1) Java execution engine.
  * 2) Uses bulk_insert to write data into new files.
  */
+@Slf4j
 public class JavaSortAndSizeExecutionStrategy<T>
     extends JavaExecutionStrategy<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(JavaSortAndSizeExecutionStrategy.class);
 
   public JavaSortAndSizeExecutionStrategy(HoodieTable table,
                                           HoodieEngineContext engineContext,
@@ -57,7 +56,7 @@ public class JavaSortAndSizeExecutionStrategy<T>
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups,
       final String instantTime, final Map<String, String> strategyParams, final Schema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    log.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
