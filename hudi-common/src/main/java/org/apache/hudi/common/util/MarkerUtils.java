@@ -120,7 +120,7 @@ public class MarkerUtils {
         return Option.empty();
       }
       inputStream = storage.open(markerTypeFilePath);
-      String markerType = org.apache.hudi.io.util.FileIOUtils.readAsUTFString(inputStream);
+      String markerType = FileIOUtils.readAsUTFString(inputStream);
       if (StringUtils.isNullOrEmpty(markerType)) {
         return Option.empty();
       }

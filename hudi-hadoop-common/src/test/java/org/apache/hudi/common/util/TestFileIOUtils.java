@@ -46,18 +46,18 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
   @Test
   public void testMkdirAndDelete() throws IOException {
     try {
-      org.apache.hudi.io.util.FileIOUtils.mkdir(tempDir.toFile());
+      FileIOUtils.mkdir(tempDir.toFile());
     } catch (IOException e) {
       fail("Should not error out if dir exists already");
     }
     File dir = tempDir.resolve("dir").toFile();
-    org.apache.hudi.io.util.FileIOUtils.mkdir(dir);
+    FileIOUtils.mkdir(dir);
     assertTrue(dir.exists());
 
     new File(dir, "t.txt").createNewFile();
     new File(dir, "subdir").mkdirs();
     new File(dir, "subdir" + File.pathSeparator + "z.txt").createNewFile();
-    org.apache.hudi.io.util.FileIOUtils.deleteDirectory(dir);
+    FileIOUtils.deleteDirectory(dir);
     assertFalse(dir.exists());
   }
 
@@ -65,9 +65,9 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
   public void testInputStreamReads() throws IOException {
     String msg = "hudi rocks!";
     ByteArrayInputStream inputStream = new ByteArrayInputStream(getUTF8Bytes(msg));
-    assertEquals(msg, org.apache.hudi.io.util.FileIOUtils.readAsUTFString(inputStream));
+    assertEquals(msg, FileIOUtils.readAsUTFString(inputStream));
     inputStream = new ByteArrayInputStream(getUTF8Bytes(msg));
-    assertEquals(msg.length(), org.apache.hudi.io.util.FileIOUtils.readAsByteArray(inputStream).length);
+    assertEquals(msg.length(), FileIOUtils.readAsByteArray(inputStream).length);
   }
 
   @Test
@@ -75,7 +75,7 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
     String content = "a\nb\nc";
     List<String> expectedLines = Arrays.stream(new String[] {"a", "b", "c"}).collect(Collectors.toList());
     ByteArrayInputStream inputStream = new ByteArrayInputStream(getUTF8Bytes(content));
-    assertEquals(expectedLines, org.apache.hudi.io.util.FileIOUtils.readAsUTFStringLines(inputStream));
+    assertEquals(expectedLines, FileIOUtils.readAsUTFStringLines(inputStream));
   }
   
   @Test
@@ -91,10 +91,10 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
     } catch (NoSuchFieldException | IllegalAccessException e) {
       throw new IllegalArgumentException(e);
     }
-    assertEquals(String.join("", org.apache.hudi.io.util.FileIOUtils.getConfiguredLocalDirs()),
+    assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             System.getProperty("java.io.tmpdir"));
     envMaps.put("LOCAL_DIRS", "/xxx");
-    assertEquals(String.join("", org.apache.hudi.io.util.FileIOUtils.getConfiguredLocalDirs()),
+    assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             envMaps.get("LOCAL_DIRS"));
   }
 
@@ -105,7 +105,7 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
 
     // Case when local dirs provided
     System.setProperty("java.io.tmpdir", "dir1,dir2,dir3");
-    String result = org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath();
+    String result = FileIOUtils.getDefaultSpillableMapBasePath();
     assertTrue(result.equals("dir1") || result.equals("dir2") || result.equals("dir3"));
 
     // Clear the property for the next case

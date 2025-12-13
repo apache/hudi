@@ -51,7 +51,7 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
       }
       return this.next != null;
     } catch (Exception e) {
-      org.apache.hudi.io.util.FileIOUtils.closeQuietly(parquetReader);
+      FileIOUtils.closeQuietly(parquetReader);
       throw new HoodieException("unable to read next record from parquet file ", e);
     }
   }
