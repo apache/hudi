@@ -44,19 +44,30 @@ import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionIdentifier;
+import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.configuration.FlinkOptions.HIVE_STYLE_PARTITIONING;
 import static org.apache.hudi.configuration.FlinkOptions.KEYGEN_CLASS_NAME;
@@ -215,6 +226,148 @@ public class TestFileIndex {
 
     List<String> p = fileIndex.getOrBuildPartitionPaths();
     assertEquals(Arrays.asList("par3"), p);
+  }
+
+  @ParameterizedTest
+  @MethodSource("filtersAndResults")
+  void testFileListingWithRecordLevelIndex(List<RowData> dataset, DataType dataType, String recordFields, ColumnStatsProbe probe, int maxKeyCnt, int expectedCnt) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, recordFields);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_RLI_KEYS_MAX_NUM, maxKeyCnt);
+    // Enable record level index specifically for this test
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+
+    // Write test data
+    TestData.writeData(dataset, conf);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // Create a filter on the record key 'uuid' with EQUALS operator to trigger record-level index
+    FileIndex fileIndex =
+        FileIndex.builder()
+            .path(new StoragePath(tempFile.getAbsolutePath()))
+            .conf(conf)
+            .rowType((RowType) dataType.getLogicalType())
+            .metaClient(metaClient)
+            .columnStatsProbe(probe)
+            .build();
+
+    // Get filtered file slices - this should use record-level index data skipping
+    List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
+    assertThat(fileSlices.size(), is(expectedCnt));
+  }
+
+  private static Stream<Arguments> filtersAndResults() {
+    CallExpression equalExpr = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("id3", DataTypes.STRING().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression inExpr = CallExpression.permanent(
+        BuiltInFunctionDefinitions.IN,
+        Arrays.asList(
+            new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("id1", DataTypes.STRING().notNull()),
+            new ValueLiteralExpression("id7", DataTypes.STRING().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression orExpression = CallExpression.permanent(BuiltInFunctionDefinitions.OR, Arrays.asList(inExpr, equalExpr), DataTypes.BOOLEAN());
+
+    CallExpression equalExpr1 = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("name", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("Julian", DataTypes.STRING().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    CallExpression inExpr1 = CallExpression.permanent(
+        BuiltInFunctionDefinitions.IN,
+        Arrays.asList(
+            new FieldReferenceExpression("name", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("Bob", DataTypes.STRING().notNull()),
+            new ValueLiteralExpression("Danny", DataTypes.STRING().notNull())
+        ),
+        DataTypes.BOOLEAN());
+
+    // record predicate with IN, number of filtered file slices is 1.
+    ColumnStatsProbe probe1 = ColumnStatsProbe.newInstance(Collections.singletonList(equalExpr));
+    // record predicate with EQUALS, number of filtered file slices is 2.
+    ColumnStatsProbe probe2 = ColumnStatsProbe.newInstance(Collections.singletonList(inExpr));
+    // record predicate with OR, number of filtered file slices is 3.
+    ColumnStatsProbe probe3 = ColumnStatsProbe.newInstance(Collections.singletonList(orExpression));
+
+    // predicate for two record keys
+    // id = id3 and name in ('Bob', 'Han'), number of filtered file slices is 0.
+    ColumnStatsProbe probe4 = ColumnStatsProbe.newInstance(Arrays.asList(equalExpr, inExpr1));
+    // id = id3 and name = 'Julian', number of filtered file slices is 1.
+    ColumnStatsProbe probe5 = ColumnStatsProbe.newInstance(Arrays.asList(equalExpr, equalExpr1));
+    // id in (id1, id7) and name in ('Bob', 'Danny'), number of filtered file slices is 2.
+    ColumnStatsProbe probe6 = ColumnStatsProbe.newInstance(Arrays.asList(inExpr, inExpr1));
+
+    // TIMESTAMP data type tests - using the special data type config with f_timestamp as record key
+    CallExpression equalExprTimestamp = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_timestamp", DataTypes.TIMESTAMP(3), 0, 0),
+            new ValueLiteralExpression(LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")), DataTypes.TIMESTAMP(3).notNull())
+        ),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probeTimestamp = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprTimestamp));
+
+    // TIME data type tests - using the TIME config with appropriate record key
+    CallExpression equalExprTime = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_time", DataTypes.TIME(), 0, 0),
+            new ValueLiteralExpression(LocalTime.ofSecondOfDay(1), DataTypes.TIME().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probeTime = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprTime));
+
+    // DATE data type tests - using the date config with appropriate record key
+    CallExpression equalExprDate = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_date", DataTypes.DATE(), 0, 0),
+            new ValueLiteralExpression(LocalDate.ofEpochDay(1), DataTypes.DATE().notNull())
+        ),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probeDate = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprDate));
+
+    // DECIMAL data type tests - using decimal ordering config
+    CallExpression equalExprDecimal = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_decimal", DataTypes.DECIMAL(3, 2), 2, 2),
+            new ValueLiteralExpression(new BigDecimal("1.11"), DataTypes.DECIMAL(38, 18).notNull())
+        ),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probeDecimal = ColumnStatsProbe.newInstance(Collections.singletonList(equalExprDecimal));
+
+    Object[][] data = new Object[][] {
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid", probe1, 8, 1},
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid", probe2, 8, 2},
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid", probe3, 8, 3},
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe4, 8, 0},
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe5, 8, 1},
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe6, 8, 2},
+        // the number of hoodie keys inferred from query predicate is 4, which exceed the configured max
+        // number of hoodie keys for record index, thus fallback to not using record index.
+        {TestData.DATA_SET_INSERT, TestConfigurations.ROW_DATA_TYPE, "uuid,name", probe2, 2, 4},
+        // key type is TIMESTAMP
+        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_timestamp", probeTimestamp, 8, 1},
+        // key type is TIME
+        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_time", probeTime, 8, 1},
+        // key type is DATE
+        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_date", probeDate, 8, 1},
+        // key type is DECIMAL
+        {TestData.DATA_SET_WITH_SPECIAL_KEY, TestConfigurations.PARTITIONED_ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE, "f_decimal", probeDecimal, 8, 1},
+    };
+    return Stream.of(data).map(Arguments::of);
   }
 
   private List<FileSlice> getFilteredFileSlices(HoodieTableMetaClient metaClient, FileIndex fileIndex) {

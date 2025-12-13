@@ -51,6 +51,12 @@ public class PartitionStatsIndex extends FileStatsIndex {
   }
 
   @Override
+  public boolean isIndexAvailable() {
+    return getMetaClient().getTableConfig().isMetadataTableAvailable()
+        && getMetaClient().getTableConfig().getMetadataPartitions().contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS);
+  }
+
+  @Override
   public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
     throw new UnsupportedOperationException("This method is not supported by " + this.getClass().getSimpleName());
   }
