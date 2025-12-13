@@ -105,6 +105,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned: " + config.getTableName());
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
+      context.clearJobStatus();
 
       if (partitionsToClean.isEmpty()) {
         LOG.info("Nothing to clean here. It is already clean");
@@ -146,6 +147,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         partitionsToDelete.addAll(cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
             .collect(Collectors.toList()));
       }
+      context.clearJobStatus();
 
       return new HoodieCleanerPlan(
           earliestInstant.map(x -> new HoodieActionInstant(x.requestedTime(), x.getAction(), x.getState().name())).orElse(null),

@@ -111,6 +111,8 @@ public abstract class HoodieEngineContext {
 
   public abstract void setJobStatus(String activeModule, String activityDescription);
 
+  public abstract void clearJobStatus();
+
   public abstract void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids);
 
   public abstract List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey);
