@@ -120,7 +120,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
   protected def getCDCBlocks(relativeLogFile: String, cdcSchema: HoodieSchema): List[HoodieDataBlock] = {
     val logFile = new HoodieLogFile(
       metaClient.getStorage.getPathInfo(new StoragePath(metaClient.getBasePath, relativeLogFile)))
-    val reader = HoodieLogFormat.newReader(storage, logFile, cdcSchema.toAvroSchema)
+    val reader = HoodieLogFormat.newReader(storage, logFile, cdcSchema)
     val blocks = scala.collection.mutable.ListBuffer.empty[HoodieDataBlock]
     while(reader.hasNext) {
       blocks.asJava.add(reader.next().asInstanceOf[HoodieDataBlock])

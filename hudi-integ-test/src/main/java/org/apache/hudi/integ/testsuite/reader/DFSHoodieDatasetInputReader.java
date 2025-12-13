@@ -289,7 +289,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .withLogFilePaths(
               fileSlice.getLogFiles().map(l -> l.getPath().getName())
                   .collect(Collectors.toList()))
-          .withReaderSchema(new Schema.Parser().parse(schemaStr))
+          .withReaderSchema(HoodieSchema.parse(schemaStr))
           .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
               .filterCompletedInstants().lastInstant().get().requestedTime())
           .withMaxMemorySizeInBytes(

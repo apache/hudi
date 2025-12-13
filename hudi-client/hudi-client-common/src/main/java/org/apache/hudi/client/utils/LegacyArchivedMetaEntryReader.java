@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -268,7 +269,7 @@ public class LegacyArchivedMetaEntryReader {
             reader = HoodieLogFormat.newReader(
                 metaClient.getStorage(),
                 new HoodieLogFile(pathInfo.getPath()),
-                HoodieArchivedMetaEntry.getClassSchema());
+                HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()));
           } catch (IOException ioe) {
             throw new HoodieIOException(
                 "Error initializing the reader for archived log: " + pathInfo.getPath(), ioe);

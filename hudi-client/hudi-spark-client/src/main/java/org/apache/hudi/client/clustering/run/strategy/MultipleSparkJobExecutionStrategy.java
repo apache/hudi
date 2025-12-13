@@ -179,12 +179,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                           final Map<String, String> extraMetadata);
 
   protected BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(Map<String, String> strategyParams,
-                                                                  Schema schema) {
+                                                                  HoodieSchema schema) {
     return getPartitioner(strategyParams, schema, true);
   }
 
   protected BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> getRDDPartitioner(Map<String, String> strategyParams,
-                                                                              Schema schema) {
+                                                                              HoodieSchema schema) {
     return getPartitioner(strategyParams, schema, false);
   }
 
@@ -195,7 +195,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
    * @param schema         Schema of the data including metadata fields.
    */
   private <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
-                                                      Schema schema,
+                                                      HoodieSchema schema,
                                                       boolean isRowPartitioner) {
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
@@ -209,11 +209,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
-              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), recordType);
+              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieSchemaUtils.addMetadataFields(schema), recordType);
         case LINEAR:
           return isRowPartitioner
               ? new RowCustomColumnsSortPartitioner(orderByColumns, getWriteConfig())
-              : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema), getWriteConfig());
+              : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieSchemaUtils.addMetadataFields(schema), getWriteConfig());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }

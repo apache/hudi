@@ -229,9 +229,9 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, config),
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.HOODIE_SCHEMA, config),
         records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, config),
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.HOODIE_SCHEMA, config),
         records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
 
 
