@@ -24,7 +24,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -62,10 +64,15 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
     List<Pair<HoodieFileGroupId, String>> fileComparisonPairList =
         fileComparisonPairs.collectAsList().stream()
             .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
+    Option<String> lastInstant = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime);
+    if (lastInstant.isEmpty()) {
+      // No completed instants implies the table is empty. Return empty result.
+      return context.emptyHoodiePairData();
+    }
 
     List<HoodieKeyLookupResult> keyLookupResults =
         CollectionUtils.toStream(
-            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
+            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight, lastInstant.get())
                 .apply(fileComparisonPairList.iterator())
             )
             .flatMap(Collection::stream)
