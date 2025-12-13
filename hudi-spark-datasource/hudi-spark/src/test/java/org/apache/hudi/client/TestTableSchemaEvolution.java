@@ -18,13 +18,14 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -39,7 +40,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -380,11 +380,11 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private List<HoodieRecord> convertToSchema(List<HoodieRecord> records, String schemaStr) {
-    Schema newSchema = new Schema.Parser().parse(schemaStr);
+    HoodieSchema newSchema = HoodieSchema.parse(schemaStr);
     return records.stream().map(r -> {
       HoodieKey key = r.getKey();
       GenericRecord payload = (GenericRecord) ((HoodieAvroIndexedRecord) r).getData();
-      GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema);
+      GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema.toAvroSchema());
       return new HoodieAvroIndexedRecord(key, newPayload);
     }).collect(Collectors.toList());
   }
@@ -401,7 +401,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private static boolean isSchemaCompatible(String oldSchema, String newSchema, boolean shouldAllowDroppedColumns) {
-    return AvroSchemaUtils.isSchemaCompatible(new Schema.Parser().parse(oldSchema), new Schema.Parser().parse(newSchema), shouldAllowDroppedColumns);
+    return HoodieSchemaCompatibility.isSchemaCompatible(HoodieSchema.parse(oldSchema), HoodieSchema.parse(newSchema), shouldAllowDroppedColumns);
   }
 
   @Override

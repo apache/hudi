@@ -97,10 +97,6 @@ import java.util.stream.Collectors;
 import static org.apache.avro.Schema.Type.ARRAY;
 import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -126,7 +122,7 @@ public class HoodieAvroUtils {
   private static final Properties PROPERTIES = new Properties();
 
   // All metadata fields are optional strings.
-  public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
+  public static final Schema METADATA_FIELD_SCHEMA = AvroSchemaUtils.createNullableSchema(Schema.Type.STRING);
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
@@ -320,7 +316,7 @@ public class HoodieAvroUtils {
         parentFields.add(newField);
       }
     }
-    return createNewSchemaFromFieldsWithReference(schema, parentFields);
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, parentFields);
   }
 
   /**
@@ -399,7 +395,7 @@ public class HoodieAvroUtils {
         .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList());
 
-    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
@@ -418,7 +414,7 @@ public class HoodieAvroUtils {
           }
         })
         .collect(Collectors.toList());
-    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   private static Schema initRecordKeySchema() {
@@ -810,7 +806,7 @@ public class HoodieAvroUtils {
       Object val = valueNode.get(part);
 
       if (i == parts.length - 1) {
-        return getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
+        return AvroSchemaUtils.getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
       } else {
         if (!(val instanceof GenericRecord)) {
           throw new HoodieException("Cannot find a record at part value :" + part);
@@ -836,11 +832,11 @@ public class HoodieAvroUtils {
       String part = parts[i];
       try {
         // Resolve nullable/union schema to the actual schema
-        currentSchema = getNonNullTypeFromUnion(currentSchema.getField(part).schema());
+        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema.getField(part).schema());
 
         if (i == parts.length - 1) {
           // Return the schema for the final part
-          return getNonNullTypeFromUnion(currentSchema);
+          return AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
         }
       } catch (Exception e) {
         throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
@@ -877,11 +873,11 @@ public class HoodieAvroUtils {
     if (fieldSchema == null) {
       return fieldValue;
     } else if (fieldValue == null) {
-      checkState(isNullable(fieldSchema));
+      checkState(AvroSchemaUtils.isNullable(fieldSchema));
       return null;
     }
 
-    return convertValueForAvroLogicalTypes(getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
+    return convertValueForAvroLogicalTypes(AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
   }
 
   /**
@@ -1115,7 +1111,7 @@ public class HoodieAvroUtils {
             newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
           } else if (newField.defaultVal() instanceof JsonProperties.Null) {
             newRecord.put(i, null);
-          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
+          } else if (!AvroSchemaUtils.isNullable(newField.schema()) && newField.defaultVal() == null) {
             throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
           } else {
             newRecord.put(i, newField.defaultVal());

@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
+import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -163,7 +163,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     HoodieSchema outputSchema = HoodieSchemaUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),
             partitionColumns.stream()).collect(Collectors.toList()));
-    this.reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(requestedSchema, outputSchema);
+    this.reverseProjection = HoodieArrayWritableSchemaUtils.getReverseProjection(requestedSchema, outputSchema);
   }
 
   @VisibleForTesting
@@ -249,9 +249,9 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   private static HoodieSchema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
-      Schema schema = tableSchemaResolver.getTableAvroSchema(latestCommitTime);
+      HoodieSchema schema = tableSchemaResolver.getTableSchema(latestCommitTime);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-      return HoodieSchema.fromAvroSchema(HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf)));
+      return HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf));
     } catch (Exception e) {
       throw new RuntimeException("Unable to get table schema", e);
     }
@@ -334,6 +334,9 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         // The READ_COLUMN_NAMES_CONF_STR includes all columns from the query, including those used in the WHERE clause,
         // so any column referenced in the filter (non-partition) will appear twice if already present in the project schema,
         // here distinct() is used here to deduplicate the read columns.
-        Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).distinct().collect(Collectors.toList()));
+        Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(","))
+            .filter(c -> !partitionColumns.contains(c))
+            .distinct()
+            .collect(Collectors.toList()));
   }
 }

@@ -19,17 +19,17 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
@@ -55,33 +55,31 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.areSchemasProjectionEquivalent;
-import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.HoodieAvroUtils.createFullName;
 import static org.apache.hudi.avro.HoodieAvroUtils.createNamePrefix;
 import static org.apache.hudi.avro.HoodieAvroUtils.getOldFieldNameWithRenaming;
 import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDate;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
-public class HoodieArrayWritableAvroUtils {
+public class HoodieArrayWritableSchemaUtils {
 
-  public static ArrayWritable rewriteRecordWithNewSchema(ArrayWritable writable, Schema oldSchema, Schema newSchema, Map<String, String> renameCols) {
+  public static ArrayWritable rewriteRecordWithNewSchema(ArrayWritable writable, HoodieSchema oldSchema, HoodieSchema newSchema, Map<String, String> renameCols) {
     return (ArrayWritable) rewriteRecordWithNewSchema(writable, oldSchema, newSchema, renameCols, new LinkedList<>());
   }
 
-  private static Writable rewriteRecordWithNewSchema(Writable writable, Schema oldAvroSchema, Schema newAvroSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
+  private static Writable rewriteRecordWithNewSchema(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     if (writable == null) {
       return null;
     }
-    Schema oldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(oldAvroSchema);
-    Schema newSchema = AvroSchemaUtils.getNonNullTypeFromUnion(newAvroSchema);
-    if (areSchemasProjectionEquivalent(oldSchema, newSchema)) {
+    HoodieSchema oldSchemaNonNull = HoodieSchemaUtils.getNonNullTypeFromUnion(oldSchema);
+    HoodieSchema newSchemaNonNull = HoodieSchemaUtils.getNonNullTypeFromUnion(newSchema);
+    if (HoodieSchemaCompatibility.areSchemasProjectionEquivalent(oldSchemaNonNull, newSchemaNonNull)) {
       return writable;
     }
-    return rewriteRecordWithNewSchemaInternal(writable, oldSchema, newSchema, renameCols, fieldNames);
+    return rewriteRecordWithNewSchemaInternal(writable, oldSchemaNonNull, newSchemaNonNull, renameCols, fieldNames);
   }
 
-  private static Writable rewriteRecordWithNewSchemaInternal(Writable writable, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
+  private static Writable rewriteRecordWithNewSchemaInternal(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(writable instanceof ArrayWritable)) {
@@ -89,41 +87,42 @@ public class HoodieArrayWritableAvroUtils {
         }
 
         ArrayWritable arrayWritable = (ArrayWritable) writable;
-        List<Schema.Field> fields = newSchema.getFields();
+        List<HoodieSchemaField> fields = newSchema.getFields();
         // projection will keep the size from the "from" schema because it gets recycled
         // and if the size changes the reader will fail
         boolean noFieldsRenaming = renameCols.isEmpty();
         String namePrefix = createNamePrefix(noFieldsRenaming, fieldNames);
         Writable[] values = new Writable[Math.max(fields.size(), arrayWritable.get().length)];
         for (int i = 0; i < fields.size(); i++) {
-          Schema.Field newField = newSchema.getFields().get(i);
+          HoodieSchemaField newField = newSchema.getFields().get(i);
           String newFieldName = newField.name();
           fieldNames.push(newFieldName);
-          Schema.Field oldField = noFieldsRenaming
+          Option<HoodieSchemaField> oldFieldOpt = noFieldsRenaming
               ? oldSchema.getField(newFieldName)
               : oldSchema.getField(getOldFieldNameWithRenaming(namePrefix, newFieldName, renameCols));
-          if (oldField != null) {
+          if (oldFieldOpt.isPresent()) {
+            HoodieSchemaField oldField = oldFieldOpt.get();
             values[i] = rewriteRecordWithNewSchema(arrayWritable.get()[oldField.pos()], oldField.schema(), newField.schema(), renameCols, fieldNames);
-          } else if (newField.defaultVal() instanceof JsonProperties.Null) {
+          } else if (newField.defaultVal().isPresent() && newField.defaultVal().get().equals(HoodieSchema.NULL_VALUE)) {
             values[i] = NullWritable.get();
-          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
+          } else if (!newField.schema().isNullable() && newField.defaultVal().isEmpty()) {
             throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
-          } else if (newField.defaultVal() != null) {
-            switch (AvroSchemaUtils.getNonNullTypeFromUnion(newField.schema()).getType()) {
+          } else if (newField.defaultVal().isPresent()) {
+            switch (HoodieSchemaUtils.getNonNullTypeFromUnion(newField.schema()).getType()) {
               case BOOLEAN:
-                values[i] = new BooleanWritable((Boolean) newField.defaultVal());
+                values[i] = new BooleanWritable((Boolean) newField.defaultVal().get());
                 break;
               case INT:
-                values[i] = new IntWritable((Integer) newField.defaultVal());
+                values[i] = new IntWritable((Integer) newField.defaultVal().get());
                 break;
               case LONG:
-                values[i] = new LongWritable((Long) newField.defaultVal());
+                values[i] = new LongWritable((Long) newField.defaultVal().get());
                 break;
               case FLOAT:
-                values[i] = new FloatWritable((Float) newField.defaultVal());
+                values[i] = new FloatWritable((Float) newField.defaultVal().get());
                 break;
               case DOUBLE:
-                values[i] = new DoubleWritable((Double) newField.defaultVal());
+                values[i] = new DoubleWritable((Double) newField.defaultVal().get());
                 break;
               case STRING:
                 values[i] = new Text(newField.defaultVal().toString());
@@ -140,10 +139,10 @@ public class HoodieArrayWritableAvroUtils {
         if ((writable instanceof BytesWritable)) {
           return writable;
         }
-        if (oldSchema.getType() != Schema.Type.STRING && oldSchema.getType() != Schema.Type.ENUM) {
-          throw new SchemaCompatibilityException(String.format("Only ENUM or STRING type can be converted ENUM type. Schema type was %s", oldSchema.getType().getName()));
+        if (oldSchema.getType() != HoodieSchemaType.STRING && oldSchema.getType() != HoodieSchemaType.ENUM) {
+          throw new SchemaCompatibilityException(String.format("Only ENUM or STRING type can be converted ENUM type. Schema type was %s", oldSchema.getType()));
         }
-        if (oldSchema.getType() == Schema.Type.STRING) {
+        if (oldSchema.getType() == HoodieSchemaType.STRING) {
           return new BytesWritable(((Text) writable).copyBytes());
         }
         return writable;
@@ -178,7 +177,7 @@ public class HoodieArrayWritableAvroUtils {
     }
   }
 
-  public static Writable rewritePrimaryType(Writable writable, Schema oldSchema, Schema newSchema) {
+  public static Writable rewritePrimaryType(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema) {
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:
@@ -191,13 +190,14 @@ public class HoodieArrayWritableAvroUtils {
         case STRING:
           return writable;
         case FIXED:
+        case DECIMAL:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
             // Check whether this is a [[Decimal]]'s precision change
-            if (oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
-              LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldSchema.getLogicalType();
+            if (oldSchema.getType() == HoodieSchemaType.DECIMAL) {
+              HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) oldSchema;
               return HiveDecimalUtils.enforcePrecisionScale((HiveDecimalWritable) writable, new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale()));
             } else {
-              throw new HoodieAvroSchemaException("Fixed type size change is not currently supported");
+              throw new HoodieSchemaException("Fixed type size change is not currently supported");
             }
           }
 
@@ -209,93 +209,95 @@ public class HoodieArrayWritableAvroUtils {
           if (Objects.equals(oldSchema.getFullName(), newSchema.getFullName())) {
             return writable;
           } else {
-            LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldSchema.getLogicalType();
+            HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) oldSchema;
             return HiveDecimalUtils.enforcePrecisionScale((HiveDecimalWritable) writable, new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale()));
           }
 
         default:
-          throw new HoodieAvroSchemaException("Unknown schema type: " + newSchema.getType());
+          throw new HoodieSchemaException("Unknown schema type: " + newSchema.getType());
       }
     } else {
       return rewritePrimaryTypeWithDiffSchemaType(writable, oldSchema, newSchema);
     }
   }
 
-  private static Writable rewritePrimaryTypeWithDiffSchemaType(Writable writable, Schema oldSchema, Schema newSchema) {
+  private static Writable rewritePrimaryTypeWithDiffSchemaType(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema) {
     switch (newSchema.getType()) {
       case NULL:
       case BOOLEAN:
-        break;
       case INT:
-        if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
+        break;
+      case DATE:
+        if (oldSchema.getType() == HoodieSchemaType.STRING) {
           return HoodieHiveUtils.getDateWriteable((HoodieAvroUtils.fromJavaDate(java.sql.Date.valueOf(writable.toString()))));
         }
         break;
       case LONG:
-        if (oldSchema.getType() == Schema.Type.INT) {
+        if (oldSchema.getType() == HoodieSchemaType.INT) {
           return new LongWritable(((IntWritable) writable).get());
         }
         break;
       case FLOAT:
-        if ((oldSchema.getType() == Schema.Type.INT)
-            || (oldSchema.getType() == Schema.Type.LONG)) {
-          return oldSchema.getType() == Schema.Type.INT
+        if ((oldSchema.getType() == HoodieSchemaType.INT)
+            || (oldSchema.getType() == HoodieSchemaType.LONG)) {
+          return oldSchema.getType() == HoodieSchemaType.INT
               ? new FloatWritable(((IntWritable) writable).get())
               : new FloatWritable(((LongWritable) writable).get());
         }
         break;
       case DOUBLE:
-        if (oldSchema.getType() == Schema.Type.FLOAT) {
+        if (oldSchema.getType() == HoodieSchemaType.FLOAT) {
           // java float cannot convert to double directly, deal with float precision change
           return new DoubleWritable(Double.parseDouble(((FloatWritable) writable).get() + ""));
-        } else if (oldSchema.getType() == Schema.Type.INT) {
+        } else if (oldSchema.getType() == HoodieSchemaType.INT) {
           return new DoubleWritable(((IntWritable) writable).get());
-        } else if (oldSchema.getType() == Schema.Type.LONG) {
+        } else if (oldSchema.getType() == HoodieSchemaType.LONG) {
           return new DoubleWritable(((LongWritable) writable).get());
         }
         break;
       case BYTES:
-        if (oldSchema.getType() == Schema.Type.STRING) {
+        if (oldSchema.getType() == HoodieSchemaType.STRING) {
           return new BytesWritable(getUTF8Bytes(writable.toString()));
         }
         break;
       case STRING:
-        if (oldSchema.getType() == Schema.Type.ENUM) {
+        if (oldSchema.getType() == HoodieSchemaType.ENUM) {
           return writable;
         }
-        if (oldSchema.getType() == Schema.Type.BYTES) {
+        if (oldSchema.getType() == HoodieSchemaType.BYTES) {
           return new Text(StringUtils.fromUTF8Bytes(((BytesWritable) writable).getBytes()));
         }
-        if (oldSchema.getLogicalType() == LogicalTypes.date()) {
+        if (oldSchema.getType() == HoodieSchemaType.DATE) {
           return new Text(toJavaDate(((IntWritable) writable).get()).toString());
         }
-        if (oldSchema.getType() == Schema.Type.INT
-            || oldSchema.getType() == Schema.Type.LONG
-            || oldSchema.getType() == Schema.Type.FLOAT
-            || oldSchema.getType() == Schema.Type.DOUBLE) {
+        if (oldSchema.getType() == HoodieSchemaType.INT
+            || oldSchema.getType() == HoodieSchemaType.LONG
+            || oldSchema.getType() == HoodieSchemaType.FLOAT
+            || oldSchema.getType() == HoodieSchemaType.DOUBLE) {
           return new Text(writable.toString());
         }
-        if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+        if (oldSchema instanceof HoodieSchema.Decimal) {
           HiveDecimalWritable hdw = (HiveDecimalWritable) writable;
           return new Text(hdw.getHiveDecimal().bigDecimalValue().toPlainString());
         }
         break;
       case FIXED:
-        if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
+      case DECIMAL:
+        if (newSchema instanceof HoodieSchema.Decimal) {
+          HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) newSchema;
           DecimalTypeInfo decimalTypeInfo = new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale());
 
-          if (oldSchema.getType() == Schema.Type.STRING
-              || oldSchema.getType() == Schema.Type.INT
-              || oldSchema.getType() == Schema.Type.LONG
-              || oldSchema.getType() == Schema.Type.FLOAT
-              || oldSchema.getType() == Schema.Type.DOUBLE) {
+          if (oldSchema.getType() == HoodieSchemaType.STRING
+              || oldSchema.getType() == HoodieSchemaType.INT
+              || oldSchema.getType() == HoodieSchemaType.LONG
+              || oldSchema.getType() == HoodieSchemaType.FLOAT
+              || oldSchema.getType() == HoodieSchemaType.DOUBLE) {
             // loses trailing zeros due to hive issue. Since we only read with hive, I think this is fine
             HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(new BigDecimal(writable.toString())));
             return HiveDecimalUtils.enforcePrecisionScale(converted, decimalTypeInfo);
           }
 
-          if (oldSchema.getType() == Schema.Type.BYTES) {
+          if (oldSchema.getType() == HoodieSchemaType.BYTES) {
             ByteBuffer buffer = ByteBuffer.wrap(((BytesWritable) writable).getBytes());
             BigDecimal bd = new BigDecimal(new BigInteger(buffer.array()), decimal.getScale());
             HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(bd));
@@ -305,7 +307,7 @@ public class HoodieArrayWritableAvroUtils {
         break;
       default:
     }
-    throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+    throw new HoodieSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
   private static int[] getReverseProjectionMapping(HoodieSchema from, HoodieSchema to) {
@@ -334,4 +336,3 @@ public class HoodieArrayWritableAvroUtils {
     };
   }
 }
-

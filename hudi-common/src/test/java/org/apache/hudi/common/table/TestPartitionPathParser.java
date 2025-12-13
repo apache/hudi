@@ -77,7 +77,7 @@ class TestPartitionPathParser {
         Arguments.of("default", HoodieSchema.create(HoodieSchemaType.INT), null),
         Arguments.of("2025-01-03", HoodieSchema.create(HoodieSchemaType.STRING), "2025-01-03"),
         Arguments.of("value1", HoodieSchema.create(HoodieSchemaType.BYTES), "value1".getBytes(StandardCharsets.UTF_8)),
-        Arguments.of("value1", HoodieSchema.createFixed("fixed", "docs", null, 50), "value1".getBytes(StandardCharsets.UTF_8))
+        Arguments.of("value1", HoodieSchema.createFixed("fixed", null, "docs",50), "value1".getBytes(StandardCharsets.UTF_8))
     );
   }
 
