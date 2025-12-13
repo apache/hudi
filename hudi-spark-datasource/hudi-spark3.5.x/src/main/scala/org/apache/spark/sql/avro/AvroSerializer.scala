@@ -17,17 +17,18 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.common.schema.HoodieSchema
+
+import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
-import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
-import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
-import org.apache.spark.sql.avro.AvroUtils.{AvroMatchedField, toFieldStr}
+import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
@@ -37,6 +38,7 @@ import org.apache.spark.sql.types._
 
 import java.nio.ByteBuffer
 import java.util.TimeZone
+
 import scala.collection.JavaConverters._
 
 /**
@@ -53,13 +55,13 @@ import scala.collection.JavaConverters._
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroSerializer(rootCatalystType: DataType,
-                                  rootAvroType: HoodieSchema,
+                                  rootHoodieType: HoodieSchema,
                                   nullable: Boolean,
                                   positionalFieldMatch: Boolean,
                                   datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
 
-  def this(rootCatalystType: DataType, rootAvroType: HoodieSchema, nullable: Boolean) = {
-    this(rootCatalystType, rootAvroType, nullable, positionalFieldMatch = false,
+  def this(rootCatalystType: DataType, rootHoodieType: HoodieSchema, nullable: Boolean) = {
+    this(rootCatalystType, rootHoodieType, nullable, positionalFieldMatch = false,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE,
         LegacyBehaviorPolicy.CORRECTED.toString)))
   }
@@ -75,7 +77,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     datetimeRebaseMode, "Avro")
 
   private val converter: Any => Any = {
-    val actualAvroType = resolveNullableType(rootAvroType.getAvroSchema, nullable)
+    val actualAvroType = resolveNullableType(rootHoodieType.toAvroSchema, nullable)
     val baseConverter = try {
       rootCatalystType match {
         case st: StructType =>
@@ -89,7 +91,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       }
     } catch {
       case ise: IncompatibleSchemaException => throw new IncompatibleSchemaException(
-        s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootAvroType.", ise)
+        s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootHoodieType.", ise)
     }
     if (nullable) {
       (data: Any) =>

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.common.schema.{HoodieSchema}
+import org.apache.hudi.common.schema.HoodieSchema
 
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
