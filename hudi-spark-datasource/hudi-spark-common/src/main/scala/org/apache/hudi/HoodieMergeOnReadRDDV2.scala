@@ -39,7 +39,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
@@ -181,7 +180,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
-          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema.toAvroSchema)
+          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
@@ -235,7 +234,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
   }
 
   private def convertAvroToRowIterator(closeableFileGroupRecordIterator: ClosableIterator[IndexedRecord],
-                                       requestedSchema: Schema): Iterator[InternalRow] = {
+                                       requestedSchema: HoodieSchema): Iterator[InternalRow] = {
     val converter = sparkAdapter.createAvroDeserializer(requestedSchema, requiredSchema.structTypeSchema)
     val projection = UnsafeProjection.create(requiredSchema.structTypeSchema)
     new Iterator[InternalRow] with Closeable {

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -42,7 +43,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -183,7 +183,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     job.getConfiguration().set(FileInputFormat.INPUT_DIR_RECURSIVE, "true");
     // To parallelize reading file status.
     job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
-    AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
+    AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (HoodieSchema.parse(schemaStr).getAvroSchema()));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);

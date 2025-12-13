@@ -31,7 +31,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -77,7 +78,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       HoodieCommitMetadata metadata = timeline.readCommitMetadata(timeline.lastInstant().get());
       assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-      assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));
+      assertEquals(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableSchema(false));
       // Data Validations.
       Dataset<Row> df = sparkSession.read().format("hudi").load(basePath);
       assertEquals(numRecords, df.collectAsList().size());

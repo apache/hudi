@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{HoodieCLIUtils, HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
@@ -38,7 +37,6 @@ import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, P
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SaveMode}
@@ -217,7 +215,7 @@ class PartitionBucketIndexManager extends BaseProcedure
       }
 
       val readerContextFactory: ReaderContextFactory[InternalRow] = context.getReaderContextFactory(metaClient)
-      val sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields.toAvroSchema)
+      val sparkSchemaWithMetaFields = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchemaWithMetaFields)
 
       val res: RDD[InternalRow] = if (allFileSlice.isEmpty) {
         spark.sparkContext.emptyRDD

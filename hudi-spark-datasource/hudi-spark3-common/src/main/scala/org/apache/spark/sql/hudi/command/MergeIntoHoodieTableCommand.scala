@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
@@ -36,7 +36,6 @@ import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
 
-import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
 import org.apache.spark.sql.SparkSession
@@ -428,7 +427,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         val orderedUpdatedFieldSeq = getOrderedUpdatedFields(updatedFieldSet)
         writeParams ++= Seq(
           WRITE_PARTIAL_UPDATE_SCHEMA.key ->
-            HoodieAvroUtils.generateProjectionSchema(fullSchema, orderedUpdatedFieldSeq.asJava).toString
+            HoodieAvroUtils.generateProjectionSchema(fullSchema.getAvroSchema, orderedUpdatedFieldSeq.asJava).toString
         )
         true
       } else {
@@ -533,10 +532,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
   }
 
-  private def getTableSchema: Schema = {
+  private def getTableSchema: HoodieSchema = {
     val (structName, nameSpace) = AvroConversionUtils
       .getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
-    AvroConversionUtils.convertStructTypeToAvroSchema(
+    HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
       new StructType(targetTableSchema), structName, nameSpace)
   }
 

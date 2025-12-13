@@ -18,9 +18,12 @@
 
 package org.apache.hudi
 
+import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 
 import scala.collection.JavaConverters._
@@ -163,6 +166,7 @@ object HoodieSchemaConversionUtils {
     StructType(alignedFields)
   }
 
+
   /**
    * Recursively updates element types for complex types (arrays, maps, structs).
    */
@@ -193,5 +197,20 @@ object HoodieSchemaConversionUtils {
 
       case _ => dataType
     }
+  }
+
+  /**
+   * Creates a converter from GenericRecord to InternalRow using HoodieSchema.
+   * This is equivalent to AvroConversionUtils.createAvroToInternalRowConverter() but accepts HoodieSchema.
+   *
+   * @param requiredAvroSchema the HoodieSchema to use for deserialization
+   * @param requiredRowSchema the Spark StructType for the output InternalRow
+   * @return a function that converts GenericRecord to Option[InternalRow]
+   */
+  def createHoodieSchemaToInternalRowConverter(requiredAvroSchema: HoodieSchema, requiredRowSchema: StructType): GenericRecord => Option[InternalRow] = {
+    val deserializer = sparkAdapter.createAvroDeserializer(requiredAvroSchema, requiredRowSchema)
+    record => deserializer
+      .deserialize(record)
+      .map(_.asInstanceOf[InternalRow])
   }
 }

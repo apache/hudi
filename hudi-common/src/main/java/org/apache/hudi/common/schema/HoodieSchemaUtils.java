@@ -574,6 +574,42 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Converts field values for specific data types with logical type handling.
+   * This is equivalent to HoodieAvroUtils.convertValueForSpecificDataTypes() but operates on HoodieSchema.
+   * <p>
+   * Handles special conversions for Avro logical types:
+   * <ul>
+   *   <li>Date type - converts epoch day integer to LocalDate</li>
+   *   <li>Timestamp types - converts epoch milliseconds/microseconds to Timestamp</li>
+   *   <li>Decimal type - converts bytes/fixed to BigDecimal</li>
+   * </ul>
+   *
+   * @param fieldSchema the field schema
+   * @param fieldValue the field value to convert
+   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp handling
+   * @return converted value for logical types, or original value
+   * @throws IllegalStateException if fieldValue is null but schema is not nullable
+   * @since 1.2.0
+   */
+  public static Object convertValueForSpecificDataTypes(HoodieSchema fieldSchema,
+                                                        Object fieldValue,
+                                                        boolean consistentLogicalTimestampEnabled) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    } else if (fieldValue == null) {
+      ValidationUtils.checkState(fieldSchema.isNullable(),
+          "Field value is null but schema is not nullable");
+      return null;
+    }
+
+    // Delegate to existing Avro utility
+    return HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema.toAvroSchema(),
+        fieldValue,
+        consistentLogicalTimestampEnabled
+    );
+  }
+  /**
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
    * the top level field, b is at second level and so on.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
@@ -582,6 +618,7 @@ public final class HoodieSchemaUtils {
    * @param fields     list of fields to project
    * @return projected schema containing only specified fields
    */
+
   public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
     return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
   }

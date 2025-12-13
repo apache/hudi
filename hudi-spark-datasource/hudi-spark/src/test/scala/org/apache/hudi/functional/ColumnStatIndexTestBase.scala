@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSparkUtils, PartitionStatsIndexSupport}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
@@ -36,7 +36,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 
-import org.apache.avro.Schema
+import org.apache.avro.{Schema => AvroSchema}
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._
@@ -69,7 +69,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .add("c7", StringType) // HUDI-8909. To support Byte w/ partition stats index.
       .add("c8", ByteType)
 
-  val sourceTableHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "record", ""))
+  val sourceTableHoodieSchema: HoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sourceTableSchema, "record", "")
 
   @BeforeEach
   override def setUp() {
@@ -299,7 +299,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
+    val localSourceTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -341,7 +341,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
+    val localSourceTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val pStatsIndex = new PartitionStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -573,7 +573,7 @@ object ColumnStatIndexTestBase {
   }
 
   trait WrapperCreator {
-    def create(orig: JBigDecimal, sch: Schema): DecimalWrapper
+    def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper
   }
 
   // Test cases for column stats index with DecimalWrapper
@@ -584,7 +584,7 @@ object ColumnStatIndexTestBase {
         "ByteBuffer Test",
         new JBigDecimal("123.45"),
         new WrapperCreator {
-          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
+          override def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper =
             new DecimalWrapper {
               // Return a ByteBuffer computed via Avro's DecimalConversion.`
               override def getValue: ByteBuffer =
@@ -597,7 +597,7 @@ object ColumnStatIndexTestBase {
         "Java BigDecimal Test",
         new JBigDecimal("543.21"),
         new WrapperCreator {
-          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
+          override def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper =
             new DecimalWrapper {
               override def getValue: ByteBuffer =
                 ColumnStatsIndexSupport.decConv.toBytes(orig, sch, sch.getLogicalType)
@@ -609,7 +609,7 @@ object ColumnStatIndexTestBase {
         "Scala BigDecimal Test",
         scala.math.BigDecimal("987.65").bigDecimal,
         new WrapperCreator {
-          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
+          override def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper =
             new DecimalWrapper {
               override def getValue: ByteBuffer =
                 // Here we explicitly use orig (which comes from Scala BigDecimal converted to java.math.BigDecimal)

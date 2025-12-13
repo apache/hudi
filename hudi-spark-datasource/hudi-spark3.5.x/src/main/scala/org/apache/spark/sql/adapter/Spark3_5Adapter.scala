@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark35HoodieFileScanRDD
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.avro.Schema
@@ -87,11 +88,11 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
 
   override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark35PartitionedFileUtils
 
-  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_5AvroSerializer(rootCatalystType, rootAvroType, nullable)
 
-  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
-    new HoodieSpark3_5AvroDeserializer(rootAvroType, rootCatalystType)
+  override def createAvroDeserializer(rootHoodieType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark3_5AvroDeserializer(rootHoodieType, rootCatalystType)
 
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_5ExtendedSqlParser(spark, delegate)

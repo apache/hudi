@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -46,7 +47,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -74,7 +74,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalTestHarness {
-  private static final Schema SCHEMA = getAvroSchema("AvroSchema", "AvroSchemaNS");
+  private static final HoodieSchema SCHEMA = getHoodieSchema("AvroSchema", "AvroSchemaNS");
   private final Map<String, String> properties = new HashMap<>();
   private HoodieTableMetaClient metaClient;
 
@@ -144,11 +144,11 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     return records.stream().map(r -> r.getKey()).collect(Collectors.toList());
   }
 
-  private static Schema getAvroSchema(String schemaName, String schemaNameSpace) {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
+  private static HoodieSchema getHoodieSchema(String schemaName, String schemaNameSpace) {
+    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
   }
 
-  public HoodieWriteConfig getWriteConfig(Schema avroSchema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
+  public HoodieWriteConfig getWriteConfig(HoodieSchema hoodieSchema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
     properties.put(RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
     properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
     properties.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
@@ -171,19 +171,19 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
     return getConfigBuilder(true)
         .withPath(basePath())
-        .withSchema(avroSchema.toString())
+        .withSchema(hoodieSchema.toString())
         .withProps(properties)
         .build();
   }
 
-  public HoodieWriteConfig buildDefaultWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, DefaultMerger.class.getName(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, RecordMergeMode.EVENT_TIME_ORDERING);
+  public HoodieWriteConfig buildDefaultWriteConfig(HoodieSchema hoodieSchema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(hoodieSchema, DefaultMerger.class.getName(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, RecordMergeMode.EVENT_TIME_ORDERING);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
     return writeConfig;
   }
 
-  public HoodieWriteConfig buildCustomWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
+  public HoodieWriteConfig buildCustomWriteConfig(HoodieSchema hoodieSchema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(hoodieSchema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
     return writeConfig;
   }

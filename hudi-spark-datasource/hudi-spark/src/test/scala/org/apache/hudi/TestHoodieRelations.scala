@@ -17,9 +17,8 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
+import org.apache.hudi.common.schema.HoodieSchema
 
-import org.apache.avro.Schema
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -40,8 +39,8 @@ class TestHoodieRelations {
       "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}," +
       "{\"name\":\"partition\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
 
-    val tableAvroSchema = new Schema.Parser().parse(avroSchemaString)
-    val tableStructSchema = convertAvroSchemaToStructType(tableAvroSchema)
+    val tableAvroSchema = HoodieSchema.parse(avroSchemaString)
+    val tableStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableAvroSchema)
 
     val (requiredAvroSchema, requiredStructSchema, _) =
       HoodieBaseRelation.projectSchema(Left(tableAvroSchema), Array("ts"))

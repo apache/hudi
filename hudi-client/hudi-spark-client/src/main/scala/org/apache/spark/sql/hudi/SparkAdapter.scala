@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConverters}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -94,13 +95,13 @@ trait SparkAdapter extends Serializable {
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
    * Spark's [[InternalRow]] into Avro payloads
    */
-  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer
+  def createAvroSerializer(rootCatalystType: DataType, rootHoodieType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer
 
   /**
    * Creates instance of [[HoodieAvroDeserializer]] providing for ability to deserialize
    * Avro payloads into Spark's [[InternalRow]]
    */
-  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
+  def createAvroDeserializer(rootHoodieType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer
 
   /**
    * Create the hoodie's extended spark sql parser.

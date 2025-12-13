@@ -21,6 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSo
 import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -28,7 +29,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
-import org.apache.avro.Schema
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
@@ -331,16 +331,16 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
                              recordCount: Int,
                              opts: Map[String, String],
                              populateMetaFields: Boolean,
-                             dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], Schema) = {
+                             dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], HoodieSchema) = {
     val dataGen = dataGenOpt.getOrElse(new HoodieTestDataGenerator(0x12345))
 
     // Bulk Insert Operation
     val schema =
-      if (populateMetaFields) HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS
-      else HoodieTestDataGenerator.AVRO_SCHEMA
+      if (populateMetaFields) HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS
+      else HoodieTestDataGenerator.HOODIE_SCHEMA
 
     val records = dataGen.generateInserts("001", recordCount)
-    val inputDF: Dataset[Row] = toDataset(records, HoodieTestDataGenerator.AVRO_SCHEMA)
+    val inputDF: Dataset[Row] = toDataset(records, HoodieTestDataGenerator.HOODIE_SCHEMA.getAvroSchema)
 
     inputDF.write.format("org.apache.hudi")
       .options(opts)
@@ -358,7 +358,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
                                 updatedRecordsRatio: Double,
                                 opts: Map[String, String],
                                 populateMetaFields: Boolean,
-                                dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], Schema) = {
+                                dataGenOpt: Option[HoodieTestDataGenerator] = None): (List[HoodieRecord[_]], HoodieSchema) = {
     val dataGen = dataGenOpt.getOrElse(new HoodieTestDataGenerator(0x12345))
 
     // Step 1: Bootstrap table w/ N records (t/h bulk-insert)
@@ -390,7 +390,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
                                 opts: Map[String, String],
                                 populateMetaFields: Boolean,
                                 dataGenOpt: Option[HoodieTestDataGenerator] = None,
-                                inlineCompact: Boolean = false): (List[HoodieRecord[_]], Schema) = {
+                                inlineCompact: Boolean = false): (List[HoodieRecord[_]], HoodieSchema) = {
     val dataGen = dataGenOpt.getOrElse(new HoodieTestDataGenerator(0x12345))
 
     // Step 1: Bootstrap table w/ N records (t/h bulk-insert)
@@ -430,5 +430,5 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     (r, bytesRead)
   }
 
-  case class TableState(path: String, schema: Schema, targetRecordCount: Long, targetUpdatedRecordsRatio: Double)
+  case class TableState(path: String, schema: HoodieSchema, targetRecordCount: Long, targetUpdatedRecordsRatio: Double)
 }
