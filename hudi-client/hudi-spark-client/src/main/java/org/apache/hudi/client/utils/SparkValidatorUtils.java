@@ -18,7 +18,9 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
@@ -146,14 +148,34 @@ public class SparkValidatorUtils {
             sqlContext.emptyDataFrame().rdd(), newStructTypeSchema);
       }
     }
-    return readRecordsForBaseFiles(sqlContext, committedFiles);
+    return readRecordsForBaseFiles(sqlContext, committedFiles, table);
   }
 
   /**
    * Get records from specified list of data files.
    */
-  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaScalaConverters.<String>convertJavaListToScalaSeq(baseFilePaths));
+  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths,
+      HoodieTable table) {
+    final Schema schemaWithMetaFields;
+    String schemaStr = table.getConfig().getWriteSchema();
+    if (!StringUtils.isNullOrEmpty(schemaStr)) {
+      schemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(table.getConfig().getWriteSchema()));
+    } else {
+      LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
+      try {
+        schemaWithMetaFields = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema();
+      } catch (Exception e) {
+        LOG.error(String.format("Failed parsing schema from latest commit with exception %s, "
+            + "defaulting to inferring schema from data files", e));
+        return sqlContext
+            .read()
+            .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
+      }
+    }
+    return sqlContext
+        .read()
+        .schema(AvroConversionUtils.convertAvroSchemaToStructType(schemaWithMetaFields))
+        .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
   }
 
   /**
@@ -181,6 +203,6 @@ public class SparkValidatorUtils {
       return sqlContext.emptyDataFrame();
     }
 
-    return readRecordsForBaseFiles(sqlContext, newFiles);
+    return readRecordsForBaseFiles(sqlContext, newFiles, table);
   }
 }
