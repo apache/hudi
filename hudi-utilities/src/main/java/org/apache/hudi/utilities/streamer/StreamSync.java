@@ -26,6 +26,7 @@ import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
@@ -147,7 +148,6 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.DataSourceUtils.createUserDefinedBulkInsertPartitioner;
-import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
@@ -729,7 +729,7 @@ public class StreamSync implements Serializable, Closeable {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
         HoodieSchema incomingSchema = transformed.map(df ->
-                HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName))))
+                HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), AvroSchemaUtils.getAvroRecordQualifiedName(cfg.targetTableName))))
             .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetHoodieSchema);
         schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 

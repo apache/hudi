@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -50,7 +49,6 @@ import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.types.DataType;
@@ -109,7 +107,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema.toAvroSchema()));
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
   }
 
   @Override
@@ -209,8 +207,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
   }
 
-  private List<ExpressionPredicates.Predicate> getSafePredicates(Schema requiredSchema) {
-    boolean hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME);
+  private List<ExpressionPredicates.Predicate> getSafePredicates(HoodieSchema requiredSchema) {
+    boolean hasRowIndexField = requiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent();
     if (!getHasLogFiles() && !getNeedsBootstrapMerge()) {
       return allPredicates;
     } else if (!getHasLogFiles() && hasRowIndexField) {

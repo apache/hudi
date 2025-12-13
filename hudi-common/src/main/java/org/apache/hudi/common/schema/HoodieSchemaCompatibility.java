@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.avro.AvroSchemaCompatibility;
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import java.util.Collections;
 import java.util.Set;
@@ -112,13 +115,36 @@ public final class HoodieSchemaCompatibility {
    * Checks if two schemas are compatible in terms of data reading.
    * This uses the same logic as AvroSchemaUtils.isSchemaCompatible() but for HoodieSchemas.
    *
-   * @param readerSchema the schema used to read the data
-   * @param writerSchema the schema used to write the data
+   * @param prevSchema previous instance of the schema
+   * @param newSchema new instance of the schema
    * @return true if reader schema can read data written with writer schema
    * @throws IllegalArgumentException if schemas are null
    */
-  public static boolean isSchemaCompatible(HoodieSchema readerSchema, HoodieSchema writerSchema) {
-    return isSchemaCompatible(readerSchema, writerSchema, true);
+  public static boolean isSchemaCompatible(HoodieSchema prevSchema, HoodieSchema newSchema) {
+    return isSchemaCompatible(prevSchema, newSchema, true);
+  }
+
+  /**
+   * Establishes whether {@code newSchema} is compatible w/ {@code prevSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}.
+   * From avro's compatibility standpoint, prevSchema is writer schema and new schema is reader schema.
+   * {@code newSchema} is considered compatible to {@code prevSchema}, iff data written using {@code prevSchema}
+   * could be read by {@code newSchema}
+   *
+   * @param prevSchema previous instance of the schema
+   * @param newSchema new instance of the schema
+   * @param checkNaming     controls whether schemas fully-qualified names should be checked
+   * @param allowProjection whether to allow fewer fields in reader schema
+   * @return true if reader schema can read data written with writer schema
+   * @throws IllegalArgumentException if schemas are null
+   */
+  public static boolean isSchemaCompatible(HoodieSchema prevSchema, HoodieSchema newSchema,
+      boolean checkNaming, boolean allowProjection) {
+    ValidationUtils.checkArgument(prevSchema != null, "Prev schema cannot be null");
+    ValidationUtils.checkArgument(newSchema != null, "New schema cannot be null");
+
+    // Use HoodieSchemaUtils delegation for consistency
+    return AvroSchemaUtils.isSchemaCompatible(prevSchema.toAvroSchema(), newSchema.toAvroSchema(), checkNaming, allowProjection);
   }
 
   /**
@@ -190,5 +216,37 @@ public final class HoodieSchemaCompatibility {
       return false;
     }
     return AvroSchemaUtils.areSchemasProjectionEquivalent(schema1.toAvroSchema(), schema2.toAvroSchema());
+  }
+
+  /**
+   * Identifies the writer field that corresponds to the specified reader field.
+   * This function is adapted from AvroSchemaCompatibility#lookupWriterField
+   *
+   * <p>
+   * Matching includes reader name aliases.
+   * </p>
+   *
+   * @param writerSchema Schema of the record where to look for the writer field.
+   * @param readerField  Reader field to identify the corresponding writer field
+   *                     of.
+   * @return the writer field, if any does correspond, or None.
+   */
+  public static HoodieSchemaField lookupWriterField(final HoodieSchema writerSchema, final HoodieSchemaField readerField) {
+    ValidationUtils.checkArgument(writerSchema.getType() == HoodieSchemaType.RECORD, writerSchema + " is not a record");
+    Option<HoodieSchemaField> directOpt = writerSchema.getField(readerField.name());
+    // Check aliases
+    for (final String readerFieldAliasName : readerField.getAvroField().aliases()) {
+      final Option<HoodieSchemaField> writerFieldOpt = writerSchema.getField(readerFieldAliasName);
+      if (writerFieldOpt.isPresent()) {
+        if (directOpt.isPresent()) {
+          // Multiple matches found, fail fast
+          throw new HoodieSchemaException(String.format(
+              "Reader record field %s matches multiple fields in writer record schema %s", readerField, writerSchema));
+        }
+        directOpt = writerFieldOpt;
+      }
+    }
+
+    return directOpt.orElse(null);
   }
 }
