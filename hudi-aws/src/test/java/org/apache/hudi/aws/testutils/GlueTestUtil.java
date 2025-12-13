@@ -49,7 +49,6 @@ import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -74,7 +73,6 @@ public class GlueTestUtil {
     glueSyncProps.setProperty(GLUE_SYNC_DATABASE_NAME.key(), DB_NAME);
     glueSyncProps.setProperty(GLUE_SYNC_TABLE_NAME.key(), TABLE_NAME);
     glueSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    glueSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     glueSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
     glueSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     glueSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");

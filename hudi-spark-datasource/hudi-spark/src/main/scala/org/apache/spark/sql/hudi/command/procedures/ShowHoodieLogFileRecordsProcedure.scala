@@ -25,7 +25,8 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
-import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
+import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.generic.IndexedRecord

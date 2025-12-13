@@ -17,8 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.io.util;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
