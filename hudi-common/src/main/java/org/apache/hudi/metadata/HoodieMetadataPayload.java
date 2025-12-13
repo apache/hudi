@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.SerializableMetadataIndexedRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -197,18 +198,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final HoodieMetadataFileInfo DELETE_FILE_METADATA = new HoodieMetadataFileInfo(0L, true);
   protected String key = null;
   protected int type = 0;
+  protected SerializableMetadataIndexedRecord indexedRecord = null;
   protected Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
-  protected HoodieMetadataBloomFilter bloomFilterMetadata = null;
-  protected HoodieMetadataColumnStats columnStatMetadata = null;
+  private HoodieMetadataBloomFilter bloomFilterMetadata = null;
+  private HoodieMetadataColumnStats columnStatMetadata = null;
   protected HoodieRecordIndexInfo recordIndexMetadata;
-  protected HoodieSecondaryIndexInfo secondaryIndexMetadata;
+  private HoodieSecondaryIndexInfo secondaryIndexMetadata;
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
-    this(Option.ofNullable(record));
+    // TODO(yihua): can record be null for metadata payload? fix the record type to be derived without deserialization
+    // TODO(yihua): a new merger class might be the way to go?
+    this(Option.ofNullable(record), record != null ? (int) record.get(SCHEMA_FIELD_NAME_TYPE) : 0);
   }
 
-  public HoodieMetadataPayload(Option<GenericRecord> recordOpt) {
+  public HoodieMetadataPayload(Option<GenericRecord> recordOpt, int type) {
     if (recordOpt.isPresent()) {
       GenericRecord record = recordOpt.get();
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
@@ -218,8 +222,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       //       for it to be handled appropriately, therefore these fields have to be reflected
       //       in any (read-)projected schema
       key = record.get(KEY_FIELD_NAME).toString();
-      type = (int) record.get(SCHEMA_FIELD_NAME_TYPE);
-      MetadataPartitionType.get(type).constructMetadataPayload(this, record);
+      this.type = (type == 2 && key.equals(RECORDKEY_PARTITION_LIST)) ? 1 : type;
+      if (record instanceof SerializableMetadataIndexedRecord) {
+        indexedRecord = (SerializableMetadataIndexedRecord) record;
+      } else {
+        MetadataPartitionType.get(type).constructMetadataPayload(this, record);
+      }
     } else {
       this.isDeletedRecord = true;
     }
@@ -260,6 +268,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.recordIndexMetadata = recordIndexMetadata;
     this.secondaryIndexMetadata = secondaryIndexMetadata;
     this.isDeletedRecord = isDeletedRecord;
+  }
+
+  public Map<String, HoodieMetadataFileInfo> getFilesystemMetadata() {
+    if (indexedRecord != null) {
+      MetadataPartitionType.FILES.constructMetadataPayload(this, indexedRecord);
+      indexedRecord = null;
+    }
+    return filesystemMetadata;
+  }
+
+  public void setFilesystemMetadata(Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    this.filesystemMetadata = filesystemMetadata;
+  }
+
+  public void setBloomFilterMetadata(HoodieMetadataBloomFilter bloomFilterMetadata) {
+    this.bloomFilterMetadata = bloomFilterMetadata;
+  }
+
+  public void setColumnStatMetadata(HoodieMetadataColumnStats columnStatMetadata) {
+    this.columnStatMetadata = columnStatMetadata;
+  }
+
+  public void setRecordIndexMetadata(HoodieRecordIndexInfo recordIndexMetadata) {
+    this.recordIndexMetadata = recordIndexMetadata;
+  }
+
+  public void setSecondaryIndexMetadata(HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+    this.secondaryIndexMetadata = secondaryIndexMetadata;
   }
 
   /**
@@ -305,7 +341,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     String partitionIdentifier = getPartitionIdentifierForFilesPartition(partition);
     HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
     if (isPartitionDeleted) {
-      return new HoodieAvroRecord<>(key, new HoodieMetadataPayload(Option.empty()));
+      return new HoodieAvroRecord<>(key, new HoodieMetadataPayload(Option.empty(), MetadataPartitionType.FILES.getRecordType()));
     }
 
     int size = filesAdded.size() + filesDeleted.size();
@@ -394,7 +430,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema, Properties properties) throws IOException {
-    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
+    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord), type);
     HoodieRecordPayload combinedPayload = preCombine(anotherPayload);
     return combinedPayload.getInsertValue(schema, properties);
   }
@@ -415,11 +451,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     // it creates a new Schema object that's not the same reference as HOODIE_METADATA_SCHEMA
     if (schema == null || HOODIE_METADATA_SCHEMA.equals(schema)) {
       // If the schema is same or none is provided, we can return the record directly
+      if (indexedRecord != null) {
+        return Option.of(indexedRecord);
+      }
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
       return Option.of(record);
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
+      if (indexedRecord != null) {
+        MetadataPartitionType.get(type).constructMetadataPayload(this, indexedRecord);
+        indexedRecord = null;
+      }
+
       GenericData.Record record = new GenericData.Record(schema);
       record.put(KEY_FIELD_OFFSET, key);
       record.put(TYPE_FIELD_OFFSET, type);
@@ -465,6 +509,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Get the bloom filter metadata from this payload.
    */
   public Option<HoodieMetadataBloomFilter> getBloomFilterMetadata() {
+    if (indexedRecord != null) {
+      MetadataPartitionType.BLOOM_FILTERS.constructMetadataPayload(this, indexedRecord);
+      indexedRecord = null;
+    }
+
     if (bloomFilterMetadata == null) {
       return Option.empty();
     }
@@ -476,6 +525,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Get the bloom filter metadata from this payload.
    */
   public Option<HoodieMetadataColumnStats> getColumnStatMetadata() {
+    if (indexedRecord != null) {
+      MetadataPartitionType.COLUMN_STATS.constructMetadataPayload(this, indexedRecord);
+      indexedRecord = null;
+    }
+
     if (columnStatMetadata == null) {
       return Option.empty();
     }
@@ -499,11 +553,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private Stream<Map.Entry<String, HoodieMetadataFileInfo>> filterFileInfoEntries(boolean isDeleted) {
-    if (filesystemMetadata == null) {
+    if (getFilesystemMetadata() == null) {
       return Stream.empty();
     }
 
-    return filesystemMetadata.entrySet().stream().filter(e -> e.getValue().getIsDeleted() == isDeleted);
+    return getFilesystemMetadata().entrySet().stream().filter(e -> e.getValue().getIsDeleted() == isDeleted);
   }
 
   /**
@@ -727,10 +781,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * If this is a record-level index entry, returns the file to which this is mapped.
    */
   public HoodieRecordGlobalLocation getRecordGlobalLocation() {
+    if (indexedRecord != null) {
+      MetadataPartitionType.get(type).constructMetadataPayload(this, indexedRecord);
+      indexedRecord = null;
+    }
     return getLocationFromRecordIndexInfo(recordIndexMetadata);
   }
 
   public String getDataPartition() {
+    if (indexedRecord != null) {
+      MetadataPartitionType.get(type).constructMetadataPayload(this, indexedRecord);
+      indexedRecord = null;
+    }
     return recordIndexMetadata.getPartitionName();
   }
 

@@ -244,14 +244,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!partitionFileSlices.isEmpty(), () -> "Number of file slices for partition " + partitionName + " should be > 0");
-
+    int recordType = MetadataPartitionType.fromPartitionPath(partitionName).getRecordType();
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
         getEngineContext().parallelize(partitionFileSlices))
         .flatMap(
             (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice ->
                 readSliceAndFilterByKeysIntoList(partitionName, sortedKeyPrefixes, fileSlice,
                     metadataRecord -> {
-                      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+                      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord), recordType);
                       String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
                       HoodieKey key = new HoodieKey(rowKey, partitionName);
                       return new HoodieAvroRecord<>(key, payload);
@@ -583,10 +583,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> readSliceAndFilterByKeys(String partitionName,
                                                                                                        List<String> sortedKeys,
                                                                                                        FileSlice fileSlice) {
-    boolean isSecondaryIndex = MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX);
+    MetadataPartitionType metadataPartitionType = MetadataPartitionType.fromPartitionPath(partitionName);
+    boolean isSecondaryIndex = metadataPartitionType.equals(MetadataPartitionType.SECONDARY_INDEX);
+    int recordType = metadataPartitionType.getRecordType();
     return new CloseableFilterIterator<>(
         readSliceAndFilterByKeysIntoList(partitionName, sortedKeys, fileSlice, metadataRecord -> {
-          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord), recordType);
           String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
           HoodieKey hoodieKey = new HoodieKey(rowKey, partitionName);
           return Pair.of(rowKey, new HoodieAvroRecord<>(hoodieKey, payload));
@@ -598,9 +600,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                  Collection<String> keys,
                                                                                  FileSlice fileSlice,
                                                                                  boolean isFullKey) {
+    int recordType = MetadataPartitionType.fromPartitionPath(partitionName).getRecordType();
     return new CloseableFilterIterator<>(
       readSliceAndFilterByKeysIntoList(partitionName, keys, fileSlice, metadataRecord -> {
-        HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+        HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord), recordType);
         return new HoodieAvroRecord<>(new HoodieKey(payload.key, partitionName), payload);
       }, isFullKey),
         r -> !r.getData().isDeleted());
