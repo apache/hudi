@@ -54,7 +54,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
   public AsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient, boolean runInDaemonMode) {
     super(writeClient.getConfig(), runInDaemonMode);
-    this.clusteringClient = createClusteringClient(writeClient);
+    this.clusteringClient = createClusteringClient(writeClient.createNewClient());
     this.maxConcurrentClustering = 1;
     this.context = context;
   }
@@ -102,6 +102,12 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
    * Update the write client to be used for clustering.
    */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.clusteringClient.updateWriteClient(writeClient);
+    this.clusteringClient.updateWriteClient(writeClient.createNewClient());
+  }
+
+  @Override
+  public void shutdown(boolean force) {
+    super.shutdown(force);
+    clusteringClient.close();
   }
 }
