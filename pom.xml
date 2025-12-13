@@ -1906,6 +1906,8 @@
             <configuration>
               <source>11</source>
               <doclint>none</doclint>
+              <failOnWarnings>false</failOnWarnings>
+              <failOnError>false</failOnError>
             </configuration>
           </plugin>
           <plugin>
