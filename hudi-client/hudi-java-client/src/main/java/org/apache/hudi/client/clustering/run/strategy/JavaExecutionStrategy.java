@@ -43,9 +43,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,10 +57,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Clustering strategy for Java engine.
  */
+@Slf4j
 public abstract class JavaExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JavaExecutionStrategy.class);
 
   public JavaExecutionStrategy(
       HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
@@ -142,7 +140,7 @@ public abstract class JavaExecutionStrategy<T>
     HoodieWriteConfig config = getWriteConfig();
     List<HoodieRecord<T>> records = new ArrayList<>();
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+    log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
     clusteringOps.forEach(op -> suppliers.add(() -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient()), op, instantTime, maxMemoryPerCompaction)));
