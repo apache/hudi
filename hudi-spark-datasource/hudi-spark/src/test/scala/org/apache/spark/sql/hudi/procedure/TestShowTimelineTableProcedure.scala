@@ -518,7 +518,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     // Test Case 1: Timeline total
     // Note: Completed compaction creates additional instants (REQUESTED, INFLIGHT compaction, COMPLETED commit)
     {
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, limit => 100)").collect()
       assert(results.length == expectedTotal, s"Test 1: Expected total count $expectedTotal, got ${results.length}")
       assert(results(0).getString(0) == activeInstants.head._1, s"Test 1: Expected first instant not found in results")
       assert(results(expectedTotal - 1).getString(0) == archivedInstants.last._1, s"Test 1: Expected last instant not found in results")
@@ -527,7 +527,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
 
     // Test Case 2: Limit 10
     {
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 10)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, limit => 10)").collect()
       assert(results.length == 10, s"Test 2: Expected count 10 with limit, got ${results.length}")
       assert(results(0).getString(0) == activeInstants.head._1, s"Test 2: Expected first instant not found in results")
       assert(results(9).getString(0) == activeInstants(9)._1, s"Test 2: Expected last instant not found in results")
@@ -535,7 +535,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
 
     // Test Case 3: Limit 20, verify active has 20 and archived has 0
     {
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true)").collect()
       assert(results.length == 20, s"Test 3: Expected count 20 with limit, got ${results.length}")
       assert(results(0).getString(0) == activeInstants.head._1, s"Test 3: Expected first instant not found in results")
       assert(results(19).getString(0) == activeInstants(19)._1, s"Test 3: Expected last instant not found in results")
@@ -544,7 +544,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     // Test Case 4: Start timestamp within active timeline
     {
       val startTime = startTimeInActive
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$startTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, start_time => '$startTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), None)
       val expectedArchived = filterInstantsByTimeRange(archivedInstants, Some(startTime), None)
       verifyResults(results, expectedActive, expectedArchived, None, "Test 4: Start in active")
@@ -560,7 +560,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     // Test Case 5: End timestamp within active timeline
     {
       val endTime = endTimeInActive
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, endTime => '$endTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, end_time => '$endTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, None, Some(endTime))
       val expectedArchived = filterInstantsByTimeRange(archivedInstants, None, Some(endTime))
       verifyResults(results, expectedActive, expectedArchived, None, "Test 5: End in active")
@@ -578,7 +578,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     {
       val startTime = startTimeInActive
       val endTime = endTimeInActive
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$startTime', endTime => '$endTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, start_time => '$startTime', end_time => '$endTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), Some(endTime))
       val expectedArchived = filterInstantsByTimeRange(archivedInstants, Some(startTime), Some(endTime))
       verifyResults(results, expectedActive, expectedArchived, None, "Test 6: Start and end in active")
@@ -587,18 +587,18 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     // Test Case 7: Start in archived, archived not enabled
     {
       val startTime = startTimeInArchived
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => false, startTime => '$startTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => false, start_time => '$startTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), None)
       // Archived should not be included
       val archivedResults = results.filter(_.getString(6) == "ARCHIVED")
       assert(archivedResults.isEmpty,
-        s"Test 7: Expected no archived results when showArchived=false, got ${archivedResults.length}")
+        s"Test 7: Expected no archived results when show_archived=false, got ${archivedResults.length}")
       verifyResults(results, expectedActive, Seq.empty, None, "Test 7: Start in archived, archived disabled")
     }
 
     // Test Case 8: Empty start and end, archived enabled
     {
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '', endTime => '', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, start_time => '', end_time => '', limit => 100)").collect()
       verifyResults(results, activeInstants.map(_._1), archivedInstants.map(_._1), Some(expectedTotal), "Test 8: Empty start/end, archived enabled")
     }
 
@@ -606,11 +606,11 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     {
       val startTime = startTimeInArchived
       val endTime = endTimeInActive
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => false, startTime => '$startTime', endTime => '$endTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => false, start_time => '$startTime', end_time => '$endTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), Some(endTime))
       val archivedResults = results.filter(_.getString(6) == "ARCHIVED")
       assert(archivedResults.isEmpty,
-        s"Test 9: Expected no archived results when showArchived=false, got ${archivedResults.length}")
+        s"Test 9: Expected no archived results when show_archived=false, got ${archivedResults.length}")
       verifyResults(results, expectedActive, Seq.empty, None, "Test 9: Start in archived, end in active, archived disabled")
     }
 
@@ -618,7 +618,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     {
       val startTime = startTimeInArchived
       val endTime = endTimeInActive
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$startTime', endTime => '$endTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, start_time => '$startTime', end_time => '$endTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), Some(endTime))
       val expectedArchived = filterInstantsByTimeRange(archivedInstants, Some(startTime), Some(endTime))
       verifyResults(results, expectedActive, expectedArchived, None, "Test 10: Start in archived, end in active, archived enabled")
@@ -628,11 +628,11 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     {
       val startTime = startTimeInArchived
       val endTime = endTimeInArchived
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => false, startTime => '$startTime', endTime => '$endTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => false, start_time => '$startTime', end_time => '$endTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), Some(endTime))
       val archivedResults = results.filter(_.getString(6) == "ARCHIVED")
       assert(archivedResults.isEmpty,
-        s"Test 11: Expected no archived results when showArchived=false, got ${archivedResults.length}")
+        s"Test 11: Expected no archived results when show_archived=false, got ${archivedResults.length}")
       verifyResults(results, expectedActive, Seq.empty, None, "Test 11: Start and end in archived, archived disabled")
     }
 
@@ -640,7 +640,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     {
       val startTime = startTimeInArchived
       val endTime = endTimeInArchived
-      val results = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$startTime', endTime => '$endTime', limit => 100)").collect()
+      val results = spark.sql(s"call show_timeline(table => '$tableName', show_archived => true, start_time => '$startTime', end_time => '$endTime', limit => 100)").collect()
       val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), Some(endTime))
       val expectedArchived = filterInstantsByTimeRange(archivedInstants, Some(startTime), Some(endTime))
       verifyResults(results, expectedActive, expectedArchived, None, "Test 12: Start and end in archived, archived enabled")
