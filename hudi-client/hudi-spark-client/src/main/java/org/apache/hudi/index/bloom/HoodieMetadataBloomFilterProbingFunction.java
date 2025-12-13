@@ -32,10 +32,9 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,10 +51,9 @@ import scala.Tuple2;
  * whether particular record key could be stored in the latest file-slice of the file-group
  * identified by the {@link HoodieFileGroupId}
  */
+@Slf4j
 public class HoodieMetadataBloomFilterProbingFunction implements
     PairFlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieFileGroupId, HoodieBloomFilterProbingResult> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataBloomFilterProbingFunction.class);
 
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
@@ -147,7 +145,7 @@ public class HoodieMetadataBloomFilterProbingFunction implements
               }
             });
 
-            LOG.debug("Total records ({}), bloom filter candidates ({})",
+            log.debug("Total records ({}), bloom filter candidates ({})",
                 hoodieKeyList.size(), candidateRecordKeys.size());
 
             return Tuple2.apply(new HoodieFileGroupId(partitionPath, fileId), new HoodieBloomFilterProbingResult(candidateRecordKeys));

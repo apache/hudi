@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
+import lombok.Getter;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -110,6 +111,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private static final String MAP_KEY_NAME = "key";
   private static final String MAP_VALUE_NAME = "value";
 
+  @Getter
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
@@ -149,10 +151,6 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       Schema.Field avroField = avroSchema == null ? null : avroSchema.getField(field.name());
       return makeWriter(avroField == null ? null : avroField.schema(), field.dataType());
     }).toArray(ValueWriter[]::new);
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
   }
 
   @Override

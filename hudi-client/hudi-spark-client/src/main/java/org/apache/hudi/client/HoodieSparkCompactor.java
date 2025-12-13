@@ -24,13 +24,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+@Slf4j
 public class HoodieSparkCompactor<T> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkCompactor.class);
   private final transient HoodieEngineContext context;
 
   public HoodieSparkCompactor(BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient,
@@ -41,7 +40,7 @@ public class HoodieSparkCompactor<T> extends BaseCompactor<T,
 
   @Override
   public void compact(String instantTime) {
-    LOG.info("Compactor executing compaction {}", instantTime);
+    log.info("Compactor executing compaction {}", instantTime);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
     // Commit compaction

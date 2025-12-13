@@ -24,6 +24,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
 import org.apache.hudi.util.JavaScalaConverters;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
@@ -50,8 +51,6 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.davidmoten.hilbert.HilbertCurve;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -63,9 +62,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class SpaceCurveSortingHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SpaceCurveSortingHelper.class);
 
   /**
    * Orders provided {@link Dataset} by mapping values of the provided list of columns
@@ -99,7 +97,7 @@ public class SpaceCurveSortingHelper {
             .collect(Collectors.toList());
 
     if (orderByCols.size() != checkCols.size()) {
-      LOG.error(String.format("Trying to ordering over a column(s) not present in the schema (%s); skipping", CollectionUtils.diff(orderByCols, checkCols)));
+      log.error(String.format("Trying to ordering over a column(s) not present in the schema (%s); skipping", CollectionUtils.diff(orderByCols, checkCols)));
       return df;
     }
 
@@ -107,7 +105,7 @@ public class SpaceCurveSortingHelper {
     // ordering altogether (since it will match linear ordering anyway)
     if (orderByCols.size() == 1) {
       String orderByColName = orderByCols.get(0);
-      LOG.debug("Single column to order by ({}), skipping space-curve ordering", orderByColName);
+      log.debug("Single column to order by ({}), skipping space-curve ordering", orderByColName);
 
       // TODO validate if we need Spark to re-partition
       return df.repartitionByRange(targetPartitionCount, new Column(orderByColName));
