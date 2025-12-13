@@ -100,6 +100,7 @@ test_spark_hadoop_mr_bundles () {
         echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
+    change_java_runtime_version
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
     # save HiveQL query results
