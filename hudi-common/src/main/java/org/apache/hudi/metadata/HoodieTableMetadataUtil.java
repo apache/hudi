@@ -1622,7 +1622,7 @@ public class HoodieTableMetadataUtil {
   @VisibleForTesting
   public static final Set<String> META_COL_SET_TO_INDEX = new HashSet<>(Arrays.asList(META_COLS_TO_ALWAYS_INDEX));
   @VisibleForTesting
-  static final Map<String, HoodieSchema> META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP = new TreeMap() {{
+  public static final Map<String, HoodieSchema> META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP = new TreeMap() {{
       put(COMMIT_TIME_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING));
       put(RECORD_KEY_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING));
       put(PARTITION_PATH_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING));

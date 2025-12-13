@@ -1901,6 +1901,58 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
+  void testDataSkippingOnMetadataColumns(HoodieTableType tableType) {
+    String hoodieTableDDL = "create table t1(\n"
+        + "  _hoodie_commit_time STRING METADATA VIRTUAL,\n"
+        + "  _hoodie_commit_seqno STRING METADATA VIRTUAL,\n"
+        + "  _hoodie_record_key STRING METADATA VIRTUAL,\n"
+        + "  _hoodie_partition_path STRING METADATA VIRTUAL,\n"
+        + "  _hoodie_file_name STRING METADATA VIRTUAL,\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20),\n"
+        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+        + ")\n"
+        + "PARTITIONED BY (`partition`)\n"
+        + "with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'read.data.skipping.enabled' = 'true',\n"
+        + "  'hoodie.metadata.index.column.stats.enable' = 'true',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+        + "  'table.type' = '" + tableType + "'\n"
+        + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // virtual columns will be ignored for schema validating during insert
+    String insertInto = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),"
+        + "('id3','Julian',43,TIMESTAMP '1970-01-01 00:00:03','par1')";
+    execInsertSql(batchTableEnv, insertInto);
+
+    String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+
+    // virtual columns will be ignored for schema validating during insert
+    insertInto = "insert into t1 values\n"
+        + "('id4','Bob',23,TIMESTAMP '1970-01-01 00:00:01','par1'),"
+        + "('id5','Lily',33,TIMESTAMP '1970-01-01 00:00:02','par1'),"
+        + "('id6','Han',43,TIMESTAMP '1970-01-01 00:00:03','par1')";
+    execInsertSql(batchTableEnv, insertInto);
+
+    // select metadata and data columns
+    List<Row> rows = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery("select uuid, _hoodie_record_key, name, age, ts, `partition` from t1 where _hoodie_commit_time <= '" + firstCommitTime + "'").execute().collect());
+
+    assertRowsEquals(rows,
+        "[+I[id1, id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+            + "+I[id2, id2, Stephen, 33, 1970-01-01T00:00:02, par1], "
+            + "+I[id3, id3, Julian, 43, 1970-01-01T00:00:03, par1]]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
   void testDataSkippingByFilteringFileSlice(HoodieTableType tableType) {
     // Case: column for different files inside one file slice can be different,
     // so if any file in the file slice satisfy the predicate based on column stats,
