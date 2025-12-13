@@ -20,6 +20,7 @@
 package org.apache.hudi.io.compress;
 
 import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftZstdCompressor;
 import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 import org.apache.hudi.io.util.IOUtils;
 
@@ -49,6 +50,7 @@ public class TestHoodieCompressor {
     switch (codec) {
       case NONE:
       case GZIP:
+      case ZSTD:
         HoodieCompressor decompressor = HoodieCompressorFactory.getCompressor(codec);
         byte[] actualOutput = new byte[INPUT_LENGTH + 100];
         try (InputStream stream = prepareInputStream(codec)) {
@@ -77,6 +79,9 @@ public class TestHoodieCompressor {
       case GZIP:
         return new ByteArrayInputStream(
             new HoodieAirliftGzipCompressor().compress(INPUT_BYTES));
+      case ZSTD:
+        return new ByteArrayInputStream(
+            new HoodieAirliftZstdCompressor().compress(INPUT_BYTES));
       default:
         throw new IllegalArgumentException("Not supported in tests.");
     }
