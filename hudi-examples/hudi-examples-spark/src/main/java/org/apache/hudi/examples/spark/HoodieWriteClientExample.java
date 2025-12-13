@@ -37,13 +37,12 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,9 +61,8 @@ import java.util.stream.Collectors;
  * <tablePath> and <tableName> describe root path of hudi and table name
  * for example, `HoodieWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt`
  */
+@Slf4j
 public class HoodieWriteClientExample {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteClientExample.class);
 
   private static String tableType = HoodieTableType.MERGE_ON_READ.name();
 
@@ -103,7 +101,7 @@ public class HoodieWriteClientExample {
 
         // inserts
         String newCommitTime = client.startCommit();
-        LOG.info("Starting commit " + newCommitTime);
+        log.info("Starting commit " + newCommitTime);
 
         List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
         List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
@@ -112,7 +110,7 @@ public class HoodieWriteClientExample {
 
         // updates
         newCommitTime = client.startCommit();
-        LOG.info("Starting commit " + newCommitTime);
+        log.info("Starting commit " + newCommitTime);
         List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
         records.addAll(toBeUpdated);
         recordsSoFar.addAll(toBeUpdated);
@@ -121,7 +119,7 @@ public class HoodieWriteClientExample {
 
         // Delete
         newCommitTime = client.startCommit();
-        LOG.info("Starting commit " + newCommitTime);
+        log.info("Starting commit " + newCommitTime);
         // just delete half of the records
         int numToDelete = recordsSoFar.size() / 2;
         List<HoodieKey> toBeDeleted = recordsSoFar.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
@@ -130,7 +128,7 @@ public class HoodieWriteClientExample {
 
         // Delete by partition
         newCommitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
-        LOG.info("Starting commit " + newCommitTime);
+        log.info("Starting commit " + newCommitTime);
         // The partition where the data needs to be deleted
         List<String> partitionList = toBeDeleted.stream().map(s -> s.getPartitionPath()).distinct().collect(Collectors.toList());
         List<String> deleteList = recordsSoFar.stream().filter(f -> !partitionList.contains(f.getPartitionPath()))

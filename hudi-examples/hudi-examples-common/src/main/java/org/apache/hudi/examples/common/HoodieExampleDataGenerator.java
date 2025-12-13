@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -68,6 +69,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
 
   private final Map<Integer, KeyPartition> existingKeys;
   private final String[] partitionPaths;
+  @Getter
   private int numExistingKeys;
 
   public HoodieExampleDataGenerator(String[] partitionPaths) {
@@ -210,10 +212,6 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   public List<String> convertToStringList(List<HoodieRecord<T>> records) {
     return records.stream().map(this::convertToString).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
-  }
-
-  public int getNumExistingKeys() {
-    return numExistingKeys;
   }
 
   public static class KeyPartition implements Serializable {
