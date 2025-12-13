@@ -75,23 +75,11 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   static class Heartbeat {
 
     private String instantTime;
-    private Boolean isHeartbeatStarted = false;
-    private Boolean isHeartbeatStopped = false;
+    private boolean isHeartbeatStarted = false;
+    private boolean isHeartbeatStopped = false;
     private Long lastHeartbeatTime;
     private Integer numHeartbeats = 0;
     private Timer timer = new Timer(true);
-
-    @Override
-    public String toString() {
-      return "Heartbeat{"
-              + "instantTime='" + instantTime + '\''
-              + ", isHeartbeatStarted=" + isHeartbeatStarted
-              + ", isHeartbeatStopped=" + isHeartbeatStopped
-              + ", lastHeartbeatTime=" + lastHeartbeatTime
-              + ", numHeartbeats=" + numHeartbeats
-              + ", timer=" + timer
-              + '}';
-    }
   }
 
   class HeartbeatTask extends TimerTask {
@@ -116,14 +104,14 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   public void start(String instantTime) {
     log.info("Received request to start heartbeat for instant time {}", instantTime);
     Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
-    ValidationUtils.checkArgument(heartbeat == null || !heartbeat.getIsHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
-    if (heartbeat != null && heartbeat.getIsHeartbeatStarted()) {
+    ValidationUtils.checkArgument(heartbeat == null || !heartbeat.isHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
+    if (heartbeat != null && heartbeat.isHeartbeatStarted()) {
       // heartbeat already started, NO_OP
       return;
     }
 
     Heartbeat newHeartbeat = new Heartbeat();
-    newHeartbeat.setIsHeartbeatStarted(true);
+    newHeartbeat.setHeartbeatStarted(true);
     instantToHeartbeatMap.put(instantTime, newHeartbeat);
     // Ensure heartbeat is generated for the first time with this blocking call.
     // Since timer submits the task to a thread, no guarantee when that thread will get CPU
@@ -166,7 +154,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
    * @throws IOException
    */
   private boolean isHeartbeatStarted(Heartbeat heartbeat) {
-    return heartbeat != null && heartbeat.getIsHeartbeatStarted() && !heartbeat.getIsHeartbeatStopped();
+    return heartbeat != null && heartbeat.isHeartbeatStarted() && !heartbeat.isHeartbeatStopped();
   }
 
   /**
@@ -177,7 +165,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   private void stopHeartbeatTimer(Heartbeat heartbeat) {
     log.info("Stopping heartbeat for instant {}", heartbeat.getInstantTime());
     heartbeat.getTimer().cancel();
-    heartbeat.setIsHeartbeatStopped(true);
+    heartbeat.setHeartbeatStopped(true);
     log.info("Stopped heartbeat for instant {}", heartbeat.getInstantTime());
   }
 
@@ -224,7 +212,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       heartbeat.setLastHeartbeatTime(newHeartbeatTime);
       heartbeat.setNumHeartbeats(heartbeat.getNumHeartbeats() + 1);
     } catch (IOException io) {
-      Boolean isHeartbeatStopped = instantToHeartbeatMap.get(instantTime).isHeartbeatStopped;
+      boolean isHeartbeatStopped = instantToHeartbeatMap.get(instantTime).isHeartbeatStopped();
       if (isHeartbeatStopped) {
         log.info("update heart beat failed, because the instant time {} was stopped", instantTime);
         return;

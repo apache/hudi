@@ -32,8 +32,8 @@ import java.io.Serializable;
  * process) to communicate results back to Hoodie CLI process.
  */
 @AllArgsConstructor
-@Getter
 @NoArgsConstructor
+@Getter
 @ToString
 public class OperationResult<T> implements Serializable {
 
