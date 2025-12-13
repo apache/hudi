@@ -128,6 +128,7 @@ public class BigQuerySchemaResolver {
         break;
       case STRING:
       case ENUM:
+      case UUID:
         standardSQLTypeName = StandardSQLTypeName.STRING;
         break;
       case BOOLEAN:

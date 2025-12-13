@@ -194,7 +194,8 @@ public class TestBigQuerySchemaResolver {
         + "{\"name\":\"long_timestamp_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
         + "{\"name\":\"long_timestamp_millis_local\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
         + "{\"name\":\"long_timestamp_micros_local\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
-        + "{\"name\":\"bytes_decimal\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\", \"precision\": 4, \"scale\": 2}}]}";
+        + "{\"name\":\"bytes_decimal\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\", \"precision\": 4, \"scale\": 2}},"
+        + "{\"name\":\"uuid_field\",\"type\":{\"type\":\"string\",\"logicalType\":\"uuid\"}}]}";
     HoodieSchema input = HoodieSchema.parse(schemaString);
 
     Schema expected = Schema.of(
@@ -205,7 +206,8 @@ public class TestBigQuerySchemaResolver {
         Field.newBuilder("long_timestamp_micros", StandardSQLTypeName.TIMESTAMP).setMode(Field.Mode.REQUIRED).build(),
         Field.newBuilder("long_timestamp_millis_local", StandardSQLTypeName.INT64).setMode(Field.Mode.REQUIRED).build(),
         Field.newBuilder("long_timestamp_micros_local", StandardSQLTypeName.INT64).setMode(Field.Mode.REQUIRED).build(),
-        Field.newBuilder("bytes_decimal", StandardSQLTypeName.NUMERIC).setMode(Field.Mode.REQUIRED).build());
+        Field.newBuilder("bytes_decimal", StandardSQLTypeName.NUMERIC).setMode(Field.Mode.REQUIRED).build(),
+        Field.newBuilder("uuid_field", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build());
 
     Assertions.assertEquals(expected, SCHEMA_RESOLVER.convertSchema(input));
   }
