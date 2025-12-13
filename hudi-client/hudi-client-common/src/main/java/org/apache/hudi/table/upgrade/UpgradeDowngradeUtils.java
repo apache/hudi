@@ -66,8 +66,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -84,9 +83,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
+@Slf4j
 public class UpgradeDowngradeUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngradeUtils.class);
   static final String FALSE = "false";
   static final String TRUE = "true";
 
@@ -162,7 +160,7 @@ public class UpgradeDowngradeUtils {
       long millis = Long.parseLong(completionTime.substring(completionTime.length() - 3));
       return ldtInSecs.atZone(zoneId).toEpochSecond() * 1000 + millis;
     } catch (Exception e) {
-      LOG.warn("Failed to parse completion time string for instant {}", instant, e);
+      log.warn("Failed to parse completion time string for instant {}", instant, e);
       return -1;
     }
   }
@@ -343,7 +341,7 @@ public class UpgradeDowngradeUtils {
         mdtPartitions.add(partitionStatsPartition);
       }
 
-      LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
+      log.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
       if (!mdtPartitions.isEmpty()) {
         writeClient.dropIndex(mdtPartitions);
       }

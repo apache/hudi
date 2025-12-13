@@ -30,8 +30,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -67,9 +66,8 @@ import java.util.Map;
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
 @NotThreadSafe
+@Slf4j
 public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieConcatHandle.class);
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
@@ -101,7 +99,7 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I,
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
-      LOG.debug("Old record is {}", oldRecord);
+      log.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;

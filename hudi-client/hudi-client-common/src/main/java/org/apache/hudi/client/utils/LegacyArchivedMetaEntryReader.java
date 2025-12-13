@@ -41,10 +41,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -64,8 +63,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * Tools used for migrating to new LSM tree style archived timeline.
  */
+@Slf4j
 public class LegacyArchivedMetaEntryReader {
-  private static final Logger LOG = LoggerFactory.getLogger(LegacyArchivedMetaEntryReader.class);
 
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
@@ -148,7 +147,7 @@ public class LegacyArchivedMetaEntryReader {
       case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");
       default:
-        LOG.error(String.format("Unknown action in metadata (%s)", action));
+        log.error(String.format("Unknown action in metadata (%s)", action));
         return Option.empty();
     }
   }
@@ -329,7 +328,7 @@ public class LegacyArchivedMetaEntryReader {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting suffix for archived file: {}", f.getPath());
+      log.warn("error getting suffix for archived file: {}", f.getPath());
     }
     // return default value in case of any errors
     return 0;

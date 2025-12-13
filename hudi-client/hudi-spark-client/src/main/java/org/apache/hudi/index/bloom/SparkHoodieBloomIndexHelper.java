@@ -245,7 +245,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .collect(Collectors.toList());
 
       List<StoragePathInfo> allFiles =
-          hoodieTable.getMetadataTable().getAllFilesInPartitions(fullPartitionPaths).values()
+          hoodieTable.getTableMetadata().getAllFilesInPartitions(fullPartitionPaths).values()
               .stream()
               .flatMap(e -> e.stream())
               .collect(Collectors.toList());

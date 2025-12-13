@@ -42,8 +42,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.action.compact.OperationResult;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -60,9 +60,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Client to perform admin operations related to compaction.
  */
+@Slf4j
 public class CompactionAdminClient extends BaseHoodieClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionAdminClient.class);
 
   public CompactionAdminClient(HoodieEngineContext context, String basePath) {
     super(context, HoodieWriteConfig.newBuilder().withPath(basePath).build());
@@ -292,26 +291,26 @@ public class CompactionAdminClient extends BaseHoodieClient {
   private List<RenameOpResult> runRenamingOps(HoodieTableMetaClient metaClient,
       List<Pair<HoodieLogFile, HoodieLogFile>> renameActions, int parallelism, boolean dryRun) {
     if (renameActions.isEmpty()) {
-      LOG.info("No renaming of log-files needed. Proceeding to removing file-id from compaction-plan");
+      log.info("No renaming of log-files needed. Proceeding to removing file-id from compaction-plan");
       return new ArrayList<>();
     } else {
-      LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
+      log.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
         context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
         return context.map(renameActions, lfPair -> {
           try {
-            LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
+            log.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
             renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
             return new RenameOpResult(lfPair, true, Option.empty());
           } catch (IOException e) {
-            LOG.error("Error renaming log file", e);
-            LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
+            log.error("Error renaming log file", e);
+            log.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
                 + lfPair.getLeft().getDeltaCommitTime() + "\" to recover from failure ***\n\n\n");
             return new RenameOpResult(lfPair, false, Option.of(e));
           }
         }, parallelism);
       } else {
-        LOG.info("Dry-Run Mode activated for rename operations");
+        log.info("Dry-Run Mode activated for rename operations");
         return renameActions.parallelStream().map(lfPair -> new RenameOpResult(lfPair, false, false, Option.empty()))
             .collect(Collectors.toList());
       }
@@ -326,10 +325,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
   /**
    * Holds Operation result for Renaming.
    */
+  @NoArgsConstructor
   public static class RenameOpResult extends OperationResult<RenameInfo> {
-
-    public RenameOpResult() {
-    }
 
     public RenameOpResult(Pair<HoodieLogFile, HoodieLogFile> op, boolean success, Option<Exception> exception) {
       super(

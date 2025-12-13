@@ -39,8 +39,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,9 +61,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER
  * using DFS. Users might need to manually clean the Locker's path if writeClient crash and never run again.
  * NOTE: This only works for DFS with atomic create/delete operation
  */
+@Slf4j
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FileSystemBasedLockProvider.class);
   private static final String LOCK_FILE_NAME = "lock";
   private final int lockTimeoutMinutes;
   private final transient HoodieStorage storage;
@@ -71,6 +70,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   protected LockConfiguration lockConfiguration;
   private final SimpleDateFormat sdf;
   private final LockInfo lockInfo;
+  @Getter
   private String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
@@ -115,7 +115,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
             storage.deleteFile(this.lockFile);
-            LOG.warn("Delete expired lock file: {}", this.lockFile);
+            log.warn("Delete expired lock file: {}", this.lockFile);
           } else {
             reloadCurrentOwnerLockInfo();
             return false;
@@ -125,7 +125,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return storage.exists(this.lockFile);
       }
     } catch (IOException | HoodieIOException e) {
-      LOG.info(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
+      log.info(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
       return false;
     }
   }
@@ -148,11 +148,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     return this.lockFile.toString();
   }
 
-  @Override
-  public String getCurrentOwnerLockInfo() {
-    return currentOwnerLockInfo;
-  }
-
   private boolean checkIfExpired() {
     if (lockTimeoutMinutes == 0) {
       return false;
@@ -163,7 +158,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         return true;
       }
     } catch (IOException | HoodieIOException e) {
-      LOG.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
+      log.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
     }
     return false;
   }

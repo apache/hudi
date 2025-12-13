@@ -515,7 +515,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     // validate MDT compaction instant
-    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
+    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getTableMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     try {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()

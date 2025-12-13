@@ -34,8 +34,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -56,9 +55,8 @@ import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.getTi
 /**
  * Utilities class for consistent bucket index metadata management.
  */
+@Slf4j
 public class ConsistentBucketIndexUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketIndexUtils.class);
 
   /**
    * Loads hashing metadata of the given partition, if it does not exist, creates a new one (also persist it into storage).
@@ -78,7 +76,7 @@ public class ConsistentBucketIndexUtils {
       return metadataOption.get();
     }
 
-    LOG.info("Failed to load metadata, try to create one. Partition: {}.", partition);
+    log.info("Failed to load metadata, try to create one. Partition: {}.", partition);
 
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
@@ -177,7 +175,7 @@ public class ConsistentBucketIndexUtils {
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
-      LOG.error("Error when loading hashing metadata, partition: " + partition, e);
+      log.error("Error when loading hashing metadata, partition: " + partition, e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }
@@ -209,9 +207,9 @@ public class ConsistentBucketIndexUtils {
         }
       } catch (IOException e2) {
         // ignore the exception and return false
-        LOG.warn("Failed to check the existence of bucket metadata file: {}", fullPath, e2);
+        log.warn("Failed to check the existence of bucket metadata file: {}", fullPath, e2);
       }
-      LOG.warn("Failed to update bucket metadata: {}", metadata, e1);
+      log.warn("Failed to update bucket metadata: {}", metadata, e1);
       return false;
     }
   }
@@ -239,7 +237,7 @@ public class ConsistentBucketIndexUtils {
       if (!storage.exists(fullPath)) {
         throw e;
       }
-      LOG.warn("Failed to create marker but {} exists", fullPath, e);
+      log.warn("Failed to create marker but {} exists", fullPath, e);
     }
   }
 
@@ -260,7 +258,7 @@ public class ConsistentBucketIndexUtils {
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
-      LOG.error("Error when loading hashing metadata, for path: " + metaFile.getPath().getName(), e);
+      log.error("Error when loading hashing metadata, for path: " + metaFile.getPath().getName(), e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }

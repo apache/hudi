@@ -46,6 +46,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -64,8 +66,11 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
  */
 public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Serializable {
 
+  @Getter(AccessLevel.PROTECTED)
   private final HoodieTable<T, I, K, O> hoodieTable;
+  @Getter(AccessLevel.PROTECTED)
   private final transient HoodieEngineContext engineContext;
+  @Getter(AccessLevel.PROTECTED)
   protected HoodieWriteConfig writeConfig;
   protected final HoodieRecordType recordType;
   protected final HoodieSchema readerSchemaWithMetaFields;
@@ -84,18 +89,6 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    */
   public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime);
-
-  protected HoodieTable<T, I, K, O> getHoodieTable() {
-    return this.hoodieTable;
-  }
-
-  protected HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  protected HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
-  }
 
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     TypedProperties props = getReaderProperties(maxMemory);
