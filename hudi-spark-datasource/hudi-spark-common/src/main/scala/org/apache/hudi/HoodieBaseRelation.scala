@@ -45,8 +45,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathInfo}
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -834,7 +833,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val hoodieConfig = ConfigUtils.getHFileCacheConfigs(options.asJava)
 
       val reader = new HoodieSparkIOFactory(
-        new HoodieHadoopStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
+        HoodieStorageUtils.getStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, filePath, HFILE)
 

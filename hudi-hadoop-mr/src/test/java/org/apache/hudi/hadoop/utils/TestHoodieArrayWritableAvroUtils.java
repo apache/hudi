@@ -21,6 +21,8 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
@@ -32,7 +34,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
-import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorConverters;
@@ -70,25 +71,24 @@ import static org.mockito.Mockito.when;
 
 public class TestHoodieArrayWritableAvroUtils {
 
-  HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-  Schema tableSchema = HoodieTestDataGenerator.AVRO_SCHEMA;
+  private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
   @Test
   public void testProjection() {
-    Schema from =  tableSchema;
-    Schema to = HoodieAvroUtils.generateProjectionSchema(from, Arrays.asList("trip_type", "current_ts", "weight"));
+    HoodieSchema from = HoodieTestDataGenerator.HOODIE_SCHEMA;
+    HoodieSchema to = HoodieSchemaUtils.generateProjectionSchema(from, Arrays.asList("trip_type", "current_ts", "weight"));
     UnaryOperator<ArrayWritable> reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(to, from);
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
     ArrayWritable record = convertArrayWritable(dataGen.generateGenericRecord());
-    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from);
+    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from.toAvroSchema());
     Object tripType = fromSerializer.getValue(record, "trip_type");
     Object currentTs = fromSerializer.getValue(record, "current_ts");
     Object weight = fromSerializer.getValue(record, "weight");
 
     //Make sure the projected fields can be read
-    ArrayWritable projectedRecord = HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, Collections.emptyMap());
-    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to);
+    ArrayWritable projectedRecord = HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from.toAvroSchema(), to.toAvroSchema(), Collections.emptyMap());
+    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to.toAvroSchema());
     assertEquals(tripType, toSerializer.getValue(projectedRecord, "trip_type"));
     assertEquals(currentTs, toSerializer.getValue(projectedRecord, "current_ts"));
     assertEquals(weight, toSerializer.getValue(projectedRecord, "weight"));

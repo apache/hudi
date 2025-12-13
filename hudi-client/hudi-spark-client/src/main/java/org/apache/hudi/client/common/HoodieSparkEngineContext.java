@@ -48,6 +48,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -79,7 +80,9 @@ import scala.Tuple2;
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
+  @Getter
   private final JavaSparkContext javaSparkContext;
+  @Getter
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
 
@@ -93,16 +96,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     this.sqlContext = sqlContext;
   }
 
-  public JavaSparkContext getJavaSparkContext() {
-    return javaSparkContext;
-  }
-
   public JavaSparkContext jsc() {
     return javaSparkContext;
-  }
-
-  public SQLContext getSqlContext() {
-    return sqlContext;
   }
 
   public static JavaSparkContext getSparkContext(HoodieEngineContext context) {

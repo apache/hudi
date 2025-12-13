@@ -29,8 +29,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -43,11 +43,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Timeline Service that runs as part of write client.
  */
+@Slf4j
 public class EmbeddedTimelineService {
   // lock used when starting/stopping/modifying embedded services
   private static final Object SERVICE_LOCK = new Object();
-
-  private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTimelineService.class);
   private static final AtomicInteger NUM_SERVERS_RUNNING = new AtomicInteger(0);
   // Map of TimelineServiceIdentifier to existing timeline service running
   private static final Map<TimelineServiceIdentifier, EmbeddedTimelineService> RUNNING_SERVICES = new HashMap<>();
@@ -62,6 +61,7 @@ public class EmbeddedTimelineService {
   private final TimelineServiceIdentifier timelineServiceIdentifier;
   private final Set<String> basePaths; // the set of base paths using this EmbeddedTimelineService
 
+  @Getter
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
@@ -97,7 +97,7 @@ public class EmbeddedTimelineService {
       synchronized (SERVICE_LOCK) {
         if (RUNNING_SERVICES.containsKey(timelineServiceIdentifier)) {
           RUNNING_SERVICES.get(timelineServiceIdentifier).addBasePath(writeConfig.getBasePath());
-          LOG.info("Reusing existing embedded timeline server with configuration: " + RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
+          log.info("Reusing existing embedded timeline server with configuration: " + RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
           return RUNNING_SERVICES.get(timelineServiceIdentifier);
         }
         // if no compatible instance is found, create a new one
@@ -122,10 +122,10 @@ public class EmbeddedTimelineService {
 
   public static void shutdownAllTimelineServers() {
     RUNNING_SERVICES.entrySet().forEach(entry -> {
-      LOG.info("Closing Timeline server");
+      log.info("Closing Timeline server");
       entry.getValue().server.close();
       METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
-      LOG.info("Closed Timeline server");
+      log.info("Closed Timeline server");
     });
     RUNNING_SERVICES.clear();
   }
@@ -178,7 +178,7 @@ public class EmbeddedTimelineService {
 
     server = timelineServiceCreator.create(storageConf.newInstance(), serviceConfig, viewManager);
     serverPort = server.startService();
-    LOG.info("Started embedded timeline server at {}:{}", hostAddr, serverPort);
+    log.info("Started embedded timeline server at {}:{}", hostAddr, serverPort);
   }
 
   @FunctionalInterface
@@ -189,10 +189,10 @@ public class EmbeddedTimelineService {
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
     if (embeddedTimelineServiceHostAddr != null) {
-      LOG.info("Overriding hostIp to ({}) found in write conf. It was {}", embeddedTimelineServiceHostAddr, this.hostAddr);
+      log.info("Overriding hostIp to ({}) found in write conf. It was {}", embeddedTimelineServiceHostAddr, this.hostAddr);
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
-      LOG.warn("Unable to find driver bind address from write config, use current host name");
+      log.warn("Unable to find driver bind address from write config, use current host name");
       this.hostAddr = NetworkUtils.getHostname();
     }
   }
@@ -215,10 +215,6 @@ public class EmbeddedTimelineService {
         .withRemoteTimelineClientMaxRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
         .withRemoteTimelineClientRetryExceptions(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
         .build();
-  }
-
-  public FileSystemViewManager getViewManager() {
-    return viewManager;
   }
 
   /**
@@ -245,12 +241,12 @@ public class EmbeddedTimelineService {
     }
     // continue rest of shutdown outside of the synchronized block to avoid excess blocking
     if (basePaths.isEmpty() && null != server) {
-      LOG.info("Closing Timeline server");
+      log.info("Closing Timeline server");
       this.server.close();
       METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
       this.server = null;
       this.viewManager = null;
-      LOG.info("Closed Timeline server");
+      log.info("Closed Timeline server");
     }
   }
 

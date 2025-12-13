@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util.io;
+package org.apache.hudi.io;
 
 import javax.annotation.Nonnull;
 

@@ -622,7 +622,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     avroReaderContext.setHasBootstrapBaseFile(false);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    avroReaderContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(avroReaderContext, customSchema.toAvroSchema(), customSchema.toAvroSchema(), Option.empty(), props, metaClient));
+    avroReaderContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(avroReaderContext, customSchema, customSchema, Option.empty(), props, metaClient));
     avroReaderContext.getRecordContext().encodeSchema(customSchema);
 
     BufferedRecordMerger<IndexedRecord> merger = BufferedRecordMergerFactory.create(
@@ -631,7 +631,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         false,
         recordMerger,
         payloadClassName,
-        customSchema.toAvroSchema(),
+        customSchema,
         props,
         Option.empty());
 
@@ -1039,15 +1039,15 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
   }
 
-  public static void assertRowEqual(InternalRow expected, InternalRow actual, Schema schema) {
+  public static void assertRowEqual(InternalRow expected, InternalRow actual, HoodieSchema schema) {
     assertRowEqualsRecursive(expected, actual, schema.getFields(), "");
   }
 
   private static void assertRowEqualsRecursive(InternalRow expected, InternalRow actual,
-                                               List<Schema.Field> fields, String pathPrefix) {
+                                               List<HoodieSchemaField> fields, String pathPrefix) {
     for (int i = 0; i < fields.size(); i++) {
-      Schema.Field field = fields.get(i);
-      Schema fieldSchema = getNonNullSchema(field.schema());
+      HoodieSchemaField field = fields.get(i);
+      HoodieSchema fieldSchema = field.schema().getNonNullType();
       String path = pathPrefix + field.name();
 
       if (expected.isNullAt(i) || actual.isNullAt(i)) {

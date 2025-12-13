@@ -21,10 +21,12 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, Ho
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
-import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
+import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.generic.IndexedRecord
@@ -68,7 +70,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
-      val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePaths.last)))
+      val schema = HoodieSchema.fromAvroSchema(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePaths.last))))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
         .withStorage(storage)
         .withBasePath(basePath)
@@ -83,7 +85,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
         .build
       scanner.asScala.foreach(hoodieRecord => {
-        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema).get()
+        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema.toAvroSchema).get()
         if (allRecords.size() < limit) {
           allRecords.add(record)
         }
@@ -92,7 +94,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
           val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath)))
-          val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePath), schema)
+          val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePath), HoodieSchema.fromAvroSchema(schema))
           while (reader.hasNext) {
             val block = reader.next()
             block match {

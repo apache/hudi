@@ -106,9 +106,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     tempDir.toAbsolutePath.toUri.toString
   }
 
-  override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_], metaClient: HoodieTableMetaClient): HoodieReaderContext[InternalRow] = {
+  override def getHoodieReaderContext(tablePath: String, schema: HoodieSchema, storageConf: StorageConfiguration[_], metaClient: HoodieTableMetaClient): HoodieReaderContext[InternalRow] = {
     val parquetReader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema);
+    val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema)
     val orcReader = sparkAdapter.createOrcFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]), dataSchema)
     val multiFormatReader = new MultipleColumnarFileFormatReader(parquetReader, orcReader)
     new SparkFileFormatInternalRowReaderContext(multiFormatReader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
@@ -136,9 +136,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getCustomPayload: String = classOf[CustomPayloadForTesting].getName
 
-  override def assertRecordsEqual(schema: Schema, expected: InternalRow, actual: InternalRow): Unit = {
+  override def assertRecordsEqual(schema: HoodieSchema, expected: InternalRow, actual: InternalRow): Unit = {
     assertEquals(expected.numFields, actual.numFields)
-    val expectedStruct = HoodieSparkAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
+    val expectedStruct = HoodieSparkAvroSchemaConverters.toSqlType(schema.toAvroSchema)._1.asInstanceOf[StructType]
 
     expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).zipWithIndex.foreach {
       case ((v1, v2), i) =>
@@ -398,8 +398,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     schema
   }
 
-  override def assertRecordMatchesSchema(schema: Schema, record: InternalRow): Unit = {
-    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
+  override def assertRecordMatchesSchema(schema: HoodieSchema, record: InternalRow): Unit = {
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema)
     assertRecordMatchesSchema(structType, record)
   }
 

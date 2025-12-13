@@ -19,6 +19,8 @@
 
 package org.apache.hudi.metadata;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -74,6 +76,7 @@ import java.util.Map;
  */
 public class BucketizedMetadataTableFileGroupIndexParser implements MetadataTableFileGroupIndexParser {
   private final Map<String, Integer> partitionToBaseIndexOffset;
+  @Getter
   private final int numberOfFileGroups;
 
   public BucketizedMetadataTableFileGroupIndexParser(Map<String, Integer> partitionSizes) {
@@ -118,10 +121,5 @@ public class BucketizedMetadataTableFileGroupIndexParser implements MetadataTabl
   public int getFileGroupIndex(String fileID) {
     String partitionName = HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileID);
     return partitionToBaseIndexOffset.get(partitionName) + HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileID);
-  }
-
-  @Override
-  public int getNumberOfFileGroups() {
-    return numberOfFileGroups;
   }
 }

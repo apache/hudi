@@ -21,6 +21,8 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -306,11 +308,12 @@ public class HoodieArrayWritableAvroUtils {
     throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
-  private static int[] getReverseProjectionMapping(Schema from, Schema to) {
-    List<Schema.Field> fromFields = from.getFields();
+  private static int[] getReverseProjectionMapping(HoodieSchema from, HoodieSchema to) {
+    List<HoodieSchemaField> fromFields = from.getFields();
     int[] newProjection = new int[fromFields.size()];
     for (int i = 0; i < newProjection.length; i++) {
-      newProjection[i] = to.getField(fromFields.get(i).name()).pos();
+      String fieldName = fromFields.get(i).name();
+      newProjection[i] = to.getField(fieldName).orElseThrow(() -> new IllegalArgumentException("Schema missing field with name: " + fieldName)).pos();
     }
     return newProjection;
   }
@@ -319,7 +322,7 @@ public class HoodieArrayWritableAvroUtils {
    * After the reading and merging etc is done, we need to put the records
    * into the positions of the original schema
    */
-  public static UnaryOperator<ArrayWritable> getReverseProjection(Schema from, Schema to) {
+  public static UnaryOperator<ArrayWritable> getReverseProjection(HoodieSchema from, HoodieSchema to) {
     int[] projection = getReverseProjectionMapping(from, to);
     return arrayWritable -> {
       Writable[] values = new Writable[to.getFields().size()];

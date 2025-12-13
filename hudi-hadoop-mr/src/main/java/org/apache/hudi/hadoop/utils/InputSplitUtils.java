@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop;
+package org.apache.hudi.hadoop.utils;
 
 import java.io.DataInput;
 import java.io.DataOutput;

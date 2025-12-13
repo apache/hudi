@@ -47,14 +47,13 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -65,8 +64,8 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
 
+@Slf4j
 public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteableTestTable.class);
 
   protected final Schema schema;
   protected final Option<BloomFilter> filter;
@@ -111,7 +110,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     StoragePath baseFilePath = new StoragePath(Paths.get(basePath, partition, fileName).toString());
     if (storage.exists(baseFilePath)) {
-      LOG.warn("Deleting the existing base file " + baseFilePath);
+      log.warn("Deleting the existing base file " + baseFilePath);
       storage.deleteFile(baseFilePath);
     }
 

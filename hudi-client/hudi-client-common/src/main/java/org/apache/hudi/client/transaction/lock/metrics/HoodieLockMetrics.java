@@ -28,13 +28,12 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 public class HoodieLockMetrics {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLockMetrics.class);
 
   public static final String LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME = "lock.acquire.attempts";
   public static final String LOCK_ACQUIRE_SUCCESS_COUNTER_NAME = "lock.acquire.success";
@@ -124,7 +123,7 @@ public class HoodieLockMetrics {
     if (durationMs.isPresent()) {
       metric.update(durationMs.get(), TimeUnit.MILLISECONDS);
     } else {
-      LOG.info("Unable to get lock {} duration", lockName);
+      log.info("Unable to get lock {} duration", lockName);
     }
   }
 

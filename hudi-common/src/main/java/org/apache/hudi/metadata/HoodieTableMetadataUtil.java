@@ -1086,7 +1086,7 @@ public class HoodieTableMetadataUtil {
       HoodieTableConfig tableConfig = datasetMetaClient.getTableConfig();
       readerContext.initRecordMerger(properties);
       readerContext.setSchemaHandler(
-          new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get().toAvroSchema(), writerSchemaOpt.get().toAvroSchema(), Option.empty(), properties, datasetMetaClient));
+          new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, datasetMetaClient));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
           readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getOrderingFields(),
@@ -1823,8 +1823,8 @@ public class HoodieTableMetadataUtil {
           .withLogFiles(Stream.of(logFile))
           .withPartitionPath(partitionPath)
           .withBaseFileOption(Option.empty())
-          .withDataSchema(writerSchemaOpt.get().toAvroSchema())
-          .withRequestedSchema(writerSchemaOpt.get().toAvroSchema())
+          .withDataSchema(writerSchemaOpt.get())
+          .withRequestedSchema(writerSchemaOpt.get())
           .withLatestCommitTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
           .withProps(properties)
           .build();
@@ -2538,9 +2538,9 @@ public class HoodieTableMetadataUtil {
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
     final StoragePath basePath = metaClient.getBasePath();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
-    final Schema tableSchema;
+    final HoodieSchema tableSchema;
     try {
-      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+      tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     } catch (Exception e) {
       throw new HoodieException("Unable to resolve table schema for table", e);
     }
@@ -2555,7 +2555,7 @@ public class HoodieTableMetadataUtil {
             .withHoodieTableMetaClient(metaClient)
             .withFileSlice(fileSlice)
             .withDataSchema(tableSchema)
-            .withRequestedSchema(HoodieAvroUtils.getRecordKeySchema())
+            .withRequestedSchema(HoodieSchemaUtils.getRecordKeySchema())
             .withLatestCommitTime(latestCommitTime)
             .withProps(getFileGroupReaderPropertiesFromStorageConf(storageConf))
             .build();

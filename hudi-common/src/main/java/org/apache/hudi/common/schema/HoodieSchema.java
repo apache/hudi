@@ -22,15 +22,17 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -84,8 +86,8 @@ public class HoodieSchema implements Serializable {
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
   private static final long serialVersionUID = 1L;
-  private final Schema avroSchema;
-  private final HoodieSchemaType type;
+  private Schema avroSchema;
+  private HoodieSchemaType type;
 
   /**
    * Creates a new HoodieSchema wrapping the given Avro schema.
@@ -1334,5 +1336,18 @@ public class HoodieSchema implements Serializable {
   public enum TimePrecision {
     MILLIS,
     MICROS
+  }
+
+  private void writeObject(ObjectOutputStream oos) throws IOException {
+    oos.defaultWriteObject();
+    oos.writeObject(avroSchema.toString());
+  }
+
+  private void readObject(ObjectInputStream ois)
+      throws ClassNotFoundException, IOException {
+    ois.defaultReadObject();
+    String schemaString = (String) ois.readObject();
+    avroSchema = new Schema.Parser().parse(schemaString);
+    type = HoodieSchemaType.fromAvro(avroSchema);
   }
 }

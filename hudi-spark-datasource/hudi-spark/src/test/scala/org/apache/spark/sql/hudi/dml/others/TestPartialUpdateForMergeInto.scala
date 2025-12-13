@@ -23,7 +23,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
@@ -743,11 +743,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     val logFilePathList: List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
     Collections.sort(logFilePathList)
 
-    val tableSchema = new TableSchemaResolver(metaClient).getTableSchema()
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until expectedNumLogFile) {
       val logReader = new HoodieLogFileReader(
         metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        tableSchema.toAvroSchema, 1024 * 1024, false, false,
+        schema, 1024 * 1024, false, false,
         "id", null)
       assertTrue(logReader.hasNext)
       val logBlockHeader = logReader.next().getLogBlockHeader
@@ -759,8 +759,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         assertFalse(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
       }
       val actualSchema = HoodieSchema.parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
-      val expectedSchema = HoodieSchema.fromAvroSchema(HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
-        tableSchema.toAvroSchema, changedFields(i).asJava), false))
+      val expectedSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.generateProjectionSchema(
+        schema, changedFields(i).asJava), false)
       assertEquals(expectedSchema, actualSchema)
     }
   }

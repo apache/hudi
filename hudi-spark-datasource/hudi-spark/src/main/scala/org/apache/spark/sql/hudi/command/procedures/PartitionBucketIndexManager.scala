@@ -220,12 +220,10 @@ class PartitionBucketIndexManager extends BaseProcedure
       val res: RDD[InternalRow] = if (allFileSlice.isEmpty) {
         spark.sparkContext.emptyRDD
       } else {
-        val serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields.getAvroSchema)
         val latestInstantTime = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
 
         spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
           // instantiate other supporting cast
-          val readerSchema = serializableTableSchemaWithMetaFields.get
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
           // get this value from config, which has obtained this from write client
           val enableOptimizedLogBlockScan = config.getOrElse(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
@@ -236,8 +234,8 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(latestInstantTime.requestedTime())
             .withFileSlice(fileSlice)
-            .withDataSchema(readerSchema)
-            .withRequestedSchema(readerSchema)
+            .withDataSchema(tableSchemaWithMetaFields)
+            .withRequestedSchema(tableSchemaWithMetaFields)
             .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)

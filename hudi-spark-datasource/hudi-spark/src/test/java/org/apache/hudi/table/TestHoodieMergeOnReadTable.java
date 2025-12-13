@@ -95,7 +95,7 @@ import static org.apache.hudi.common.model.HoodieWriteStat.NULL_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -607,7 +607,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         .filter(path -> FSUtils.isLogFile(path.getName()))
         .forEach(logFilePath -> {
           try {
-            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), AVRO_SCHEMA, 10000, false,
+            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), HOODIE_SCHEMA, 10000, false,
                 false, "_row_key", null);
             Map<HoodieLogBlock.HeaderMetadataType, String> headers = Collections.emptyMap();
             while (reader.hasNext()) {

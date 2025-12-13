@@ -25,7 +25,7 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
@@ -261,8 +261,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
                 .withFileSlice(fileSlice)
-                .withDataSchema(dataAvroSchema)
-                .withRequestedSchema(requestedAvroSchema)
+                .withDataSchema(HoodieSchema.fromAvroSchema(dataAvroSchema))
+                .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedAvroSchema))
                 .withInternalSchema(internalSchemaOpt)
                 .withProps(props)
                 .withStart(file.start)

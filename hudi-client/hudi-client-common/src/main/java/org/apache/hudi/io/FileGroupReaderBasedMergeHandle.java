@@ -57,9 +57,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -83,8 +82,8 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
  * the records, and writes the records to a new base file.
  */
 @NotThreadSafe
+@Slf4j
 public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FileGroupReaderBasedMergeHandle.class);
 
   private final Option<CompactionOperation> compactionOperation;
   private final String maxInstantTime;
@@ -187,7 +186,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   private void init(CompactionOperation operation, String partitionPath) {
-    LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
+    log.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
     this.baseFileToMerge = operation.getBaseFile(config.getBasePath(), operation.getPartitionPath()).orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -217,7 +216,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       oldFilePath = makeNewFilePath(partitionPath, oldFileName);
       newFilePath = makeNewFilePath(partitionPath, newFileName);
 
-      LOG.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
+      log.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
@@ -290,7 +289,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             writeStatus.markSuccess(record, recordMetadata);
             recordsWritten++;
           } catch (Exception e) {
-            LOG.error("Error writing record {}", record, e);
+            log.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
             fileGroupReader.onWriteFailure(record.getRecordKey());
           }
@@ -317,7 +316,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                                         Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
-        .withDataSchema(writeSchemaWithMetaFields.toAvroSchema()).withRequestedSchema(writeSchemaWithMetaFields.toAvroSchema())
+        .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());

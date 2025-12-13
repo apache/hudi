@@ -97,7 +97,7 @@ public class DataHubTableProperties {
 
   private static Map<String, String> getSerdeProperties(DataHubSyncConfig config, boolean readAsOptimized) {
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-    String inputFormatClassName = getInputFormatClassName(baseFileFormat, false, false);
+    String inputFormatClassName = getInputFormatClassName(baseFileFormat, false);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
 

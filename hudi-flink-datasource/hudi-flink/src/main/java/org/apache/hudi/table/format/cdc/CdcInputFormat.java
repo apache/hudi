@@ -379,7 +379,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           readerContext.getMergeMode(),
           false,
           Option.of(imageManager.writeConfig.getRecordMerger()),
-          tableSchema.toAvroSchema(),
+          tableSchema,
           Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
           props,
           metaClient.getTableConfig().getPartialUpdateMode());
@@ -509,7 +509,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           throw new HoodieIOException("Fail to call getFileStatus", e);
         }
       }).toArray(HoodieLogFile[]::new);
-      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema.toAvroSchema());
+      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
     }
 
     private int[] getRequiredPos(String tableSchema, HoodieSchema required) {

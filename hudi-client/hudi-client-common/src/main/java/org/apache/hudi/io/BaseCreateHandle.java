@@ -36,8 +36,7 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -46,8 +45,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+@Slf4j
 public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseCreateHandle.class);
 
   protected HoodieFileWriter fileWriter;
   protected final StoragePath path;
@@ -120,7 +119,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
       writeStatus.markFailure(record, t, recordMetadata);
-      LOG.error("Error writing record " + record, t);
+      log.error("Error writing record " + record, t);
     }
   }
 
@@ -177,7 +176,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    */
   @Override
   public List<WriteStatus> close() {
-    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    log.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
       if (isClosed()) {
         // Handle has already been closed
@@ -193,7 +192,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
       setupWriteStatus();
 
-      LOG.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
+      log.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime());
 

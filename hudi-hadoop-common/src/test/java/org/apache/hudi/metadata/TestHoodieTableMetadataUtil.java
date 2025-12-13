@@ -259,7 +259,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         FileSlice fileSlice2 = new FileSlice(p, instant2, fileId1);
         fileSlice2.setBaseFile(baseFile1);
         StoragePath storagePath2 = new StoragePath(partitionMetadataPath.getParent(), hoodieTestTable.getLogFileNameById(fileId1, 1));
-        writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS,
+        writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS,
             dataGen.generateInsertsForPartition(instant2, 10, p), 1, metaClient.getStorage(), new Properties(), fileId1, instant2);
         fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
         partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
