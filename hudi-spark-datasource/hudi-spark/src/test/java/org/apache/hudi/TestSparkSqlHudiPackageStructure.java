@@ -45,7 +45,11 @@ public class TestSparkSqlHudiPackageStructure {
 
   /**
    * Allowed sub-packages under org.apache.spark.sql.hudi for Scala test classes.
-   * These are referenced in azure-pipelines configuration for wildcard test suites.
+   * This list **MUST** be kept in sync with:
+   * (1) The 'job6HudiSparkDdlOthersWildcardSuites' list in azure-pipelines-20230430.yml for Azure
+   * CI (excluding org.apache.spark.sql.hudi.dml and org.apache.spark.sql.hudi.feature)
+   * (2) the Scala other test filter (SCALA_TEST_OTHERS_FILTER) in .github/workflows/bot.yml
+   * for GitHub actions (excluding org.apache.spark.sql.hudi.dml)
    */
   private static final Set<String> ALLOWED_PACKAGES = new HashSet<>(Arrays.asList(
       "org.apache.spark.sql.hudi.analysis",
