@@ -62,8 +62,8 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>org.apache.thrift.tools</groupId>
-                        <artifactId>maven-thrift-plugin</artifactId>
+                        <groupId>org.apache.thrift</groupId>
+                        <artifactId>thrift-maven-plugin</artifactId>
                         <version>${maven-thrift-plugin.version}</version>
                         <configuration>
                             <thriftExecutable>${thrift.home}/bin/thrift</thriftExecutable>
