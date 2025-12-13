@@ -17,18 +17,17 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.schema.HoodieSchemaType
-import org.apache.hudi.common.schema.HoodieSchemaType._
-
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.LogicalTypes
+import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
+import org.apache.avro.{LogicalTypes, Schema}
+import org.apache.avro.Schema.Type
+import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.{HoodieMatchedField, HoodieSchemaHelper}
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
-import org.apache.spark.sql.avro.AvroUtils.toFieldStr
+import org.apache.spark.sql.avro.AvroUtils.{AvroMatchedField, toFieldStr}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, RebaseDateTime}
@@ -38,7 +37,6 @@ import org.apache.spark.sql.types._
 
 import java.nio.ByteBuffer
 import java.util.TimeZone
-
 import scala.collection.JavaConverters._
 
 /**
@@ -55,13 +53,13 @@ import scala.collection.JavaConverters._
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroSerializer(rootCatalystType: DataType,
-                                  rootHoodieType: HoodieSchema,
+                                  rootAvroType: HoodieSchema,
                                   nullable: Boolean,
                                   positionalFieldMatch: Boolean,
                                   datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
 
-  def this(rootCatalystType: DataType, rootHoodieType: HoodieSchema, nullable: Boolean) = {
-    this(rootCatalystType, rootHoodieType, nullable, positionalFieldMatch = false,
+  def this(rootCatalystType: DataType, rootAvroType: HoodieSchema, nullable: Boolean) = {
+    this(rootCatalystType, rootAvroType, nullable, positionalFieldMatch = false,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE,
         LegacyBehaviorPolicy.CORRECTED.toString)))
   }
@@ -77,21 +75,21 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
     datetimeRebaseMode, "Avro")
 
   private val converter: Any => Any = {
-    val actualHoodieType = resolveNullableType(rootHoodieType, nullable)
+    val actualAvroType = resolveNullableType(rootAvroType.getAvroSchema, nullable)
     val baseConverter = try {
       rootCatalystType match {
         case st: StructType =>
-          newStructConverter(st, actualHoodieType, Nil, Nil).asInstanceOf[Any => Any]
+          newStructConverter(st, actualAvroType, Nil, Nil).asInstanceOf[Any => Any]
         case _ =>
           val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
-          val converter = newConverter(rootCatalystType, actualHoodieType, Nil, Nil)
+          val converter = newConverter(rootCatalystType, actualAvroType, Nil, Nil)
           (data: Any) =>
             tmpRow.update(0, data)
             converter.apply(tmpRow, 0)
       }
     } catch {
       case ise: IncompatibleSchemaException => throw new IncompatibleSchemaException(
-        s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootHoodieType.", ise)
+        s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootAvroType.", ise)
     }
     if (nullable) {
       (data: Any) =>
@@ -110,54 +108,44 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
   private lazy val decimalConversions = new DecimalConversion()
 
   private def newConverter(catalystType: DataType,
-                           hoodieType: HoodieSchema,
+                           avroType: Schema,
                            catalystPath: Seq[String],
                            avroPath: Seq[String]): Converter = {
     val errorPrefix = s"Cannot convert SQL ${toFieldStr(catalystPath)} " +
       s"to Avro ${toFieldStr(avroPath)} because "
-    (catalystType, hoodieType.getType) match {
-      case (NullType, HoodieSchemaType.NULL) =>
+    (catalystType, avroType.getType) match {
+      case (NullType, NULL) =>
         (getter, ordinal) => null
-      case (BooleanType, HoodieSchemaType.BOOLEAN) =>
+      case (BooleanType, BOOLEAN) =>
         (getter, ordinal) => getter.getBoolean(ordinal)
-      case (ByteType, HoodieSchemaType.INT) =>
+      case (ByteType, INT) =>
         (getter, ordinal) => getter.getByte(ordinal).toInt
-      case (ShortType, HoodieSchemaType.INT) =>
+      case (ShortType, INT) =>
         (getter, ordinal) => getter.getShort(ordinal).toInt
-      case (IntegerType, HoodieSchemaType.INT) =>
+      case (IntegerType, INT) =>
         (getter, ordinal) => getter.getInt(ordinal)
-      case (LongType, HoodieSchemaType.LONG) =>
+      case (LongType, LONG) =>
         (getter, ordinal) => getter.getLong(ordinal)
-      case (FloatType, HoodieSchemaType.FLOAT) =>
+      case (FloatType, FLOAT) =>
         (getter, ordinal) => getter.getFloat(ordinal)
-      case (DoubleType, HoodieSchemaType.DOUBLE) =>
+      case (DoubleType, DOUBLE) =>
         (getter, ordinal) => getter.getDouble(ordinal)
-      case (d: DecimalType, HoodieSchemaType.FIXED) =>
-        hoodieType match {
-          case decimal: HoodieSchema.Decimal =>
-            (getter, ordinal) =>
-              val decimalValue = getter.getDecimal(ordinal, d.precision, d.scale)
-              decimalConversions.toFixed(decimalValue.toJavaBigDecimal,
-                hoodieType.toAvroSchema, LogicalTypes.decimal(d.precision, d.scale))
-          case _ =>
-            throw new IncompatibleSchemaException(errorPrefix +
-              s"FIXED type must be a decimal schema")
-        }
+      case (d: DecimalType, FIXED)
+        if avroType.getLogicalType == LogicalTypes.decimal(d.precision, d.scale) =>
+        (getter, ordinal) =>
+          val decimal = getter.getDecimal(ordinal, d.precision, d.scale)
+          decimalConversions.toFixed(decimal.toJavaBigDecimal, avroType,
+            LogicalTypes.decimal(d.precision, d.scale))
 
-      case (d: DecimalType, HoodieSchemaType.BYTES) =>
-        hoodieType match {
-          case decimal: HoodieSchema.Decimal =>
-            (getter, ordinal) =>
-              val decimalValue = getter.getDecimal(ordinal, d.precision, d.scale)
-              decimalConversions.toBytes(decimalValue.toJavaBigDecimal,
-                hoodieType.toAvroSchema, LogicalTypes.decimal(d.precision, d.scale))
-          case _ =>
-            throw new IncompatibleSchemaException(errorPrefix +
-              s"BYTES type must be a decimal schema")
-        }
+      case (d: DecimalType, BYTES)
+        if avroType.getLogicalType == LogicalTypes.decimal(d.precision, d.scale) =>
+        (getter, ordinal) =>
+          val decimal = getter.getDecimal(ordinal, d.precision, d.scale)
+          decimalConversions.toBytes(decimal.toJavaBigDecimal, avroType,
+            LogicalTypes.decimal(d.precision, d.scale))
 
-      case (StringType, HoodieSchemaType.ENUM) =>
-        val enumSymbols: Set[String] = hoodieType.getEnumSymbols.asScala.toSet
+      case (StringType, ENUM) =>
+        val enumSymbols: Set[String] = avroType.getEnumSymbols.asScala.toSet
         (getter, ordinal) =>
           val data = getter.getUTF8String(ordinal).toString
           if (!enumSymbols.contains(data)) {
@@ -165,13 +153,13 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
               s""""$data" cannot be written since it's not defined in enum """ +
               enumSymbols.mkString("\"", "\", \"", "\""))
           }
-          new EnumSymbol(hoodieType.toAvroSchema, data)
+          new EnumSymbol(avroType, data)
 
-      case (StringType, HoodieSchemaType.STRING) =>
+      case (StringType, STRING) =>
         (getter, ordinal) => new Utf8(getter.getUTF8String(ordinal).getBytes)
 
-      case (BinaryType, HoodieSchemaType.FIXED) =>
-        val size = hoodieType.getFixedSize
+      case (BinaryType, FIXED) =>
+        val size = avroType.getFixedSize
         (getter, ordinal) =>
           val data: Array[Byte] = getter.getBinary(ordinal)
           if (data.length != size) {
@@ -180,55 +168,40 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
             throw new IncompatibleSchemaException(errorPrefix + len2str(data.length) +
               " of binary data cannot be written into FIXED type with size of " + len2str(size))
           }
-          new Fixed(hoodieType.toAvroSchema, data)
+          new Fixed(avroType, data)
 
-      case (BinaryType, HoodieSchemaType.BYTES) =>
+      case (BinaryType, BYTES) =>
         (getter, ordinal) => ByteBuffer.wrap(getter.getBinary(ordinal))
 
-      case (DateType, HoodieSchemaType.INT) =>
+      case (DateType, INT) =>
         (getter, ordinal) => dateRebaseFunc(getter.getInt(ordinal))
 
-      case (TimestampType, HoodieSchemaType.LONG) =>
-        hoodieType match {
-          case ts: HoodieSchema.Timestamp if ts.isUtcAdjusted =>
-            ts.getPrecision match {
-              case HoodieSchema.TimePrecision.MILLIS => (getter, ordinal) =>
-                DateTimeUtils.microsToMillis(timestampRebaseFunc(getter.getLong(ordinal)))
-              case HoodieSchema.TimePrecision.MICROS => (getter, ordinal) =>
-                timestampRebaseFunc(getter.getLong(ordinal))
-            }
-          case _ if hoodieType.getType == HoodieSchemaType.LONG =>
-            // For backward compatibility, if the Avro type is Long and it is not logical type,
-            // output the timestamp value as with millisecond precision.
-            (getter, ordinal) =>
-              DateTimeUtils.microsToMillis(timestampRebaseFunc(getter.getLong(ordinal)))
-          case _ =>
-            throw new IncompatibleSchemaException(errorPrefix +
-              s"SQL type ${TimestampType.sql} cannot be converted to Avro type $hoodieType")
-        }
+      case (TimestampType, LONG) => avroType.getLogicalType match {
+        // For backward compatibility, if the Avro type is Long and it is not logical type
+        // (the `null` case), output the timestamp value as with millisecond precision.
+        case null | _: TimestampMillis => (getter, ordinal) =>
+          DateTimeUtils.microsToMillis(timestampRebaseFunc(getter.getLong(ordinal)))
+        case _: TimestampMicros => (getter, ordinal) =>
+          timestampRebaseFunc(getter.getLong(ordinal))
+        case other => throw new IncompatibleSchemaException(errorPrefix +
+          s"SQL type ${TimestampType.sql} cannot be converted to Avro logical type $other")
+      }
 
-      case (TimestampNTZType, HoodieSchemaType.LONG) =>
-        hoodieType match {
-          case ts: HoodieSchema.Timestamp if !ts.isUtcAdjusted =>
-            ts.getPrecision match {
-              case HoodieSchema.TimePrecision.MILLIS => (getter, ordinal) =>
-                DateTimeUtils.microsToMillis(getter.getLong(ordinal))
-              case HoodieSchema.TimePrecision.MICROS => (getter, ordinal) =>
-                getter.getLong(ordinal)
-            }
-          case _ if hoodieType.getType == HoodieSchemaType.LONG =>
-            // To keep consistent with TimestampType, if the Avro type is Long and it is not
-            // logical type, output the TimestampNTZ as long value in millisecond precision.
-            (getter, ordinal) =>
-              DateTimeUtils.microsToMillis(getter.getLong(ordinal))
-          case _ =>
-            throw new IncompatibleSchemaException(errorPrefix +
-              s"SQL type ${TimestampNTZType.sql} cannot be converted to Avro type $hoodieType")
-        }
+      case (TimestampNTZType, LONG) => avroType.getLogicalType match {
+        // To keep consistent with TimestampType, if the Avro type is Long and it is not
+        // logical type (the `null` case), output the TimestampNTZ as long value
+        // in millisecond precision.
+        case null | _: LocalTimestampMillis => (getter, ordinal) =>
+          DateTimeUtils.microsToMillis(getter.getLong(ordinal))
+        case _: LocalTimestampMicros => (getter, ordinal) =>
+          getter.getLong(ordinal)
+        case other => throw new IncompatibleSchemaException(errorPrefix +
+          s"SQL type ${TimestampNTZType.sql} cannot be converted to Avro logical type $other")
+      }
 
-      case (ArrayType(et, containsNull), HoodieSchemaType.ARRAY) =>
+      case (ArrayType(et, containsNull), ARRAY) =>
         val elementConverter = newConverter(
-          et, resolveNullableType(hoodieType.getElementType, containsNull),
+          et, resolveNullableType(avroType.getElementType, containsNull),
           catalystPath :+ "element", avroPath :+ "element")
         (getter, ordinal) => {
           val arrayData = getter.getArray(ordinal)
@@ -248,8 +221,8 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
           java.util.Arrays.asList(result: _*)
         }
 
-      case (st: StructType, HoodieSchemaType.RECORD) =>
-        val structConverter = newStructConverter(st, hoodieType, catalystPath, avroPath)
+      case (st: StructType, RECORD) =>
+        val structConverter = newStructConverter(st, avroType, catalystPath, avroPath)
         val numFields = st.length
         (getter, ordinal) => structConverter(getter.getStruct(ordinal, numFields))
 
@@ -258,8 +231,8 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       // >>> BEGINS
       ////////////////////////////////////////////////////////////////////////////////////////////
 
-      case (st: StructType, HoodieSchemaType.UNION) =>
-        val unionConverter = newUnionConverter(st, hoodieType, catalystPath, avroPath)
+      case (st: StructType, UNION) =>
+        val unionConverter = newUnionConverter(st, avroType, catalystPath, avroPath)
         val numFields = st.length
         (getter, ordinal) => unionConverter(getter.getStruct(ordinal, numFields))
 
@@ -267,9 +240,9 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       // <<< ENDS
       ////////////////////////////////////////////////////////////////////////////////////////////
 
-      case (MapType(kt, vt, valueContainsNull), HoodieSchemaType.MAP) if kt == StringType =>
+      case (MapType(kt, vt, valueContainsNull), MAP) if kt == StringType =>
         val valueConverter = newConverter(
-          vt, resolveNullableType(hoodieType.getValueType, valueContainsNull),
+          vt, resolveNullableType(avroType.getValueType, valueContainsNull),
           catalystPath :+ "value", avroPath :+ "value")
         (getter, ordinal) =>
           val mapData = getter.getMap(ordinal)
@@ -289,40 +262,40 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
           }
           result
 
-      case (_: YearMonthIntervalType, HoodieSchemaType.INT) =>
+      case (_: YearMonthIntervalType, INT) =>
         (getter, ordinal) => getter.getInt(ordinal)
 
-      case (_: DayTimeIntervalType, HoodieSchemaType.LONG) =>
+      case (_: DayTimeIntervalType, LONG) =>
         (getter, ordinal) => getter.getLong(ordinal)
 
       case _ =>
         throw new IncompatibleSchemaException(errorPrefix +
-          s"schema is incompatible (sqlType = ${catalystType.sql}, hoodieType = $hoodieType)")
+          s"schema is incompatible (sqlType = ${catalystType.sql}, avroType = $avroType)")
     }
   }
 
   private def newStructConverter(catalystStruct: StructType,
-                                 hoodieStruct: HoodieSchema,
+                                 avroStruct: Schema,
                                  catalystPath: Seq[String],
                                  avroPath: Seq[String]): InternalRow => Record = {
 
-    val hoodieSchemaHelper = new HoodieSchemaHelper(
-      hoodieStruct, catalystStruct, avroPath, catalystPath, positionalFieldMatch)
+    val avroSchemaHelper = new AvroUtils.AvroSchemaHelper(
+      avroStruct, catalystStruct, avroPath, catalystPath, positionalFieldMatch)
 
-    hoodieSchemaHelper.validateNoExtraCatalystFields(ignoreNullable = false)
-    hoodieSchemaHelper.validateNoExtraRequiredHoodieFields()
+    avroSchemaHelper.validateNoExtraCatalystFields(ignoreNullable = false)
+    avroSchemaHelper.validateNoExtraRequiredAvroFields()
 
-    val (avroIndices, fieldConverters) = hoodieSchemaHelper.matchedFields.map {
-      case HoodieMatchedField(catalystField, _, hoodieField) =>
+    val (avroIndices, fieldConverters) = avroSchemaHelper.matchedFields.map {
+      case AvroMatchedField(catalystField, _, avroField) =>
         val converter = newConverter(catalystField.dataType,
-          resolveNullableType(hoodieField.schema(), catalystField.nullable),
-          catalystPath :+ catalystField.name, avroPath :+ hoodieField.name())
-        (hoodieField.pos(), converter)
+          resolveNullableType(avroField.schema(), catalystField.nullable),
+          catalystPath :+ catalystField.name, avroPath :+ avroField.name)
+        (avroField.pos(), converter)
     }.toArray.unzip
 
     val numFields = catalystStruct.length
     row: InternalRow =>
-      val result = new Record(hoodieStruct.toAvroSchema)
+      val result = new Record(avroStruct)
       var i = 0
       while (i < numFields) {
         if (row.isNullAt(i)) {
@@ -341,18 +314,18 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
   ////////////////////////////////////////////////////////////////////////////////////////////
 
   private def newUnionConverter(catalystStruct: StructType,
-                                hoodieUnion: HoodieSchema,
+                                avroUnion: Schema,
                                 catalystPath: Seq[String],
                                 avroPath: Seq[String]): InternalRow => Any = {
-    if (hoodieUnion.getType != HoodieSchemaType.UNION || !canMapUnion(catalystStruct, hoodieUnion)) {
+    if (avroUnion.getType != UNION || !canMapUnion(catalystStruct, avroUnion)) {
       throw new IncompatibleSchemaException(s"Cannot convert Catalyst type $catalystStruct to " +
-        s"Avro type $hoodieUnion.")
+        s"Avro type $avroUnion.")
     }
-    val nullable = hoodieUnion.getTypes.size() > 0 && hoodieUnion.getTypes.get(0).getType == HoodieSchemaType.NULL
+    val nullable = avroUnion.getTypes.size() > 0 && avroUnion.getTypes.get(0).getType == Type.NULL
     val avroInnerTypes = if (nullable) {
-      hoodieUnion.getTypes.asScala.tail
+      avroUnion.getTypes.asScala.tail
     } else {
-      hoodieUnion.getTypes.asScala
+      avroUnion.getTypes.asScala
     }
     val fieldConverters = catalystStruct.zip(avroInnerTypes).map {
       case (f1, f2) => newConverter(f1.dataType, f2, catalystPath, avroPath)
@@ -365,7 +338,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         if (!row.isNullAt(i)) {
           if (result != null) {
             throw new IncompatibleSchemaException(s"Cannot convert Catalyst record $catalystStruct to " +
-              s"hoodie union $hoodieUnion. Record has more than one optional values set")
+              s"Avro union $avroUnion. Record has more than one optional values set")
           }
           result = fieldConverters(i).apply(row, i)
         }
@@ -373,14 +346,14 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       }
       if (!nullable && result == null) {
         throw new IncompatibleSchemaException(s"Cannot convert Catalyst record $catalystStruct to " +
-          s"Hoodie union $hoodieUnion. Record has no values set, while should have exactly one")
+          s"Avro union $avroUnion. Record has no values set, while should have exactly one")
       }
       result
   }
 
-  private def canMapUnion(catalystStruct: StructType, avroStruct: HoodieSchema): Boolean = {
+  private def canMapUnion(catalystStruct: StructType, avroStruct: Schema): Boolean = {
     (avroStruct.getTypes.size() > 0 &&
-      avroStruct.getTypes.get(0).getType == HoodieSchemaType.NULL &&
+      avroStruct.getTypes.get(0).getType == Type.NULL &&
       avroStruct.getTypes.size() - 1 == catalystStruct.length) || avroStruct.getTypes.size() == catalystStruct.length
   }
 
@@ -401,7 +374,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
    * It will also log a warning message if the nullability for Avro and catalyst types are
    * different.
    */
-  private def resolveNullableType(avroType: HoodieSchema, nullable: Boolean): HoodieSchema = {
+  private def resolveNullableType(avroType: Schema, nullable: Boolean): Schema = {
     val (avroNullable, resolvedAvroType) = resolveAvroType(avroType)
     warnNullabilityDifference(avroNullable, nullable)
     resolvedAvroType
@@ -412,10 +385,10 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
    * return value is a [[Boolean]] indicating if the input Avro type is nullable. The second
    * return value is the possibly resolved type.
    */
-  private def resolveAvroType(avroType: HoodieSchema): (Boolean, HoodieSchema) = {
-    if (avroType.getType == HoodieSchemaType.UNION) {
+  private def resolveAvroType(avroType: Schema): (Boolean, Schema) = {
+    if (avroType.getType == Type.UNION) {
       val fields = avroType.getTypes.asScala
-      val actualType = fields.filter(_.getType != HoodieSchemaType.NULL)
+      val actualType = fields.filter(_.getType != Type.NULL)
       if (fields.length == 2 && actualType.length == 1) {
         (true, actualType.head)
       } else {
