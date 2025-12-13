@@ -15,10 +15,10 @@ env:
 jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
-    if: false
+    if: true
     env:
       HUDI_VERSION: 1.1.0
-      STAGING_REPO_NUM: 1164
+      STAGING_REPO_NUM: 1170
     strategy:
       matrix:
         include:
