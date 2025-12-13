@@ -28,7 +28,6 @@
 JAVA_RUNTIME_VERSION=$1
 SCALA_PROFILE=$2
 SPARK_VERSION=$3
-DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 echo $WORKDIR
 JARS_DIR=${WORKDIR}/jars
@@ -65,8 +64,8 @@ change_java_runtime_version () {
 # Function to change Java runtime version to default Java 8
 ##
 use_default_java_runtime () {
-  echo "::warning:: Use default java runtime under ${DEFAULT_JAVA_HOME}"
-  export JAVA_HOME=${DEFAULT_JAVA_HOME}
+  echo "::warning:: Use default java runtime under /usr/lib/jvm/java-11-openjdk"
+  export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
 }
 
 ##
