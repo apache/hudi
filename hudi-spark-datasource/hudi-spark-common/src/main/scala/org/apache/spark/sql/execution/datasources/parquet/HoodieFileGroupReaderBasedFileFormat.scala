@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -212,8 +212,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     //TODO add util for this in HoodieSchema
-    val requestedAvroSchema = AvroSchemaUtils.pruneDataSchema(hoodieTableSchema.getAvroSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
-    val dataAvroSchema = AvroSchemaUtils.pruneDataSchema(hoodieTableSchema.getAvroSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
+    val requestedAvroSchema = HoodieSchemaUtils.pruneDataSchema(hoodieTableSchema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedSchema, sanitizedTableName), exclusionFields)
+    val dataAvroSchema = HoodieSchemaUtils.pruneDataSchema(hoodieTableSchema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataSchema, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
 
@@ -261,8 +261,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
                 .withFileSlice(fileSlice)
-                .withDataSchema(HoodieSchema.fromAvroSchema(dataAvroSchema))
-                .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedAvroSchema))
+                .withDataSchema(dataAvroSchema)
+                .withRequestedSchema(requestedAvroSchema)
                 .withInternalSchema(internalSchemaOpt)
                 .withProps(props)
                 .withStart(file.start)

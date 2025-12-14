@@ -845,7 +845,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       //       to be passed from driver to executor
       val requiredSchema = HoodieSchema.parse(requiredDataSchema.avroSchemaStr)
       //TODO to fill impl for this
-      val hoodieSchemaToRowConverter = HoodieSchemaConversionUtils.createHoodieSchemaToInternalRowConverter(requiredSchema, requiredRowSchema)
+      val hoodieSchemaToRowConverter = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(requiredSchema, requiredRowSchema)
 
       reader.getRecordIterator(requiredSchema).asScala
         .map(record => {

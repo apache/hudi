@@ -183,7 +183,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     job.getConfiguration().set(FileInputFormat.INPUT_DIR_RECURSIVE, "true");
     // To parallelize reading file status.
     job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
-    AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (HoodieSchema.parse(schemaStr).getAvroSchema()));
+    AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), HoodieSchema.parse(schemaStr).getAvroSchema());
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
