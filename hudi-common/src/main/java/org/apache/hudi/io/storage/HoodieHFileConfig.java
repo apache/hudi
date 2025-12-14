@@ -30,12 +30,14 @@ public class HoodieHFileConfig {
   private final StorageConfiguration storageConf;
   private final BloomFilter bloomFilter;
   private final String keyFieldName;
+  private final boolean allowDuplicatesToBeInserted;
 
   public HoodieHFileConfig(StorageConfiguration storageConf,
                            CompressionCodec compressionCodec,
                            int blockSize,
                            long maxFileSize,
                            String keyFieldName,
+                           boolean allowDuplicatesToBeInserted,
                            BloomFilter bloomFilter) {
     this.storageConf = storageConf;
     this.compressionCodec = compressionCodec;
@@ -43,6 +45,7 @@ public class HoodieHFileConfig {
     this.maxFileSize = maxFileSize;
     this.bloomFilter = bloomFilter;
     this.keyFieldName = keyFieldName;
+    this.allowDuplicatesToBeInserted = allowDuplicatesToBeInserted;
   }
 
   public StorageConfiguration getStorageConf() {
@@ -71,5 +74,9 @@ public class HoodieHFileConfig {
 
   public String getKeyFieldName() {
     return keyFieldName;
+  }
+
+  public boolean allowDuplicatesToBeInserted() {
+    return allowDuplicatesToBeInserted;
   }
 }
