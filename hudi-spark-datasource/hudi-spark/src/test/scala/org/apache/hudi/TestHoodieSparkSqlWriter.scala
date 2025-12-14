@@ -1381,7 +1381,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
   private def fetchActualSchema(): HoodieSchema = {
     val tableMetaClient = createMetaClient(spark, tempBasePath)
-    new TableSchemaResolver(tableMetaClient).getTableSchema()
+    new TableSchemaResolver(tableMetaClient).getTableSchema(false)
   }
 }
 

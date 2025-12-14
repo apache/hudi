@@ -19,7 +19,7 @@
 package org.apache.spark.sql.avro
 
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.common.schema.{HoodieJsonProperties, HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 import org.apache.spark.sql.types._
@@ -102,7 +102,14 @@ object HoodieSparkSchemaConverters {
           val fields = st.map { f =>
             val fieldSchema = toHoodieType(f.dataType, f.nullable, f.name, childNameSpace)
             val doc = f.getComment.orNull
-            HoodieSchemaField.of(f.name, fieldSchema, doc)
+            // Match existing Avro SchemaConverters behavior: use NULL_VALUE for nullable unions
+            // to avoid serializing "default":null in JSON representation
+            val defaultVal = if (fieldSchema.isNullable) {
+              HoodieJsonProperties.NULL_VALUE
+            } else {
+              null
+            }
+            HoodieSchemaField.of(f.name, fieldSchema, doc, defaultVal)
           }
 
           HoodieSchema.createRecord(recordName, nameSpace, null, fields.asJava)
