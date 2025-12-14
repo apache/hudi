@@ -805,7 +805,10 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       case Left(hoodieSchema) =>
         val fieldMap = hoodieSchema.getFields.asScala.map(f => f.name() -> f).toMap
         val requiredFields = requiredColumns.map { col =>
-          fieldMap(col)
+          val f = fieldMap(col)
+          // We have to create a new HoodieSchemaField since Avro schemas can't share field
+          // instances (and will throw "org.apache.avro.AvroRuntimeException: Field already used")
+          HoodieSchemaField.of(f.name(), f.schema(), f.doc().orElse(null), f.defaultVal().orElse(null))
         }.toList
 
         val fieldsJava = new java.util.ArrayList[HoodieSchemaField]()
