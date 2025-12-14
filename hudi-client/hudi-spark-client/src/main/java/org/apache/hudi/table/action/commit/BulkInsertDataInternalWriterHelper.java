@@ -129,26 +129,23 @@ public class BulkInsertDataInternalWriterHelper {
       boolean shouldDropPartitionColumns = writeConfig.shouldDropPartitionColumns();
       if (shouldDropPartitionColumns) {
         // Drop the partition columns from the row
-        // Using the deprecated JavaConversions to be compatible with scala versions < 2.12. Once hudi support for scala versions < 2.12 is
-        // stopped, can move this to JavaConverters.seqAsJavaList(...)
         List<String> partitionCols = JavaScalaConverters.convertScalaListToJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
-        Set<Integer> partitionIdx = new HashSet<Integer>();
+        Set<Integer> partitionIdx = new HashSet<>();
         for (String col : partitionCols) {
           partitionIdx.add(this.structType.fieldIndex(col));
         }
 
         // Relies on InternalRow::toSeq(...) preserving the column ordering based on the supplied schema
-        // Using the deprecated JavaConversions to be compatible with scala versions < 2.12.
         List<Object> cols = JavaScalaConverters.convertScalaListToJavaList(row.toSeq(structType));
         int idx = 0;
-        List<Object> newCols = new ArrayList<Object>();
+        List<Object> newCols = new ArrayList<>();
         for (Object o : cols) {
           if (!partitionIdx.contains(idx)) {
             newCols.add(o);
           }
           idx += 1;
         }
-        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.<Object>convertJavaListToScalaSeq(newCols));
+        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.convertJavaListToScalaSeq(newCols));
         handle.write(newRow);
       } else {
         handle.write(row);
