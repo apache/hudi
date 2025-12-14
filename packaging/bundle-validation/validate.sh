@@ -80,12 +80,9 @@ use_default_java_runtime () {
 test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
-        change_java_runtime_version
-    fi
+    change_java_runtime_version
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
     local DERBY_PID=$!
-    use_default_java_runtime
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
     change_java_runtime_version
