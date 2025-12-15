@@ -79,11 +79,12 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
       if (fieldOpt.isEmpty()) {
         return null;
       }
-      Object value = currentRecord.get(fieldOpt.get().pos());
+      HoodieSchemaField field = fieldOpt.get();
+      Object value = currentRecord.get(field.pos());
       if (i == path.length - 1) {
         return value;
       }
-      currentSchema = fieldOpt.get().schema();
+      currentSchema = field.schema();
       currentRecord = (IndexedRecord) value;
     }
     return null;

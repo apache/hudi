@@ -40,6 +40,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -61,6 +63,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
@@ -77,8 +80,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -91,7 +92,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
@@ -136,10 +136,13 @@ public class HoodieIndexUtils {
    * @param tableSchema  table schema
    * @return true if each field's data type are supported for secondary index, false otherwise
    */
-  static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
+  static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, HoodieSchema tableSchema) {
     return sourceFields.stream().allMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return isSecondaryIndexSupportedType(schema);
+      Option<Pair<String, HoodieSchemaField>> schema = HoodieSchemaUtils.getNestedField(tableSchema, fieldToIndex);
+      if (schema.isEmpty()) {
+        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldToIndex);
+      }
+      return isSecondaryIndexSupportedType(schema.get().getRight().schema());
     });
   }
 
@@ -150,10 +153,14 @@ public class HoodieIndexUtils {
    * @param tableSchema  table schema
    * @return true if each field's data types are supported, false otherwise
    */
-  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, Schema tableSchema) {
+  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, HoodieSchema tableSchema) {
     return sourceFields.stream().anyMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+      Option<Pair<String, HoodieSchemaField>> nestedFieldOpt = HoodieSchemaUtils.getNestedField(tableSchema, fieldToIndex);
+      if (nestedFieldOpt.isEmpty()) {
+        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldToIndex);
+      }
+      HoodieSchema fieldSchema = nestedFieldOpt.get().getRight().schema();
+      return fieldSchema.getType() != HoodieSchemaType.RECORD && fieldSchema.getType() != HoodieSchemaType.ARRAY && fieldSchema.getType() != HoodieSchemaType.MAP;
     });
   }
 
@@ -161,39 +168,26 @@ public class HoodieIndexUtils {
    * Check if the given schema type is supported for secondary index.
    * Supported types are: String (including CHAR), Integer types (Int, BigInt, Long, Short), and timestamp
    */
-  private static boolean isSecondaryIndexSupportedType(Schema schema) {
+  private static boolean isSecondaryIndexSupportedType(HoodieSchema schema) {
     // Handle union types (nullable fields)
-    if (schema.getType() == Schema.Type.UNION) {
+    if (schema.getType() == HoodieSchemaType.UNION) {
       // For union types, check if any of the types is supported
       return schema.getTypes().stream()
-          .anyMatch(s -> s.getType() != Schema.Type.NULL && isSecondaryIndexSupportedType(s));
+          .anyMatch(s -> s.getType() != HoodieSchemaType.NULL && isSecondaryIndexSupportedType(s));
     }
 
     // Check basic types
     switch (schema.getType()) {
       case STRING:
-        // STRING type can have UUID logical type which we don't support
-        return schema.getLogicalType() == null; // UUID and other string-based logical types are not supported
-      // Regular STRING (includes CHAR)
       case INT:
-        // INT type can represent regular integers or dates/times with logical types
-        if (schema.getLogicalType() != null) {
-          // Support date and time-millis logical types
-          return schema.getLogicalType() == LogicalTypes.date()
-              || schema.getLogicalType() == LogicalTypes.timeMillis();
-        }
-        return true; // Regular INT
       case LONG:
-        // LONG type can represent regular longs or timestamps with logical types
-        if (schema.getLogicalType() != null) {
-          // Support timestamp logical types
-          return schema.getLogicalType() == LogicalTypes.timestampMillis()
-              || schema.getLogicalType() == LogicalTypes.timestampMicros()
-              || schema.getLogicalType() == LogicalTypes.timeMicros();
-        }
-        return true; // Regular LONG
       case DOUBLE:
-        return true; // Support DOUBLE type
+      case DATE:
+      case TIME:
+        return true;
+      case TIMESTAMP:
+        // LOCAL timestamps are not supported
+        return ((HoodieSchema.Timestamp) schema).isUtcAdjusted();
       default:
         return false;
     }
@@ -721,40 +715,36 @@ public class HoodieIndexUtils {
                                                                Map<String, String> options,
                                                                Map<String, Map<String, String>> columns,
                                                                String userIndexName) throws Exception {
-    Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     List<String> sourceFields = new ArrayList<>(columns.keySet());
     String columnName = sourceFields.get(0); // We know there's only one column from the check above
 
     // First check if the field exists
-    try {
-      getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
-    } catch (Exception e) {
+    Option<Pair<String, HoodieSchemaField>> fieldSchemaOpt = HoodieSchemaUtils.getNestedField(tableSchema, columnName);
+    if (fieldSchemaOpt.isEmpty()) {
       throw new HoodieMetadataIndexException(String.format(
           "Cannot create %s index '%s': Column '%s' does not exist in the table schema. "
-          + "Please verify the column name and ensure it exists in the table.",
+              + "Please verify the column name and ensure it exists in the table.",
           indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? "secondary" : "expression",
           userIndexName, columnName));
     }
 
+    Pair<String, HoodieSchemaField> fieldSchema = fieldSchemaOpt.get();
+
     // Check for complex types (RECORD, ARRAY, MAP) - not supported for any index type
     if (!validateDataTypeForSecondaryOrExpressionIndex(sourceFields, tableSchema)) {
-      Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
       throw new HoodieMetadataIndexException(String.format(
           "Cannot create %s index '%s': Column '%s' has unsupported data type '%s'. "
           + "Complex types (RECORD, ARRAY, MAP) are not supported for indexing. "
           + "Please choose a column with a primitive data type.",
           indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? "secondary" : "expression",
-          userIndexName, columnName, fieldSchema.getType()));
+          userIndexName, columnName, fieldSchema.getRight().schema().getType()));
     }
 
     // For secondary index, apply stricter data type validation
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
       if (!validateDataTypeForSecondaryIndex(sourceFields, tableSchema)) {
-        Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
-        String actualType = fieldSchema.getType().toString();
-        if (fieldSchema.getLogicalType() != null) {
-          actualType += " with logical type " + fieldSchema.getLogicalType();
-        }
+        String actualType = fieldSchema.getRight().schema().getType().toString();
 
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Column '%s' has unsupported data type '%s'. "

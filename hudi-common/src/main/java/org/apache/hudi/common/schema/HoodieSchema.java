@@ -780,6 +780,10 @@ public class HoodieSchema implements Serializable {
         .anyMatch(schema -> schema.getType() == Schema.Type.NULL);
   }
 
+  public boolean isSchemaNull() {
+    return type == null || type == HoodieSchemaType.NULL;
+  }
+
   /**
    * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
    *
