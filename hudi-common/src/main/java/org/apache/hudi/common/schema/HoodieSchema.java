@@ -895,7 +895,7 @@ public class HoodieSchema implements Serializable {
 
       try {
         Schema avroSchema = avroParser.parse(jsonSchema);
-        return new HoodieSchema(avroSchema);
+        return fromAvroSchema(avroSchema);
       } catch (Exception e) {
         throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
       }
@@ -913,7 +913,7 @@ public class HoodieSchema implements Serializable {
 
       try {
         Schema avroSchema = avroParser.parse(inputStream);
-        return new HoodieSchema(avroSchema);
+        return fromAvroSchema(avroSchema);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse schema from InputStream", e);
       } catch (Exception e) {
