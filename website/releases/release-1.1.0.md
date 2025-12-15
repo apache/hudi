@@ -1,6 +1,5 @@
 ---
-title: "Release 1.1"
-slug: release-1.1
+title: "Release 1.1.0"
 layout: releases
 toc: true
 ---

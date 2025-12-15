@@ -149,7 +149,7 @@ module.exports = {
             to: "/releases/release-1.1",
           },
           {
-            from: ["/releases"],
+            from: ["/releases/release-1.1.0"],
             to: "/releases/release-1.1",
           },
           {

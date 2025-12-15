@@ -12,7 +12,7 @@
 module.exports = {
   releases: [
     'download',
-    'release-1.1.0',
+    'release-1.1',
     'release-1.0',
     'release-0.15.0',
     'release-0.14',

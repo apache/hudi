@@ -17,7 +17,7 @@ relevant [module and API changes](#module-and-api-changes) and
 
 ## Migration Guide
 
-This release keeps the same table version (`6`) as [0.14.0 release](/releases/release-0.14), and there is no need for
+This release keeps the same table version (`6`) as [0.14.0 release](/releases/release-0.14.0), and there is no need for
 a table version upgrade if you are upgrading from 0.14.0. There are a
 few [module and API changes](#module-and-api-changes)
 and [behavior changes](#behavior-changes) as
@@ -42,8 +42,8 @@ We have expanded Hudi support to Spark 3.5 with two new bundles:
 #### New Utilities Bundles for Scala 2.13
 
 Besides adding a bundle for Spark 3.5 and Scala 2.13, we have added new utilities bundles to use with Scala
-2.13, [hudi-utilities-bundle_2.13](https://mvnrepository.com/artifact/org/apache/hudi/hudi-utilities-bundle_2.13)
-and [hudi-utilities-slim-bundle_2.13](https://mvnrepository.com/artifact/org/apache/hudi/hudi-utilities-slim-bundle_2.13).
+2.13, [hudi-utilities-bundle_2.13](https://mvnrepository.com/artifact/org.apache.hudi/hudi-utilities-bundle_2.13)
+and [hudi-utilities-slim-bundle_2.13](https://mvnrepository.com/artifact/org.apache.hudi/hudi-utilities-slim-bundle_2.13).
 
 #### New and Deprecated Flink Bundles
 
