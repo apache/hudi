@@ -56,7 +56,7 @@ public class JavaSortAndSizeExecutionStrategy<T>
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups,
       final String instantTime, final Map<String, String> strategyParams, final Schema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
-    log.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    log.info("Starting clustering for a group, parallelism: {} commit: {}", numOutputGroups, instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
