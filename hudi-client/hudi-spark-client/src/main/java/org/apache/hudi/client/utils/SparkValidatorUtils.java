@@ -153,7 +153,7 @@ public class SparkValidatorUtils {
    * Get records from specified list of data files.
    */
   public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaScalaConverters.<String>convertJavaListToScalaSeq(baseFilePaths));
+    return sqlContext.read().parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
   }
 
   /**
