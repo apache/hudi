@@ -19,10 +19,10 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
@@ -712,7 +712,7 @@ public class StreamSync implements Serializable, Closeable {
                 rowDataset -> {
                   Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(rowDataset,
                       HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                      Option.of(finalSchemaProvider.getTargetHoodieSchema().toAvroSchema()));
+                      Option.of(finalSchemaProvider.getTargetHoodieSchema()));
                   errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
                       .map(evStr -> new ErrorEvent<>(evStr,
                           ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
@@ -720,14 +720,14 @@ public class StreamSync implements Serializable, Closeable {
                 });
           } else {
             avroRDDOptional = transformed.map(
-                rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, finalSchemaProvider.getTargetHoodieSchema().toAvroSchema()));
+                rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, finalSchemaProvider.getTargetHoodieSchema()));
           }
         }
       } else {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
         HoodieSchema incomingSchema = transformed.map(df ->
-                HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), AvroSchemaUtils.getAvroRecordQualifiedName(cfg.targetTableName))))
+                HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema(), AvroSchemaUtils.getAvroRecordQualifiedName(cfg.targetTableName)))
             .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetHoodieSchema);
         schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 
@@ -736,7 +736,7 @@ public class StreamSync implements Serializable, Closeable {
         } else {
           // Rewrite transformed records into the expected target schema
           SchemaProvider finalSchemaProvider = schemaProvider;
-          avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, finalSchemaProvider.getTargetHoodieSchema().toAvroSchema()));
+          avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, finalSchemaProvider.getTargetHoodieSchema()));
         }
       }
     } else {
@@ -790,7 +790,7 @@ public class StreamSync implements Serializable, Closeable {
    */
   @VisibleForTesting
   SchemaProvider getDeducedSchemaProvider(HoodieSchema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
+    Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
     Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
         HoodieSchemaUtils.getLatestTableInternalSchema(
             HoodieStreamer.Config.getProps(conf, cfg), metaClient));
@@ -799,7 +799,7 @@ public class StreamSync implements Serializable, Closeable {
 
     HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
             incomingSchema == null ? HoodieSchema.create(HoodieSchemaType.NULL) : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
-            latestTableSchemaOpt.map(HoodieSchema::fromAvroSchema),
+            latestTableSchemaOpt,
             internalSchemaOpt,
             props);
 
@@ -808,7 +808,7 @@ public class StreamSync implements Serializable, Closeable {
                 new SimpleSchemaProvider(hoodieSparkContext.jsc(), targetSchema, props));
   }
 
-  private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {
+  private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, HoodieSchema readerSchema) {
     return HoodieSparkUtils.createRdd(rowDataset, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
         Option.ofNullable(readerSchema)).toJavaRDD();
   }
@@ -1238,17 +1238,6 @@ public class StreamSync implements Serializable, Closeable {
       return newWriteSchema;
     } catch (Exception e) {
       throw new HoodieSchemaFetchException("Failed to fetch schema from table", e);
-    }
-  }
-
-  /**
-   * Register Avro Schemas.
-   *
-   * @param schemaProvider Schema Provider
-   */
-  private void registerAvroSchemas(SchemaProvider schemaProvider) {
-    if (null != schemaProvider) {
-      registerAvroSchemas(schemaProvider.getSourceHoodieSchema(), schemaProvider.getTargetHoodieSchema());
     }
   }
 

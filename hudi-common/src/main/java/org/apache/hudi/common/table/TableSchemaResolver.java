@@ -355,6 +355,21 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Returns table's latest {@link HoodieSchema} iff table is non-empty (ie there's at least
+   * a single commit)
+   *
+   * This method differs from {@link #getTableAvroSchema(boolean)} in that it won't fallback
+   * to use table's schema used at creation
+   */
+  public Option<HoodieSchema> getTableSchemaFromLatestCommit(boolean includeMetadataFields) {
+    if (metaClient.isTimelineNonEmpty()) {
+      return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).map(HoodieSchema::fromAvroSchema);
+    }
+
+    return Option.empty();
+  }
+
+  /**
    * Read schema from a data file from the last compaction commit done.
    *
    * @deprecated please use {@link #getTableAvroSchema(HoodieInstant, boolean)} instead

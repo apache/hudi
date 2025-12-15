@@ -238,6 +238,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.fromAvroSchema(AVRO_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
+  public static final HoodieSchema NESTED_SCHEMA = HoodieSchema.fromAvroSchema(NESTED_AVRO_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final HoodieSchema HOODIE_SCHEMA_WITH_METADATA_FIELDS = HoodieSchema.fromAvroSchema(AVRO_SCHEMA_WITH_METADATA_FIELDS);
