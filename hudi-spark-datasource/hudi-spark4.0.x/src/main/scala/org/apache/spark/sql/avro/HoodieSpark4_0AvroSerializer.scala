@@ -21,10 +21,10 @@ import org.apache.hudi.common.schema.HoodieSchema
 
 import org.apache.spark.sql.types.DataType
 
-class HoodieSpark4_0AvroSerializer(rootCatalystType: DataType, rootHoodieType: HoodieSchema, nullable: Boolean)
+class HoodieSpark4_0AvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean)
   extends HoodieAvroSerializer {
 
-  val avroSerializer = new AvroSerializer(rootCatalystType, rootHoodieType, nullable)
+  val avroSerializer = new AvroSerializer(rootCatalystType, rootType, nullable)
 
   override def serialize(catalystData: Any): Any = avroSerializer.serialize(catalystData)
 }
