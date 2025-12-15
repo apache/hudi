@@ -43,6 +43,7 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final Option<List<String>> logPaths;
   private final String latestCommit;
   private final String tablePath;
+  private final String partitionPath;
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
   private final Option<InstantRange> instantRange;
@@ -59,6 +60,7 @@ public class MergeOnReadInputSplit implements InputSplit {
       Option<List<String>> logPaths,
       String latestCommit,
       String tablePath,
+      String partitionPath,
       long maxCompactionMemoryInBytes,
       String mergeType,
       @Nullable InstantRange instantRange,
@@ -68,10 +70,51 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.logPaths = logPaths;
     this.latestCommit = latestCommit;
     this.tablePath = tablePath;
+    this.partitionPath = partitionPath;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.mergeType = mergeType;
     this.instantRange = Option.ofNullable(instantRange);
     this.fileId = fileId;
+  }
+
+  public String getFileId() {
+    return fileId;
+  }
+
+  public void setFileId(String fileId) {
+    this.fileId = fileId;
+  }
+
+  public Option<String> getBasePath() {
+    return basePath;
+  }
+
+  public Option<List<String>> getLogPaths() {
+    return logPaths;
+  }
+
+  public String getLatestCommit() {
+    return latestCommit;
+  }
+
+  public String getTablePath() {
+    return tablePath;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public long getMaxCompactionMemoryInBytes() {
+    return maxCompactionMemoryInBytes;
+  }
+
+  public String getMergeType() {
+    return mergeType;
+  }
+
+  public Option<InstantRange> getInstantRange() {
+    return this.instantRange;
   }
 
   @Override

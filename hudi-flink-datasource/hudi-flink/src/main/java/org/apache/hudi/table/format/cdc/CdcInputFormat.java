@@ -927,13 +927,13 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         .collect(Collectors.toList()));
     String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
     return new MergeOnReadInputSplit(0, basePath, logPaths,
-        fileSlice.getLatestInstantTime(), tablePath, maxCompactionMemoryInBytes,
+        fileSlice.getLatestInstantTime(), tablePath, fileSlice.getPartitionPath(), maxCompactionMemoryInBytes,
         FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId());
   }
 
   public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
     return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
-        FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, maxCompactionMemoryInBytes,
+        FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, "", maxCompactionMemoryInBytes,
         FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, FSUtils.getFileIdFromLogPath(new StoragePath(filePath)));
   }
 }

@@ -58,6 +58,7 @@ public class HoodieContinuousSplitBatch {
             HoodieSourceSplit.SPLIT_COUNTER.incrementAndGet(),
             split.getBasePath().orElse(null),
             split.getLogPaths(), split.getTablePath(),
+            split.getPartitionPath(), split.getLatestCommit(),
             split.getMergeType(), split.getFileId()
         )
     ).collect(Collectors.toList());

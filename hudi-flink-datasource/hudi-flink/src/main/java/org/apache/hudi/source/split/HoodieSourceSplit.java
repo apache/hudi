@@ -28,6 +28,7 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -47,8 +48,12 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   private final Option<List<String>> logPaths;
   // the base table path
   private final String tablePath;
+  // partition path
+  private final String partitionPath;
   // source merge type
   private final String mergeType;
+  // the latest commit instant time
+  private final String latestCommit;
   // file id of file splice
   @Setter
   protected String fileId;
@@ -66,12 +71,16 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
       @Nullable String basePath,
       Option<List<String>> logPaths,
       String tablePath,
+      String partitionPath,
+      String latestCommit,
       String mergeType,
       String fileId) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
     this.tablePath = tablePath;
+    this.partitionPath = partitionPath;
+    this.latestCommit = latestCommit;
     this.mergeType = mergeType;
     this.fileId = fileId;
     this.fileOffset = 0;
@@ -81,6 +90,38 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   @Override
   public String splitId() {
     return toString();
+  }
+
+  public String getFileId() {
+    return fileId;
+  }
+
+  public void setFileId(String fileId) {
+    this.fileId = fileId;
+  }
+
+  public Option<String> getBasePath() {
+    return basePath;
+  }
+
+  public Option<List<String>> getLogPaths() {
+    return logPaths;
+  }
+
+  public String getTablePath() {
+    return tablePath;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public String getLatestCommit() {
+    return latestCommit;
+  }
+
+  public String getMergeType() {
+    return mergeType;
   }
 
   public void consume() {
@@ -97,12 +138,34 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   }
 
   @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    HoodieSourceSplit that = (HoodieSourceSplit) o;
+    return splitNum == that.splitNum && consumed == that.consumed && fileOffset == that.fileOffset && recordOffset == that.recordOffset && Objects.equals(basePath, that.basePath)
+        && Objects.equals(logPaths, that.logPaths) && Objects.equals(tablePath, that.tablePath) && Objects.equals(partitionPath, that.partitionPath)
+        && Objects.equals(mergeType, that.mergeType) && Objects.equals(latestCommit, that.latestCommit) && Objects.equals(fileId, that.fileId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, latestCommit, fileId, consumed, fileOffset, recordOffset);
+  }
+
+  @Override
   public String toString() {
     return "HoodieSourceSplit{"
         + "splitNum=" + splitNum
         + ", basePath=" + basePath
         + ", logPaths=" + logPaths
         + ", tablePath='" + tablePath + '\''
+        + ", partitionPath='" + partitionPath + '\''
+        + ", lastCommit='" + latestCommit + '\''
         + ", mergeType='" + mergeType + '\''
         + '}';
   }

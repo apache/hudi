@@ -181,6 +181,8 @@ public class TestDefaultHoodieSplitProvider {
         "basePath_" + splitNum,
         Option.empty(),
         "/table/path",
+        "/table/path/partition1",
+        "",
         "read_optimized",
         fileId
     );
