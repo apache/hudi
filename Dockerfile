@@ -19,7 +19,7 @@
 # thrift
 # maven
 # java8
-FROM apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_new
+FROM apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2
 
 CMD ["java", "-version"]
 

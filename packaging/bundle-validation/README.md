@@ -58,6 +58,23 @@ image. If you need faster iteration for local build, you may use the `Dockerfile
 instruction for downloads, which provides caching across builds. This increases the size of the generated image compared
 to `base/` and the image should only be used for development only and not be pushed to remote.
 
+## Building Image for Azure CI
+
+The `Dockerfile` and build script for the Docker image used by Azure CI are under `azure/`. To build the image:
+
+```shell
+cd azure
+./build.sh
+```
+
+This builds and tags the image as `apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2`.
+
+To push the image to Docker Hub (only from a few PMCs with permissions):
+
+```shell
+docker push apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2
+```
+
 ## Running Bundle Validation on a Release Candidate
 
 The bundle validation on a release candidate is specified in the GitHub Action job `validate-release-candidate-bundles`
