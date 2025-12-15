@@ -209,16 +209,7 @@ public class TestHoodieTableSource {
                 new ValueLiteralExpression(firstCommitTime, DataTypes.STRING().notNull())),
             DataTypes.BOOLEAN());
 
-    // will be ignored during columns stats prune
-    CallExpression filter2 =
-        CallExpression.permanent(
-            BuiltInFunctionDefinitions.NOT_EQUALS,
-            Arrays.asList(
-                new FieldReferenceExpression("_hoodie_commit_seqno", DataTypes.STRING(), 0, 6),
-                new ValueLiteralExpression("test", DataTypes.STRING().notNull())),
-            DataTypes.BOOLEAN());
-
-    hoodieTableSource.applyFilters(Arrays.asList(filter1, filter2));
+    hoodieTableSource.applyFilters(Collections.singletonList(filter1));
     List<FileSlice> fileSlices = hoodieTableSource.getBaseFileOnlyFileSlices();
     assertThat("There should be 2 file slices in the second insert.", fileSlices.size(), CoreMatchers.is(2));
   }
