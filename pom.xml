@@ -238,7 +238,8 @@
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
-    <spark32orEarlier>true</spark32orEarlier>
+    <spark33orEarlier>true</spark33orEarlier>
+    <spark31orEarlier>true</spark31orEarlier>
   </properties>
 
   <scm>
@@ -2533,6 +2534,7 @@
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
+        <spark31orEarlier>false</spark31orEarlier>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.2.x</module>
@@ -2578,7 +2580,7 @@
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
-        <spark32orEarlier>false</spark32orEarlier>
+        <spark31orEarlier>false</spark31orEarlier>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
@@ -2625,7 +2627,8 @@
         <slf4j.version>2.0.6</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
-        <spark32orEarlier>false</spark32orEarlier>
+        <spark33orEarlier>false</spark33orEarlier>
+        <spark31orEarlier>false</spark31orEarlier>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.4.x</module>
@@ -2679,7 +2682,8 @@
         <slf4j.version>2.0.7</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
-        <spark32orEarlier>false</spark32orEarlier>
+        <spark33orEarlier>false</spark33orEarlier>
+        <spark31orEarlier>false</spark31orEarlier>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.5.x</module>

@@ -29,6 +29,8 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -467,5 +469,16 @@ public class AvroSchemaUtils {
 
   public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
+  }
+
+  public static Schema getRepairedSchema(Schema writerSchema, Schema readerSchema) {
+    try {
+      Class<?> avroSchemaRepairClass = Class.forName("org.apache.parquet.schema.AvroSchemaRepair");
+      Method repairMethod = avroSchemaRepairClass.getMethod("repairLogicalTypes", Schema.class, Schema.class);
+      return (Schema) repairMethod.invoke(null, writerSchema, readerSchema);
+    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      // Fallback if class/method not available
+      return writerSchema;
+    }
   }
 }

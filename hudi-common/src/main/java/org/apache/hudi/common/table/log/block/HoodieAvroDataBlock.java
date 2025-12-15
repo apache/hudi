@@ -41,7 +41,6 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.parquet.schema.AvroSchemaRepair;
 
 import javax.annotation.Nonnull;
 
@@ -63,6 +62,7 @@ import java.util.function.Supplier;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getRepairedSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -172,7 +172,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // avoid this for MDT for sure.
       // and for tables having no logical ts column.
       Schema repairedWriterSchema = enableLogicalTimestampFieldRepair
-          ? AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
+          ? getRepairedSchema(writerSchema, readerSchema) : writerSchema;
       if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
         this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
         this.promotedSchema = Option.of(readerSchema);

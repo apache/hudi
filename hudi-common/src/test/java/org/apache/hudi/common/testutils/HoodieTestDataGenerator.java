@@ -89,6 +89,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -216,6 +217,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   private final String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
+  private Option<Schema> extendedSchema = Option.empty();
 
   public HoodieTestDataGenerator(long seed) {
     this(seed, DEFAULT_PARTITION_PATHS, new HashMap<>());
@@ -1316,7 +1318,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       String partitionPath = record.getPartitionPath();
       Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps());
       String orderingValStr = orderingValue.toString();
-      String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
+      GenericRecord data = (GenericRecord) record.getData();
+      String riderValue = data.getSchema().getField("rider") != null ? data.get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
     }
 

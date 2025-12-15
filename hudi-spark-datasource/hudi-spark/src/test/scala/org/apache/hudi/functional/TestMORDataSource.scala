@@ -37,7 +37,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.{JavaConversions, JFunction}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
@@ -935,7 +935,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       metaClient = HoodieTableMetaClient.reload(metaClient)
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
       val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(inputDF1.schema, "record", "")
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, avroSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, metadataConfig, metaClient)
       columnStatsIndex.loadTransposed(Seq("fare","city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
         assertTrue(!emptyTransposedColStatsDF.columns.contains("fare"))
         assertTrue(!emptyTransposedColStatsDF.columns.contains("city_to_state"))
@@ -1461,9 +1461,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Delete last completed instant
     metaClient = createMetaClient(spark, tablePath)
     val files = storage.listDirectEntries(new StoragePath(s"$tablePath/.hoodie")).stream()
-      .filter(f => f.getPath.getName.contains(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      .filter(JavaConversions.getPredicate((f: StoragePathInfo) => f.getPath.getName.contains(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
         && !f.getPath.getName.contains("inflight")
-        && !f.getPath.getName.contains("requested"))
+        && !f.getPath.getName.contains("requested")))
       .collect(Collectors.toList[StoragePathInfo]).asScala
     assertEquals(1, files.size)
     storage.deleteFile(files.head.getPath)
