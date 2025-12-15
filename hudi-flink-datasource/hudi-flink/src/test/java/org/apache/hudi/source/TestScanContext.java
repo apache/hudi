@@ -187,7 +187,7 @@ public class TestScanContext {
     Duration scanInterval = scanContext.getScanInterval();
 
     assertNotNull(scanInterval, "Scan interval should not be null");
-    assertEquals(Duration.ofMinutes(5), scanInterval, "Scan interval should be 5 minutes");
+    assertEquals(Duration.ofSeconds(5), scanInterval, "Scan interval should be 5 minutes");
   }
 
   @Test
@@ -201,7 +201,7 @@ public class TestScanContext {
     Duration scanInterval = scanContext.getScanInterval();
 
     assertNotNull(scanInterval, "Scan interval should not be null");
-    assertEquals(Duration.ofMinutes(FlinkOptions.READ_STREAMING_CHECK_INTERVAL.defaultValue()),
+    assertEquals(Duration.ofSeconds(FlinkOptions.READ_STREAMING_CHECK_INTERVAL.defaultValue()),
         scanInterval, "Scan interval should use default value");
   }
 
@@ -226,7 +226,7 @@ public class TestScanContext {
     assertTrue(scanContext.skipClustering());
     assertTrue(scanContext.skipInsertOverwrite());
     assertTrue(scanContext.cdcEnabled());
-    assertEquals(Duration.ofMinutes(10), scanContext.getScanInterval());
+    assertEquals(Duration.ofSeconds(10), scanContext.getScanInterval());
   }
 
   // Helper method to create ScanContext using the Builder

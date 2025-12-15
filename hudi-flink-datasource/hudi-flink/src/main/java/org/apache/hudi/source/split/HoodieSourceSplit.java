@@ -26,12 +26,13 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Hoodie SourceSplit implementation for source V2.
  */
 public class HoodieSourceSplit implements SourceSplit, Serializable {
-  public static int SPLIT_COUNTER = 0;
+  public static AtomicInteger SPLIT_COUNTER = new AtomicInteger(0);
   private static final long serialVersionUID = 1L;
   private static final long NUM_NO_CONSUMPTION = 0L;
 

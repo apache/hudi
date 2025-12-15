@@ -27,15 +27,15 @@ import java.util.Collections;
  * Result from continuous enumerator.
  */
 public class HoodieContinuousSplitBatch {
-  public static HoodieContinuousSplitBatch EMPTY = new HoodieContinuousSplitBatch(Collections.emptyList(), "", "");
+  public static final HoodieContinuousSplitBatch EMPTY = new HoodieContinuousSplitBatch(Collections.emptyList(), "", "");
   private final Collection<HoodieSourceSplit> splits;
   private final String fromInstant;
   private final String toInstant;
 
   /**
    * @param splits should never be null. But it can be an empty collection
-   * @param fromInstant can be null
-   * @param toInstant should never be null. But it can have null instant timestamp in String format
+   * @param fromInstant could be null
+   * @param toInstant should never be null. But it can be empty string
    */
   public HoodieContinuousSplitBatch(
       Collection<HoodieSourceSplit> splits,

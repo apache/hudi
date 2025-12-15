@@ -21,11 +21,11 @@ package org.apache.hudi.source.split;
 import org.apache.flink.annotation.Internal;
 
 /**
- * Interface for continuously discovery new splits from active timeline.
+ * Interface for continuously discover new splits from active timeline.
  */
 @Internal
 public interface HoodieContinuousSplitDiscover {
 
-  /** Discover the files appended between {@code lostInstant} and the last commit of current table */
+  /** Discover the files appended between {@code lastInstant} and the last commit of current table */
   HoodieContinuousSplitBatch discoverSplits(String lastInstant);
 }

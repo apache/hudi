@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.ScanContext;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
@@ -27,8 +28,6 @@ import org.apache.hudi.source.split.HoodieSplitProvider;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,7 +54,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       HoodieSplitProvider splitProvider,
       HoodieContinuousSplitDiscover splitDiscover,
       ScanContext scanContext,
-      @Nullable HoodieSplitEnumeratorState enumState) {
+      Option<HoodieSplitEnumeratorState> enumStateOpt) {
     super(enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;
     this.splitProvider = splitProvider;
@@ -63,8 +62,8 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     this.scanContext = scanContext;
     this.position = new AtomicReference<>();
 
-    if (enumState != null) {
-      this.position.set(HoodieEnumeratorPosition.of(enumState.getLastEnumeratedInstant(), enumState.getLastEnumeratedInstantCompletionTime()));
+    if (enumStateOpt.isPresent()) {
+      this.position.set(HoodieEnumeratorPosition.of(enumStateOpt.get().getLastEnumeratedInstant(), enumStateOpt.get().getLastEnumeratedInstantCompletionTime()));
     } else {
       this.position.set(HoodieEnumeratorPosition.of(scanContext.getStartInstant(), scanContext.getStartInstant()));
     }
@@ -98,19 +97,14 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
           pendingSplitNumber);
       return HoodieContinuousSplitBatch.EMPTY;
     }
-    return splitDiscover.discoverSplits(position.get().lastInstantCompletionTime());
+    return splitDiscover.discoverSplits(position.get().lastInstantCompletionTime().isPresent() ? position.get().lastInstantCompletionTime().get() : null);
   }
 
   private void processDiscoveredSplits(HoodieContinuousSplitBatch result, Throwable throwable) {
-    if (throwable == null) {
-      if (!Objects.equals(result.getFromInstant(), position.get().lastInstantCompletionTime())) {
-        LOG.info(
-            "Skip {} discovered splits because the scan starting position doesn't match "
-                + "the current enumerator position: enumerator position = {}, scan starting position = {}",
-            result.getSplits().size(),
-            position.get().lastInstantCompletionTime(),
-            result.getFromInstant());
-      } else {
+    if (throwable != null) {
+      throw new RuntimeException("Failed to discover new splits", throwable);
+    } else {
+      if (Objects.equals(result.getFromInstant(), position.get().lastInstantCompletionTime().get())) {
         if (!result.getSplits().isEmpty()) {
           splitProvider.onDiscoveredSplits(result.getSplits());
           LOG.info(
@@ -124,11 +118,16 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
               result.getFromInstant(),
               result.getToInstant());
         }
-        position.set(HoodieEnumeratorPosition.of(position.get().lastInstantCompletionTime(), result.getToInstant()));
+        position.set(HoodieEnumeratorPosition.of(Option.of(result.getToInstant()), position.get().lastInstantCompletionTime()));
         LOG.info("Update enumerator position to {}", position.get());
+      } else {
+        LOG.info(
+            "Skip {} discovered splits because the scan starting position doesn't match "
+                + "the current enumerator position: enumerator position = {}, scan starting position = {}",
+            result.getSplits().size(),
+            position.get().lastInstantCompletionTime(),
+            result.getFromInstant());
       }
-    } else {
-      throw new RuntimeException("Failed to discover new splits", throwable);
     }
   }
 }

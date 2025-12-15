@@ -18,6 +18,9 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -25,27 +28,36 @@ import java.util.Objects;
  * The position of {@link HoodieContinuousSplitEnumerator}.
  */
 public class HoodieEnumeratorPosition implements Serializable {
-  private final String lastInstant;
-  private final String lastInstantCompletionTime;
+  private final Option<String> lastInstant;
+  private final Option<String> lastInstantCompletionTime;
 
   static HoodieEnumeratorPosition empty() {
-    return new HoodieEnumeratorPosition(null, null);
+    return new HoodieEnumeratorPosition(Option.empty(), Option.empty());
   }
 
   static HoodieEnumeratorPosition of(String lastInstant, String lastInstantCompletionTime) {
     return new HoodieEnumeratorPosition(lastInstant, lastInstantCompletionTime);
   }
 
+  static HoodieEnumeratorPosition of(Option<String> lastInstant, Option<String> lastInstantCompletionTime) {
+    return new HoodieEnumeratorPosition(lastInstant, lastInstantCompletionTime);
+  }
+
   private HoodieEnumeratorPosition(String lastInstant, String lastInstantCompletionTime) {
+    this.lastInstant = StringUtils.isNullOrEmpty(lastInstant) ? Option.empty() : Option.of(lastInstant);
+    this.lastInstantCompletionTime = StringUtils.isNullOrEmpty(lastInstantCompletionTime) ? Option.empty() : Option.of(lastInstantCompletionTime);
+  }
+
+  private HoodieEnumeratorPosition(Option<String> lastInstant, Option<String> lastInstantCompletionTime) {
     this.lastInstant = lastInstant;
     this.lastInstantCompletionTime = lastInstantCompletionTime;
   }
 
-  String lastInstant() {
+  public Option<String> lastInstant() {
     return lastInstant;
   }
 
-  String lastInstantCompletionTime() {
+  public Option<String> lastInstantCompletionTime() {
     return lastInstantCompletionTime;
   }
 

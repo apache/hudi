@@ -247,6 +247,11 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTableMetaClient metaClient,
       @Nullable String issuedOffset,
       boolean cdcEnabled) {
+
+    if (metaClient == null) {
+      throw new IllegalArgumentException("metaClient must not be null");
+    }
+
     metaClient.reloadActiveTimeline();
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
@@ -319,8 +324,14 @@ public class IncrementalInputSplits implements Serializable {
       @Nullable String startInstant,
       boolean cdcEnabled) {
     Result result = inputSplits(metaClient, startInstant, cdcEnabled);
-    List<HoodieSourceSplit> splits = result.inputSplits.stream().map(split -> new HoodieSourceSplit(
-        ++HoodieSourceSplit.SPLIT_COUNTER, split.getBasePath().orElse(null), split.getLogPaths(), split.getTablePath(), split.getMergeType(), split.getFileId())).collect(Collectors.toList());
+    List<HoodieSourceSplit> splits = result.inputSplits.stream().map(split ->
+      new HoodieSourceSplit(
+          HoodieSourceSplit.SPLIT_COUNTER.incrementAndGet(),
+          split.getBasePath().orElse(null),
+          split.getLogPaths(), split.getTablePath(),
+          split.getMergeType(), split.getFileId()
+      )
+    ).collect(Collectors.toList());
 
     return new HoodieContinuousSplitBatch(splits, startInstant, result.endInstant);
   }

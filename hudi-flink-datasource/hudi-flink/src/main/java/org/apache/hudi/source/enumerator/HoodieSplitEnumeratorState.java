@@ -18,9 +18,8 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
-
-import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.Collection;
@@ -29,12 +28,14 @@ import java.util.Collection;
  * State of Hoodie split enumerator. Mainly include the states of pending splits of split provider.
  */
 public class HoodieSplitEnumeratorState implements Serializable {
-  private final String lastEnumeratedInstant;
-  private final String lastEnumeratedInstantCompletionTime;
+  private final Option<String> lastEnumeratedInstant;
+  private final Option<String> lastEnumeratedInstantCompletionTime;
   private final Collection<HoodieSourceSplitState> pendingSplitStates;
 
   public HoodieSplitEnumeratorState(
-      Collection<HoodieSourceSplitState> pendingSplitStates, @Nullable String lastEnumeratedInstant, @Nullable String lastEnumeratedInstantCompletionTime) {
+      Collection<HoodieSourceSplitState> pendingSplitStates,
+      Option<String> lastEnumeratedInstant,
+      Option<String> lastEnumeratedInstantCompletionTime) {
     this.pendingSplitStates = pendingSplitStates;
     this.lastEnumeratedInstant = lastEnumeratedInstant;
     this.lastEnumeratedInstantCompletionTime = lastEnumeratedInstantCompletionTime;
@@ -44,11 +45,11 @@ public class HoodieSplitEnumeratorState implements Serializable {
     return pendingSplitStates;
   }
 
-  public String getLastEnumeratedInstant() {
+  public Option<String> getLastEnumeratedInstant() {
     return lastEnumeratedInstant;
   }
 
-  public String getLastEnumeratedInstantCompletionTime() {
+  public Option<String> getLastEnumeratedInstantCompletionTime() {
     return lastEnumeratedInstantCompletionTime;
   }
 }

@@ -37,7 +37,9 @@ public class ScanContext implements Serializable {
   private final Path path;
   private final RowType rowType;
   private final String startInstant;
+  private final String endInstant;
   private final long maxCompactionMemoryInBytes;
+  // max pending splits that are not assigned in split provider
   private final long maxPendingSplits;
   // skip compaction
   private final boolean skipCompaction;
@@ -53,6 +55,7 @@ public class ScanContext implements Serializable {
       Path path,
       RowType rowType,
       String startInstant,
+      String endInstant,
       long maxCompactionMemoryInBytes,
       long maxPendingSplits,
       boolean skipCompaction,
@@ -63,6 +66,7 @@ public class ScanContext implements Serializable {
     this.path = path;
     this.rowType = rowType;
     this.startInstant = startInstant;
+    this.endInstant = endInstant;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.maxPendingSplits = maxPendingSplits;
     this.skipCompaction = skipCompaction;
@@ -85,6 +89,10 @@ public class ScanContext implements Serializable {
 
   public String getStartInstant() {
     return startInstant;
+  }
+
+  public String getEndInstant() {
+    return endInstant;
   }
 
   public long getMaxCompactionMemoryInBytes() {
@@ -112,7 +120,7 @@ public class ScanContext implements Serializable {
   }
 
   public Duration getScanInterval() {
-    return Duration.ofMinutes(conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL));
+    return Duration.ofSeconds(conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL));
   }
 
   /**
@@ -123,6 +131,7 @@ public class ScanContext implements Serializable {
     private Path path;
     private RowType rowType;
     private String startInstant;
+    private String endInstant;
     private long maxCompactionMemoryInBytes;
     private long maxPendingSplits;
     private boolean skipCompaction;
@@ -147,6 +156,11 @@ public class ScanContext implements Serializable {
 
     public Builder startInstant(String startInstant) {
       this.startInstant = startInstant;
+      return this;
+    }
+
+    public Builder endInstant(String endInstant) {
+      this.endInstant = endInstant;
       return this;
     }
 
@@ -186,6 +200,7 @@ public class ScanContext implements Serializable {
           path,
           rowType,
           startInstant,
+          endInstant,
           maxCompactionMemoryInBytes,
           maxPendingSplits,
           skipCompaction,

@@ -191,7 +191,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
         scanContext, metaClient);
 
-    HoodieContinuousSplitBatch result = discover.discoverSplits(null);
+    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartInstant());
 
     assertNotNull(result, "Result should not be null");
     assertNotNull(result.getSplits(), "Splits should not be null");
@@ -225,6 +225,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
         .startInstant(conf.get(FlinkOptions.READ_START_COMMIT))
+        .endInstant("")
         .maxCompactionMemoryInBytes(100 * 1024 * 1024)
         .maxPendingSplits(1000)
         .skipCompaction(skipCompaction)

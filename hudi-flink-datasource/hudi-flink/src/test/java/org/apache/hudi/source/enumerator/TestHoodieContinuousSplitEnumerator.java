@@ -91,7 +91,7 @@ public class TestHoodieContinuousSplitEnumerator {
   @Test
   public void testStartEnumerator() {
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
 
     // Verify that async task was scheduled
@@ -101,10 +101,10 @@ public class TestHoodieContinuousSplitEnumerator {
   @Test
   public void testEnumeratorWithInitialState() {
     HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        Collections.emptyList(), "20231201120000000", "20231201120001000");
+        Collections.emptyList(), Option.of("20231201120000000"), Option.of("20231201120001000"));
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, state);
+        context, splitProvider, splitDiscover, scanContext, Option.of(state));
 
     assertNotNull(enumerator, "Enumerator should be created with state");
   }
@@ -112,7 +112,7 @@ public class TestHoodieContinuousSplitEnumerator {
   @Test
   public void testEnumeratorWithoutInitialState() {
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
 
     assertNotNull(enumerator, "Enumerator should be created without state");
   }
@@ -120,7 +120,7 @@ public class TestHoodieContinuousSplitEnumerator {
   @Test
   public void testShouldWaitForMoreSplits() {
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
 
     assertTrue(enumerator.shouldWaitForMoreSplits(),
         "Continuous enumerator should always wait for more splits");
@@ -129,7 +129,7 @@ public class TestHoodieContinuousSplitEnumerator {
   @Test
   public void testSnapshotState() throws Exception {
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     splitProvider.onDiscoveredSplits(Arrays.asList(split1, split2));
 
     HoodieSplitEnumeratorState state = enumerator.snapshotState(1L);
@@ -144,7 +144,7 @@ public class TestHoodieContinuousSplitEnumerator {
         Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
 
     // Trigger async callback manually
@@ -168,7 +168,7 @@ public class TestHoodieContinuousSplitEnumerator {
         Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
 
     int initialCount = splitProvider.pendingSplitCount();
@@ -185,7 +185,7 @@ public class TestHoodieContinuousSplitEnumerator {
         Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
     context.executeAsyncCallbacks();
 
@@ -197,13 +197,13 @@ public class TestHoodieContinuousSplitEnumerator {
   public void testProcessDiscoveredSplitsWithMismatchedInstant() {
     // Set up enumerator with different start instant
     HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        Collections.emptyList(), "20231201060000000", "20231201060001000");
+        Collections.emptyList(), Option.of("20231201060000000"), Option.of("20231201060001000"));
 
     splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
         Arrays.asList(split1, split2), "20231201000000000", "20231201060001000"));
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, state);
+        context, splitProvider, splitDiscover, scanContext, Option.of(state));
     enumerator.start();
     context.executeAsyncCallbacks();
 
@@ -218,7 +218,7 @@ public class TestHoodieContinuousSplitEnumerator {
         Collections.emptyList(), "20231201000000000", "20231201120000000"));
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
     context.executeAsyncCallbacks();
 
@@ -231,7 +231,7 @@ public class TestHoodieContinuousSplitEnumerator {
     splitDiscover.setThrowException(true);
 
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
 
     try {
@@ -246,7 +246,7 @@ public class TestHoodieContinuousSplitEnumerator {
   public void testHandleSplitRequest() {
     splitProvider.onDiscoveredSplits(Arrays.asList(split1, split2));
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
 
     context.registerReader(new ReaderInfo(0, "localhost"));
@@ -259,7 +259,7 @@ public class TestHoodieContinuousSplitEnumerator {
   @Test
   public void testAddSplitsBack() {
     enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, null);
+        context, splitProvider, splitDiscover, scanContext, Option.empty());
     enumerator.start();
 
     enumerator.addSplitsBack(Arrays.asList(split1), 0);
@@ -420,7 +420,7 @@ public class TestHoodieContinuousSplitEnumerator {
         org.apache.flink.table.types.logical.RowType rowType,
         String startInstant,
         long maxPendingSplits) {
-      super(conf, path, rowType, startInstant, 0L, maxPendingSplits, false, false, false, false);
+      super(conf, path, rowType, startInstant, "",0L, maxPendingSplits, false, false, false, false);
     }
 
     public static Builder builder() {
