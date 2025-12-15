@@ -19,19 +19,15 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
@@ -53,7 +49,7 @@ import java.util.{Locale, TimeZone}
 trait SparkAdapter extends Serializable {
 
   /**
-   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[org.apache.spark.sql.vectorized.ColumnarBatchRow]]
    */
   def isColumnarBatchRow(r: InternalRow): Boolean
 
@@ -72,7 +68,7 @@ trait SparkAdapter extends Serializable {
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
-   * [[TableCatalog]]s
+   * [[org.apache.spark.sql.connector.catalog.TableCatalog]]s
    */
   def getCatalogUtils: HoodieCatalogUtils
 
@@ -207,7 +203,7 @@ trait SparkAdapter extends Serializable {
                               metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
 
   /**
-   * Extract condition in [[DeleteFromTable]]
+   * Extract condition in [[org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
   def extractDeleteCondition(deleteFromTable: Command): Expression

@@ -18,12 +18,9 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
-import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -41,7 +38,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -60,7 +56,6 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -68,7 +63,6 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -93,7 +87,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -109,7 +102,6 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
-import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
@@ -883,95 +875,6 @@ public class HoodieMetadataTableValidator implements Serializable {
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
 
     validate(metadataBasedColStats, fsBasedColStats, partitionPath, "column stats");
-  }
-
-  private void validatePartitionStats(HoodieMetadataValidationContext metadataTableBasedContext, Set<String> baseDataFilesForCleaning, List<String> allPartitions) throws Exception {
-
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieData<HoodieMetadataColumnStats> partitionStatsUsingColStats = getPartitionStatsUsingColStats(metadataTableBasedContext,
-        baseDataFilesForCleaning, allPartitions, engineContext);
-
-
-    PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
-        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()),
-        metadataTableBasedContext.getSchema(),
-        metadataTableBasedContext.getMetadataConfig(),
-        metaClientOpt.get(), false);
-    HoodieData<HoodieMetadataColumnStats> partitionStats =
-        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
-            metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
-            // set isTightBound to false since partition stats generated using column stats does not contain the field
-            .map(colStat -> HoodieMetadataColumnStats.newBuilder(colStat).setIsTightBound(false).build());
-    JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
-    if (!diffRDD.isEmpty()) {
-      List<HoodieMetadataColumnStats> diff = diffRDD.collect();
-      Set<String> partitionPaths = diff.stream().map(HoodieMetadataColumnStats::getFileName).collect(Collectors.toSet());
-      StringBuilder statDiffMsg = new StringBuilder();
-      for (String partitionPath : partitionPaths) {
-        List<HoodieMetadataColumnStats> diffPartitionStatsColStats = partitionStatsUsingColStats.filter(stat -> stat.getFileName().equals(partitionPath)).collectAsList();
-        List<HoodieMetadataColumnStats> diffPartitionStats = partitionStats.filter(stat -> stat.getFileName().equals(partitionPath)).collectAsList();
-        statDiffMsg.append(String.format("Partition stats from MDT: %s from colstats: %s", Arrays.toString(diffPartitionStats.toArray()), Arrays.toString(diffPartitionStatsColStats.toArray())));
-      }
-      throw new HoodieValidationException(String.format("Partition stats validation failed diff: %s", statDiffMsg));
-    }
-  }
-
-  private HoodieData<HoodieMetadataColumnStats> getPartitionStatsUsingColStats(HoodieMetadataValidationContext metadataTableBasedContext, Set<String> baseDataFilesForCleaning,
-                                                                               List<String> allPartitions, HoodieSparkEngineContext engineContext) {
-    return engineContext.parallelize(allPartitions).flatMap(partitionPath -> {
-      List<FileSlice> latestFileSlicesFromMetadataTable = filterFileSliceBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath),
-          baseDataFilesForCleaning);
-      List<String> latestFileNames = new ArrayList<>();
-      latestFileSlicesFromMetadataTable.stream().filter(fs -> fs.getBaseFile().isPresent()).forEach(fs -> getLatestFiles(fs, latestFileNames));
-      List<HoodieColumnRangeMetadata<Comparable>> colStats = metadataTableBasedContext.getSortedColumnStatsList(partitionPath, latestFileNames, metadataTableBasedContext.getSchema());
-
-      TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = aggregateColumnStats(partitionPath, colStats);
-      // TODO: fix `isTightBound` flag when stats based on log files are available
-      List<HoodieRecord> partitionStatRecords = HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, new ArrayList<>(aggregatedColumnStats), false, false, Option.empty())
-          .collect(Collectors.toList());
-      return partitionStatRecords.stream()
-          .map(record -> {
-            try {
-              return ((HoodieMetadataPayload) record.getData()).getInsertValue(null, null)
-                  .map(metadataRecord -> ((HoodieMetadataRecord) metadataRecord).getColumnStatsMetadata());
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          })
-          .filter(Option::isPresent)
-          .map(Option::get)
-          .collect(Collectors.toList())
-          .iterator();
-    });
-  }
-
-  private static void getLatestFiles(FileSlice fs, List<String> latestFileNames) {
-    latestFileNames.add(fs.getBaseFile().get().getFileName());
-    latestFileNames.addAll(fs.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
-  }
-
-  /**
-   * Generates aggregated column stats which also signify as partition stat for the particular partition
-   * path.
-   *
-   * @param partitionPath Provided partition path
-   * @param colStats Column stat records for the partition
-   */
-  static TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregateColumnStats(String partitionPath, List<HoodieColumnRangeMetadata<Comparable>> colStats) {
-    TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = new TreeSet<>(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName));
-    for (HoodieColumnRangeMetadata<Comparable> colStat : colStats) {
-      HoodieColumnRangeMetadata<Comparable> partitionStat = HoodieColumnRangeMetadata.create(partitionPath, colStat.getColumnName(),
-          colStat.getMinValue(), colStat.getMaxValue(), colStat.getNullCount(), colStat.getValueCount(), colStat.getTotalSize(), colStat.getTotalUncompressedSize(),
-          colStat.getValueMetadata());
-      HoodieColumnRangeMetadata<Comparable> storedPartitionStat = aggregatedColumnStats.floor(partitionStat);
-      if (storedPartitionStat == null || !storedPartitionStat.getColumnName().equals(partitionStat.getColumnName())) {
-        aggregatedColumnStats.add(partitionStat);
-        continue;
-      }
-      aggregatedColumnStats.remove(partitionStat);
-      aggregatedColumnStats.add(HoodieColumnRangeMetadata.merge(storedPartitionStat, partitionStat));
-    }
-    return aggregatedColumnStats;
   }
 
   private void validateBloomFilters(

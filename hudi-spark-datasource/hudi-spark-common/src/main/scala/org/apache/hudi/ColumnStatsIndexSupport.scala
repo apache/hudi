@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
@@ -33,21 +33,20 @@ import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
-
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.common.function.SerializableFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, HoodieUnsafeUtils, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.nio.ByteBuffer
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -55,7 +54,6 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
-                              avroSchema: Schema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false) {
@@ -127,6 +125,62 @@ class ColumnStatsIndexSupport(spark: SparkSession,
             //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
             //       Optimizer)
             createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
+          } else {
+            val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
+            spark.createDataFrame(rdd, indexSchema)
+          }
+
+          if (allowCaching) {
+            cachedColumnStatsIndexViews.put(targetColumns, df)
+            // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
+            //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
+            //       the referenced to persisted [[DataFrame]] instance
+            df.persist(StorageLevel.MEMORY_ONLY)
+
+            block(df)
+          } else {
+            withPersistedDataset(df) {
+              block(df)
+            }
+          }
+        }
+    }
+  }
+
+  /**
+   * Loads view of the Column Stats Index in a transposed format where single row coalesces every columns'
+   * statistics for a single file, returning it as [[DataFrame]]
+   *
+   * Please check out scala-doc of the [[transpose]] method explaining this view in more details
+   */
+  def loadTransposed[T](targetColumns: Seq[String],
+                        shouldReadInMemory: Boolean,
+                        prunedPartitions: Option[Set[String]] = None,
+                        prunedFileNamesOpt: Option[Set[String]] = None)(block: DataFrame => T): T = {
+    cachedColumnStatsIndexViews.get(targetColumns) match {
+      case Some(cachedDF) =>
+        block(cachedDF)
+      case None =>
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
+          case Some(prunedFileNames) =>
+            val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+              override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
+                prunedFileNames.contains(r.getFileName)
+              }
+            }
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+          case None =>
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+        }
+
+        withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
+          val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
+          val df = if (shouldReadInMemory) {
+            // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
+            //       of the transposed table in memory, facilitating execution of the subsequently chained operations
+            //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
+            //       Optimizer)
+            HoodieUnsafeUtils.createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
           } else {
             val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
             spark.createDataFrame(rdd, indexSchema)
@@ -341,6 +395,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
     columnStatsRecords
   }
+
 
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath)
