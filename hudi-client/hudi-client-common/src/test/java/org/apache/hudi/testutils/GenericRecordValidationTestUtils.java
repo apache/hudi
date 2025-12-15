@@ -18,10 +18,13 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +38,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
@@ -67,8 +69,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class GenericRecordValidationTestUtils {
 
   public static void assertGenericRecords(GenericRecord record1, GenericRecord record2,
-                                          Schema schema, List<String> excludeFields) {
-    for (Schema.Field f: schema.getFields()) {
+                                          HoodieSchema schema, List<String> excludeFields) {
+    for (HoodieSchemaField f: schema.getFields()) {
       String fieldName = f.name();
       if (excludeFields.contains(fieldName)) {
         continue;
@@ -81,7 +83,7 @@ public class GenericRecordValidationTestUtils {
               HoodieRealtimeRecordReaderUtils.arrayWritableToString((ArrayWritable) value2));
         } else if (value1 instanceof Text && value2 instanceof BytesWritable) {
           assertArrayEquals(((Text) value1).getBytes(), ((BytesWritable) value2).getBytes());
-        } else if (f.schema().getType() == Schema.Type.ENUM
+        } else if (f.schema().getType() == HoodieSchemaType.ENUM
             && value1 instanceof BytesWritable && value2 instanceof Text) {
           // TODO(HUDI-8660): Revisit ENUM handling in Spark parquet reader and writer
           assertArrayEquals(((BytesWritable) value1).getBytes(), ((Text) value2).getBytes());
@@ -126,8 +128,8 @@ public class GenericRecordValidationTestUtils {
     // Verify row count.
     assertEquals(prevRecordsMap.size(), newRecordsMap.size());
 
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(
-        new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.parse(config.getSchema()), config.allowOperationMetadataField());
 
     // Verify every field.
     prevRecordsMap.forEach((key, value) -> {

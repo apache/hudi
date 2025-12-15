@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.hive;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -336,7 +335,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     String hiveColumnNames = fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",year,month,day";
-    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(tripsHiveColumnTypes);
+    String modifiedHiveColumnTypes = HoodieSchemaUtils.addMetadataColumnTypes(tripsHiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string,string,string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
