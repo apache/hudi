@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.hadoop.fs;
+package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.io.SeekableDataInputStream;
 
