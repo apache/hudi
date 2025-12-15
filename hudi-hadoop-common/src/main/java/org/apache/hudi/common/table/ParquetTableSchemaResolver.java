@@ -60,5 +60,4 @@ public class ParquetTableSchemaResolver extends TableSchemaResolver {
   public MessageType getTableParquetSchema(boolean includeMetadataField) throws Exception {
     return convertAvroSchemaToParquet(getTableAvroSchema(includeMetadataField));
   }
-
 }

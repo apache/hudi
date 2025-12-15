@@ -19,11 +19,11 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.model.HoodieRowDataCreation;
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.table.data.RowData;
