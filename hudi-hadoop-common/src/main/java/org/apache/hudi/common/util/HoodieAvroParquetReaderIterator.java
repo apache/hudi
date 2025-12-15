@@ -17,10 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hadoop;
+package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ParquetReaderIterator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
