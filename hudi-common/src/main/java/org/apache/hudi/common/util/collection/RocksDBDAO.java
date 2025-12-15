@@ -517,7 +517,13 @@ public class RocksDBDAO {
   }
 
   private <T> CustomSerializer<T> getSerializerForColumnFamily(String columnFamily) {
-    return (CustomSerializer<T>) columnFamilySerializers.computeIfAbsent(columnFamily, cf -> new DefaultSerializer<>());
+    CustomSerializer<T> customSerializer = (CustomSerializer<T>) columnFamilySerializers.get(columnFamily);
+    if (customSerializer == null) {
+      synchronized (this) {
+        customSerializer = (CustomSerializer<T>) columnFamilySerializers.computeIfAbsent(columnFamily, cf -> new DefaultSerializer<>());
+      }
+    }
+    return customSerializer;
   }
 
   private byte[] getKeyBytes(String key) {
