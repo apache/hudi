@@ -63,7 +63,6 @@ public class DataSourceTestUtils {
 
   private static final Random RANDOM = new Random(0xDAADDEED);
 
-  //TODO to remove these
   public static Schema getStructTypeExampleSchema() throws IOException {
     return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
   }

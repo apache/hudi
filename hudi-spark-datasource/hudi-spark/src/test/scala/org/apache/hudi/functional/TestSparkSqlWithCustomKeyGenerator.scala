@@ -513,7 +513,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
   private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: HoodieSchemaType): Unit = {
     val metaClient = createMetaClient(spark, tablePath)
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val nullableSchema = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL), HoodieSchema.create(HoodieSchemaType.valueOf(expectedType.name())))
+    val nullableSchema = HoodieSchema.createNullable(HoodieSchemaType.valueOf(expectedType.name()))
     assertEquals(nullableSchema, schemaResolver.getTableSchema(true).getField(fieldName).get().schema())
   }
 

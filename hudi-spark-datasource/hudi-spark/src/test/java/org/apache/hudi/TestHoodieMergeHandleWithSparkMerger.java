@@ -74,7 +74,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalTestHarness {
-  private static final HoodieSchema SCHEMA = getSchema("AvroSchema", "AvroSchemaNS");
+  private static final HoodieSchema SCHEMA = getSchema("Schema", "SchemaNS");
   private final Map<String, String> properties = new HashMap<>();
   private HoodieTableMetaClient metaClient;
 
@@ -148,7 +148,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
   }
 
-  public HoodieWriteConfig getWriteConfig(HoodieSchema hoodieSchema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
+  public HoodieWriteConfig getWriteConfig(HoodieSchema schema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
     properties.put(RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
     properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
     properties.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
@@ -171,7 +171,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
     return getConfigBuilder(true)
         .withPath(basePath())
-        .withSchema(hoodieSchema.toString())
+        .withSchema(schema.toString())
         .withProps(properties)
         .build();
   }

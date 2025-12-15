@@ -39,13 +39,13 @@ class TestHoodieRelations {
       "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}," +
       "{\"name\":\"partition\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
 
-    val tableAvroSchema = HoodieSchema.parse(avroSchemaString)
-    val tableStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableAvroSchema)
+    val tableSchema = HoodieSchema.parse(avroSchemaString)
+    val tableStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val (requiredAvroSchema, requiredStructSchema, _) =
-      HoodieBaseRelation.projectSchema(Left(tableAvroSchema), Array("ts"))
+      HoodieBaseRelation.projectSchema(Left(tableSchema), Array("ts"))
 
-    assertEquals(Seq(tableAvroSchema.getField("ts").get()), requiredAvroSchema.getFields.asScala)
+    assertEquals(Seq(tableSchema.getField("ts").get()), requiredAvroSchema.getFields.asScala)
     assertEquals(
       Seq(tableStructSchema.fields.apply(tableStructSchema.fieldIndex("ts"))),
       requiredStructSchema.fields.toSeq

@@ -24,7 +24,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
@@ -427,7 +427,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         val orderedUpdatedFieldSeq = getOrderedUpdatedFields(updatedFieldSet)
         writeParams ++= Seq(
           WRITE_PARTIAL_UPDATE_SCHEMA.key ->
-            HoodieAvroUtils.generateProjectionSchema(fullSchema.getAvroSchema, orderedUpdatedFieldSeq.asJava).toString
+            HoodieSchemaUtils.generateProjectionSchema(fullSchema, orderedUpdatedFieldSeq.asJava).toString
         )
         true
       } else {

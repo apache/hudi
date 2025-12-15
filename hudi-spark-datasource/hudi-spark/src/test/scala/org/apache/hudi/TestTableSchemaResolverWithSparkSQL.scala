@@ -124,9 +124,9 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     try {
       val schemaFromData = HoodieSchema.fromAvroSchema(
         new TableSchemaResolver(metaClient).getTableAvroSchemaFromDataFile)
-      val structFromData = AvroConversionUtils.convertAvroSchemaToStructType(HoodieAvroUtils.removeMetadataFields(schemaFromData.toAvroSchema()))
+      val structFromData = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(schemaFromData))
       val schemeDesign = HoodieSchema.parse(schemaString)
-      val structDesign = AvroConversionUtils.convertAvroSchemaToStructType(schemeDesign.toAvroSchema())
+      val structDesign = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemeDesign)
       assertEquals(structFromData, structDesign)
     } catch {
       case e: Exception => tableSchemaResolverParsingException = e;

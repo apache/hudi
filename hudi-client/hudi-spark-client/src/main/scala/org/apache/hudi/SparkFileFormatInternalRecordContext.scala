@@ -61,7 +61,7 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
   override def convertToAvroRecord(record: InternalRow, schema: HoodieSchema): GenericRecord = {
     val structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema)
     val serializer = serializerMap.getOrElseUpdate(schema.toAvroSchema, {
-      sparkAdapter.createAvroSerializer(structType, schema, isNullable(schema.toAvroSchema))
+      sparkAdapter.createAvroSerializer(structType, schema, schema.isNullable)
     })
     serializer.serialize(record).asInstanceOf[GenericRecord]
   }
