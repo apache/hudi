@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hadoop;
+package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieParquetConfig;
