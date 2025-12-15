@@ -70,8 +70,8 @@ public class TestHoodieContinuousSplitEnumerator {
     splitProvider = new DefaultHoodieSplitProvider();
 
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH.key(), "/tmp/test");
-    conf.setInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 1);
+    conf.set(FlinkOptions.PATH, "/tmp/test");
+    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 1);
 
     scanContext = TestScanContext.builder()
         .conf(conf)

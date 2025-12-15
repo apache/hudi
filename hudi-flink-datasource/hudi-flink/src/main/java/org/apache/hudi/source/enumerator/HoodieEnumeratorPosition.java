@@ -28,8 +28,8 @@ import java.util.Objects;
  * The position of {@link HoodieContinuousSplitEnumerator}.
  */
 public class HoodieEnumeratorPosition implements Serializable {
-  private final Option<String> lastInstant;
-  private final Option<String> lastInstantCompletionTime;
+  private final Option<String> issuedInstant;
+  private final Option<String> issuedOffset;
 
   static HoodieEnumeratorPosition empty() {
     return new HoodieEnumeratorPosition(Option.empty(), Option.empty());
@@ -43,22 +43,22 @@ public class HoodieEnumeratorPosition implements Serializable {
     return new HoodieEnumeratorPosition(lastInstant, lastInstantCompletionTime);
   }
 
-  private HoodieEnumeratorPosition(String lastInstant, String lastInstantCompletionTime) {
-    this.lastInstant = StringUtils.isNullOrEmpty(lastInstant) ? Option.empty() : Option.of(lastInstant);
-    this.lastInstantCompletionTime = StringUtils.isNullOrEmpty(lastInstantCompletionTime) ? Option.empty() : Option.of(lastInstantCompletionTime);
+  private HoodieEnumeratorPosition(String issuedInstant, String issuedOffset) {
+    this.issuedInstant = StringUtils.isNullOrEmpty(issuedInstant) ? Option.empty() : Option.of(issuedInstant);
+    this.issuedOffset = StringUtils.isNullOrEmpty(issuedOffset) ? Option.empty() : Option.of(issuedOffset);
   }
 
-  private HoodieEnumeratorPosition(Option<String> lastInstant, Option<String> lastInstantCompletionTime) {
-    this.lastInstant = lastInstant;
-    this.lastInstantCompletionTime = lastInstantCompletionTime;
+  private HoodieEnumeratorPosition(Option<String> issuedInstant, Option<String> issuedOffset) {
+    this.issuedInstant = issuedInstant;
+    this.issuedOffset = issuedOffset;
   }
 
-  public Option<String> lastInstant() {
-    return lastInstant;
+  public Option<String> issuedInstant() {
+    return issuedInstant;
   }
 
-  public Option<String> lastInstantCompletionTime() {
-    return lastInstantCompletionTime;
+  public Option<String> issuedOffset() {
+    return issuedOffset;
   }
 
   @Override
@@ -70,19 +70,19 @@ public class HoodieEnumeratorPosition implements Serializable {
       return false;
     }
     HoodieEnumeratorPosition that = (HoodieEnumeratorPosition) o;
-    return Objects.equals(lastInstant, that.lastInstant) && Objects.equals(lastInstantCompletionTime, that.lastInstantCompletionTime);
+    return Objects.equals(issuedInstant, that.issuedInstant) && Objects.equals(issuedOffset, that.issuedOffset);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(lastInstant, lastInstantCompletionTime);
+    return Objects.hash(issuedInstant, issuedOffset);
   }
 
   @Override
   public String toString() {
     return "HoodieEnumeratorPosition{"
-        + "lastInstant=" + lastInstant
-        + ", lastInstantCompletionTime=" + lastInstantCompletionTime
+        + "issuedInstant=" + issuedInstant
+        + ", issuedOffset=" + issuedOffset
         + '}';
   }
 }

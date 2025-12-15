@@ -33,7 +33,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Continuous Hoodie enumerator that discovers Hoodie splits from new Hudi commits of upstream Hoodie table.
+ * Continuous Hoodie enumerator that discovers Hoodie splits from new Hoodie commits of upstream Hoodie table.
  */
 public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerator {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieContinuousSplitEnumerator.class);
@@ -63,7 +63,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     this.position = new AtomicReference<>();
 
     if (enumStateOpt.isPresent()) {
-      this.position.set(HoodieEnumeratorPosition.of(enumStateOpt.get().getLastEnumeratedInstant(), enumStateOpt.get().getLastEnumeratedInstantCompletionTime()));
+      this.position.set(HoodieEnumeratorPosition.of(enumStateOpt.get().getLastEnumeratedInstant(), enumStateOpt.get().getLastEnumeratedInstantOffset()));
     } else {
       this.position.set(HoodieEnumeratorPosition.of(scanContext.getStartInstant(), scanContext.getStartInstant()));
     }
@@ -86,7 +86,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
   @Override
   public HoodieSplitEnumeratorState snapshotState(long checkpointId) throws Exception {
-    return new HoodieSplitEnumeratorState(splitProvider.state(), position.get().lastInstant(), position.get().lastInstantCompletionTime());
+    return new HoodieSplitEnumeratorState(splitProvider.state(), position.get().issuedInstant(), position.get().issuedOffset());
   }
 
   private HoodieContinuousSplitBatch discoverSplits() {
@@ -97,37 +97,37 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
           pendingSplitNumber);
       return HoodieContinuousSplitBatch.EMPTY;
     }
-    return splitDiscover.discoverSplits(position.get().lastInstantCompletionTime().isPresent() ? position.get().lastInstantCompletionTime().get() : null);
+    return splitDiscover.discoverSplits(position.get().issuedOffset().isPresent() ? position.get().issuedOffset().get() : null);
   }
 
   private void processDiscoveredSplits(HoodieContinuousSplitBatch result, Throwable throwable) {
     if (throwable != null) {
       throw new RuntimeException("Failed to discover new splits", throwable);
-    } else {
-      if (Objects.equals(result.getFromInstant(), position.get().lastInstantCompletionTime().get())) {
-        if (!result.getSplits().isEmpty()) {
-          splitProvider.onDiscoveredSplits(result.getSplits());
-          LOG.info(
-              "Added {} splits discovered between ({}, {}] to the assigner",
-              result.getSplits().size(),
-              result.getFromInstant(),
-              result.getToInstant());
-        } else {
-          LOG.info(
-              "No new splits discovered between ({}, {}]",
-              result.getFromInstant(),
-              result.getToInstant());
-        }
-        position.set(HoodieEnumeratorPosition.of(Option.of(result.getToInstant()), position.get().lastInstantCompletionTime()));
-        LOG.info("Update enumerator position to {}", position.get());
+    }
+
+    if (Objects.equals(result.getFromInstant(), position.get().issuedOffset().get())) {
+      if (!result.getSplits().isEmpty()) {
+        splitProvider.onDiscoveredSplits(result.getSplits());
+        LOG.info(
+            "Added {} splits discovered between ({}, {}] to the assigner",
+            result.getSplits().size(),
+            result.getFromInstant(),
+            result.getToInstant());
       } else {
         LOG.info(
-            "Skip {} discovered splits because the scan starting position doesn't match "
-                + "the current enumerator position: enumerator position = {}, scan starting position = {}",
-            result.getSplits().size(),
-            position.get().lastInstantCompletionTime(),
-            result.getFromInstant());
+            "No new splits discovered between ({}, {}]",
+            result.getFromInstant(),
+            result.getToInstant());
       }
+      position.set(HoodieEnumeratorPosition.of(result.getFromInstant(), result.getToInstant()));
+      LOG.info("Update enumerator position to {}", position.get());
+    } else {
+      LOG.info(
+          "Skip {} discovered splits because the scan starting position doesn't match "
+              + "the current enumerator position: enumerator position = {}, scan starting position = {}",
+          result.getSplits().size(),
+          position.get().issuedOffset(),
+          result.getFromInstant());
     }
   }
 }

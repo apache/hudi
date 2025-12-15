@@ -333,7 +333,8 @@ public class IncrementalInputSplits implements Serializable {
       )
     ).collect(Collectors.toList());
 
-    return new HoodieContinuousSplitBatch(splits, startInstant, result.endInstant);
+    return new HoodieContinuousSplitBatch(splits, startInstant,
+            result.getOffset() == null ? result.getEndInstant() : result.getOffset());
   }
 
   /**

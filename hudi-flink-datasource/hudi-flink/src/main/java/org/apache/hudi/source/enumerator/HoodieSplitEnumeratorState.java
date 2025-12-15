@@ -29,16 +29,16 @@ import java.util.Collection;
  */
 public class HoodieSplitEnumeratorState implements Serializable {
   private final Option<String> lastEnumeratedInstant;
-  private final Option<String> lastEnumeratedInstantCompletionTime;
+  private final Option<String> lastEnumeratedInstantOffset;
   private final Collection<HoodieSourceSplitState> pendingSplitStates;
 
   public HoodieSplitEnumeratorState(
       Collection<HoodieSourceSplitState> pendingSplitStates,
       Option<String> lastEnumeratedInstant,
-      Option<String> lastEnumeratedInstantCompletionTime) {
+      Option<String> lastEnumeratedInstantOffset) {
     this.pendingSplitStates = pendingSplitStates;
     this.lastEnumeratedInstant = lastEnumeratedInstant;
-    this.lastEnumeratedInstantCompletionTime = lastEnumeratedInstantCompletionTime;
+    this.lastEnumeratedInstantOffset = lastEnumeratedInstantOffset;
   }
 
   public Collection<HoodieSourceSplitState> getPendingSplitStates() {
@@ -49,7 +49,7 @@ public class HoodieSplitEnumeratorState implements Serializable {
     return lastEnumeratedInstant;
   }
 
-  public Option<String> getLastEnumeratedInstantCompletionTime() {
-    return lastEnumeratedInstantCompletionTime;
+  public Option<String> getLastEnumeratedInstantOffset() {
+    return lastEnumeratedInstantOffset;
   }
 }

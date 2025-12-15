@@ -41,14 +41,14 @@ public class TestScanContext {
   @Test
   public void testGetConf() throws Exception {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH.key(), "/tmp/test");
+    conf.set(FlinkOptions.PATH, "/tmp/test");
 
     ScanContext scanContext = createTestScanContext(conf,  new Path("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
 
     assertNotNull(scanContext.getConf(), "Configuration should not be null");
-    assertEquals("/tmp/test", scanContext.getConf().getString(FlinkOptions.PATH),
+    assertEquals("/tmp/test", scanContext.getConf().get(FlinkOptions.PATH),
         "Configuration should match");
   }
 
@@ -179,7 +179,7 @@ public class TestScanContext {
   @Test
   public void testGetScanInterval() throws Exception {
     Configuration conf = new Configuration();
-    conf.setInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 5);
+    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 5);
 
     ScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
@@ -208,7 +208,7 @@ public class TestScanContext {
   @Test
   public void testAllFieldsInitialized() throws Exception {
     Configuration conf = new Configuration();
-    conf.setInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 10);
+    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 10);
     Path path = new Path("/tmp/hoodie/table");
     String startInstant = "20231215120000000";
     long maxCompactionMemory = 2L * 1024L * 1024L * 1024L; // 2GB

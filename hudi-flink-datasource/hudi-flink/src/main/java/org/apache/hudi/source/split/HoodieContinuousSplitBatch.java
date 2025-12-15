@@ -18,7 +18,7 @@
 
 package org.apache.hudi.source.split;
 
-import org.apache.flink.util.Preconditions;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -42,8 +42,8 @@ public class HoodieContinuousSplitBatch {
       String fromInstant,
       String toInstant) {
 
-    Preconditions.checkArgument(splits != null, "Invalid to splits collection: null");
-    Preconditions.checkArgument(toInstant != null, "Invalid end instant: null");
+    ValidationUtils.checkArgument(splits != null, "Invalid to splits collection: null");
+    ValidationUtils.checkArgument(toInstant != null, "Invalid end instant: null");
     this.splits = splits;
     this.fromInstant = fromInstant;
     this.toInstant = toInstant;
