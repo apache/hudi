@@ -133,7 +133,8 @@ public class SanitizationTestUtils {
 
   public static HoodieSchema generateRenamedSchemaWithDefaultReplacement() {
     HoodieSchema addressSchema = HoodieSchema.createRecord("__Address", null, null,
-        Arrays.asList(HoodieSchemaField.of("__stree9add__ress", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, "@@@any_address"),
+        Arrays.asList(
+            HoodieSchemaField.of("__stree9add__ress", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)), null, "@@@any_address"),
             HoodieSchemaField.of("cit__y__", HoodieSchema.create(HoodieSchemaType.STRING))));
     return HoodieSchema.createRecord("Person", null, null,
         Arrays.asList(HoodieSchemaField.of("__firstname", HoodieSchema.create(HoodieSchemaType.STRING)),
@@ -143,7 +144,8 @@ public class SanitizationTestUtils {
 
   public static HoodieSchema generateRenamedSchemaWithConfiguredReplacement() {
     HoodieSchema addressSchema = HoodieSchema.createRecord("_Address", null, null,
-        Arrays.asList(HoodieSchemaField.of("_stree9add_ress", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, "@@@any_address"),
+        Arrays.asList(
+            HoodieSchemaField.of("_stree9add_ress", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL)), null, "@@@any_address"),
             HoodieSchemaField.of("cit_y_", HoodieSchema.create(HoodieSchemaType.STRING))));
     return HoodieSchema.createRecord("Person", null, null,
         Arrays.asList(HoodieSchemaField.of("_firstname", HoodieSchema.create(HoodieSchemaType.STRING)),
