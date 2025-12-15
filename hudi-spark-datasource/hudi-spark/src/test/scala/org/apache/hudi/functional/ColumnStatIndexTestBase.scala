@@ -36,7 +36,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 
-import org.apache.avro.{Schema => AvroSchema}
+import org.apache.avro.{Schema}
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._
@@ -573,7 +573,7 @@ object ColumnStatIndexTestBase {
   }
 
   trait WrapperCreator {
-    def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper
+    def create(orig: JBigDecimal, sch: Schema): DecimalWrapper
   }
 
   // Test cases for column stats index with DecimalWrapper
@@ -584,7 +584,7 @@ object ColumnStatIndexTestBase {
         "ByteBuffer Test",
         new JBigDecimal("123.45"),
         new WrapperCreator {
-          override def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper =
+          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
             new DecimalWrapper {
               // Return a ByteBuffer computed via Avro's DecimalConversion.`
               override def getValue: ByteBuffer =
@@ -597,7 +597,7 @@ object ColumnStatIndexTestBase {
         "Java BigDecimal Test",
         new JBigDecimal("543.21"),
         new WrapperCreator {
-          override def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper =
+          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
             new DecimalWrapper {
               override def getValue: ByteBuffer =
                 ColumnStatsIndexSupport.decConv.toBytes(orig, sch, sch.getLogicalType)
@@ -609,7 +609,7 @@ object ColumnStatIndexTestBase {
         "Scala BigDecimal Test",
         scala.math.BigDecimal("987.65").bigDecimal,
         new WrapperCreator {
-          override def create(orig: JBigDecimal, sch: AvroSchema): DecimalWrapper =
+          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
             new DecimalWrapper {
               override def getValue: ByteBuffer =
                 // Here we explicitly use orig (which comes from Scala BigDecimal converted to java.math.BigDecimal)

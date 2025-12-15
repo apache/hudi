@@ -74,7 +74,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalTestHarness {
-  private static final HoodieSchema SCHEMA = getHoodieSchema("AvroSchema", "AvroSchemaNS");
+  private static final HoodieSchema SCHEMA = getSchema("AvroSchema", "AvroSchemaNS");
   private final Map<String, String> properties = new HashMap<>();
   private HoodieTableMetaClient metaClient;
 
@@ -144,7 +144,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     return records.stream().map(r -> r.getKey()).collect(Collectors.toList());
   }
 
-  private static HoodieSchema getHoodieSchema(String schemaName, String schemaNameSpace) {
+  private static HoodieSchema getSchema(String schemaName, String schemaNameSpace) {
     return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
   }
 

@@ -369,13 +369,13 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val tableSchemaStr = tableSchema.toString
 
-    val hoodieTableSchema = HoodieTableSchema(tableStructSchema, tableSchemaStr, internalSchemaOpt)
+    val schema = HoodieTableSchema(tableStructSchema, tableSchemaStr, internalSchemaOpt)
     val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, Some(requiredInternalSchema))
 
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
-      val rdd = composeRDD(fileSplits, hoodieTableSchema, requiredSchema, targetColumns, filters)
+      val rdd = composeRDD(fileSplits, schema, requiredSchema, targetColumns, filters)
 
       // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
       // Please check [[needConversion]] scala-doc for more details
@@ -811,14 +811,11 @@ object HoodieBaseRelation extends SparkAdapterSupport {
           HoodieSchemaField.of(f.name(), f.schema(), f.doc().orElse(null), f.defaultVal().orElse(null))
         }.toList
 
-        val fieldsJava = new java.util.ArrayList[HoodieSchemaField]()
-        requiredFields.foreach(fieldsJava.add)
+        val requiredSchema = HoodieSchema.createRecord(hoodieSchema.getName, hoodieSchema.getDoc.orElse(null),
+          hoodieSchema.getNamespace.orElse(null), hoodieSchema.isError, requiredFields.asJava)
+        val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredSchema)
 
-        val requiredHoodieSchema = HoodieSchema.createRecord(hoodieSchema.getName, hoodieSchema.getDoc.orElse(null),
-          hoodieSchema.getNamespace.orElse(null), hoodieSchema.isError, fieldsJava)
-        val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredHoodieSchema)
-
-        (requiredHoodieSchema, requiredStructSchema, InternalSchema.getEmptyInternalSchema)
+        (requiredSchema, requiredStructSchema, InternalSchema.getEmptyInternalSchema)
     }
   }
 

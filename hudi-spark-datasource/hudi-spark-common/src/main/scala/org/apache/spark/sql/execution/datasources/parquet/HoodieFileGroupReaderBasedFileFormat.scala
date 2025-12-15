@@ -88,15 +88,15 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            hoodieFileFormat: HoodieFileFormat)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
-  private lazy val hoodieTableSchema = HoodieSchema.parse(tableSchema.avroSchemaStr)
+  private lazy val schema = HoodieSchema.parse(tableSchema.avroSchemaStr)
 
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     HOption.ofNullable(
-      ParquetTableSchemaResolver.convertAvroSchemaToParquet(hoodieTableSchema.getAvroSchema, new Configuration())
+      ParquetTableSchemaResolver.convertAvroSchemaToParquet(schema.getAvroSchema, new Configuration())
     )
   }
 
-  private lazy val hasTimestampMillisFieldInTableSchema = AvroSchemaRepair.hasTimestampMillisField(hoodieTableSchema.getAvroSchema)
+  private lazy val hasTimestampMillisFieldInTableSchema = AvroSchemaRepair.hasTimestampMillisField(schema.getAvroSchema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
   override def shortName(): String = "HudiFileGroup"
 
@@ -211,9 +211,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    //TODO add util for this in HoodieSchema
-    val requestedAvroSchema = HoodieSchemaUtils.pruneDataSchema(hoodieTableSchema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedSchema, sanitizedTableName), exclusionFields)
-    val dataAvroSchema = HoodieSchemaUtils.pruneDataSchema(hoodieTableSchema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataSchema, sanitizedTableName), exclusionFields)
+    val requestedHoodieSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedSchema, sanitizedTableName), exclusionFields)
+    val dataHoodieSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataSchema, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
 
@@ -261,8 +260,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
                 .withFileSlice(fileSlice)
-                .withDataSchema(dataAvroSchema)
-                .withRequestedSchema(requestedAvroSchema)
+                .withDataSchema(dataHoodieSchema)
+                .withRequestedSchema(requestedHoodieSchema)
                 .withInternalSchema(internalSchemaOpt)
                 .withProps(props)
                 .withStart(file.start)

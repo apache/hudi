@@ -51,17 +51,17 @@ import scala.collection.JavaConverters._
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroDeserializer(rootAvroType: HoodieSchema,
+private[sql] class AvroDeserializer(rootHoodieType: HoodieSchema,
                                     rootCatalystType: DataType,
                                     positionalFieldMatch: Boolean,
                                     datetimeRebaseSpec: RebaseSpec,
                                     filters: StructFilters) {
 
-  def this(rootAvroType: HoodieSchema,
+  def this(rootHoodieType: HoodieSchema,
            rootCatalystType: DataType,
            datetimeRebaseMode: String) = {
     this(
-      rootAvroType,
+      rootHoodieType,
       rootCatalystType,
       positionalFieldMatch = false,
       RebaseSpec(LegacyBehaviorPolicy.withName(datetimeRebaseMode)),
@@ -84,7 +84,7 @@ private[sql] class AvroDeserializer(rootAvroType: HoodieSchema,
         val resultRow = new SpecificInternalRow(st.map(_.dataType))
         val fieldUpdater = new RowUpdater(resultRow)
         val applyFilters = filters.skipRow(resultRow, _)
-        val writer = getRecordWriter(rootAvroType.toAvroSchema, st, Nil, Nil, applyFilters)
+        val writer = getRecordWriter(rootHoodieType.toAvroSchema, st, Nil, Nil, applyFilters)
         (data: Any) => {
           val record = data.asInstanceOf[GenericRecord]
           val skipRow = writer(fieldUpdater, record)
@@ -94,7 +94,7 @@ private[sql] class AvroDeserializer(rootAvroType: HoodieSchema,
       case _ =>
         val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
         val fieldUpdater = new RowUpdater(tmpRow)
-        val writer = newWriter(rootAvroType.toAvroSchema, rootCatalystType, Nil, Nil)
+        val writer = newWriter(rootHoodieType.toAvroSchema, rootCatalystType, Nil, Nil)
         (data: Any) => {
           writer(fieldUpdater, 0, data)
           Some(tmpRow.get(0, rootCatalystType))
@@ -102,7 +102,7 @@ private[sql] class AvroDeserializer(rootAvroType: HoodieSchema,
     }
   } catch {
     case ise: IncompatibleSchemaException => throw new IncompatibleSchemaException(
-      s"Cannot convert Avro type $rootAvroType to SQL type ${rootCatalystType.sql}.", ise)
+      s"Cannot convert Avro type $rootHoodieType to SQL type ${rootCatalystType.sql}.", ise)
   }
 
   def deserialize(data: Any): Option[Any] = converter(data)

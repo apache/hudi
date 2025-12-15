@@ -719,7 +719,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     val structSchema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
-    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structSchema, "record", "")
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structSchema, "record", "")
     val inputDF = spark.createDataFrame(
       spark.sparkContext.parallelize(Seq(Row(1, "v1"), Row(2, "v2"), Row(3, null), Row(4, "v4"))),
       structSchema)
@@ -739,7 +739,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, hoodieSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, schema, metadataConfig, metaClient)
     columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head

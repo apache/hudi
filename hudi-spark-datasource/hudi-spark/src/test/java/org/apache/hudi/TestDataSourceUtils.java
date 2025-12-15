@@ -124,8 +124,8 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   @Test
   public void testAvroRecordsFieldConversion() {
 
-    HoodieSchema hoodieSchema = HoodieSchema.parse(avroSchemaString);
-    Schema avroSchema = hoodieSchema.toAvroSchema();
+    HoodieSchema schema = HoodieSchema.parse(avroSchemaString);
+    Schema avroSchema = schema.toAvroSchema();
     GenericRecord record = new GenericData.Record(avroSchema);
     record.put("event_date1", 18000);
     record.put("event_date2", 18001);
