@@ -28,9 +28,12 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class AvroSchemaRepair {
+  public static boolean isLocalTimestampSupported = isLocalTimestampMillisSupported();
+
   public static Schema repairLogicalTypes(Schema fileSchema, Schema tableSchema) {
     Schema repairedSchema = repairAvroSchema(fileSchema, tableSchema);
     if (repairedSchema != fileSchema) {
@@ -125,8 +128,12 @@ public class AvroSchemaRepair {
 
     // if file scheam has no logical type, and the table has a local timestamp, then we need to repair
     if (fileSchemaLogicalType == null) {
-      return tableSchemaLogicalType instanceof LogicalTypes.LocalTimestampMillis
-          || tableSchemaLogicalType instanceof LogicalTypes.LocalTimestampMicros;
+      try {
+        return tableSchemaLogicalType instanceof LogicalTypes.LocalTimestampMillis
+            || tableSchemaLogicalType instanceof LogicalTypes.LocalTimestampMicros;
+      } catch (Exception e) {
+        return false;
+      }
     }
 
     // if file schema is timestamp-micros, and the table is timestamp-millis, then we need to repair
@@ -233,6 +240,20 @@ public class AvroSchemaRepair {
       default:
         return tableSchema.getType() == Schema.Type.LONG
             && (tableSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis || tableSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis);
+    }
+  }
+
+  /**
+   * Check if LogicalTypes.LocalTimestampMillis is supported in the current Avro version
+   *
+   * @return true if LocalTimestampMillis is available, false otherwise
+   */
+  public static boolean isLocalTimestampMillisSupported() {
+    try {
+      return Arrays.stream(LogicalTypes.class.getDeclaredClasses())
+          .anyMatch(c -> c.getSimpleName().equals("LocalTimestampMillis"));
+    } catch (Exception e) {
+      return false;
     }
   }
 }

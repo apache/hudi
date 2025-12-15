@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.avro;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -67,6 +68,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       AvroReadSupport.setAvroReadSchema(conf, filterSchema);
       AvroReadSupport.setRequestedProjection(conf, filterSchema);
     }
+    parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(), getFilter(conf));
   }
 
   public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption, Option<Schema> dataSchema) throws IOException {

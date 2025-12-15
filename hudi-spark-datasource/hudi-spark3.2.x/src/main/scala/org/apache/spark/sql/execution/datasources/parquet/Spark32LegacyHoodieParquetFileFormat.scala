@@ -347,7 +347,7 @@ class Spark32LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           new HoodieParquetReadSupport(
             convertTz,
             enableVectorizedReader = false,
-            enableTimestampFieldRepair = true,
+            enableTimestampFieldRepair = false,
             datetimeRebaseSpec,
             int96RebaseSpec)
         } else {

@@ -40,7 +40,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{EnumSource, MethodSource, ValueSource}
 
 import scala.collection.JavaConverters._
 
@@ -132,7 +132,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, avroSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, metadataConfig, metaClient)
     columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head
@@ -159,102 +159,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
-    ) ++ metadataOpts
-
-    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
-
-    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
-
-    inputDF
-      .sort("c1")
-      .repartition(4, new Column("c1"))
-      .write
-      .format("hudi")
-      .options(opts)
-      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
-
-    val metadataConfig = HoodieMetadataConfig.newBuilder()
-      .fromProperties(toProperties(metadataOpts))
-      .build()
-
-    val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient,
-      HoodieMetadataConfig.newBuilder().enable(false).build())
-    fsv.loadAllPartitions()
-
-    val partitionPaths = fsv.getPartitionPaths
-    val partitionToBaseFiles : java.util.Map[String, java.util.List[StoragePath]] = new java.util.HashMap[String, java.util.List[StoragePath]]
-
-    partitionPaths.forEach(partitionPath =>
-      partitionToBaseFiles.put(partitionPath.getName, fsv.getLatestBaseFiles(partitionPath.getName)
-        .map[StoragePath](baseFile => baseFile.getStoragePath).collect(Collectors.toList[StoragePath]))
-    )
-    fsv.close()
-
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
-    val requestedColumns = Seq("c1")
-    // get all file names
-    val stringEncoder: Encoder[String] = org.apache.spark.sql.Encoders.STRING
-    val fileNameSet: Set[String] = columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { df =>
-      val fileNames: Array[String] = df.select("fileName").as[String](stringEncoder).collect()
-      val newFileNameSet: Set[String] = fileNames.toSet
-      newFileNameSet
-    }
-    val targetFileName = fileNameSet.take(2)
-    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, None, Some(targetFileName)) { df =>
-      assertEquals(2, df.collect().length)
-      val targetDFFileNameSet: Set[String] = df.select("fileName").as[String](stringEncoder).collect().toSet
-      assertEquals(targetFileName, targetDFFileNameSet)
-    }
-
-    // fetch stats only for a subset of partitions
-    // lets send in all file names, but only 1 partition to test that the prefix based lookup is effective.
-    val expectedFileNames = partitionToBaseFiles.get("10").stream().map[String](baseFile => baseFile.getName).collect(Collectors.toSet[String])
-    // even though fileNameSet (last arg) contains files from all partitions, since list of partitions passed in is just 1 (i.e 10), we should get matched only w/ files from
-    // partition 10.
-    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(Set("10")), Some(fileNameSet)) { df =>
-      assertEquals(expectedFileNames.size(), df.collect().length)
-      val targetDFFileNameSet = df.select("fileName").as[String](stringEncoder).collectAsList().stream().collect(Collectors.toSet[String])
-      assertEquals(expectedFileNames, targetDFFileNameSet)
-    }
-
-    // lets redo for 2 partitions.
-    val expectedFileNames1 = partitionToBaseFiles.get("9").stream().map[String](baseFile => baseFile.getName).collect(Collectors.toList[String])
-    expectedFileNames1.addAll(partitionToBaseFiles.get("11").stream().map[String](baseFile => baseFile.getName).collect(Collectors.toList[String]))
-    Collections.sort(expectedFileNames1)
-    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(Set("9","11")), Some(fileNameSet)) { df =>
-      assertEquals(expectedFileNames1.size, df.collect().length)
-      val targetDFFileNameSet = df.select("fileName").as[String](stringEncoder).collectAsList().stream().collect(Collectors.toList[String])
-      Collections.sort(targetDFFileNameSet)
-      assertEquals(expectedFileNames1, targetDFFileNameSet)
-    }
-  }
-
-  @ParameterizedTest
-  @CsvSource(value = Array("true", "false"))
-  def testMetadataColumnStatsIndexPartialProjection(shouldReadInMemory: Boolean): Unit = {
-    var targetColumnsToIndex = Seq("c1", "c2", "c3")
-
-    val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
-    )
-
-    val opts = Map(
-      "hoodie.insert.shuffle.parallelism" -> "4",
-      "hoodie.upsert.shuffle.parallelism" -> "4",
-      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-      RECORDKEY_FIELD.key -> "c1",
-      HoodieTableConfig.PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
     ) ++ metadataOpts
@@ -291,7 +195,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       // These are NOT indexed
       val requestedColumns = Seq("c4")
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
         assertEquals(0, emptyTransposedColStatsDF.collect().length)
@@ -371,7 +275,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       val manualUpdatedColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition
@@ -434,7 +338,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     // We have to include "c1", since we sort the expected outputs by this column
     val requestedColumns = Seq("c4", "c1")
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
     ////////////////////////////////////////////////////////////////////////
     // Query filter #1: c1 > 1 and c4 > 'c4 filed value'
