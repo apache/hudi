@@ -32,6 +32,8 @@ import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -491,5 +493,16 @@ public class AvroSchemaUtils {
     schemaChange = reduce(filterCols, schemaChange,
         (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
+  }
+
+  public static Schema getRepairedSchema(Schema writerSchema, Schema readerSchema) {
+    try {
+      Class<?> avroSchemaRepairClass = Class.forName("org.apache.parquet.schema.AvroSchemaRepair");
+      Method repairMethod = avroSchemaRepairClass.getMethod("repairLogicalTypes", Schema.class, Schema.class);
+      return (Schema) repairMethod.invoke(null, writerSchema, readerSchema);
+    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      // Fallback if class/method not available
+      return writerSchema;
+    }
   }
 }

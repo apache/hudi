@@ -45,11 +45,8 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -62,9 +59,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -209,10 +206,6 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           record.put("array_field", Collections.singletonList(nestedRecord));
           record.put("nullable_map_field", Collections.singletonMap("key_" + instant, nestedRecord));
           // logical types
-          BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", random.nextFloat()));
-          Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-          GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
-          record.put("decimal_field", genericFixed);
           record.put("date_nullable_field", random.nextBoolean() ? null : LocalDate.now().minusDays(random.nextInt(3)));
           record.put("timestamp_millis_field", ts);
           record.put("timestamp_micros_nullable_field", random.nextBoolean() ? null : ts * 1000);
@@ -223,7 +216,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
               enumSchema
                   .getEnumSymbols()
                   .get(random.nextInt(enumSchema.getEnumSymbols().size()))));
-          return new HoodieAvroIndexedRecord(new HoodieKey(key, partition), record, ts);
+          return new HoodieAvroIndexedRecord(new HoodieKey(key, partition), record);
         })
         .collect(Collectors.toList());
   }

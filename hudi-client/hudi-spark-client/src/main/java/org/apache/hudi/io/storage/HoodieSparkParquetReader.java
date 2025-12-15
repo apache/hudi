@@ -177,7 +177,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public void close() {
-    readerIterators.forEach(ParquetReaderIterator::close);
+    readerIterators.forEach(it -> it.close());
   }
 
   @Override

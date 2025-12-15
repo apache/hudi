@@ -70,15 +70,29 @@
         <version>3.5.0</version>
         <executions>
           <execution>
-            <id>add-spark32plus-avro-sources</id>
+            <id>add-spark34plus-avro-sources</id>
             <phase>generate-sources</phase>
             <goals>
               <goal>add-source</goal>
             </goals>
             <configuration>
-              <skipAddSource>${spark32orEarlier}</skipAddSource>
+              <skipAddSource>${spark33orEarlier}</skipAddSource>
               <sources>
                 <source>src/avro/java</source>
+                <source>src/parquet/java</source>
+              </sources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>add-spark34plus-parquet-test-sources</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <skipAddTestSource>${spark33orEarlier}</skipAddTestSource>
+              <sources>
+                <source>src/parquet/test/java</source>
               </sources>
             </configuration>
           </execution>

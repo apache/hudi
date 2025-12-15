@@ -45,6 +45,7 @@ public class TestAvroSchemaRepair {
     Schema result = AvroSchemaRepair.repairLogicalTypes(requestedSchema, tableSchema);
 
     assertSame(requestedSchema, result, "When schemas are identical, should return same instance");
+
   }
 
   @Test
