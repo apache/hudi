@@ -243,8 +243,10 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) resolvedSchema;
         if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
           return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
-        } else {
+        } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
           return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampType: " + timestampSchema.getPrecision());
         }
       } else {
         // Default to micros precision when no timestamp schema is available
@@ -256,8 +258,10 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         if (!timestampSchema.isUtcAdjusted()) {
           if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
             return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
-          } else {
+          } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
             return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
+          } else {
+            throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampNTZType: " + timestampSchema.getPrecision());
           }
         } else {
           throw new UnsupportedOperationException("TimestampNTZType requires local timestamp schema, but got UTC-adjusted: " + timestampSchema.getName());
@@ -464,9 +468,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
           return Types.primitive(INT64, repetition)
               .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
-        } else {
+        } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
           return Types.primitive(INT64, repetition)
               .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampType: " + timestampSchema.getPrecision());
         }
       } else {
         // Default to micros precision when no timestamp schema is available
@@ -480,9 +486,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
             return Types.primitive(INT64, repetition)
                 .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
-          } else {
+          } else if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
             return Types.primitive(INT64, repetition)
                 .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+          } else {
+            throw new UnsupportedOperationException("Unsupported timestamp precision for TimestampNTZType: " + timestampSchema.getPrecision());
           }
         } else {
           throw new UnsupportedOperationException("TimestampNTZType requires local timestamp schema, but got UTC-adjusted: " + timestampSchema.getName());
