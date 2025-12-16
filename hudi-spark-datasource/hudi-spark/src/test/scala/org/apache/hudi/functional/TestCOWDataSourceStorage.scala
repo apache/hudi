@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
-import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
