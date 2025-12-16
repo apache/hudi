@@ -18,6 +18,7 @@
 
 package org.apache.hudi.adapter;
 
+import lombok.Getter;
 import org.apache.flink.runtime.event.WatermarkEvent;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.watermark.Watermark;
@@ -35,14 +36,11 @@ import java.util.List;
  */
 public class CollectOutputAdapter<T> implements Output<StreamRecord<T>> {
 
+  @Getter
   private final List<T> records;
 
   public CollectOutputAdapter() {
     this.records = new ArrayList<>();
-  }
-
-  public List<T> getRecords() {
-    return this.records;
   }
 
   @Override
