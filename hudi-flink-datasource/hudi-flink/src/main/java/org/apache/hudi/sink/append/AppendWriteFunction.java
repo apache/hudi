@@ -31,14 +31,13 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -53,8 +52,8 @@ import java.util.Map;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
-  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunction.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -144,7 +143,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     } else {
       writeStatus = Collections.emptyList();
       this.currentInstant = instantToWrite(false);
-      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
+      log.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
 
     recordWriteFailure(writeMetrics, writeStatus);

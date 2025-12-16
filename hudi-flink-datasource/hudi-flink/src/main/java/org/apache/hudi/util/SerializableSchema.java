@@ -20,6 +20,8 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.Column.MetadataColumn;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -88,27 +90,16 @@ public class SerializableSchema implements Serializable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+  @AllArgsConstructor
+  @Getter
   public static class Column implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private final String name;
     private final DataType dataType;
 
-    private Column(String name, DataType dataType) {
-      this.name = name;
-      this.dataType = dataType;
-    }
-
     public static Column create(String name, DataType type) {
       return new Column(name, type);
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public DataType getDataType() {
-      return dataType;
     }
   }
 }

@@ -22,6 +22,8 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
@@ -31,14 +33,11 @@ import org.apache.flink.util.SerializedValue;
 /**
  * Correspondent between a write task with the coordinator.
  */
+@AllArgsConstructor
 public class Correspondent {
+
   private final OperatorID operatorID;
   private final TaskOperatorEventGateway gateway;
-
-  private Correspondent(OperatorID operatorID, TaskOperatorEventGateway gateway) {
-    this.operatorID = operatorID;
-    this.gateway = gateway;
-  }
 
   @VisibleForTesting
   protected Correspondent() {
@@ -71,49 +70,31 @@ public class Correspondent {
     }
   }
 
-  public OperatorID getOperatorID() {
-    return operatorID;
-  }
-
-  public TaskOperatorEventGateway getGateway() {
-    return gateway;
-  }
-
   /**
    * A request for instant time with a given checkpoint id.
    */
+  @AllArgsConstructor
+  @Getter
   public static class InstantTimeRequest implements CoordinationRequest {
-    private final long checkpointId;
 
-    private InstantTimeRequest(long checkpointId) {
-      this.checkpointId = checkpointId;
-    }
+    private final long checkpointId;
 
     public static InstantTimeRequest getInstance(long checkpointId) {
       return new InstantTimeRequest(checkpointId);
-    }
-
-    public long getCheckpointId() {
-      return checkpointId;
     }
   }
 
   /**
    * A response with instant time.
    */
+  @AllArgsConstructor
+  @Getter
   public static class InstantTimeResponse implements CoordinationResponse {
-    private final String instant;
 
-    private InstantTimeResponse(String instant) {
-      this.instant = instant;
-    }
+    private final String instant;
 
     public static InstantTimeResponse getInstance(String instant) {
       return new InstantTimeResponse(instant);
-    }
-
-    public String getInstant() {
-      return instant;
     }
   }
 }

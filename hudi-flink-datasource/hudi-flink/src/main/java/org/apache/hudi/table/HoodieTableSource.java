@@ -79,6 +79,7 @@ import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -105,8 +106,6 @@ import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -132,6 +131,7 @@ import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
  */
+@Slf4j
 public class HoodieTableSource implements
     ScanTableSource,
     SupportsProjectionPushDown,
@@ -141,7 +141,6 @@ public class HoodieTableSource implements
     SupportsReadingMetadata,
     Serializable {
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
   private static final long NO_LIMIT_CONSTANT = -1;
 
@@ -355,7 +354,7 @@ public class HoodieTableSource implements
     }
     StringJoiner joiner = new StringJoiner(" and ");
     partitionFilters.forEach(f -> joiner.add(f.asSummaryString()));
-    LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner);
+    log.info("Partition pruner for hoodie source, condition is:\n" + joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
             this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
@@ -456,7 +455,7 @@ public class HoodieTableSource implements
             final List<MergeOnReadInputSplit> inputSplits = buildInputSplits();
             if (inputSplits.isEmpty()) {
               // When there is no input splits, just return an empty source.
-              LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
+              log.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
@@ -480,7 +479,7 @@ public class HoodieTableSource implements
         final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, cdcEnabled);
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
-          LOG.info("No input splits generated for incremental read. Returning empty collection");
+          log.info("No input splits generated for incremental read. Returning empty collection");
           return InputFormats.EMPTY_INPUT_FORMAT;
         } else if (cdcEnabled) {
           return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, result.getInputSplits());
@@ -541,8 +540,7 @@ public class HoodieTableSource implements
         requiredRowType,
         tableSchema.toString(),
         HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
-        inputSplits,
-        conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
+        inputSplits);
     return CdcInputFormat.builder()
         .config(this.conf)
         .tableState(hoodieTableState)
@@ -567,8 +565,7 @@ public class HoodieTableSource implements
         requiredRowType,
         tableAvroSchema.toString(),
         HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
-        inputSplits,
-        conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
+        inputSplits);
     return MergeOnReadInputFormat.builder()
         .config(this.conf)
         .tableState(hoodieTableState)
@@ -657,7 +654,7 @@ public class HoodieTableSource implements
       return schemaResolver.getTableSchema();
     } catch (Throwable e) {
       // table exists but has no written data
-      LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);
+      log.warn("Unable to resolve schema from table, using schema from the DDL", e);
       return inferSchemaFromDdl();
     }
   }

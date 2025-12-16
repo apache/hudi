@@ -71,6 +71,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,8 +79,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.orc.OrcFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -104,9 +103,8 @@ import static org.apache.hudi.configuration.FlinkOptions.WRITE_FAIL_FAST;
 /**
  * Utilities for Flink stream read and write.
  */
+@Slf4j
 public class StreamerUtil {
-
-  private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
   public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
 
@@ -158,7 +156,7 @@ public class StreamerUtil {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
-        LOG.info("Adding overridden properties to file properties.");
+        log.info("Adding overridden properties to file properties.");
         conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
       }
     } catch (IOException ioe) {
@@ -306,9 +304,9 @@ public class StreamerUtil {
           .setCDCSupplementalLoggingMode(conf.get(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
-      LOG.info("Table initialized under base path {}", basePath);
+      log.info("Table initialized under base path {}", basePath);
     } else {
-      LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
+      log.info("Table [path={}, name={}] already exists, no need to initialize the table",
           basePath, conf.get(FlinkOptions.TABLE_NAME));
     }
 
@@ -622,7 +620,7 @@ public class StreamerUtil {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
       return getTableSchema(metaClient, false);
     } catch (Exception e) {
-      LOG.error("Failed to resolve the latest table schema", e);
+      log.error("Failed to resolve the latest table schema", e);
     }
     return null;
   }
@@ -673,7 +671,7 @@ public class StreamerUtil {
   public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
     if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
       conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+      log.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
   }

@@ -21,35 +21,18 @@ package org.apache.hudi.source.enumerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 
+import org.immutables.value.Value;
+
 import java.io.Serializable;
 import java.util.Collection;
 
 /**
  * State of Hoodie split enumerator. Mainly include the states of pending splits of split provider.
  */
+@Value
 public class HoodieSplitEnumeratorState implements Serializable {
-  private final Option<String> lastEnumeratedInstant;
-  private final Option<String> lastEnumeratedInstantOffset;
-  private final Collection<HoodieSourceSplitState> pendingSplitStates;
 
-  public HoodieSplitEnumeratorState(
-      Collection<HoodieSourceSplitState> pendingSplitStates,
-      Option<String> lastEnumeratedInstant,
-      Option<String> lastEnumeratedInstantOffset) {
-    this.pendingSplitStates = pendingSplitStates;
-    this.lastEnumeratedInstant = lastEnumeratedInstant;
-    this.lastEnumeratedInstantOffset = lastEnumeratedInstantOffset;
-  }
-
-  public Collection<HoodieSourceSplitState> getPendingSplitStates() {
-    return pendingSplitStates;
-  }
-
-  public Option<String> getLastEnumeratedInstant() {
-    return lastEnumeratedInstant;
-  }
-
-  public Option<String> getLastEnumeratedInstantOffset() {
-    return lastEnumeratedInstantOffset;
-  }
+  Collection<HoodieSourceSplitState> pendingSplitStates;
+  Option<String> lastEnumeratedInstant;
+  Option<String> lastEnumeratedInstantOffset;
 }
