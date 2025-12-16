@@ -22,14 +22,13 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
@@ -69,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestHoodieArrayWritableAvroUtils {
+public class TestHoodieArrayWritableSchemaUtils {
 
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
@@ -77,7 +76,7 @@ public class TestHoodieArrayWritableAvroUtils {
   public void testProjection() {
     HoodieSchema from = HoodieTestDataGenerator.HOODIE_SCHEMA;
     HoodieSchema to = HoodieSchemaUtils.generateProjectionSchema(from, Arrays.asList("trip_type", "current_ts", "weight"));
-    UnaryOperator<ArrayWritable> reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(to, from);
+    UnaryOperator<ArrayWritable> reverseProjection = HoodieArrayWritableSchemaUtils.getReverseProjection(to, from);
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
     ArrayWritable record = convertArrayWritable(dataGen.generateGenericRecord());
@@ -87,7 +86,7 @@ public class TestHoodieArrayWritableAvroUtils {
     Object weight = fromSerializer.getValue(record, "weight");
 
     //Make sure the projected fields can be read
-    ArrayWritable projectedRecord = HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from.toAvroSchema(), to.toAvroSchema(), Collections.emptyMap());
+    ArrayWritable projectedRecord = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, from, to, Collections.emptyMap());
     HiveAvroSerializer toSerializer = new HiveAvroSerializer(to.toAvroSchema());
     assertEquals(tripType, toSerializer.getValue(projectedRecord, "trip_type"));
     assertEquals(currentTs, toSerializer.getValue(projectedRecord, "current_ts"));
@@ -128,10 +127,10 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   void testRewriteStringToDateInt() throws AvroSerdeException {
-    Schema oldSchema = Schema.create(Schema.Type.STRING);
-    Schema newSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.DATE);
     Writable oldWritable = new Text("2023-01-01");
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
     Writable expected = HoodieHiveUtils.getDateWriteable(HoodieAvroUtils.fromJavaDate(Date.valueOf("2023-01-01")));
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, oldSchema, result, newSchema);
@@ -140,9 +139,9 @@ public class TestHoodieArrayWritableAvroUtils {
   @Test
   void testRewriteIntToLong() throws AvroSerdeException {
     Writable oldWritable = new IntWritable(42);
-    Schema oldSchema = Schema.create(Schema.Type.INT);
-    Schema newSchema = Schema.create(Schema.Type.LONG);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
     Writable expected = new LongWritable(42);
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, oldSchema, result, newSchema);
@@ -151,9 +150,9 @@ public class TestHoodieArrayWritableAvroUtils {
   @Test
   void testRewriteLongToFloat() throws AvroSerdeException {
     Writable oldWritable = new LongWritable(123);
-    Schema oldSchema = Schema.create(Schema.Type.LONG);
-    Schema newSchema = Schema.create(Schema.Type.FLOAT);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.LONG);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.FLOAT);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
     Writable expected = new FloatWritable(123.0f);
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, oldSchema, result, newSchema);
@@ -162,9 +161,9 @@ public class TestHoodieArrayWritableAvroUtils {
   @Test
   void testRewriteFloatToDouble() throws AvroSerdeException {
     Writable oldWritable = new FloatWritable(3.14f);
-    Schema oldSchema = Schema.create(Schema.Type.FLOAT);
-    Schema newSchema = Schema.create(Schema.Type.DOUBLE);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.FLOAT);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.DOUBLE);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
     Writable expected = new DoubleWritable(3.14d);
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, oldSchema, result, newSchema);
@@ -173,9 +172,9 @@ public class TestHoodieArrayWritableAvroUtils {
   @Test
   void testRewriteBytesToString() throws AvroSerdeException {
     BytesWritable oldWritable = new BytesWritable("hello".getBytes());
-    Schema oldSchema = Schema.create(Schema.Type.BYTES);
-    Schema newSchema = Schema.create(Schema.Type.STRING);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.BYTES);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
     Writable expected = new Text("hello");
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, oldSchema, result, newSchema);
@@ -184,9 +183,9 @@ public class TestHoodieArrayWritableAvroUtils {
   @Test
   void testRewriteIntToString() throws AvroSerdeException {
     Writable oldWritable = new IntWritable(123);
-    Schema oldSchema = Schema.create(Schema.Type.INT);
-    Schema newSchema = Schema.create(Schema.Type.STRING);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, newSchema);
     Writable expected = new Text("123");
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, oldSchema, result, newSchema);
@@ -194,10 +193,10 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   void testRewriteFixedDecimalToString() throws AvroSerdeException {
-    Schema decimalSchema = LogicalTypes.decimal(10, 2).addToSchema(Schema.createFixed("decimal", null, null, 5));
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal("decimal", null, null, 10, 2, 5);
     HiveDecimalWritable oldWritable = new HiveDecimalWritable(HiveDecimal.create(new BigDecimal("123.45")));
-    Schema newSchema = Schema.create(Schema.Type.STRING);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, decimalSchema, newSchema);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, decimalSchema, newSchema);
     Writable expected = new Text("123.45");
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, decimalSchema, result, newSchema);
@@ -205,12 +204,13 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   void testRewriteStringToFixedDecimal() throws AvroSerdeException {
-    Schema decimalSchema = LogicalTypes.decimal(10, 2).addToSchema(Schema.createFixed("decimal", null, null, 5));
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal("decimal", null, null, 10, 2, 5);
     Writable oldWritable = new Text("123.45");
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, Schema.create(Schema.Type.STRING), decimalSchema);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, decimalSchema);
     assertInstanceOf(HiveDecimalWritable.class, result);
     assertEquals(new BigDecimal("123.45"), ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
-    validateRewriteWithAvro(oldWritable, Schema.create(Schema.Type.STRING), result, decimalSchema);
+    validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
   }
 
   @Test
@@ -218,26 +218,27 @@ public class TestHoodieArrayWritableAvroUtils {
     BigDecimal input = new BigDecimal("123.45");
     byte[] bytes = input.unscaledValue().toByteArray();
     BytesWritable oldWritable = new BytesWritable(bytes);
-    Schema decimalSchema = LogicalTypes.decimal(5, 2).addToSchema(Schema.createFixed("decimal", null, null, 5));
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, Schema.create(Schema.Type.BYTES), decimalSchema);
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal("decimal", null, null, 5, 2, 5);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.BYTES);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, decimalSchema);
     assertEquals(input, ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
-    validateRewriteWithAvro(oldWritable, Schema.create(Schema.Type.BYTES), result, decimalSchema);
+    validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
   }
 
   @Test
   void testUnsupportedTypeConversionThrows() {
-    Schema oldSchema = Schema.createMap(Schema.create(Schema.Type.INT));
-    Schema newSchema = Schema.create(Schema.Type.STRING);
-    assertThrows(HoodieAvroSchemaException.class, () ->
-        HoodieArrayWritableAvroUtils.rewritePrimaryType(null, oldSchema, newSchema));
+    HoodieSchema oldSchema = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertThrows(HoodieSchemaException.class, () ->
+        HoodieArrayWritableSchemaUtils.rewritePrimaryType(null, oldSchema, newSchema));
   }
 
   @Test
   void testRewriteEnumToString() throws AvroSerdeException {
-    Schema enumSchema = Schema.createEnum("TestEnum", null, null, Arrays.asList("A", "B", "C"));
+    HoodieSchema enumSchema = HoodieSchema.createEnum("TestEnum", null, null, Arrays.asList("A", "B", "C"));
     Writable oldWritable = new Text("B");
-    Schema newSchema = Schema.create(Schema.Type.STRING);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, enumSchema, newSchema);
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, enumSchema, newSchema);
     Writable expected = new Text("B");
     assertEquals(expected, result);
     validateRewriteWithAvro(oldWritable, enumSchema, result, newSchema);
@@ -245,19 +246,19 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   void testRewriteFixedWithSameSizeAndFullName() {
-    Schema oldFixed = Schema.createFixed("decimal", null, "ns", 5);
-    Schema newFixed = Schema.createFixed("decimal", null, "ns", 5);
+    HoodieSchema oldFixed = HoodieSchema.createFixed("decimal", null, "ns", 5);
+    HoodieSchema newFixed = HoodieSchema.createFixed("decimal", null, "ns", 5);
     HiveDecimalWritable hdw = new HiveDecimalWritable(HiveDecimal.create("123.45"));
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(hdw, oldFixed, newFixed);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(hdw, oldFixed, newFixed);
     assertSame(hdw, result);
   }
 
   @Test
   void testRewriteFixedWithSameSizeButDifferentNameUsesDecimalFallback() throws AvroSerdeException {
-    Schema oldFixed = LogicalTypes.decimal(5, 2).addToSchema(Schema.createFixed("decA", null, "ns1", 5));
-    Schema newFixed = LogicalTypes.decimal(5, 2).addToSchema(Schema.createFixed("decB", null, "ns2", 5));
+    HoodieSchema oldFixed = HoodieSchema.createDecimal("decA", "ns1", null, 5, 2, 5);
+    HoodieSchema newFixed = HoodieSchema.createDecimal("decB", "ns2", null, 5, 2, 5);
     HiveDecimalWritable oldWritable = new HiveDecimalWritable(HiveDecimal.create("123.45"));
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, oldFixed, newFixed);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldFixed, newFixed);
     assertInstanceOf(HiveDecimalWritable.class, result);
     assertEquals(new BigDecimal("123.45"), ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
     validateRewriteWithAvro(oldWritable, oldFixed, result, newFixed);
@@ -265,59 +266,62 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   void testRewriteBooleanPassthrough() {
-    Schema boolSchema = Schema.create(Schema.Type.BOOLEAN);
+    HoodieSchema boolSchema = HoodieSchema.create(HoodieSchemaType.BOOLEAN);
     BooleanWritable bool = new BooleanWritable(true);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(bool, boolSchema, boolSchema);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(bool, boolSchema, boolSchema);
     assertSame(bool, result);
   }
 
   @Test
   void testUnsupportedRewriteMapToIntThrows() {
-    Schema oldSchema = Schema.createMap(Schema.create(Schema.Type.STRING));
-    Schema newSchema = Schema.create(Schema.Type.INT);
-    assertThrows(HoodieAvroSchemaException.class, () ->
-        HoodieArrayWritableAvroUtils.rewritePrimaryType(new Text("foo"), oldSchema, newSchema));
+    HoodieSchema oldSchema = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema newSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    assertThrows(HoodieSchemaException.class, () ->
+        HoodieArrayWritableSchemaUtils.rewritePrimaryType(new Text("foo"), oldSchema, newSchema));
   }
 
   @Test
   void testRewriteIntToDecimalFixed() throws AvroSerdeException {
-    Schema fixedDecimal = LogicalTypes.decimal(8, 2).addToSchema(Schema.createFixed("dec", null, null, 6));
+    HoodieSchema fixedDecimalSchema = HoodieSchema.createDecimal("dec", null, null, 8, 2, 5);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.INT);
     IntWritable oldWritable = new IntWritable(12345);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, Schema.create(Schema.Type.INT), fixedDecimal);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, fixedDecimalSchema);
     assertInstanceOf(HiveDecimalWritable.class, result);
     assertEquals(new BigDecimal("12345"), ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
-    validateRewriteWithAvro(oldWritable, Schema.create(Schema.Type.INT), result, fixedDecimal);
+    validateRewriteWithAvro(oldWritable, oldSchema, result, fixedDecimalSchema);
   }
 
   @Test
   void testRewriteDoubleToDecimalFixed() throws AvroSerdeException {
-    Schema fixedDecimal = LogicalTypes.decimal(10, 3).addToSchema(Schema.createFixed("dec", null, null, 8));
+    HoodieSchema fixedDecimal = HoodieSchema.createDecimal("dec", null, null, 10, 3, 8);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.DOUBLE);
     DoubleWritable oldWritable = new DoubleWritable(987.654);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, Schema.create(Schema.Type.DOUBLE), fixedDecimal);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, fixedDecimal);
     assertInstanceOf(HiveDecimalWritable.class, result);
     assertEquals(new BigDecimal("987.654"), ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
-    validateRewriteWithAvro(oldWritable, Schema.create(Schema.Type.DOUBLE), result, fixedDecimal);
+    validateRewriteWithAvro(oldWritable, oldSchema, result, fixedDecimal);
   }
 
   @Test
   void testRewriteDecimalBytesToFixed() throws AvroSerdeException {
-    Schema decimalSchema = LogicalTypes.decimal(6, 2).addToSchema(Schema.createFixed("dec", null, null, 6));
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal("dec", null, null, 6, 2, 6);
+    HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.BYTES);
     BigDecimal value = new BigDecimal("999.99");
     byte[] unscaledBytes = value.unscaledValue().toByteArray();
     BytesWritable oldWritable = new BytesWritable(unscaledBytes);
-    Writable result = HoodieArrayWritableAvroUtils.rewritePrimaryType(oldWritable, Schema.create(Schema.Type.BYTES), decimalSchema);
+    Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, decimalSchema);
     assertEquals(value, ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
-    validateRewriteWithAvro(oldWritable, Schema.create(Schema.Type.BYTES), result, decimalSchema);
+    validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
   }
 
   private void validateRewriteWithAvro(
       Writable oldWritable,
-      Schema oldSchema,
+      HoodieSchema oldSchema,
       Writable newWritable,
-      Schema newSchema
+      HoodieSchema newSchema
   ) throws AvroSerdeException {
-    TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema, Collections.emptySet());
-    TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema, Collections.emptySet());
+    TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema.toAvroSchema(), Collections.emptySet());
+    TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema.toAvroSchema(), Collections.emptySet());
 
     ObjectInspector oldObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(oldTypeInfo);
     ObjectInspector newObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(newTypeInfo);
@@ -326,30 +330,26 @@ public class TestHoodieArrayWritableAvroUtils {
     ObjectInspector writableOINew = getWritableOIForType(newTypeInfo);
 
     Object javaInput = ObjectInspectorConverters.getConverter(writableOIOld, oldObjectInspector).convert(oldWritable);
-    if (isDecimalSchema(oldSchema)) {
-      javaInput = HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(getDecimalValue(javaInput, oldSchema), oldSchema, oldSchema.getLogicalType());
+    if (oldSchema.getType() == HoodieSchemaType.DECIMAL) {
+      javaInput = HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(getDecimalValue(javaInput, (HoodieSchema.Decimal) oldSchema), oldSchema.toAvroSchema(), oldSchema.toAvroSchema().getLogicalType());
     } else if (javaInput instanceof byte[]) {
       javaInput = ByteBuffer.wrap((byte[]) javaInput);
     }
-    Object javaOutput = HoodieAvroUtils.rewritePrimaryType(javaInput, oldSchema, newSchema);
+    Object javaOutput = HoodieAvroUtils.rewritePrimaryType(javaInput, oldSchema.toAvroSchema(), newSchema.toAvroSchema());
     Object javaExpected = ObjectInspectorConverters.getConverter(writableOINew, newObjectInspector).convert(newWritable);
 
-    if (isDecimalSchema(newSchema)) {
-      BigDecimal outputDecimal = getDecimalValue(javaOutput, newSchema);
-      BigDecimal expectedDecimal = getDecimalValue(javaExpected, newSchema);
+    if (newSchema.getType() == HoodieSchemaType.DECIMAL) {
+      BigDecimal outputDecimal = getDecimalValue(javaOutput, (HoodieSchema.Decimal) newSchema);
+      BigDecimal expectedDecimal = getDecimalValue(javaExpected, (HoodieSchema.Decimal) newSchema);
       assertEquals(0, outputDecimal.compareTo(expectedDecimal));
-    } else if (newSchema.getLogicalType() instanceof LogicalTypes.Date) {
+    } else if (newSchema.getType() == HoodieSchemaType.DATE) {
       assertEquals(HoodieAvroUtils.toJavaDate((int) javaOutput), javaExpected);
     } else {
       assertEquals(javaOutput, javaExpected);
     }
   }
 
-  private boolean isDecimalSchema(Schema schema) {
-    return schema.getLogicalType() instanceof LogicalTypes.Decimal;
-  }
-
-  private BigDecimal getDecimalValue(Object value, Schema decimalSchema) {
+  private BigDecimal getDecimalValue(Object value, HoodieSchema.Decimal decimalSchema) {
     if (value instanceof HiveDecimal) {
       return ((HiveDecimal) value).bigDecimalValue();
     } else if (value instanceof HiveDecimalWritable) {
@@ -357,12 +357,10 @@ public class TestHoodieArrayWritableAvroUtils {
     } else if (value instanceof BigDecimal) {
       return (BigDecimal) value;
     } else if (value instanceof byte[]) {
-      int scale = ((LogicalTypes.Decimal) decimalSchema.getLogicalType()).getScale();
-      return new BigDecimal(new BigInteger((byte[]) value), scale);
+      return new BigDecimal(new BigInteger((byte[]) value), decimalSchema.getScale());
     } else if (value instanceof GenericData.Fixed) {
-      int scale = ((LogicalTypes.Decimal) decimalSchema.getLogicalType()).getScale();
       byte[] bytes = ((GenericData.Fixed) value).bytes();
-      return new BigDecimal(new BigInteger(bytes), scale);
+      return new BigDecimal(new BigInteger(bytes), decimalSchema.getScale());
     }
     throw new IllegalArgumentException("Unsupported decimal object: " + value.getClass() + " -> " + value);
   }

@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.avro.AvroSchemaCompatibility;
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -51,6 +48,10 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -97,7 +98,6 @@ import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -117,7 +117,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -927,13 +926,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
-      Option<Schema> existingTableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
-      if (!existingTableSchema.isPresent()) {
+      Option<HoodieSchema> existingTableSchemaOpt = schemaResolver.getTableSchemaIfPresent(false);
+      if (existingTableSchemaOpt.isEmpty()) {
         return;
       }
-      Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(existingTableSchema.get());
-      AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
+
+      HoodieSchema writerSchema = HoodieSchemaUtils.createHoodieWriteSchema(config.getSchema(), false);
+      HoodieSchema tableSchema = HoodieSchemaUtils.addMetadataFields(existingTableSchemaOpt.get());
+      HoodieSchemaCompatibility.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
       
       // Check secondary index column compatibility
       Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
@@ -956,8 +956,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws SchemaCompatibilityException if a secondary index column has incompatible evolution
    */
   static void validateSecondaryIndexSchemaEvolution(
-      Schema tableSchema,
-      Schema writerSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema writerSchema,
       HoodieIndexMetadata indexMetadata) throws SchemaCompatibilityException {
     
     // Filter for secondary index definitions
@@ -984,21 +984,25 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     for (Map.Entry<String, String> entry : columnToIndexName.entrySet()) {
       String columnName = entry.getKey();
       String indexName = entry.getValue();
+
+      Option<HoodieSchemaField> tableFieldOpt = tableSchema.getField(columnName);
       
-      Schema.Field tableField = tableSchema.getField(columnName);
-      
-      if (tableField == null) {
+      if (tableFieldOpt.isEmpty()) {
         // This shouldn't happen as indexed columns should exist in table schema
         log.warn("Secondary index '{}' references non-existent column: {}", indexName, columnName);
         continue;
       }
-      
+
+      HoodieSchemaField tableField = tableFieldOpt.get();
+
       // Use AvroSchemaCompatibility's field lookup logic to handle aliases
-      Schema.Field writerField = AvroSchemaCompatibility.lookupWriterField(writerSchema, tableField);
+      HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, tableField);
       
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {
         // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
-        if (getNonNullTypeFromUnion(tableField.schema()).equals(getNonNullTypeFromUnion(writerField.schema()))) {
+        HoodieSchema nonNullTableField = tableField.schema().getNonNullType();
+        HoodieSchema nonNullWriterField = writerField.schema().getNonNullType();
+        if (nonNullTableField.equals(nonNullWriterField)) {
           continue;
         }
         

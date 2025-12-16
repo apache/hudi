@@ -53,8 +53,8 @@ class TestHoodieAvroReaderContext {
   private static final HoodieSchema LIMITED_SKELETON_SCHEMA = getLimitedSkeletonSchema();
   private static final HoodieSchema BASE_SCHEMA = getBaseSchema();
   private static final HoodieSchema LIMITED_BASE_SCHEMA = getLimitedBaseSchema();
-  private static final Schema FULL_MERGED_SCHEMA = AvroSchemaUtils.mergeSchemas(SKELETON_SCHEMA.toAvroSchema(), BASE_SCHEMA.toAvroSchema());
-  private static final Schema LIMTIED_MERGED_SCHEMA = AvroSchemaUtils.mergeSchemas(LIMITED_SKELETON_SCHEMA.toAvroSchema(), LIMITED_BASE_SCHEMA.toAvroSchema());
+  private static final HoodieSchema FULL_MERGED_SCHEMA = HoodieSchemaUtils.mergeSchemas(SKELETON_SCHEMA, BASE_SCHEMA);
+  private static final HoodieSchema LIMITED_MERGED_SCHEMA = HoodieSchemaUtils.mergeSchemas(LIMITED_SKELETON_SCHEMA, LIMITED_BASE_SCHEMA);
 
   private final StorageConfiguration<?> storageConfig = mock(StorageConfiguration.class);
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
@@ -308,9 +308,9 @@ class TestHoodieAvroReaderContext {
 
   private IndexedRecord createFullMergedRecord(String skeletonField1, String skeletonField2, int skeletonField3,
                                             String baseField1, String baseField2, double baseField3) {
-    GenericRecord nested = new GenericData.Record(FULL_MERGED_SCHEMA.getFields().get(5).schema());
+    GenericRecord nested = new GenericData.Record(FULL_MERGED_SCHEMA.getFields().get(5).schema().toAvroSchema());
     nested.put(0, baseField3);
-    GenericRecord record = new GenericData.Record(FULL_MERGED_SCHEMA);
+    GenericRecord record = new GenericData.Record(FULL_MERGED_SCHEMA.toAvroSchema());
     record.put(0, skeletonField1);
     record.put(1, skeletonField2);
     record.put(2, skeletonField3);
@@ -321,9 +321,9 @@ class TestHoodieAvroReaderContext {
   }
 
   private IndexedRecord createLimitedMergedRecord(String skeletonField2, String baseField1, double baseField3) {
-    GenericRecord nested = new GenericData.Record(LIMTIED_MERGED_SCHEMA.getFields().get(2).schema());
+    GenericRecord nested = new GenericData.Record(LIMITED_MERGED_SCHEMA.getFields().get(2).schema().toAvroSchema());
     nested.put(0, baseField3);
-    GenericRecord record = new GenericData.Record(LIMTIED_MERGED_SCHEMA);
+    GenericRecord record = new GenericData.Record(LIMITED_MERGED_SCHEMA.toAvroSchema());
     record.put(0, skeletonField2);
     record.put(1, baseField1);
     record.put(2, nested);

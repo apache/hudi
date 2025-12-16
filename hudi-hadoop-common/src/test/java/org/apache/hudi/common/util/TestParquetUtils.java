@@ -26,6 +26,9 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -63,7 +66,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -249,16 +251,16 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     String recordKeyField = "id";
     String partitionPathField = "partition";
     String dataField = "data";
-    Schema schema = getSchema(recordKeyField, partitionPathField, dataField);
+    HoodieSchema schema = getSchema(recordKeyField, partitionPathField, dataField);
 
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(1000, 0.0001, 10000, BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, Option.of(filter), new Properties());
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema.toAvroSchema(), Option.of(filter), new Properties());
     try (ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE)) {
       valueList.forEach(entry -> {
-        GenericRecord rec = new GenericData.Record(schema);
+        GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
         rec.put(recordKeyField, entry.getLeft().getLeft());
         rec.put(partitionPathField, partitionPath);
         if (entry.getRight()) {
@@ -294,21 +296,20 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         fileName, partitionPathField, partitionPath, partitionPath, 0, totalCount);
   }
 
-  private Schema getSchema(String recordKeyField, String partitionPathField, String dataField) {
-    List<Schema.Field> toBeAddedFields = new ArrayList<>();
-    Schema recordSchema = Schema.createRecord("HoodieRecord", "", "", false);
+  private HoodieSchema getSchema(String recordKeyField, String partitionPathField, String dataField) {
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>();
 
-    Schema.Field recordKeySchemaField =
-        new Schema.Field(recordKeyField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
-    Schema.Field partitionPathSchemaField =
-        new Schema.Field(partitionPathField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
-    Schema.Field dataSchemaField =
-        new Schema.Field(dataField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE);
+    HoodieSchemaField recordKeySchemaField =
+        HoodieSchemaField.of(recordKeyField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField partitionPathSchemaField =
+        HoodieSchemaField.of(partitionPathField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField dataSchemaField =
+        HoodieSchemaField.of(dataField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE);
 
     toBeAddedFields.add(recordKeySchemaField);
     toBeAddedFields.add(partitionPathSchemaField);
     toBeAddedFields.add(dataSchemaField);
-    recordSchema.setFields(toBeAddedFields);
+    HoodieSchema recordSchema = HoodieSchema.createRecord("HoodieRecord", "", "", false, toBeAddedFields);
     return recordSchema;
   }
 
@@ -478,24 +479,23 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
   private void writeParquetFileWithExtendedSchema(String filePath, List<String> rowKeys) throws Exception {
     // Create an extended schema with an additional field
-    Schema extendedSchema = Schema.createRecord("record", "", "", false);
-    List<Schema.Field> fields = new ArrayList<>();
-    fields.add(new Schema.Field("_row_key", Schema.create(Schema.Type.STRING), "", (Object) null));
-    fields.add(new Schema.Field("time", Schema.create(Schema.Type.LONG), "", (Object) null));
-    fields.add(new Schema.Field("number", Schema.create(Schema.Type.LONG), "", (Object) null));
-    fields.add(new Schema.Field("extra_field", createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE)); // Additional field
-    extendedSchema.setFields(fields);
+    List<HoodieSchemaField> fields = new ArrayList<>();
+    fields.add(HoodieSchemaField.of("_row_key", HoodieSchema.create(HoodieSchemaType.STRING), "", (Object) null));
+    fields.add(HoodieSchemaField.of("time", HoodieSchema.create(HoodieSchemaType.LONG), "", (Object) null));
+    fields.add(HoodieSchemaField.of("number", HoodieSchema.create(HoodieSchemaType.LONG), "", (Object) null));
+    fields.add(HoodieSchemaField.of("extra_field", HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE)); // Additional field
+    HoodieSchema extendedSchema = HoodieSchema.createRecord("record", "", "", false, fields);
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1, BloomFilterTypeCode.SIMPLE.name());
 
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(extendedSchema), extendedSchema, Option.of(filter), new Properties());
+        new AvroSchemaConverter().convert(extendedSchema.toAvroSchema()), extendedSchema.toAvroSchema(), Option.of(filter), new Properties());
 
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
 
     for (String rowKey : rowKeys) {
-      GenericRecord record = new GenericData.Record(extendedSchema);
+      GenericRecord record = new GenericData.Record(extendedSchema.toAvroSchema());
       record.put("_row_key", rowKey);
       record.put("time", 1234567L);
       record.put("number", 12345L);
