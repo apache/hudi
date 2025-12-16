@@ -22,11 +22,13 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
@@ -223,8 +225,8 @@ public class TestRecordLevelIndex {
     RowType rowType = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
     List<String> result = RecordLevelIndex.computeHoodieKeyFromFilters(
         conf, metaClient, ExpressionEvaluators.fromExpression(expressions), recordKeyFields, rowType, consistentLogicalTimestampEnabled);
-    String expectedTimestamp = consistentLogicalTimestampEnabled ? "1970-01-01T00:00:00.001" : "-28799999";
-    assertEquals(Arrays.asList("f_timestamp:" + expectedTimestamp + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + "f_decimal:1.10"), result,
+    String expectedTimestampVal = RowDataKeyGen.getRecordKey(TimestampData.fromEpochMillis(1), "f_timestamp", consistentLogicalTimestampEnabled);
+    assertEquals(Arrays.asList("f_timestamp:" + expectedTimestampVal + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + "f_decimal:1.10"), result,
         "Should return composite key with complex record keys");
   }
 
