@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.common.config;
 
 import org.apache.hudi.storage.StorageConfiguration;
 

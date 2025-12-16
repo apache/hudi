@@ -17,12 +17,32 @@
  * under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.io.hadoop;
 
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.io.SeekableDataInputStream;
 
-public class HoodieSchemaNotFoundException extends HoodieSchemaException {
-  public HoodieSchemaNotFoundException(String message) {
-    super(message);
+import org.apache.hadoop.fs.FSDataInputStream;
+
+import java.io.IOException;
+
+/**
+ * An implementation of {@link SeekableDataInputStream} based on Hadoop's {@link FSDataInputStream}
+ */
+public class HadoopSeekableDataInputStream extends SeekableDataInputStream {
+  private final FSDataInputStream stream;
+
+  public HadoopSeekableDataInputStream(FSDataInputStream stream) {
+    super(stream);
+    this.stream = stream;
+  }
+
+  @Override
+  public long getPos() throws IOException {
+    return stream.getPos();
+  }
+
+  @Override
+  public void seek(long pos) throws IOException {
+    stream.seek(pos);
   }
 }

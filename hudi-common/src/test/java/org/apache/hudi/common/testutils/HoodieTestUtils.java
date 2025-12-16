@@ -68,6 +68,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
 
+import javax.annotation.Nonnull;
+
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -532,5 +534,18 @@ public class HoodieTestUtils {
     });
     nonExistentConfigs.forEach(key -> assertFalse(
         tableConfig.contains(key), key + " should not be present in the table config"));
+  }
+
+  /**
+   * Fetches inner-most cause of the provided {@link Throwable}
+   */
+  @Nonnull
+  public static Throwable getRootCause(@Nonnull Throwable t) {
+    Throwable cause = t;
+    while (cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+
+    return cause;
   }
 }

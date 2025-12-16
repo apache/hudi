@@ -17,21 +17,12 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table;
+package org.apache.hudi.exception;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.schema.MessageType;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
-import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
-
-public class ParquetTableSchemaResolver extends TableSchemaResolver {
-
-  public ParquetTableSchemaResolver(HoodieTableMetaClient metaClient) {
-    super(metaClient);
-  }
-
-  public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
-    return getAvroSchemaConverter(hadoopConf).convert(schema);
+public class HoodieSchemaNotFoundException extends HoodieSchemaException {
+  public HoodieSchemaNotFoundException(String message) {
+    super(message);
   }
 }
