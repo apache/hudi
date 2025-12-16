@@ -116,7 +116,7 @@ abstract class AbstractHoodieSplitEnumerator
 
   @Override
   public HoodieSplitEnumeratorState snapshotState(long checkpointId) throws Exception {
-    return new HoodieSplitEnumeratorState(splitProvider.state(), null, null);
+    return new HoodieSplitEnumeratorState(splitProvider.state(), Option.empty(), Option.empty());
   }
 
   @Override

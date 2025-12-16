@@ -194,25 +194,6 @@ public class TestHoodieContinuousSplitEnumerator {
   }
 
   @Test
-  public void testProcessDiscoveredSplitsWithMismatchedInstant() {
-    // Set up enumerator with different start instant
-    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        Collections.emptyList(), Option.of("20231201060000000"), Option.of("20231201060001000"));
-
-    splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
-        Arrays.asList(split1, split2), "20231201000000000", "20231201060001000"));
-
-    enumerator = new HoodieContinuousSplitEnumerator(
-        context, splitProvider, splitDiscover, scanContext, Option.of(state));
-    enumerator.start();
-    context.executeAsyncCallbacks();
-
-    // Splits should not be added due to instant mismatch
-    assertEquals(0, splitProvider.pendingSplitCount(),
-        "Should skip splits when instant doesn't match");
-  }
-
-  @Test
   public void testProcessDiscoveredSplitsWithEmptyResult() {
     splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
         Collections.emptyList(), "20231201000000000", "20231201120000000"));

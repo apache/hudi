@@ -29,7 +29,6 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -65,7 +64,9 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     if (enumStateOpt.isPresent()) {
       this.position.set(HoodieEnumeratorPosition.of(enumStateOpt.get().getLastEnumeratedInstant(), enumStateOpt.get().getLastEnumeratedInstantOffset()));
     } else {
-      this.position.set(HoodieEnumeratorPosition.of(scanContext.getStartInstant(), scanContext.getStartInstant()));
+      // We need to set the instantOffset as null for the first read. For first read, the start instant is inclusive,
+      // while for continuous incremental read, the start instant is exclusive.
+      this.position.set(HoodieEnumeratorPosition.of(Option.empty(), Option.empty()));
     }
   }
 
@@ -105,29 +106,21 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       throw new RuntimeException("Failed to discover new splits", throwable);
     }
 
-    if (Objects.equals(result.getFromInstant(), position.get().issuedOffset().get())) {
-      if (!result.getSplits().isEmpty()) {
-        splitProvider.onDiscoveredSplits(result.getSplits());
-        LOG.info(
-            "Added {} splits discovered between ({}, {}] to the assigner",
-            result.getSplits().size(),
-            result.getFromInstant(),
-            result.getToInstant());
-      } else {
-        LOG.info(
-            "No new splits discovered between ({}, {}]",
-            result.getFromInstant(),
-            result.getToInstant());
-      }
-      position.set(HoodieEnumeratorPosition.of(result.getFromInstant(), result.getToInstant()));
-      LOG.info("Update enumerator position to {}", position.get());
-    } else {
-      LOG.info(
-          "Skip {} discovered splits because the scan starting position doesn't match "
-              + "the current enumerator position: enumerator position = {}, scan starting position = {}",
+    if (!result.getSplits().isEmpty()) {
+      splitProvider.onDiscoveredSplits(result.getSplits());
+      LOG.debug(
+          "Added {} splits discovered between ({}, {}] to the assigner",
           result.getSplits().size(),
           position.get().issuedOffset(),
-          result.getFromInstant());
+          result.getOffset());
+    } else {
+      LOG.debug(
+          "No new splits discovered between ({}, {}]",
+          position.get().issuedOffset(),
+          result.getOffset());
     }
+    position.set(HoodieEnumeratorPosition.of(result.getEndInstant(), result.getOffset()));
+    LOG.info("Update enumerator position to {}", position.get());
   }
+
 }

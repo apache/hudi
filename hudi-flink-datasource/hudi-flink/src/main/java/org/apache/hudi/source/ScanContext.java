@@ -36,8 +36,8 @@ public class ScanContext implements Serializable {
   private final Configuration conf;
   private final Path path;
   private final RowType rowType;
-  private final String startInstant;
-  private final String endInstant;
+  private final String startCommit;
+  private final String endCommit;
   private final long maxCompactionMemoryInBytes;
   // max pending splits that are not assigned in split provider
   private final long maxPendingSplits;
@@ -54,8 +54,8 @@ public class ScanContext implements Serializable {
       Configuration conf,
       Path path,
       RowType rowType,
-      String startInstant,
-      String endInstant,
+      String startCommit,
+      String endCommit,
       long maxCompactionMemoryInBytes,
       long maxPendingSplits,
       boolean skipCompaction,
@@ -65,8 +65,8 @@ public class ScanContext implements Serializable {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
-    this.startInstant = startInstant;
-    this.endInstant = endInstant;
+    this.startCommit = startCommit;
+    this.endCommit = endCommit;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.maxPendingSplits = maxPendingSplits;
     this.skipCompaction = skipCompaction;
@@ -87,12 +87,12 @@ public class ScanContext implements Serializable {
     return rowType;
   }
 
-  public String getStartInstant() {
-    return startInstant;
+  public String getStartCommit() {
+    return startCommit;
   }
 
-  public String getEndInstant() {
-    return endInstant;
+  public String getEndCommit() {
+    return endCommit;
   }
 
   public long getMaxCompactionMemoryInBytes() {

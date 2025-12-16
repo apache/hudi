@@ -589,9 +589,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
 
     assertNotNull(result, "Result should not be null");
     assertNotNull(result.getSplits(), "Splits should not be null");
-    assertEquals(firstInstant.getCompletionTime(), result.getFromInstant(),
-        "From instant should match");
-    assertNotNull(result.getToInstant(), "To instant should not be null");
+    assertNotNull(result.getOffset(), "To instant should not be null");
   }
 
   @Test

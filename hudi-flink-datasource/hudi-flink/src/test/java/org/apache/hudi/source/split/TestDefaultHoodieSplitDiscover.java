@@ -35,7 +35,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -101,7 +100,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
 
     assertNotNull(result, "Result should not be null");
     assertNotNull(result.getSplits(), "Splits should not be null");
-    assertNotNull(result.getToInstant(), "To instant should not be null");
+    assertNotNull(result.getOffset(), "To instant should not be null");
   }
 
   @Test
@@ -170,9 +169,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     HoodieContinuousSplitBatch result = discover.discoverSplits(firstCompletionTime);
 
     assertNotNull(result, "Result should not be null");
-    assertEquals(firstCompletionTime, result.getFromInstant(),
-        "From instant should match the provided instant");
-    assertNotNull(result.getToInstant(), "To instant should not be null");
+    assertNotNull(result.getOffset(), "To instant should not be null");
   }
 
   @Test
@@ -191,7 +188,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
         scanContext, metaClient);
 
-    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartInstant());
+    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartCommit());
 
     assertNotNull(result, "Result should not be null");
     assertNotNull(result.getSplits(), "Splits should not be null");

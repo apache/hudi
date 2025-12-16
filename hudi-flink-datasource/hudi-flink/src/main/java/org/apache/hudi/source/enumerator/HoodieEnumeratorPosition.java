@@ -24,11 +24,16 @@ import org.apache.hudi.common.util.StringUtils;
 import java.io.Serializable;
 import java.util.Objects;
 
-/***
- * The position of {@link HoodieContinuousSplitEnumerator}.
+/**
+ * The position of {@link HoodieContinuousSplitEnumerator}. The completionTime notion which is introduced in incremental
+ * read mainly for scenarios of “hollow” instants: instants start very early but finished long time after, the completion
+ * time based inc query gives clear semantics of the consumption boundaries. The instantTime is from legacy readers and
+ * now just used for logging purposes.
  */
 public class HoodieEnumeratorPosition implements Serializable {
+  // Max instant time consumed
   private final Option<String> issuedInstant;
+  // Max completion time
   private final Option<String> issuedOffset;
 
   static HoodieEnumeratorPosition empty() {

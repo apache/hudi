@@ -86,7 +86,7 @@ public class TestScanContext {
         TestConfigurations.ROW_TYPE, expectedInstant, 100 * 1024 * 1024,
         1000, false, false, false, false);
 
-    assertEquals(expectedInstant, scanContext.getStartInstant(),
+    assertEquals(expectedInstant, scanContext.getStartCommit(),
         "Start instant should match");
   }
 
@@ -219,7 +219,7 @@ public class TestScanContext {
         maxPendingSplits, true, true, true, true);
 
     assertEquals(path, scanContext.getPath());
-    assertEquals(startInstant, scanContext.getStartInstant());
+    assertEquals(startInstant, scanContext.getStartCommit());
     assertEquals(maxCompactionMemory, scanContext.getMaxCompactionMemoryInBytes());
     assertEquals(maxPendingSplits, scanContext.getMaxPendingSplits());
     assertTrue(scanContext.skipCompaction());
