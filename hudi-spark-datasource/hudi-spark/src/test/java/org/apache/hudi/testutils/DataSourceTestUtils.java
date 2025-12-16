@@ -184,11 +184,6 @@ public class DataSourceTestUtils {
     return true;
   }
 
-  public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
-    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-        .getLatestCompletionTime().orElse(null);
-  }
-
   public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {
     return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
         .getLatestCompletionTime().orElse(null);

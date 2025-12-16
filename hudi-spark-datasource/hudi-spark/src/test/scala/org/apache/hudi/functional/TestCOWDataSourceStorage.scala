@@ -30,8 +30,9 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
@@ -96,7 +97,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       options += TIMESTAMP_OUTPUT_DATE_FORMAT.key -> "yyyyMMdd"
     }
     val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
@@ -106,8 +107,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val completionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val completionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
     // Snapshot query
     val snapshotDF1 = spark.read.format("org.apache.hudi")
@@ -137,7 +138,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val completionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
+    val completionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val snapshotDF2 = spark.read.format("hudi")
       .options(readOptions)
       .load(basePath)

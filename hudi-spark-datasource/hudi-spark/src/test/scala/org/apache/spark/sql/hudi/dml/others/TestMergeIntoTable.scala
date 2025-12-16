@@ -25,7 +25,8 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -1031,8 +1032,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           checkAnswer(s"select id, name, price, _ts from $targetTable")(
             Seq(1, "a1", 10, 1000)
           )
-          val fs = HadoopFSUtils.getFs(targetBasePath, spark.sessionState.newHadoopConf())
-          val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
+          val storage = HoodieTestUtils.getStorage(new StoragePath(targetBasePath))
+          val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, targetBasePath)
 
           // Second merge
           spark.sql(s"update $sourceTable set price = 12, _ts = 1001 where id = 1")
@@ -1046,7 +1047,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           checkAnswer(s"select id, name, price, _ts from $targetTable")(
             Seq(1, "a1", 12, 1001)
           )
-          val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
+          val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, targetBasePath)
           // Test incremental query
           val hudiIncDF1 = spark.read.format("org.apache.hudi")
             .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
