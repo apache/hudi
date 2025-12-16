@@ -116,6 +116,22 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
+  // Max number of seconds before compaction occurs
+  public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
+      .key(METADATA_PREFIX + ".compact.inline.max.delta.seconds")
+      .defaultValue(String.valueOf(60 * 60 ))
+      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a "
+      + "new one (for metadata table). "
+      + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
+      + "i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.");
+
+  // Compaction trigger strategy
+  public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
+      .key(METADATA_PREFIX +  ".compact.inline.trigger.strategy")
+      .defaultValue("NUM_COMMITS")
+      .withDocumentation("Controls how compaction scheduling is triggered for metadata table,"
+      + "by time or num delta commits or combination of both. ");
+
   public static final ConfigProperty<String> ENABLE_LOG_COMPACTION_ON_METADATA_TABLE = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.enable")
       .defaultValue("false")

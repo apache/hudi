@@ -75,6 +75,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.util.Lazy;
 
@@ -219,6 +220,8 @@ public class HoodieMetadataWriteUtils {
             .withLogCompactionEnabled(writeConfig.isLogCompactionEnabledOnMetadata())
             // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
+            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.valueOf(writeConfig.getMetadataInlineCompactionTriggerStrategy()))
+            .withMaxDeltaSecondsBeforeCompaction(writeConfig.getMetadataMaxDeltaSecondsBeforeCompaction())
             .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MDT_MAX_HFILE_SIZE_BYTES)
             .logFileMaxSize(maxLogFileSizeBytes)
