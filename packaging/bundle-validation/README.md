@@ -67,12 +67,12 @@ cd azure
 ./build.sh
 ```
 
-This builds and tags the image as `apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2`.
+This builds and tags the image as `apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_java11`.
 
 To push the image to Docker Hub (only from a few PMCs with permissions):
 
 ```shell
-docker push apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2
+docker push apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_java11
 ```
 
 ## Running Bundle Validation on a Release Candidate
