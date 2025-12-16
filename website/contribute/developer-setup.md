@@ -16,64 +16,16 @@ To contribute code, you need
  - for large contributions, a signed [Individual Contributor License Agreement](https://www.apache.org/licenses/icla.pdf) (ICLA) to the Apache Software Foundation (ASF).
  - (Recommended) Join our dev mailing list & slack channel, listed on [community](/community/get-involved) page.
 
+## Default Build Profiles
 
-## IntelliJ Setup
+The following table summarizes the default build profiles and versions used by the Apache Hudi project.
 
-IntelliJ is the recommended IDE for developing Hudi. To contribute, you would need to do the following
- 
-- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide).
-
-- In IntelliJ, select `File` > `New` > `Project from Existing Sources...` and select the `pom.xml` file under your local Hudi source folder.
-
-- In `Project Structure`, select Java 1.8 as the Project SDK.
-
-  ![IDE setup java](/assets/images/contributing/IDE_setup_java.png)
-
-- Make the following configuration in `Preferences` or `Settings` in newer IntelliJ so the Hudi code can compile in the IDE:
-  * Enable annotation processing in compiler.
-
-    ![IDE setup annotation processing](/assets/images/contributing/IDE_setup_annotation.png)
-  * Configure Maven *NOT* to delegate IDE build/run actions to Maven so you can run tests in IntelliJ directly.
-
-    ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
-    ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
-
-- If you switch maven build profile, e.g., from Spark 3.4 to Spark 3.5, you need to first build Hudi in the command line first and `Reload All Maven Projects` in IntelliJ like below,
-so that IntelliJ re-indexes the code.
-
-   ![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
-
-- \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
-    * Open `Settings` in IntelliJ
-    * Install and activate CheckStyle plugin
-
-      ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
-    * In `Settings` > `Tools` > `Checkstyle`, use a recent version, e.g., 12.1.0
-
-      ![IDE_setup_checkstyle_2](/assets/images/contributing/IDE_setup_checkstyle_2.png)
-    * Click on `+`, add the style/checkstyle.xml file, and name the configuration as "Hudi Checks"
-
-      ![IDE_setup_checkstyle_3](/assets/images/contributing/IDE_setup_checkstyle_3.png)
-    * Activate the checkstyle configuration by checking `Active`
-
-      ![IDE_setup_checkstyle_4](/assets/images/contributing/IDE_setup_checkstyle_4.png)
-    * Open `Settings` > `Editor` > `Code Style` > `Java`
-    * Select "Project" as the "Scheme".  Then, go to the settings, open `Import Scheme` > `CheckStyle Configuration`, select `style/checkstyle.xml` to load
-
-      ![IDE_setup_code_style_java_before](/assets/images/contributing/IDE_setup_code_style_java_before.png)
-    * After loading the configuration, you should see that the `Indent` and `Continuation indent` become 2 and 4, from 4 and 8, respectively
-
-      ![IDE_setup_code_style_java_after](/assets/images/contributing/IDE_setup_code_style_java_after.png)
-    * Apply/Save the changes
-- \[Recommended\] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
-
-- \[Recommended\] As it is required to add [Apache License header](https://www.apache.org/legal/src-headers#headers) to all source files, configuring "Copyright" settings as shown below will come in handy.
-
-![IDE setup copyright 1](/assets/images/contributing/IDE_setup_copyright_1.png)
-
-
-
-![IDE setup copyright 2](/assets/images/contributing/IDE_setup_copyright_2.png)
+| Component | Default Profile / Version | Notes |
+|----------|--------------------------|-------|
+| Spark    | 3.5                      | Default Spark 3 build profile |
+| Scala    | 2.12                     | Default Scala version for Spark builds |
+| Java     | 11                       | Recommended and CI-aligned Java version |
+| Flink    | 1.20                     | Default Flink streaming profile |
 
 
 ## Useful Maven commands for developers. 
@@ -158,6 +110,60 @@ Use `alt use` to use v1 version of docker-compose while running integration test
 ## Code WalkThrough
 
 This Quick Video will give a code walkthrough to start with [watch](https://www.youtube.com/watch?v=N2eDfU_rQ_U).
+
+
+## IntelliJ Setup
+
+IntelliJ is the recommended IDE for developing Hudi. To contribute, you would need to do the following
+ 
+- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide).
+
+- In IntelliJ, select `File` > `New` > `Project from Existing Sources...` and select the `pom.xml` file under your local Hudi source folder.
+
+- In `Project Structure`, select Java 1.8 as the Project SDK.
+
+  ![IDE setup java](/assets/images/contributing/IDE_setup_java.png)
+
+- Make the following configuration in `Preferences` or `Settings` in newer IntelliJ so the Hudi code can compile in the IDE:
+  * Enable annotation processing in compiler.
+
+    ![IDE setup annotation processing](/assets/images/contributing/IDE_setup_annotation.png)
+  * Configure Maven *NOT* to delegate IDE build/run actions to Maven so you can run tests in IntelliJ directly.
+
+    ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
+    ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
+
+- If you switch maven build profile, e.g., from Spark 3.4 to Spark 3.5, you need to first build Hudi in the command line first and `Reload All Maven Projects` in IntelliJ like below,
+so that IntelliJ re-indexes the code.
+
+   ![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
+
+- \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
+    * Open `Settings` in IntelliJ
+    * Install and activate CheckStyle plugin
+
+      ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
+    * In `Settings` > `Tools` > `Checkstyle`, use a recent version, e.g., 12.1.0
+    * Click on `+`, add the style/checkstyle.xml file, and name the configuration as "Hudi Checks"
+
+      ![IDE_setup_checkstyle_3](/assets/images/contributing/IDE_setup_checkstyle_3.png)
+    * Activate the checkstyle configuration by checking `Active`
+    * Open `Settings` > `Editor` > `Code Style` > `Java`
+    * Select "Project" as the "Scheme".  Then, go to the settings, open `Import Scheme` > `CheckStyle Configuration`, select `style/checkstyle.xml` to load
+
+      ![IDE_setup_code_style_java_before](/assets/images/contributing/IDE_setup_code_style_java_before.png)
+    * After loading the configuration, you should see that the `Indent` and `Continuation indent` become 2 and 4, from 4 and 8, respectively
+    * Apply/Save the changes
+- \[Recommended\] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
+
+- \[Recommended\] As it is required to add [Apache License header](https://www.apache.org/legal/src-headers#headers) to all source files, configuring "Copyright" settings as shown below will come in handy.
+
+![IDE setup copyright 1](/assets/images/contributing/IDE_setup_copyright_1.png)
+
+
+
+![IDE setup copyright 2](/assets/images/contributing/IDE_setup_copyright_2.png)
+
 
 ## Running unit tests and local debugger via Intellij IDE
 
