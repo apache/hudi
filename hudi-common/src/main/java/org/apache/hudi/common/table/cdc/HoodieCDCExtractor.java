@@ -341,6 +341,20 @@ public class HoodieCDCExtractor {
               .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new StoragePath(partitionPath, logFile))
               .collect(Collectors.toList());
+          // get files list from unfinished compaction commit
+          List<StoragePath> filesToCompact = metaClient.getActiveTimeline().getInstants().stream().filter(
+                  i -> i.compareTo(instant) < 0 && !i.isCompleted() && i.getAction()
+                      .equals(HoodieActiveTimeline.COMPACTION_ACTION))
+              .flatMap(i -> {
+                try {
+                  return metaClient.getActiveTimeline().readCompactionPlan(i).getOperations()
+                      .stream()
+                      .flatMap(f -> f.getDeltaFilePaths().stream().map(logFile -> new StoragePath(partitionPath, logFile)));
+                } catch (IOException e) {
+                  throw new HoodieIOException("Failed to read a compaction plan on instant " + i, e);
+                }
+              }).collect(Collectors.toList());
+          logFilePaths.addAll(filesToCompact);
           List<HoodieLogFile> logFiles = storage.listDirectEntries(logFilePaths).stream()
               .map(HoodieLogFile::new).collect(Collectors.toList());
           return Option.of(new FileSlice(fgId, instant.requestedTime(), baseFile, logFiles));

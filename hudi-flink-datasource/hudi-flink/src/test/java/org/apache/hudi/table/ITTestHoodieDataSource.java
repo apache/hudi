@@ -1593,7 +1593,6 @@ public class ITTestHoodieDataSource {
     conf.set(FlinkOptions.TABLE_NAME, "t1");
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false); // calculate the changes on the fly
     conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);  // for batch upsert
     conf.set(FlinkOptions.CDC_ENABLED, true);
@@ -1609,7 +1608,6 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
-        .option(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false)
         .option(FlinkOptions.READ_CDC_FROM_CHANGELOG, false)
         .option(FlinkOptions.READ_START_COMMIT, latestCommit)
         .option(FlinkOptions.CDC_ENABLED, true)
@@ -1630,6 +1628,57 @@ public class ITTestHoodieDataSource {
     List<Row> result2 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery(query).execute().collect());
     assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
+  }
+
+  @Test
+  void  testChangelogCompactionSchedule() throws Exception {
+    TableEnvironment tableEnv = streamTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    // schedule compaction after 2 commits
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 2);
+    conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false); // calculate the changes on the fly
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);  // for batch upsert
+    conf.set(FlinkOptions.CDC_ENABLED, true);
+
+    // write 3 batches of the same data set
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 2)
+        .option(FlinkOptions.READ_CDC_FROM_CHANGELOG, false)
+        .option(FlinkOptions.READ_START_COMMIT, latestCommit)
+        .option(FlinkOptions.CDC_ENABLED, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    String secondCommit = TestUtils.getNthCompleteInstant(new StoragePath(tempFile.getAbsolutePath()), 1, HoodieTimeline.DELTA_COMMIT_ACTION);
+    String thirdCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+    final String query1 = String.format("select count(*) from t1/*+ options('read.start-commit'='%s')*/", firstCommit);
+    final String query2 = String.format("select count(*) from t1/*+ options('read.start-commit'='%s')*/", secondCommit);
+    final String query3 = String.format("select count(*) from t1/*+ options('read.start-commit'='%s')*/", thirdCommit);
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query1).execute().collect());
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query2).execute().collect());
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query3).execute().collect());
+    assertEquals(19, result1.size());
+    assertEquals(7, result2.size());
+    assertEquals(3, result3.size());
+    assertRowsEquals(result1.subList(result1.size() - 2, result1.size()), "[-U[1], +U[2]]");
+    assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-D[1], +I[1]]");
+    assertRowsEquals(result3.subList(result3.size() - 2, result3.size()), "[-D[1], +I[1]]");
   }
 
   @ParameterizedTest
