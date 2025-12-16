@@ -56,7 +56,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession, SQLContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
-import org.apache.spark.sql.avro.{HoodieSparkAvroSchemaConverters, HoodieSparkSchemaConverters}
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
