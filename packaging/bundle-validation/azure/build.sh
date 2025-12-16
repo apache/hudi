@@ -17,5 +17,5 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-docker build -t hudi-ci-bundle-validation-base:azure_ci_test_base_v2 .
-docker image tag hudi-ci-bundle-validation-base:azure_ci_test_base_v2 apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2
+docker build -t hudi-ci-bundle-validation-base:azure_ci_test_base_java11 .
+docker image tag hudi-ci-bundle-validation-base:azure_ci_test_base_java11 apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_java11
