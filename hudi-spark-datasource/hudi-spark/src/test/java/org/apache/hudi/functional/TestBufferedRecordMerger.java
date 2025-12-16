@@ -19,8 +19,8 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DefaultSparkRecordMerger;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -949,7 +949,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
       HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
       InternalRow row = bufferedRecord.getRecord();
-      StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema());
+      StructType sparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
       return new HoodieSparkRecord(hoodieKey, row, sparkSchema, false);
     }
 

@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema
+import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToDataType, convertStructTypeToHoodieSchema}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -484,7 +483,7 @@ object ExpressionPayload {
     avroDeserializerCache.get()
       .get(schema, new Function[Schema, HoodieAvroDeserializer] {
         override def apply(t: Schema): HoodieAvroDeserializer =
-          sparkAdapter.createAvroDeserializer(HoodieSchema.fromAvroSchema(schema), convertAvroSchemaToStructType(schema))
+          sparkAdapter.createAvroDeserializer(HoodieSchema.fromAvroSchema(schema), convertHoodieSchemaToDataType(HoodieSchema.fromAvroSchema(schema)))
       })
   }
 
@@ -492,7 +491,7 @@ object ExpressionPayload {
     avroSerializerCache.get()
       .get(schema, new Function[Schema, HoodieAvroSerializer] {
         override def apply(t: Schema): HoodieAvroSerializer =
-          sparkAdapter.createAvroSerializer(convertAvroSchemaToStructType(schema), HoodieSchema.fromAvroSchema(schema), isNullable(schema))
+          sparkAdapter.createAvroSerializer(convertHoodieSchemaToDataType(HoodieSchema.fromAvroSchema(schema)), HoodieSchema.fromAvroSchema(schema), isNullable(schema))
       })
   }
 

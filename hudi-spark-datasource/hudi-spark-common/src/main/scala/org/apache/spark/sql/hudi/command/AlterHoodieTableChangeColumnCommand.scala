@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, HoodieSchemaConversionUtils}
+import org.apache.hudi.HoodieSchemaConversionUtils
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
@@ -72,7 +72,7 @@ case class AlterHoodieTableChangeColumnCommand(
           field
         }
       })
-    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableIdentifier.table)
+    val (structName, nameSpace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableIdentifier.table)
     val newSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(newTableSchema, structName, nameSpace)
 
     // Validate the compatibility between new schema and origin schema.

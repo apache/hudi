@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -59,7 +59,7 @@ case class AlterHoodieTableAddColumnsCommand(tableId: TableIdentifier,
       // Get the new schema
       val rearrangedSchema = hoodieCatalogTable.dataSchema ++ colsToAdd ++ hoodieCatalogTable.partitionSchema
       val newSqlSchema = StructType(rearrangedSchema)
-      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
+      val (structName, nameSpace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableId.table)
       val newSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(newSqlSchema, structName, nameSpace)
 
       // Commit with new schema to change the table schema

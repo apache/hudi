@@ -622,4 +622,25 @@ public final class HoodieSchemaUtils {
   public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
     return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
   }
+
+  /**
+   * Gets the fully-qualified Avro record name for a Hudi table.
+   * This is equivalent to {@link AvroSchemaUtils#getAvroRecordQualifiedName(String)}
+   * but provides a HoodieSchema-context API.
+   *
+   * <p>The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
+   * where tableName is sanitized for Avro compatibility.</p>
+   *
+   * @param tableName the Hudi table name
+   * @return the fully-qualified Avro record name (e.g., "hoodie.my_table.my_table_record")
+   * @throws IllegalArgumentException if tableName is null or empty
+   * @since 1.2.0
+   */
+  public static String getRecordQualifiedName(String tableName) {
+    ValidationUtils.checkArgument(tableName != null && !tableName.trim().isEmpty(),
+        "Table name cannot be null or empty");
+
+    // Delegate to AvroSchemaUtils
+    return AvroSchemaUtils.getAvroRecordQualifiedName(tableName);
+  }
 }

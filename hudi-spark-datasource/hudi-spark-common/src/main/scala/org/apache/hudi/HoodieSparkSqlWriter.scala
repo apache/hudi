@@ -18,15 +18,14 @@
 package org.apache.hudi
 
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
-import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
 import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusValidator
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
+import org.apache.hudi.HoodieSchemaConversionUtils.{convertStructTypeToHoodieSchema, getRecordNameAndNamespace}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
 import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -366,11 +365,9 @@ class HoodieSparkSqlWriterInternal {
       //       play crucial role in establishing compatibility b/w schemas
       val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s =>
         (s.getName, toScalaOption(s.getNamespace).orNull(null)))
-        .getOrElse(getAvroRecordNameAndNamespace(tblName))
+        .getOrElse(getRecordNameAndNamespace(tblName))
 
-      val sourceSchema = HoodieSchema.fromAvroSchema(
-        convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      )
+      val sourceSchema = convertStructTypeToHoodieSchema(df.schema, avroRecordName, avroRecordNamespace)
       val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
@@ -721,8 +718,8 @@ class HoodieSparkSqlWriterInternal {
 
     var schema: String = null
     if (df.schema.nonEmpty) {
-      val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-      schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, namespace).toString
+      val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
+      schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema, structName, namespace).toString
     } else {
       schema = HoodieAvroUtils.getNullSchema.toString
     }

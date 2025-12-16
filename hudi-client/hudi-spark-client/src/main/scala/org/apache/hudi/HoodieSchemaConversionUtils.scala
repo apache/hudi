@@ -20,11 +20,13 @@ package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils}
 import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConverters._
 
@@ -211,5 +213,45 @@ object HoodieSchemaConversionUtils {
     record => deserializer
       .deserialize(record)
       .map(_.asInstanceOf[InternalRow])
+  }
+
+  /**
+   * Gets the fully-qualified Avro record name and namespace for a Hudi table
+   * This delegates to [[HoodieSchemaUtils.getRecordQualifiedName]] which in turn
+   * delegates to [[AvroSchemaUtils.getAvroRecordQualifiedName]].
+   *
+   * The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
+   * where tableName is sanitized for Avro compatibility.
+   *
+   * @param tableName the Hudi table name
+   */
+  def getRecordNameAndNamespace(tableName: String): (String, String) = {
+    val qualifiedName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
+    val nameParts = qualifiedName.split('.')
+    (nameParts.last, nameParts.init.mkString("."))
+  }
+
+  /**
+   * Creates a [[org.apache.spark.sql.DataFrame]] from the provided [[RDD]] of [[GenericRecord]]s
+   * using a HoodieSchema.
+   *
+   * @param rdd RDD of GenericRecords to convert
+   * @param hoodieSchema the HoodieSchema for the records
+   * @param sparkSession the SparkSession to use
+   * @return DataFrame containing the converted records
+   */
+  def createDataFrame(rdd: RDD[GenericRecord], hoodieSchema: HoodieSchema, sparkSession: SparkSession): Dataset[Row] = {
+    val structType = convertHoodieSchemaToStructType(hoodieSchema)
+
+    sparkSession.createDataFrame(rdd.mapPartitions { records =>
+      if (records.isEmpty) Iterator.empty
+      else {
+        val serde = HoodieSparkUtils.getCatalystRowSerDe(structType)
+        val converter = createGenericRecordToInternalRowConverter(hoodieSchema, structType)
+        records.map { record =>
+          converter(record).map(serde.deserializeRow).get
+        }
+      }
+    }, structType)
   }
 }

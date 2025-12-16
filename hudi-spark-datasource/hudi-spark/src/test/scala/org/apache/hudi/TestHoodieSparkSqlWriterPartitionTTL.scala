@@ -22,6 +22,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
 import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.{fixInstantTimeCompatibility, instantTimePlusMillis}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -70,8 +71,8 @@ class TestHoodieSparkSqlWriterPartitionTTL extends HoodieSparkWriterTestBase {
       HoodieTTLConfig.PARTITION_TTL_STRATEGY_CLASS_NAME.key() -> "org.apache.hudi.HoodieSparkSqlWriterTestStrategy"
     )
 
-    val schema = DataSourceTestUtils.getStructTypeExampleSchema
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val schema = HoodieSchema.fromAvroSchema(DataSourceTestUtils.getStructTypeExampleSchema)
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val recordsForPart1 = DataSourceTestUtils.generateRandomRowsByPartition(100, "part1")
     val recordsSeqForPart1 = convertRowListToSeq(recordsForPart1)
     val part1DF = spark.createDataFrame(sc.parallelize(recordsSeqForPart1), structType)

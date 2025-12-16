@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieSchemaConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -61,11 +61,11 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def getTableSqlSchema(metaClient: HoodieTableMetaClient,
                         includeMetadataFields: Boolean = false): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = try Some(schemaResolver.getTableAvroSchema(includeMetadataFields))
+    val schema = try Some(schemaResolver.getTableSchema(includeMetadataFields))
     catch {
       case _: Throwable => None
     }
-    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
+    schema.map(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType)
   }
 
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable, metaClient: HoodieTableMetaClient): Seq[String] = {

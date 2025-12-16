@@ -324,7 +324,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, Option.empty, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
-        val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
+        val converter = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$), columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
       }), false)
 
@@ -410,7 +410,7 @@ object ColumnStatsIndexSupport {
     HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME
   )
 
-  private val columnStatsRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$)
+  private val columnStatsRecordStructType: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$))
 
   /**
    * @VisibleForTesting

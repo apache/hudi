@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSchemaConversionUtils.{convertHoodieSchemaToStructType, convertStructTypeToHoodieSchema}
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
@@ -484,7 +484,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //  - Schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
     writeParams ++= Seq(
       PAYLOAD_RECORD_AVRO_SCHEMA ->
-        HoodieAvroUtils.removeMetadataFields(convertStructTypeToAvroSchema(sourceDF.schema, "record", "")).toString,
+        HoodieSchemaUtils.removeMetadataFields(convertStructTypeToHoodieSchema(sourceDF.schema, "record", "")).toString,
       PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
     )
 
@@ -493,10 +493,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
-    val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
-    val schema = convertStructTypeToAvroSchema(hoodieCatalogTable.tableSchema, structName, namespace)
+    val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(hoodieCatalogTable.tableName)
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(hoodieCatalogTable.tableSchema, structName, namespace)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF,
-      schemaFromCatalog = Option.apply(HoodieSchema.fromAvroSchema(schema)))
+      schemaFromCatalog = Option.apply(schema))
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }
@@ -533,8 +533,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   private def getTableSchema: HoodieSchema = {
-    val (structName, nameSpace) = AvroConversionUtils
-      .getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
+    val (structName, nameSpace) = HoodieSchemaConversionUtils
+      .getRecordNameAndNamespace(hoodieCatalogTable.tableName)
     HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
       new StructType(targetTableSchema), structName, nameSpace)
   }

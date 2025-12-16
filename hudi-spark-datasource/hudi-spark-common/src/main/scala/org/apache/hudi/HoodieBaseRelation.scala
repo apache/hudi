@@ -167,7 +167,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     }
 
-    val (name, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
+    val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
     val schema: HoodieSchema = internalSchemaOpt.map { is =>
       InternalSchemaConverter.convert(is, namespace + "." + name)
     } orElse {
@@ -753,7 +753,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
   }
 
   def convertToHoodieSchema(structSchema: StructType, tableName: String ): HoodieSchema = {
-    val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
+    val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
     HoodieSparkSchemaConverters.toHoodieType(structSchema, nullable = false, recordName, namespace)
   }
 
