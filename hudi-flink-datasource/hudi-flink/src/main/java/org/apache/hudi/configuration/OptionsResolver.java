@@ -499,6 +499,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether table services are enabled.
+   */
+  public static boolean areTableServicesEnabled(Configuration conf) {
+    return conf.getBoolean(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), true);
+  }
+
+  /**
    * Returns the customized insert partitioner instance.
    */
   public static Option<Partitioner> getInsertPartitioner(Configuration conf) {
