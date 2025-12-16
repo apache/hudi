@@ -88,6 +88,22 @@ class TestPartialUpdateHandler {
     assertTrue(result.isEmpty());
   }
 
+  @Test
+  void testEmptyProperties() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testNonEmptyProperties() {
+    TypedProperties props = new TypedProperties();
+    props.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+    assertTrue(result.containsKey(PARTIAL_UPDATE_UNAVAILABLE_VALUE));
+    assertEquals(DEBEZIUM_UNAVAILABLE_VALUE, result.get(PARTIAL_UPDATE_UNAVAILABLE_VALUE));
+  }
 
   @Test
   void testDirectMatch() {
