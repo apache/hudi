@@ -119,7 +119,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                              firstCommit: Boolean,
                              options: util.Map[String, String],
                              schemaStr: String): Unit = {
-    val schema = new Schema.Parser().parse(schemaStr)
+    val schema = HoodieSchema.parse(schemaStr)
     val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
       .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])
       .collect(Collectors.toList[GenericRecord])).asScala.toSeq, 2)

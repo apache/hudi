@@ -527,6 +527,19 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Appends provided new fields at the end of the given schema
+   *
+   * NOTE: No deduplication is made, this method simply appends fields at the end of the list
+   *       of the source schema as is
+   *
+   * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
+   */
+  public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
+    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.appendFieldsToSchema(schema.toAvroSchema(),
+        newFields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())));
+  }
+
+  /**
    * Create a new schema but maintain all meta info from the old schema.
    * This is equivalent to {@link AvroSchemaUtils#createNewSchemaFromFieldsWithReference(Schema, List)} but operates on HoodieSchema.
    *

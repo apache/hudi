@@ -166,7 +166,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   }
 
   private void validateDateAndTimestampFields(List<Row> rows, long ts) {
-    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSchema(), false);
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSchema());
     Timestamp timestamp = new Timestamp(ts);
     // sanity check date field is within expected range
     Date startDate = Date.valueOf(LocalDate.now().minusDays(3));
@@ -317,10 +317,11 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
   private HoodieSchema getSchema() {
     try {
-      String schemaStr = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
-      return HoodieSchema.parse(schemaStr);
+      String schema = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      return HoodieSchema.parse(schema);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
+
   }
 }

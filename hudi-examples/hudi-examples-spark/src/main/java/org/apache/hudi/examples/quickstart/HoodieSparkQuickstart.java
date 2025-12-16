@@ -26,6 +26,8 @@ import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.sql.Dataset;
@@ -38,10 +40,8 @@ import static org.apache.hudi.config.HoodieWriteConfig.TBL_NAME;
 import static org.apache.spark.sql.SaveMode.Append;
 import static org.apache.spark.sql.SaveMode.Overwrite;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HoodieSparkQuickstart {
-
-  private HoodieSparkQuickstart() {
-  }
 
   public static void main(String[] args) {
     if (args.length < 2) {

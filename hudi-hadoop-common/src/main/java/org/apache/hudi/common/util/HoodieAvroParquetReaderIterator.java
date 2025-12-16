@@ -17,32 +17,28 @@
  * under the License.
  */
 
-package org.apache.hudi.hadoop.fs;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.avro.HoodieAvroUtils;
 
-import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.parquet.hadoop.ParquetReader;
 
-import java.io.IOException;
+import java.util.Map;
 
-/**
- * An implementation of {@link SeekableDataInputStream} based on Hadoop's {@link FSDataInputStream}
- */
-public class HadoopSeekableDataInputStream extends SeekableDataInputStream {
-  private final FSDataInputStream stream;
+public class HoodieAvroParquetReaderIterator extends ParquetReaderIterator<IndexedRecord> {
+  private final Schema promotedSchema;
+  private final Map<String, String> renamedColumns;
 
-  public HadoopSeekableDataInputStream(FSDataInputStream stream) {
-    super(stream);
-    this.stream = stream;
+  public HoodieAvroParquetReaderIterator(ParquetReader<IndexedRecord> parquetReader, Schema promotedSchema, Map<String, String> renamedColumns) {
+    super(parquetReader);
+    this.promotedSchema = promotedSchema;
+    this.renamedColumns = renamedColumns;
   }
 
   @Override
-  public long getPos() throws IOException {
-    return stream.getPos();
-  }
-
-  @Override
-  public void seek(long pos) throws IOException {
-    stream.seek(pos);
+  public IndexedRecord next() {
+    return HoodieAvroUtils.rewriteRecordWithNewSchema(super.next(), promotedSchema, renamedColumns);
   }
 }

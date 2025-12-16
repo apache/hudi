@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hadoop;
+package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;

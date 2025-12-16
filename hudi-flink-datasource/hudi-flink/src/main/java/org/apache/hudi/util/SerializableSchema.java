@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.Column.MetadataColumn;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.utils.DataTypeUtils;
@@ -29,6 +30,7 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.table.api.DataTypes.ROW;
 
@@ -44,11 +46,15 @@ public class SerializableSchema implements Serializable {
   }
 
   public static SerializableSchema create(ResolvedSchema resolvedSchema) {
-    List<Column> columns = resolvedSchema.getColumns().stream()
-        .filter(c -> c.isPhysical() || c instanceof org.apache.flink.table.catalog.Column.MetadataColumn)
-        .map(column -> Column.create(column.getName(), column.getDataType()))
-        .collect(Collectors.toList());
-    return new SerializableSchema(columns);
+    Stream<Column> physicalColumns = resolvedSchema.getColumns().stream()
+        .filter(org.apache.flink.table.catalog.Column::isPhysical)
+        .map(column -> Column.create(column.getName(), column.getDataType()));
+    Stream<Column> virtualMetaColumns = resolvedSchema.getColumns().stream()
+        .filter(c -> c instanceof MetadataColumn && ((MetadataColumn) c).isVirtual())
+        .map(column -> Column.create(column.getName(), column.getDataType()));
+    // always put virtual metadata columns in the end, since the flink planner will always produce output rowType
+    // with metadata columns in the end.
+    return new SerializableSchema(Stream.concat(physicalColumns, virtualMetaColumns).collect(Collectors.toList()));
   }
 
   public List<String> getColumnNames() {

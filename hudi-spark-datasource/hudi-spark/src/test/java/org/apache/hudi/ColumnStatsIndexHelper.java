@@ -239,12 +239,12 @@ public class ColumnStatsIndexHelper {
                 indexRow.add(colMetadata.getNullCount());
               });
 
-              return Row$.MODULE$.apply(JavaScalaConverters.<Object>convertJavaListToScalaSeq(indexRow));
+              return Row$.MODULE$.apply(JavaScalaConverters.convertJavaListToScalaSeq(indexRow));
             })
             .filter(Objects::nonNull);
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
-        JavaScalaConverters.<String>convertJavaListToScalaSeq(columnNames),
+        JavaScalaConverters.convertJavaListToScalaSeq(columnNames),
         JavaScalaConverters.convertJavaListToScalaList(columnNames),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;

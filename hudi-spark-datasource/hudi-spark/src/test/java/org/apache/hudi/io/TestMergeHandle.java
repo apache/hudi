@@ -18,8 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -43,6 +41,8 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -438,13 +438,13 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // Append event_time.
     records.forEach(record -> {
-      Object eventTimeValue = record.getColumnValueAsJava(schema.getAvroSchema(), eventTimeFieldName, props);
+      Object eventTimeValue = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
       if (eventTimeValue != null) {
         // Append event_time.
-        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema.toAvroSchema(), eventTimeFieldName);
+        Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTimeValue = record.convertColumnValueForLogicalType(
-            field.get().schema(), eventTimeValue, keepConsistentLogicalTimestamp);
+            field.get().schema().toAvroSchema(), eventTimeValue, keepConsistentLogicalTimestamp);
         int length = eventTimeValue.toString().length();
         Long millisEventTime = null;
         if (length == 10) {

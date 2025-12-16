@@ -384,7 +384,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     return records.stream().map(r -> {
       HoodieKey key = r.getKey();
       GenericRecord payload = (GenericRecord) ((HoodieAvroIndexedRecord) r).getData();
-      GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema.getAvroSchema());
+      GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema.toAvroSchema());
       return new HoodieAvroIndexedRecord(key, newPayload);
     }).collect(Collectors.toList());
   }

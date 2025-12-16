@@ -980,4 +980,66 @@ public class TestHoodieSchema {
     assertTrue(deserializedSchema instanceof HoodieSchema.Timestamp);
     assertEquals(HoodieSchema.TimePrecision.MICROS, ((HoodieSchema.Timestamp) deserializedSchema).getPrecision());
   }
+
+  @Test
+  public void testParseLogicalTypesCreatesCorrectSubclasses() {
+    // Test that parsing schemas with logical types creates the correct subclass instances
+
+    // Test decimal on BYTES
+    String decimalBytes = "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}";
+    HoodieSchema parsedDecimalBytes = HoodieSchema.parse(decimalBytes);
+    assertInstanceOf(HoodieSchema.Decimal.class, parsedDecimalBytes);
+    HoodieSchema.Decimal decBytes = (HoodieSchema.Decimal) parsedDecimalBytes;
+    assertEquals(10, decBytes.getPrecision());
+    assertEquals(2, decBytes.getScale());
+    assertFalse(decBytes.isFixed());
+
+    // Test decimal on FIXED
+    String decimalFixed = "{\"type\":\"fixed\",\"name\":\"DecimalFixed\",\"size\":16,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}";
+    HoodieSchema parsedDecimalFixed = HoodieSchema.parse(decimalFixed);
+    assertInstanceOf(HoodieSchema.Decimal.class, parsedDecimalFixed);
+    HoodieSchema.Decimal decFixed = (HoodieSchema.Decimal) parsedDecimalFixed;
+    assertEquals(10, decFixed.getPrecision());
+    assertEquals(2, decFixed.getScale());
+    assertTrue(decFixed.isFixed());
+    assertEquals(16, decFixed.getFixedSize());
+
+    // Test timestamp-millis
+    String timestampMillis = "{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}";
+    HoodieSchema parsedTimestampMillis = HoodieSchema.parse(timestampMillis);
+    assertInstanceOf(HoodieSchema.Timestamp.class, parsedTimestampMillis);
+    HoodieSchema.Timestamp tsMillis = (HoodieSchema.Timestamp) parsedTimestampMillis;
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, tsMillis.getPrecision());
+    assertTrue(tsMillis.isUtcAdjusted());
+
+    // Test timestamp-micros
+    String timestampMicros = "{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}";
+    HoodieSchema parsedTimestampMicros = HoodieSchema.parse(timestampMicros);
+    assertInstanceOf(HoodieSchema.Timestamp.class, parsedTimestampMicros);
+    HoodieSchema.Timestamp tsMicros = (HoodieSchema.Timestamp) parsedTimestampMicros;
+    assertEquals(HoodieSchema.TimePrecision.MICROS, tsMicros.getPrecision());
+    assertTrue(tsMicros.isUtcAdjusted());
+
+    // Test local-timestamp-millis
+    String localTimestampMillis = "{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}";
+    HoodieSchema parsedLocalTimestampMillis = HoodieSchema.parse(localTimestampMillis);
+    assertInstanceOf(HoodieSchema.Timestamp.class, parsedLocalTimestampMillis);
+    HoodieSchema.Timestamp localTsMillis = (HoodieSchema.Timestamp) parsedLocalTimestampMillis;
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, localTsMillis.getPrecision());
+    assertFalse(localTsMillis.isUtcAdjusted());
+
+    // Test time-millis
+    String timeMillis = "{\"type\":\"int\",\"logicalType\":\"time-millis\"}";
+    HoodieSchema parsedTimeMillis = HoodieSchema.parse(timeMillis);
+    assertInstanceOf(HoodieSchema.Time.class, parsedTimeMillis);
+    HoodieSchema.Time tmMillis = (HoodieSchema.Time) parsedTimeMillis;
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, tmMillis.getPrecision());
+
+    // Test time-micros
+    String timeMicros = "{\"type\":\"long\",\"logicalType\":\"time-micros\"}";
+    HoodieSchema parsedTimeMicros = HoodieSchema.parse(timeMicros);
+    assertInstanceOf(HoodieSchema.Time.class, parsedTimeMicros);
+    HoodieSchema.Time tmMicros = (HoodieSchema.Time) parsedTimeMicros;
+    assertEquals(HoodieSchema.TimePrecision.MICROS, tmMicros.getPrecision());
+  }
 }
