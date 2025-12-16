@@ -19,7 +19,6 @@
 package org.apache.hudi.hadoop.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -27,6 +26,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -74,7 +75,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESS
 
 public class InputFormatTestUtil {
 
-  private static String TEST_WRITE_TOKEN = "1-0-1";
+  private static final String TEST_WRITE_TOKEN = "1-0-1";
 
   public static File prepareTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
                                   String commitNumber) throws IOException {
@@ -82,7 +83,7 @@ public class InputFormatTestUtil {
   }
 
   public static File prepareCustomizedTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
-                                            String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields, boolean injectData, Schema schema)
+                                            String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields, boolean injectData, HoodieSchema schema)
       throws IOException {
     if (useNonPartitionedKeyGen) {
       HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
@@ -228,12 +229,12 @@ public class InputFormatTestUtil {
     jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
   }
 
-  public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                          int numberOfRecords, String commitNumber) throws IOException {
     return prepareParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                          int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
 
@@ -245,17 +246,17 @@ public class InputFormatTestUtil {
     return partitionPath.toFile();
   }
 
-  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                                int numberOfRecords, String commitNumber) throws Exception {
     return prepareSimpleParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                                int numberOfRecords, String commitNumber, HoodieTableType tableType) throws Exception {
     return prepareSimpleParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, tableType, "2016", "05", "01");
   }
 
-  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                                int numberOfRecords, String commitNumber, HoodieTableType tableType, String year, String month, String date) throws Exception {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
 
@@ -267,19 +268,19 @@ public class InputFormatTestUtil {
     return partitionPath.toFile();
   }
 
-  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                                        int numberOfRecords, String commitNumber) throws IOException {
     return prepareNonPartitionedParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, HoodieSchema schema, int numberOfFiles,
                                                        int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
     return basePath.toFile();
   }
 
-  public static List<File> prepareMultiPartitionedParquetTable(java.nio.file.Path basePath, Schema schema,
+  public static List<File> prepareMultiPartitionedParquetTable(java.nio.file.Path basePath, HoodieSchema schema,
                                                                int numberPartitions, int numberOfRecordsPerPartition, String commitNumber, HoodieTableType tableType) throws IOException {
     List<File> result = new ArrayList<>();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
@@ -294,12 +295,12 @@ public class InputFormatTestUtil {
     return result;
   }
 
-  private static void createData(Schema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords,
+  private static void createData(HoodieSchema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords,
                                  String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeBaseFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
-      parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
+      parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema.toAvroSchema());
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
           parquetWriter.write(record);
@@ -310,16 +311,16 @@ public class InputFormatTestUtil {
     }
   }
 
-  private static void createSimpleData(Schema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords, String commitNumber) throws Exception {
+  private static void createSimpleData(HoodieSchema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords, String commitNumber) throws Exception {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeBaseFileName(commitNumber, "1", "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
-      parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
+      parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema.toAvroSchema());
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
-        Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(schema);
+        HoodieSchema hoodieFieldsSchema = HoodieSchemaUtils.addMetadataFields(schema);
         for (IndexedRecord record : records) {
-          GenericRecord p = HoodieAvroUtils.rewriteRecord((GenericRecord) record, hoodieFieldsSchema);
+          GenericRecord p = HoodieAvroUtils.rewriteRecord((GenericRecord) record, hoodieFieldsSchema.toAvroSchema());
           p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
           p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
           p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitNumber);
@@ -331,7 +332,7 @@ public class InputFormatTestUtil {
     }
   }
 
-  private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords,
+  private static Iterable<? extends GenericRecord> generateAvroRecords(HoodieSchema schema, int numberOfRecords,
                                                                        String instantTime, String fileId) throws IOException {
     List<GenericRecord> records = new ArrayList<>(numberOfRecords);
     for (int i = 0; i < numberOfRecords; i++) {
@@ -340,13 +341,13 @@ public class InputFormatTestUtil {
     return records;
   }
 
-  public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,
+  public static void simulateParquetUpdates(File directory, HoodieSchema schema, String originalCommit,
                                             int totalNumberOfRecords, int numberOfRecordsToUpdate, String newCommit) throws IOException {
     File fileToUpdate = Objects.requireNonNull(directory.listFiles((dir, name) -> name.endsWith("parquet")))[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
     File dataFile = new File(directory,
         FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
-    try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema)) {
+    try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema.toAvroSchema())) {
       for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit, fileId)) {
         if (numberOfRecordsToUpdate > 0) {
           // update this record
@@ -385,7 +386,7 @@ public class InputFormatTestUtil {
 
   public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir,
                                                                HoodieStorage storage,
-                                                               Schema schema, String fileId,
+                                                               HoodieSchema schema, String fileId,
                                                                String baseCommit, String newCommit,
                                                                int numberOfRecords, int offset,
                                                                int logVersion)
@@ -396,7 +397,7 @@ public class InputFormatTestUtil {
 
   public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir,
                                                                HoodieStorage storage,
-                                                               Schema schema, String fileId,
+                                                               HoodieSchema schema, String fileId,
                                                                String baseCommit, String newCommit,
                                                                int numberOfRecords, int offset,
                                                                int logVersion,
@@ -421,7 +422,7 @@ public class InputFormatTestUtil {
     List<HoodieRecord> hoodieRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     if (logBlockType == HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK) {
       dataBlock = new HoodieHFileDataBlock(
-          hoodieRecords, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), writer.getLogFile().getPath(), HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
+          hoodieRecords, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), writer.getLogFile().getPath());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(hoodieRecords, header,
           HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);

@@ -123,5 +123,14 @@ public class CompactFunctionWrapper {
 
   public void close() throws Exception {
     ioManager.close();
+    if (compactionPlanOperator != null) {
+      compactionPlanOperator.close();
+    }
+    if (compactOperator != null) {
+      compactOperator.close();
+    }
+    if (commitSink != null) {
+      commitSink.close();
+    }
   }
 }

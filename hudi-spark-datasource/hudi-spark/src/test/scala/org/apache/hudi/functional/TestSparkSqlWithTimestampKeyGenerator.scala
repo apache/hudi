@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithTimestampKeyGenerator._
 
@@ -32,20 +33,13 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
 
   test("Test Spark SQL with timestamp key generator") {
     withTempDir { tmp =>
-      Seq(
-        Seq("COPY_ON_WRITE", "true"),
-        Seq("COPY_ON_WRITE", "false"),
-        Seq("MERGE_ON_READ", "true"),
-        Seq("MERGE_ON_READ", "false")
-      ).foreach { testParams =>
-        val tableType = testParams(0)
+      Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         // enables use of engine agnostic file group reader
-        val shouldUseFileGroupReader = testParams(1)
 
         timestampKeyGeneratorSettings.foreach { keyGeneratorSettings =>
           withTable(generateTableName) { tableName =>
             // Warning level is used due to CI run with warn-log profile for quick failed cases identification
-            LOG.warn(s"Table '$tableName' with parameters: $testParams. Timestamp key generator settings: $keyGeneratorSettings")
+            LOG.warn(s"Table '$tableName'. Timestamp key generator settings: $keyGeneratorSettings")
             val tablePath = tmp.getCanonicalPath + "/" + tableName
             val tsType = if (keyGeneratorSettings.contains("DATE_STRING")) "string" else "long"
             spark.sql(
@@ -61,10 +55,9 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
                  | TBLPROPERTIES (
                  |   type = '$tableType',
                  |   primaryKey = 'id',
-                 |   preCombineField = 'precomb',
+                 |   orderingFields = 'precomb',
                  |   hoodie.datasource.write.partitionpath.field = 'ts',
                  |   hoodie.datasource.write.hive_style_partitioning = 'false',
-                 |   hoodie.file.group.reader.enabled = '$shouldUseFileGroupReader',
                  |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
                  |   $keyGeneratorSettings
                  | )
@@ -78,7 +71,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
             else // UNIX_TIMESTAMP, and SCALAR with SECONDS
               (dataBatchesWithLongOfSeconds, queryResultWithLongOfSeconds)
 
-            withSQLConf("hoodie.file.group.reader.enabled" -> s"$shouldUseFileGroupReader",
+            withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert",
               "hoodie.datasource.query.type" -> "snapshot") {
               // two partitions, one contains parquet file only, the second one contains parquet and log files for MOR, and two parquets for COW
               spark.sql(s"INSERT INTO $tableName VALUES ${dataBatches(0)}")
@@ -86,15 +79,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
 
               val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM $tableName ORDER BY id").collect().mkString("; ")
               LOG.warn(s"Query result: $queryResult")
-              // TODO: use `shouldExtractPartitionValuesFromPartitionPath` uniformly, and get `expectedQueryResult` for all cases instead of `expectedQueryResultWithLossyString` for some cases
-              //   After it we could properly process filters like "WHERE ts BETWEEN 1078016000 and 1718953003" and add tests with partition pruning.
-              //   COW: Fix for [HUDI-3896] overwrites `shouldExtractPartitionValuesFromPartitionPath` in `BaseFileOnlyRelation`, therefore for COW we extracting from partition paths and get nulls
-              //   shouldUseFileGroupReader: [HUDI-7925] Currently there is no logic for `shouldExtractPartitionValuesFromPartitionPath` in `HoodieBaseHadoopFsRelationFactory`
-              //   UPDATE: with [HUDI-5807] we now have fg reader support. However partition pruning is still not fixed.
-              if (tableType == "COPY_ON_WRITE" && !shouldUseFileGroupReader.toBoolean)
-                assertResult(expectedQueryResultWithLossyString)(queryResult)
-              else
-                assertResult(expectedQueryResult)(queryResult)
+              assertResult(expectedQueryResult)(queryResult)
             }
           }
         }
@@ -118,7 +103,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
            | TBLPROPERTIES (
            |   type = 'COPY_ON_WRITE',
            |   primaryKey = 'id',
-           |   preCombineField = 'precomb'
+           |   orderingFields = 'precomb'
            | )
            |""".stripMargin)
       val dataBatches =   Array(
@@ -151,7 +136,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
            | TBLPROPERTIES (
            |   type = 'COPY_ON_WRITE',
            |   primaryKey = 'id',
-           |   preCombineField = 'precomb',
+           |   orderingFields = 'precomb',
            |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
            |   ${timestampKeyGeneratorSettings.head}
            | )
@@ -200,5 +185,4 @@ object TestSparkSqlWithTimestampKeyGenerator {
   val queryResultWithLongOfSeconds: String = "[1,a1,1,1078016523]; [2,a3,1,1718952603]"
   val queryResultWithLongOfMilliseconds: String = "[1,a1,1,1078016523000]; [2,a3,1,1718952603000]"
   val queryResultWithString: String = "[1,a1,1,2004-02-29 01:02:03]; [2,a3,1,2024-06-21 06:50:03]"
-  val expectedQueryResultWithLossyString: String = "[1,a1,1,2004-02-29 01]; [2,a3,1,2024-06-21 06]"
 }

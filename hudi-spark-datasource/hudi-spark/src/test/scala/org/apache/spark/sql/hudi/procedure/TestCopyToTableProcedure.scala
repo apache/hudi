@@ -41,7 +41,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -77,7 +77,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -123,7 +123,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -183,7 +183,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -193,8 +193,8 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
 
       // mark startCompletionTime
       val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
-      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       val startCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
       val endCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
 
@@ -233,7 +233,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | options (
            |  type='mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.compact.inline.max.delta.commits='5',
            |  hoodie.compact.inline='true'
            |
@@ -283,7 +283,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -333,7 +333,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 

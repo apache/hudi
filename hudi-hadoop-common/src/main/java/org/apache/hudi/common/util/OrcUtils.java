@@ -19,10 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -32,6 +32,8 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -117,25 +119,10 @@ public class OrcUtils extends FileFormatUtils {
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(convertToHadoopPath(filePath), OrcFile.readerOptions(conf));
 
-      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      Schema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
-      List<String> fieldNames = orcSchema.getFieldNames();
 
-      // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
-      int keyCol = -1;
-      int partitionCol = -1;
-      for (int i = 0; i < fieldNames.size(); i++) {
-        if (fieldNames.get(i).equals(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
-          keyCol = i;
-        }
-        if (fieldNames.get(i).equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)) {
-          partitionCol = i;
-        }
-      }
-      if (keyCol == -1 || partitionCol == -1) {
-        throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
-      }
       return HoodieKeyIterator.getInstance(
           new OrcReaderIterator<>(recordReader, readSchema, orcSchema), keyGeneratorOpt, partitionPath);
     } catch (IOException e) {
@@ -272,7 +259,7 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList, HoodieIndexVersion indexVersion) {
     throw new UnsupportedOperationException(
         "Reading column statistics from metadata is not supported for ORC format yet");
   }
@@ -310,8 +297,8 @@ public class OrcUtils extends FileFormatUtils {
   @Override
   public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                                           List<HoodieRecord> records,
-                                                          Schema writerSchema,
-                                                          Schema readerSchema,
+                                                          HoodieSchema writerSchema,
+                                                          HoodieSchema readerSchema,
                                                           String keyFieldName,
                                                           Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("Hudi log blocks do not support ORC format yet");

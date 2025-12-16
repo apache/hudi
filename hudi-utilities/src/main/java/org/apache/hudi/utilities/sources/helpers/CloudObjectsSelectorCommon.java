@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -168,7 +169,7 @@ public class CloudObjectsSelectorCommon {
       boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
       return exists ? Option.of(filePathUrl) : Option.empty();
     } catch (Exception exception) {
-      LOG.warn(String.format("Failed to generate path to cloud file %s", filePath), exception);
+      LOG.error("Failed to generate path to cloud file {}", filePath, exception);
       throw new HoodieException(String.format("Failed to generate path to cloud file %s", filePath), exception);
     }
   }
@@ -287,11 +288,12 @@ public class CloudObjectsSelectorCommon {
 
     StructType rowSchema = null;
     if (schemaProviderOption.isPresent()) {
-      Schema sourceSchema = schemaProviderOption.get().getSourceSchema();
+      HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
       if (sourceSchema != null && !sourceSchema.equals(InputBatch.NULL_SCHEMA)) {
-        rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+        Schema sourceAvroSchema = sourceSchema.toAvroSchema();
+        rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(sourceAvroSchema);
         if (isCoalesceRequired(properties, sourceSchema)) {
-          reader = reader.schema(addAliasesToRowSchema(sourceSchema, rowSchema));
+          reader = reader.schema(addAliasesToRowSchema(sourceAvroSchema, rowSchema));
         } else {
           reader = reader.schema(rowSchema);
         }
@@ -327,9 +329,9 @@ public class CloudObjectsSelectorCommon {
     }
 
     if (schemaProviderOption.isPresent()) {
-      Schema sourceSchema = schemaProviderOption.get().getSourceSchema();
+      HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
       if (isCoalesceRequired(properties, sourceSchema)) {
-        dataset = spark.createDataFrame(coalesceAliasFields(dataset, sourceSchema).rdd(), rowSchema);
+        dataset = spark.createDataFrame(coalesceAliasFields(dataset, sourceSchema.toAvroSchema()).rdd(), rowSchema);
       }
     }
 
@@ -347,10 +349,10 @@ public class CloudObjectsSelectorCommon {
     return Option.of(dataset);
   }
 
-  private static boolean isCoalesceRequired(TypedProperties properties, Schema sourceSchema) {
+  private static boolean isCoalesceRequired(TypedProperties properties, HoodieSchema sourceSchema) {
     return getBooleanWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_READER_COALESCE_ALIAS_COLUMNS)
         && Objects.nonNull(sourceSchema)
-        && hasFieldWithAliases(sourceSchema);
+        && hasFieldWithAliases(sourceSchema.toAvroSchema());
   }
 
   /**

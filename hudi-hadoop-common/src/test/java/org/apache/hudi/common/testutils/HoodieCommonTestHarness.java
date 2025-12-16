@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -327,7 +327,8 @@ public class HoodieCommonTestHarness {
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     Schema recordSchema,
+                                                     HoodieSchema writerSchema,
                                                      List<HoodieRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,
@@ -336,22 +337,13 @@ public class HoodieCommonTestHarness {
                                                      String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
-        .map(record -> {
-          try {
-            return record.toIndexedRecord(schema, props);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        })
-        .filter(Option::isPresent)
-        .map(Option::get)
-        .map(HoodieRecord::getData)
+        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema.toAvroSchema()).getData())
         .collect(Collectors.toList());
-    return writeLogFiles(partitionPath, schema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
+    return writeLogFiles(partitionPath, writerSchema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     HoodieSchema schema,
                                                      List<IndexedRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage)
@@ -360,7 +352,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     HoodieSchema schema,
                                                      List<IndexedRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,
@@ -419,7 +411,7 @@ public class HoodieCommonTestHarness {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
+        return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
       default:

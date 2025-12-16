@@ -19,25 +19,24 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.hadoop.utils.HiveTypeUtils;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -46,14 +45,13 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.hive.serde2.io.DoubleWritable;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
@@ -63,23 +61,21 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -90,8 +86,6 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL
  */
 public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> {
   protected final HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator;
-  protected final Map<String, TypeInfo> columnTypeMap;
-  private final ObjectInspectorCache objectInspectorCache;
   private RecordReader<NullWritable, ArrayWritable> firstRecordReader = null;
 
   private final List<String> partitionCols;
@@ -99,50 +93,66 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
                                     List<String> partitionCols,
-                                    ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
                                     HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new HiveRecordContext(tableConfig));
+    if (storageConfiguration.getString(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS).isEmpty()) {
+      // Overriding default treatment of repeated groups in Parquet
+      storageConfiguration.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false");
+    }
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
-    this.objectInspectorCache = objectInspectorCache;
-    this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
-    this.typeConverter = new HiveReaderContextTypeConverter();
   }
 
-  private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
+  private void setSchemas(JobConf jobConf, HoodieSchema dataSchema, HoodieSchema requiredSchema) {
     List<String> dataColumnNameList = dataSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList());
-    List<TypeInfo> dataColumnTypeList = dataColumnNameList.stream().map(fieldName -> {
-      TypeInfo type = columnTypeMap.get(fieldName);
-      if (type == null) {
-        throw new IllegalArgumentException("Field: " + fieldName + ", does not have a defined type");
-      }
-      return type;
-    }).collect(Collectors.toList());
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
-    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, dataColumnTypeList.stream().map(TypeInfo::getQualifiedName).collect(Collectors.joining(",")));
+    List<TypeInfo> columnTypes;
+    try {
+      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema.toAvroSchema());
+    } catch (AvroSerdeException e) {
+      throw new HoodieAvroSchemaException(String.format("Failed to generate hive column types from schema: %s, due to %s", dataSchema, e));
+    }
+    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, columnTypes.stream().map(TypeInfo::getTypeName).collect(Collectors.joining(",")));
     // don't replace `f -> f.name()` with lambda reference
-    String readColNames = requiredSchema.getFields().stream().map(f -> f.name()).collect(Collectors.joining(","));
+    String readColNames = requiredSchema.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, requiredSchema.getFields()
-        .stream().map(f -> String.valueOf(dataSchema.getField(f.name()).pos())).collect(Collectors.joining(",")));
+        .stream().map(f -> String.valueOf(dataSchema.getField(f.name()).get().pos())).collect(Collectors.joining(",")));
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
-                                                               Schema requiredSchema, HoodieStorage storage) throws IOException {
+  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, HoodieSchema dataSchema,
+                                                               HoodieSchema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, storage);
   }
 
   @Override
   public ClosableIterator<ArrayWritable> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+      StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
   }
 
-  private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, Schema dataSchema,
-                                                                Schema requiredSchema, HoodieStorage storage) throws IOException {
+  private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, HoodieSchema dataSchema,
+                                                                HoodieSchema requiredSchema, HoodieStorage storage) throws IOException {
+    // mdt file schema irregular and does not work with this logic. Also, log file evolution is handled inside the log block
+    boolean isParquetOrOrc = filePath.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())
+        || filePath.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension());
+
+    // Read file schema and repair logical types if needed
+    HoodieSchema fileSchema;
+    if (isParquetOrOrc) {
+      Schema avroFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
+      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(avroFileSchema, dataSchema.toAvroSchema());
+      fileSchema = HoodieSchema.fromAvroSchema(repairedAvroSchema);
+    } else {
+      fileSchema = dataSchema;
+    }
+
+    // Prune the required schema based on the file schema
+    HoodieSchema actualRequiredSchema = isParquetOrOrc ? HoodieSchemaUtils.pruneDataSchema(fileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
+
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
       // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
@@ -153,37 +163,29 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
       jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
     }
-    //move the partition cols to the end, because in some cases it has issues if we don't do that
-    Schema modifiedDataSchema = HoodieAvroUtils.generateProjectionSchema(dataSchema, Stream.concat(dataSchema.getFields().stream()
-            .map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColSet.contains(n)),
-        partitionCols.stream().filter(c -> dataSchema.getField(c) != null)).collect(Collectors.toList()));
-    setSchemas(jobConfCopy, modifiedDataSchema, requiredSchema);
+
+    // Move the partition cols to the end, because in some cases it has issues if we don't do that
+    List<String> reorderedFieldNames = Stream.concat(
+        fileSchema.getFields().stream()
+            .map(f -> f.name().toLowerCase(Locale.ROOT))
+            .filter(n -> !partitionColSet.contains(n)),
+        partitionCols.stream()
+            .filter(c -> fileSchema.getField(c).isPresent())
+    ).collect(Collectors.toList());
+    HoodieSchema modifiedDataSchema = HoodieSchemaUtils.generateProjectionSchema(fileSchema, reorderedFieldNames);
+
+    setSchemas(jobConfCopy, modifiedDataSchema, actualRequiredSchema);
     InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts);
-    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy);
+    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, modifiedDataSchema.toAvroSchema());
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
-    if (modifiedDataSchema.equals(requiredSchema)) {
+    if (HoodieSchemaUtils.areSchemasProjectionEquivalent(modifiedDataSchema, requiredSchema)) {
       return recordIterator;
     }
     // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-    return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
-  }
-
-  @Override
-  public ArrayWritable convertAvroRecord(IndexedRecord avroRecord) {
-    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroRecord.getSchema(), true);
-  }
-
-  @Override
-  public GenericRecord convertToAvroRecord(ArrayWritable record, Schema schema) {
-    return objectInspectorCache.serialize(record, schema);
-  }
-
-  @Override
-  public ArrayWritable getDeleteRow(ArrayWritable record, String recordKey) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    return new CloseableMappingIterator<>(recordIterator, recordContext.projectRecord(modifiedDataSchema, requiredSchema));
   }
 
   @Override
@@ -207,78 +209,17 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    return getFieldValueFromArrayWritable(record, schema, fieldName, objectInspectorCache);
-  }
-
-  public static Object getFieldValueFromArrayWritable(ArrayWritable record, Schema schema, String fieldName, ObjectInspectorCache objectInspectorCache) {
-    return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
-  }
-
-  @Override
-  public String getMetaFieldValue(ArrayWritable record, int pos) {
-    return record.get()[pos].toString();
-  }
-
-  @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
-    HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(
-          key,
-          HoodieRecord.HoodieRecordType.HIVE);
-    }
-    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
-    ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
-  }
-
-  @Override
-  public ArrayWritable mergeEngineRecord(Schema schema,
-                                         Map<Integer, Object> updateValues,
-                                         BufferedRecord<ArrayWritable> baseRecord) {
-    Writable[] engineRecord = baseRecord.getRecord().get();
-    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
-      engineRecord[value.getKey()] = (Writable) value.getValue();
-    }
-    return baseRecord.getRecord();
-  }
-
-  @Override
-  public ArrayWritable createEngineRecord(Schema schema, List<Object> values) {
-    List<Schema.Field> fields = schema.getFields();
-    if (fields.size() != values.size()) {
-      throw new IllegalArgumentException("Mismatch between schema fields and values");
-    }
-
-    Writable[] writables = new Writable[fields.size()];
-    for (int i = 0; i < fields.size(); i++) {
-      Schema fieldSchema = resolveUnion(fields.get(i).schema());
-      writables[i] = convertToWritable(fieldSchema, values.get(i));
-    }
-    return new ArrayWritable(Writable.class, writables);
-  }
-
-  @Override
-  public ArrayWritable seal(ArrayWritable record) {
-    return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
-  }
-
-  @Override
-  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
-    return record;
-  }
-
-  @Override
   public ClosableIterator<ArrayWritable> mergeBootstrapReaders(ClosableIterator<ArrayWritable> skeletonFileIterator,
-                                                               Schema skeletonRequiredSchema,
+                                                               HoodieSchema skeletonRequiredSchema,
                                                                ClosableIterator<ArrayWritable> dataFileIterator,
-                                                               Schema dataRequiredSchema,
+                                                               HoodieSchema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldsAndValues) {
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
     int[] partitionFieldPositions = partitionFieldsAndValues.stream()
-        .map(pair -> dataRequiredSchema.getField(pair.getKey()).pos()).mapToInt(Integer::intValue).toArray();
+        .map(pair -> dataRequiredSchema.getField(pair.getKey()).orElseThrow(() ->
+            new HoodieSchemaException("Partition field '" + pair.getKey() + "' not found in data required schema")).pos())
+        .mapToInt(Integer::intValue).toArray();
     Writable[] convertedPartitionValues = partitionFieldsAndValues.stream().map(Pair::getValue).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 
@@ -297,7 +238,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
         for (int i = 0; i < partitionFieldPositions.length; i++) {
-          if (dataWritable[partitionFieldPositions[i]] == null) {
+          if (dataWritable[partitionFieldPositions[i]] == null || dataWritable[partitionFieldPositions[i]] instanceof NullWritable) {
             dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
           }
         }
@@ -316,47 +257,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     };
   }
 
-  @Override
-  public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    if (!renamedColumns.isEmpty()) {
-      throw new IllegalStateException("Schema evolution is not supported in the filegroup reader for Hive currently");
-    }
-    return HoodieArrayWritableAvroUtils.projectRecord(from, to);
-  }
-
-  @Override
-  public Comparable convertValueToEngineType(Comparable value) {
-    if (value instanceof WritableComparable) {
-      return value;
-    }
-    //TODO: [HUDI-8261] cover more types
-    if (value == null) {
-      return null;
-    } else if (value instanceof String) {
-      return new Text((String) value);
-    } else if (value instanceof Integer) {
-      return new IntWritable((int) value);
-    } else if (value instanceof Long) {
-      return new LongWritable((long) value);
-    } else if (value instanceof Float) {
-      return new FloatWritable((float) value);
-    } else if (value instanceof Double) {
-      return new DoubleWritable((double) value);
-    } else if (value instanceof Boolean) {
-      return new BooleanWritable((boolean) value);
-    }
-    return value;
-  }
-
-  public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {
-    return HoodieArrayWritableAvroUtils.reverseProject(from, to);
-  }
-
   public long getPos() throws IOException {
     if (firstRecordReader != null) {
       return firstRecordReader.getPos();
     }
-    throw new IllegalStateException("getPos() should not be called before a record reader has been initialized");
+    throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
   }
 
   public float getProgress() throws IOException {

@@ -129,7 +129,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   }
 
   @AfterAll
-  public static synchronized void resetSpark() {
+  public static synchronized void resetSpark() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;

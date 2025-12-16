@@ -21,10 +21,13 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -59,22 +62,33 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -96,6 +110,24 @@ public class HoodieTestUtils {
   public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
   public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
   public static final InstantComparator INSTANT_COMPARATOR = new DefaultInstantComparator();
+  public static final HoodieSchema SIMPLE_RECORD_SCHEMA = getSchemaFromResource(HoodieTestUtils.class, "/exampleSchema.avsc", false);
+
+  public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number) {
+    return createSimpleRecord(rowKey, time, number, Option.empty());
+  }
+
+  public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number, Option<String> partitionPath) {
+    GenericRecord record = new GenericData.Record(SIMPLE_RECORD_SCHEMA.toAvroSchema());
+    record.put("_row_key", rowKey);
+    record.put("time", time);
+    record.put("number", number);
+    String partition = partitionPath.orElseGet(() -> extractPartitionFromTimeField(time));
+    return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partition), record, null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")), null, null);
+  }
+
+  public static String extractPartitionFromTimeField(String timeField) {
+    return timeField.split("T")[0].replace("-", "/");
+  }
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
@@ -243,7 +275,7 @@ public class HoodieTestUtils {
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
-      builder.setPartitionFields("some_nonexistent_field");
+      builder.setPartitionFields("partition_path");
     }
     builder.fromProperties(properties);
     return builder;
@@ -442,6 +474,49 @@ public class HoodieTestUtils {
       deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
     });
     return deleteFileList;
+  }
+
+  /**
+   * Extracts a ZIP file from resources to a target directory.
+   * 
+   * @param resourcePath the path to the ZIP resource (relative to classpath)
+   * @param targetDirectory the target directory to extract files to
+   * @param resourceClass the class to use for resource loading
+   * @throws IOException if extraction fails
+   */
+  public static void extractZipToDirectory(String resourcePath, Path targetDirectory, Class<?> resourceClass) throws IOException {
+    InputStream resourceStream = resourceClass.getClassLoader().getResourceAsStream(resourcePath);
+    if (resourceStream == null) {
+      // Fallback to getResourceAsStream if getClassLoader().getResourceAsStream() fails
+      resourceStream = resourceClass.getResourceAsStream(resourcePath);
+    }
+    
+    if (resourceStream == null) {
+      throw new IOException("Resource not found at: " + resourcePath);
+    }
+
+    try (ZipInputStream zip = new ZipInputStream(resourceStream)) {
+      ZipEntry entry;
+      while ((entry = zip.getNextEntry()) != null) {
+        File file = targetDirectory.resolve(entry.getName()).toFile();
+        if (entry.isDirectory()) {
+          file.mkdirs();
+          continue;
+        }
+        
+        // Create parent directories if they don't exist
+        file.getParentFile().mkdirs();
+        
+        // Extract file content
+        byte[] buffer = new byte[10000];
+        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(file.toPath()))) {
+          int count;
+          while ((count = zip.read(buffer)) != -1) {
+            out.write(buffer, 0, count);
+          }
+        }
+      }
+    }
   }
 
   public static void validateTableConfig(HoodieStorage storage,

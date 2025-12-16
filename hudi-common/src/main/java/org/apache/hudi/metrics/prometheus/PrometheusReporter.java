@@ -35,9 +35,12 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -48,18 +51,46 @@ public class PrometheusReporter extends MetricsReporter {
   private static final Pattern LABEL_PATTERN = Pattern.compile("\\s*,\\s*");
 
   private static final Logger LOG = LoggerFactory.getLogger(PrometheusReporter.class);
-  private static final Map<Integer, CollectorRegistry> PORT_TO_COLLECTOR_REGISTRY = new HashMap<>();
-  private static final Map<Integer, HTTPServer> PORT_TO_SERVER = new HashMap<>();
+  private static final Map<Integer, PrometheusServerState> PORT_TO_SERVER_STATE = new ConcurrentHashMap<>();
+
+  private static class PrometheusServerState {
+    private final HTTPServer httpServer;
+    private final CollectorRegistry collectorRegistry;
+    private final AtomicInteger referenceCount;
+    private final Set<DropwizardExports> exports;
+
+    public PrometheusServerState(HTTPServer httpServer, CollectorRegistry collectorRegistry) {
+      this.httpServer = httpServer;
+      this.collectorRegistry = collectorRegistry;
+      this.referenceCount = new AtomicInteger(0);
+      this.exports = ConcurrentHashMap.newKeySet();
+    }
+
+    public HTTPServer getHttpServer() {
+      return httpServer;
+    }
+
+    public CollectorRegistry getCollectorRegistry() {
+      return collectorRegistry;
+    }
+
+    public AtomicInteger getReferenceCount() {
+      return referenceCount;
+    }
+
+    public Set<DropwizardExports> getExports() {
+      return exports;
+    }
+  }
 
   private final DropwizardExports metricExports;
   private final CollectorRegistry collectorRegistry;
   private final int serverPort;
+  private final AtomicBoolean stopped = new AtomicBoolean(false);
+  private volatile boolean unregistered = false;
 
   public PrometheusReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     this.serverPort = metricsConfig.getPrometheusPort();
-    if (!PORT_TO_SERVER.containsKey(serverPort) || !PORT_TO_COLLECTOR_REGISTRY.containsKey(serverPort)) {
-      startHttpServer(serverPort);
-    }
     List<String> labelNames = new ArrayList<>();
     List<String> labelValues = new ArrayList<>();
     if (StringUtils.nonEmpty(metricsConfig.getPushGatewayLabels())) {
@@ -70,25 +101,41 @@ public class PrometheusReporter extends MetricsReporter {
           });
     }
     metricExports = new DropwizardExports(registry, new LabeledSampleBuilder(labelNames, labelValues));
-    this.collectorRegistry = PORT_TO_COLLECTOR_REGISTRY.get(serverPort);
-    metricExports.register(collectorRegistry);
+    
+    PrometheusServerState serverState = getAndRegisterServerState(serverPort, metricExports);
+    this.collectorRegistry = serverState.getCollectorRegistry();
+    
+    LOG.debug("Registered PrometheusReporter for port {}, reference count: {}", 
+             serverPort, serverState.getReferenceCount().get());
   }
 
-  private static synchronized void startHttpServer(int serverPort) {
-    if (!PORT_TO_COLLECTOR_REGISTRY.containsKey(serverPort)) {
-      PORT_TO_COLLECTOR_REGISTRY.put(serverPort, new CollectorRegistry());
-    }
-    if (!PORT_TO_SERVER.containsKey(serverPort)) {
+  private static synchronized PrometheusServerState getAndRegisterServerState(int serverPort, DropwizardExports metricExports) {
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+    if (serverState == null) {
       try {
-        HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), PORT_TO_COLLECTOR_REGISTRY.get(serverPort));
-        PORT_TO_SERVER.put(serverPort, server);
-        Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
+        CollectorRegistry collectorRegistry = new CollectorRegistry();
+        HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry, true);
+        serverState = new PrometheusServerState(server, collectorRegistry);
+        PORT_TO_SERVER_STATE.put(serverPort, serverState);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+          try {
+            server.close();
+          } catch (Exception e) {
+            LOG.debug("Error closing Prometheus HTTP server during shutdown: {}", e.getMessage());
+          }
+        }));
       } catch (Exception e) {
         String msg = "Could not start PrometheusReporter HTTP server on port " + serverPort;
         LOG.error(msg, e);
         throw new HoodieException(msg, e);
       }
     }
+    
+    metricExports.register(serverState.getCollectorRegistry());
+    serverState.getExports().add(metricExports);
+    serverState.getReferenceCount().incrementAndGet();
+    
+    return serverState;
   }
 
   @Override
@@ -101,12 +148,79 @@ public class PrometheusReporter extends MetricsReporter {
 
   @Override
   public void stop() {
-    collectorRegistry.unregister(metricExports);
-    HTTPServer httpServer = PORT_TO_SERVER.remove(serverPort);
-    if (httpServer != null) {
-      httpServer.stop();
+    if (!stopped.getAndSet(true)) {
+      try {
+        synchronized (PrometheusReporter.class) {
+          LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
+          PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+          if (serverState == null) {
+            LOG.warn("No server state found for port {} during stop()", serverPort);
+            return;
+          }
+          
+          unregisterMetricExports();
+          removeFromExportsTracking(serverState);
+          
+          int newReferenceCount = decrementReferenceCount(serverState);
+          if (newReferenceCount <= 0) {
+            cleanupServer(serverPort);
+          } else {
+            LOG.debug("Prometheus server on port {} still has {} references, keeping server alive", 
+                     serverPort, newReferenceCount);
+          }
+        }
+      } catch (Exception e) {
+        LOG.error("Error in PrometheusReporter.stop() for port {}", serverPort, e);
+      }
     }
-    PORT_TO_COLLECTOR_REGISTRY.remove(serverPort);
+  }
+
+  private void unregisterMetricExports() {
+    if (!unregistered) {
+      try {
+        collectorRegistry.unregister(metricExports);
+        unregistered = true;
+      } catch (Exception e) {
+        LOG.debug("Error unregistering metric exports for port {}: {}", serverPort, e.getMessage());
+      }
+    }
+  }
+
+  private void removeFromExportsTracking(PrometheusServerState serverState) {
+    serverState.getExports().remove(metricExports);
+  }
+
+  private int decrementReferenceCount(PrometheusServerState serverState) {
+    int newCount = serverState.getReferenceCount().decrementAndGet();
+    LOG.debug("Unregistered PrometheusReporter for port {}, reference count: {}", 
+             serverPort, newCount);
+    return newCount;
+  }
+
+  private static synchronized void cleanupServer(int serverPort) {
+    LOG.info("No more references to Prometheus server on port {}, stopping server", serverPort);
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.remove(serverPort);
+    if (serverState != null) {
+      try {
+        serverState.getHttpServer().close();
+      } catch (Exception e) {
+        LOG.debug("Error closing Prometheus HTTP server on port {}: {}", serverPort, e.getMessage());
+      }
+    }
+  }
+
+  public static boolean isServerRunning(int port) {
+    return PORT_TO_SERVER_STATE.containsKey(port);
+  }
+
+  public static int getReferenceCount(int port) {
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
+    return serverState != null ? serverState.getReferenceCount().get() : 0;
+  }
+
+  public static int getActiveExportsCount(int port) {
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
+    return serverState != null ? serverState.getExports().size() : 0;
   }
 
   private static class LabeledSampleBuilder implements SampleBuilder {

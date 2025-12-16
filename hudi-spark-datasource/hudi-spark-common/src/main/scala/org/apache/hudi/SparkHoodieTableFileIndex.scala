@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -41,7 +42,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{expressions, InternalRow}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
@@ -101,19 +102,21 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Get the schema of the table.
    */
   lazy val schema: StructType = if (shouldFastBootstrap) {
-      StructType(rawSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+      StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
     } else {
-      rawSchema
+      rawStructSchema
     }
 
-  private lazy val rawSchema: StructType = schemaSpec.getOrElse({
-      val schemaUtil = new TableSchemaResolver(metaClient)
-      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-    })
+  lazy val rawHoodieSchema: HoodieSchema = {
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    schemaUtil.getTableSchema
+  }
+
+  private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
+    AvroConversionUtils.convertAvroSchemaToStructType(rawHoodieSchema.toAvroSchema)
+  }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
-
-  private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 
   /**
    * Get the partition schema from the hoodie.properties.
@@ -153,7 +156,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     } else {
       // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
-      logWarning("No partition columns available from hoodie.properties." +
+      logDebug("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
       new StructType()
     }
@@ -250,12 +253,24 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       the whole table
       if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val boundPredicate = InterpretedPredicate(predicate.transform {
+        val transformedPredicate = predicate.transform {
           case a: AttributeReference =>
             val index = partitionSchema.indexWhere(a.name == _.name)
             BoundReference(index, partitionSchema(index).dataType, nullable = true)
-        })
-
+        }
+        val boundPredicate: BasePredicate = try {
+          // Try using 1-arg constructor via reflection
+          val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+          val ctor = clazz.getConstructor(classOf[Expression])
+          ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
+        } catch {
+          case _: NoSuchMethodException | _: IllegalArgumentException =>
+            // Fallback: Try using 2-arg constructor for certain Spark runtime
+            val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+            val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
+            ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
+              .asInstanceOf[BasePredicate]
+        }
         val prunedPartitionPaths = partitionPaths.filter {
           partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
         }.toSeq
@@ -417,7 +432,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       schema,
       metaClient.getTableConfig.propsMap,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil,
       shouldValidatePartitionColumns(spark))
   }
 

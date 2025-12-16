@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
+import java.util.Collections;
 import java.util.Hashtable;
 import java.util.Map;
 
@@ -38,7 +39,10 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
   public static final String SPARK_SIMPLE_KEY_GENERATOR = "org.apache.hudi.keygen.SimpleKeyGenerator";
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 2 is asynchronous and in version 3 is synchronous. Synchronous table will not
       // sync any instants not already synced. So its simpler to re-bootstrap the table. Also, the schema for the
@@ -58,6 +62,6 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
     ValidationUtils.checkState(keyGenClassName != null, String.format("Missing config: %s or %s",
         HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
     tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenClassName);
-    return tablePropsToAdd;
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
 }

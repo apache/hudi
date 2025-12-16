@@ -54,7 +54,6 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -64,7 +63,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -175,15 +173,18 @@ public class IncrementalInputSplits implements Serializable {
     //   4. the end commit is archived
     Set<String> readPartitions;
     final List<StoragePathInfo> fileInfoList;
+    final List<FileSlice> fileSlices;
     if (fullTableScan) {
       // scans the partitions and files directly.
       FileIndex fileIndex = getFileIndex(metaClient);
       readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
-      if (readPartitions.size() == 0) {
+      if (readPartitions.isEmpty()) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
       fileInfoList = fileIndex.getFilesInPartitions();
+      List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
+      fileSlices = fileIndex.filterFileSlices(allFileSlices);
     } else {
       if (cdcEnabled) {
         // case1: cdc change log enabled
@@ -197,7 +198,7 @@ public class IncrementalInputSplits implements Serializable {
           .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline))
           .collect(Collectors.toList());
       readPartitions = getReadPartitions(metadataList);
-      if (readPartitions.size() == 0) {
+      if (readPartitions.isEmpty()) {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
@@ -205,29 +206,29 @@ public class IncrementalInputSplits implements Serializable {
           path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
           metadataList, metaClient.getTableType(), false);
       if (files == null) {
-        LOG.warn("Found deleted files in metadata, fall back to full table scan.");
+        LOG.warn("Found deleted files in metadata, falling back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
         FileIndex fileIndex = getFileIndex(metaClient);
         readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
-        if (readPartitions.size() == 0) {
+        if (readPartitions.isEmpty()) {
           LOG.warn("No partitions found for reading in user provided path.");
           return Result.EMPTY;
         }
         fileInfoList = fileIndex.getFilesInPartitions();
+        List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
+        fileSlices = fileIndex.filterFileSlices(allFileSlices);
       } else {
-        fileInfoList = files;
+        fileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, files, analyzingResult.getMaxCompletionTime(), false);
       }
     }
 
-    if (fileInfoList.size() == 0) {
+    if (fileSlices.isEmpty()) {
       LOG.warn("No files found for reading in user provided path.");
       return Result.EMPTY;
     }
 
-    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileInfoList, readPartitions, endInstant, analyzingResult.getMaxCompletionTime(), instantRange, false);
-
+    List<MergeOnReadInputSplit> inputSplits = getInputSplits(fileSlices, metaClient, endInstant, instantRange);
     return Result.instance(inputSplits, endInstant);
   }
 
@@ -278,19 +279,20 @@ public class IncrementalInputSplits implements Serializable {
       FileIndex fileIndex = getFileIndex(metaClient);
 
       Set<String> readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
-      if (readPartitions.size() == 0) {
-        LOG.warn("No partitions found for reading under path: " + path);
+      if (readPartitions.isEmpty()) {
+        LOG.warn("No partitions found for reading under path: {}", path);
         return Result.EMPTY;
       }
 
       List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-      if (pathInfoList.size() == 0) {
-        LOG.warn("No files found for reading under path: " + path);
+      if (pathInfoList.isEmpty()) {
+        LOG.warn("No files found for reading under path: {}", path);
         return Result.EMPTY;
       }
+      List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, pathInfoList, offsetToIssue, false);
+      List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
 
-      List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-          pathInfoList, readPartitions, endInstant, offsetToIssue, null, false);
+      List<MergeOnReadInputSplit> inputSplits = getInputSplits(fileSlices, metaClient, endInstant, null);
 
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     } else {
@@ -326,61 +328,64 @@ public class IncrementalInputSplits implements Serializable {
     if (archivedMetadataList.size() > 0) {
       LOG.warn("\n"
           + "--------------------------------------------------------------------------------\n"
-          + "---------- caution: the reader has fall behind too much from the writer,\n"
-          + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+          + "---------- caution: the reader has fallen behind too much from the writer,\n"
+          + "---------- update 'read.tasks' option to add parallelism of read tasks.\n"
           + "--------------------------------------------------------------------------------");
     }
     // IMPORTANT: the merged metadata list must be in ascending order by instant time
     List<HoodieCommitMetadata> metadataList = mergeList(archivedMetadataList, activeMetadataList);
 
     Set<String> readPartitions = getReadPartitions(metadataList);
-    if (readPartitions.size() == 0) {
-      LOG.warn("No partitions found for reading under path: " + path);
+    if (readPartitions.isEmpty()) {
+      LOG.warn("No partitions found for reading under path: {}", path);
       return Collections.emptyList();
     }
     List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
         path, hadoopConf, metadataList, metaClient.getTableType());
+    List<FileSlice> fileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, pathInfoList, queryContext.getMaxCompletionTime(), skipCompaction);
 
-    if (pathInfoList.size() == 0) {
-      LOG.warn("No files found for reading under path: " + path);
+    if (fileSlices.isEmpty()) {
+      LOG.warn("No files found for reading under path: {}", path);
       return Collections.emptyList();
     }
 
-    return getInputSplits(metaClient, commitTimeline,
-        pathInfoList, readPartitions, endInstant, queryContext.getMaxCompletionTime(), instantRange, skipCompaction);
+    return getInputSplits(fileSlices, metaClient, endInstant, instantRange);
+  }
+
+  private List<FileSlice> getFileSlices(
+      HoodieTableMetaClient metaClient,
+      HoodieTimeline commitTimeline,
+      Set<String> readPartitions,
+      List<StoragePathInfo> pathInfoList,
+      String maxCompletionTime,
+      boolean skipBaseFiles) {
+    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, pathInfoList)) {
+      return readPartitions.stream().flatMap(par -> skipBaseFiles ? fsView.getAllLogsMergedFileSliceBeforeOrOn(par, maxCompletionTime)
+          : fsView.getLatestMergedFileSlicesBeforeOrOn(par, maxCompletionTime)).collect(Collectors.toList());
+    }
   }
 
   private List<MergeOnReadInputSplit> getInputSplits(
+      List<FileSlice> fileSlices,
       HoodieTableMetaClient metaClient,
-      HoodieTimeline commitTimeline,
-      List<StoragePathInfo> pathInfoList,
-      Set<String> readPartitions,
       String endInstant,
-      String maxCompletionTime,
-      InstantRange instantRange,
-      boolean skipBaseFiles) {
-    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, pathInfoList);
+      InstantRange instantRange) {
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
-    return readPartitions.stream()
-        .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxCompletionTime, skipBaseFiles)
-            .map(fileSlice -> {
-              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-                  .sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString())
-                  .filter(logPath -> !logPath.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-                  .collect(Collectors.toList()));
-              String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-              // the latest commit is used as the limit of the log reader instant upper threshold,
-              // it must be at least the latest instant time of the file slice to avoid data loss.
-              String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
-              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-                  basePath, logPaths, latestCommit,
-                  metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
-            }).collect(Collectors.toList()))
-        .flatMap(Collection::stream)
-        .sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit))
-        .collect(Collectors.toList());
+    return fileSlices.stream().map(fileSlice -> {
+      Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+          .sorted(HoodieLogFile.getLogFileComparator())
+          .map(logFile -> logFile.getPath().toString())
+          .filter(logPath -> !logPath.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList()));
+      String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+      // the latest commit is used as the limit of the log reader instant upper threshold,
+      // it must be at least the latest instant time of the file slice to avoid data loss.
+      String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
+      return new MergeOnReadInputSplit(cnt.getAndAdd(1),
+          basePath, logPaths, latestCommit,
+          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+    }).sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit)).collect(Collectors.toList());
   }
 
   private List<MergeOnReadInputSplit> getCdcInputSplits(
@@ -390,7 +395,7 @@ public class IncrementalInputSplits implements Serializable {
     Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fileSplits = extractor.extractCDCFileSplits();
 
     if (fileSplits.isEmpty()) {
-      LOG.warn("No change logs found for reading in path: " + path);
+      LOG.warn("No change logs found for reading in path: {}", path);
       return Collections.emptyList();
     }
 
@@ -400,15 +405,6 @@ public class IncrementalInputSplits implements Serializable {
             new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath().toString(), maxCompactionMemoryInBytes,
                 splits.getKey().getFileId(), splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new)))
         .collect(Collectors.toList());
-  }
-
-  private static Stream<FileSlice> getFileSlices(
-      HoodieTableFileSystemView fsView,
-      String relPartitionPath,
-      String endInstant,
-      boolean skipBaseFiles) {
-    return skipBaseFiles ? fsView.getAllLogsMergedFileSliceBeforeOrOn(relPartitionPath, endInstant)
-        : fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
   }
 
   private FileIndex getFileIndex(HoodieTableMetaClient metaClient) {

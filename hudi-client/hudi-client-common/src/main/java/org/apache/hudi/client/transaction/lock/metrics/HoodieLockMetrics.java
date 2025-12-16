@@ -28,19 +28,27 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 public class HoodieLockMetrics {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLockMetrics.class);
 
   public static final String LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME = "lock.acquire.attempts";
   public static final String LOCK_ACQUIRE_SUCCESS_COUNTER_NAME = "lock.acquire.success";
   public static final String LOCK_ACQUIRE_FAILURES_COUNTER_NAME = "lock.acquire.failure";
+  public static final String LOCK_RELEASE_SUCCESS_COUNTER_NAME = "lock.release.success";
   public static final String LOCK_ACQUIRE_DURATION_TIMER_NAME = "lock.acquire.duration";
   public static final String LOCK_REQUEST_LATENCY_TIMER_NAME = "lock.request.latency";
+  public static final String LOCK_ACQUIRED_BY_OTHERS_ERROR_COUNTER_NAME = "lock.acquired.others.error";
+  public static final String LOCK_STATE_UNKNOWN_COUNTER_NAME = "lock.state.unknown";
+  public static final String LOCK_ACQUIRE_PRECONDITION_FAILURE_COUNTER_NAME = "lock.acquire.precondition.failure";
+  public static final String LOCK_PROVIDER_FATAL_ERROR_COUNTER_NAME = "lock.provider.fatal.error";
+  public static final String LOCK_RELEASE_FAILURE_COUNTER_NAME = "lock.release.failure";
+  public static final String LOCK_EXPIRATION_DEADLINE_COUNTER_NAME = "lock.expiration.deadline";
+  public static final String LOCK_DANGLING_COUNTER_NAME = "lock.dangling";
+  public static final String LOCK_INTERRUPTED_COUNTER_NAME = "lock.interrupted";
   private final HoodieWriteConfig writeConfig;
   private final boolean isMetricsEnabled;
   private final int keepLastNtimes = 100;
@@ -49,6 +57,14 @@ public class HoodieLockMetrics {
   private transient Counter lockAttempts;
   private transient Counter successfulLockAttempts;
   private transient Counter failedLockAttempts;
+  private transient Counter lockReleaseSuccess;
+  private transient Counter lockAcquiredByOthersError;
+  private transient Counter lockStateUnknown;
+  private transient Counter lockAcquirePreconditionFailure;
+  private transient Counter lockProviderFatalError;
+  private transient Counter lockReleaseFailure;
+  private transient Counter lockDangling;
+  private transient Counter lockInterrupted;
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
   private static final Object REGISTRY_LOCK = new Object();
@@ -65,7 +81,14 @@ public class HoodieLockMetrics {
       lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));
       successfulLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_SUCCESS_COUNTER_NAME));
       failedLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_FAILURES_COUNTER_NAME));
-
+      lockReleaseSuccess = registry.counter(getMetricsName(LOCK_RELEASE_SUCCESS_COUNTER_NAME));
+      lockAcquiredByOthersError = registry.counter(getMetricsName(LOCK_ACQUIRED_BY_OTHERS_ERROR_COUNTER_NAME));
+      lockStateUnknown = registry.counter(getMetricsName(LOCK_STATE_UNKNOWN_COUNTER_NAME));
+      lockAcquirePreconditionFailure = registry.counter(getMetricsName(LOCK_ACQUIRE_PRECONDITION_FAILURE_COUNTER_NAME));
+      lockProviderFatalError = registry.counter(getMetricsName(LOCK_PROVIDER_FATAL_ERROR_COUNTER_NAME));
+      lockReleaseFailure = registry.counter(getMetricsName(LOCK_RELEASE_FAILURE_COUNTER_NAME));
+      lockDangling = registry.counter(getMetricsName(LOCK_DANGLING_COUNTER_NAME));
+      lockInterrupted = registry.counter(getMetricsName(LOCK_INTERRUPTED_COUNTER_NAME));
       lockDuration = createTimerForMetrics(registry, LOCK_ACQUIRE_DURATION_TIMER_NAME);
       lockApiRequestDuration = createTimerForMetrics(registry, LOCK_REQUEST_LATENCY_TIMER_NAME);
     }
@@ -100,7 +123,7 @@ public class HoodieLockMetrics {
     if (durationMs.isPresent()) {
       metric.update(durationMs.get(), TimeUnit.MILLISECONDS);
     } else {
-      LOG.info("Unable to get lock {} duration", lockName);
+      log.info("Unable to get lock {} duration", lockName);
     }
   }
 
@@ -123,6 +146,60 @@ public class HoodieLockMetrics {
   public void updateLockHeldTimerMetrics() {
     if (isMetricsEnabled && lockDurationTimer != null) {
       updateMetric(lockDurationTimer, lockDuration, "held");
+    }
+  }
+
+  public void updateLockReleaseSuccessMetric() {
+    if (isMetricsEnabled) {
+      lockReleaseSuccess.inc();
+    }
+  }
+
+  public void updateLockAcquiredByOthersErrorMetric() {
+    if (isMetricsEnabled) {
+      lockAcquiredByOthersError.inc();
+    }
+  }
+
+  public void updateLockStateUnknownMetric() {
+    if (isMetricsEnabled) {
+      lockStateUnknown.inc();
+    }
+  }
+
+  public void updateLockAcquirePreconditionFailureMetric() {
+    if (isMetricsEnabled) {
+      lockAcquirePreconditionFailure.inc();
+    }
+  }
+
+  public void updateLockProviderFatalErrorMetric() {
+    if (isMetricsEnabled) {
+      lockProviderFatalError.inc();
+    }
+  }
+
+  public void updateLockReleaseFailureMetric() {
+    if (isMetricsEnabled) {
+      lockReleaseFailure.inc();
+    }
+  }
+
+  public void updateLockExpirationDeadlineMetric(int deadlineMs) {
+    if (isMetricsEnabled) {
+      metrics.registerGauge(getMetricsName(LOCK_EXPIRATION_DEADLINE_COUNTER_NAME), deadlineMs >= 0 ? (long)deadlineMs : 0);
+    }
+  }
+
+  public void updateLockDanglingMetric() {
+    if (isMetricsEnabled) {
+      this.lockDangling.inc();
+    }
+  }
+
+  public void updateLockInterruptedMetric() {
+    if (isMetricsEnabled) {
+      this.lockInterrupted.inc();
     }
   }
 }

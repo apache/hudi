@@ -79,7 +79,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
       this.issuedInstant = instant.getEpochSecond();
       this.issuedInstantDelay = Duration.between(instant, Instant.now()).getSeconds();
     } catch (ParseException e) {
-      LOG.warn("Invalid input issued instant: " + issuedInstant);
+      LOG.warn("Invalid input issued instant: {}", issuedInstant);
     }
   }
 
@@ -89,7 +89,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
       this.splitLatestCommit = instant.getEpochSecond();
       this.splitLatestCommitDelay = Duration.between(instant, Instant.now()).getSeconds();
     } catch (ParseException e) {
-      LOG.warn("Invalid input latest commit" + splitLatestCommit);
+      LOG.warn("Invalid input latest commit: {}", splitLatestCommit);
     }
   }
 

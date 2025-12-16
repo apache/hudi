@@ -20,6 +20,8 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
@@ -47,12 +49,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestHoodieAvroReaderContext {
-  private static final Schema SKELETON_SCHEMA = getSkeletonSchema();
-  private static final Schema LIMITED_SKELETON_SCHEMA = getLimitedSkeletonSchema();
-  private static final Schema BASE_SCHEMA = getBaseSchema();
-  private static final Schema LIMITED_BASE_SCHEMA = getLimitedBaseSchema();
-  private static final Schema FULL_MERGED_SCHEMA = AvroSchemaUtils.mergeSchemas(SKELETON_SCHEMA, BASE_SCHEMA);
-  private static final Schema LIMTIED_MERGED_SCHEMA = AvroSchemaUtils.mergeSchemas(LIMITED_SKELETON_SCHEMA, LIMITED_BASE_SCHEMA);
+  private static final HoodieSchema SKELETON_SCHEMA = getSkeletonSchema();
+  private static final HoodieSchema LIMITED_SKELETON_SCHEMA = getLimitedSkeletonSchema();
+  private static final HoodieSchema BASE_SCHEMA = getBaseSchema();
+  private static final HoodieSchema LIMITED_BASE_SCHEMA = getLimitedBaseSchema();
+  private static final Schema FULL_MERGED_SCHEMA = AvroSchemaUtils.mergeSchemas(SKELETON_SCHEMA.toAvroSchema(), BASE_SCHEMA.toAvroSchema());
+  private static final Schema LIMTIED_MERGED_SCHEMA = AvroSchemaUtils.mergeSchemas(LIMITED_SKELETON_SCHEMA.toAvroSchema(), LIMITED_BASE_SCHEMA.toAvroSchema());
 
   private final StorageConfiguration<?> storageConfig = mock(StorageConfiguration.class);
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
@@ -149,14 +151,14 @@ class TestHoodieAvroReaderContext {
   void getField() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
     IndexedRecord indexedRecord = createSkeletonRecord("field1", "field2", 3);
-    assertEquals("field2", avroReaderContext.getValue(indexedRecord, SKELETON_SCHEMA, "skeleton_field_2"));
+    assertEquals("field2", avroReaderContext.getRecordContext().getValue(indexedRecord, SKELETON_SCHEMA, "skeleton_field_2"));
   }
 
   @Test
   void getFieldNotInSchema() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
     IndexedRecord indexedRecord = createSkeletonRecord("field1", "field2", 3);
-    assertNull(avroReaderContext.getValue(indexedRecord, SKELETON_SCHEMA, "missing_field"));
+    assertNull(avroReaderContext.getRecordContext().getValue(indexedRecord, SKELETON_SCHEMA, "missing_field"));
   }
 
   @Test
@@ -165,7 +167,7 @@ class TestHoodieAvroReaderContext {
     HoodieAvroReaderContext avroReaderContext =
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
-    assertEquals(3.2, avroReaderContext.getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
+    assertEquals(3.2, avroReaderContext.getRecordContext().getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
   }
 
   @Test
@@ -176,7 +178,7 @@ class TestHoodieAvroReaderContext {
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "record_key";
     IndexedRecord indexedRecord = createSkeletonRecord(recordKey, "field2", 3);
-    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, SKELETON_SCHEMA));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, SKELETON_SCHEMA));
   }
 
   @Test
@@ -187,33 +189,44 @@ class TestHoodieAvroReaderContext {
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "base_field_1:compound,base_field_3.nested_field:3.2";
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
-    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, BASE_SCHEMA));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, BASE_SCHEMA));
   }
 
   @Test
   void getRecordKeyFromMetadataFields() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
-    Schema schemaWithMetaFields = HoodieAvroUtils.addMetadataFields(SKELETON_SCHEMA);
+    HoodieSchema schemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(SKELETON_SCHEMA, false);
     String recordKey = "record_key";
-    IndexedRecord indexedRecord = new GenericData.Record(schemaWithMetaFields);
+    IndexedRecord indexedRecord = new GenericData.Record(schemaWithMetaFields.toAvroSchema());
     indexedRecord.put(0, "commit_time");
     indexedRecord.put(1, "commit_seqno");
     indexedRecord.put(2, recordKey);
     indexedRecord.put(5, "field1");
     indexedRecord.put(6, "field2");
     indexedRecord.put(7, 3);
-    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, schemaWithMetaFields));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, schemaWithMetaFields));
+  }
+
+  @Test
+  void testConstructEngineRecordWithFieldValues() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    HoodieSchema schema = getSkeletonSchema();
+    Object[] fieldVals = new Object[]{"String1", "String2", 1};
+    IndexedRecord row = readerContext.getRecordContext().constructEngineRecord(schema, fieldVals);
+    assertEquals(fieldVals[0], row.get(0));
+    assertEquals(fieldVals[1], row.get(1));
+    assertEquals(fieldVals[2], row.get(2));
   }
 
   @Test
   void testConstructEngineRecordWithNoUpdate() {
     HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
-    Schema schema = getSkeletonSchema();
+    HoodieSchema schema = getSkeletonSchema();
     IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
     BufferedRecord<IndexedRecord> baseRecord =
-        new BufferedRecord<>("key1", 1, engineRecord, 0, false);
+        new BufferedRecord<>("key1", 1, engineRecord, 0, null);
     Map<Integer, Object> updates = new HashMap<>();
-    IndexedRecord output = readerContext.mergeEngineRecord(schema, updates, baseRecord);
+    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1", output.get(0));
     assertEquals("String2", output.get(1));
     assertEquals(1, output.get(2));
@@ -222,14 +235,14 @@ class TestHoodieAvroReaderContext {
   @Test
   void testConstructEngineRecordWithUpdates() {
     HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
-    Schema schema = getSkeletonSchema();
+    HoodieSchema schema = getSkeletonSchema();
     IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
     BufferedRecord<IndexedRecord> baseRecord =
-        new BufferedRecord<>("key1", 1, engineRecord, 0, false);
+        new BufferedRecord<>("key1", 1, engineRecord, 0, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, "String1_0");
     updates.put(2, 2);
-    IndexedRecord output = readerContext.mergeEngineRecord(schema, updates, baseRecord);
+    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1_0", output.get(0));
     assertEquals("String2", output.get(1));
     assertEquals(2, output.get(2));
@@ -319,43 +332,43 @@ class TestHoodieAvroReaderContext {
     return new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
   }
 
-  private static Schema getSkeletonSchema() {
+  private static HoodieSchema getSkeletonSchema() {
     Schema skeletonDataSchema = Schema.createRecord("skeleton_full_schema", null, null, false);
     Schema.Field skeletonField1 = new Schema.Field("skeleton_field_1", Schema.create(Schema.Type.STRING));
     Schema.Field skeletonField2 = new Schema.Field("skeleton_field_2", Schema.create(Schema.Type.STRING));
     Schema.Field skeletonField3 = new Schema.Field("skeleton_field_3", Schema.create(Schema.Type.INT));
     skeletonDataSchema.setFields(Arrays.asList(skeletonField1, skeletonField2, skeletonField3));
-    return skeletonDataSchema;
+    return HoodieSchema.fromAvroSchema(skeletonDataSchema);
   }
 
-  private static Schema getLimitedSkeletonSchema() {
+  private static HoodieSchema getLimitedSkeletonSchema() {
     Schema skeletonDataSchema = Schema.createRecord("skeleton_limited_schema", null, null, false);
     Schema.Field skeletonField2 = new Schema.Field("skeleton_field_2", Schema.create(Schema.Type.STRING));
     skeletonDataSchema.setFields(Collections.singletonList(skeletonField2));
-    return skeletonDataSchema;
+    return HoodieSchema.fromAvroSchema(skeletonDataSchema);
   }
 
-  private static Schema getBaseSchema() {
+  private static HoodieSchema getBaseSchema() {
     Schema baseDataSchema = Schema.createRecord("base_full_schema", null, null, false);
     Schema.Field baseField1 = new Schema.Field("base_field_1", Schema.create(Schema.Type.STRING));
     Schema.Field baseField2 = new Schema.Field("base_field_2", Schema.create(Schema.Type.STRING));
     Schema.Field baseField3 = new Schema.Field("base_field_3", Schema.createRecord("nested", null, null, false, Collections.singletonList(new Schema.Field("nested_field", Schema.create(
         Schema.Type.DOUBLE)))));
     baseDataSchema.setFields(Arrays.asList(baseField1, baseField2, baseField3));
-    return baseDataSchema;
+    return HoodieSchema.fromAvroSchema(baseDataSchema);
   }
 
-  private static Schema getLimitedBaseSchema() {
+  private static HoodieSchema getLimitedBaseSchema() {
     Schema baseDataSchema = Schema.createRecord("base_limited_schema", null, null, false);
     Schema.Field baseField1 = new Schema.Field("base_field_1", Schema.create(Schema.Type.STRING));
     Schema.Field baseField3 = new Schema.Field("base_field_3", Schema.createRecord("nested", null, null, false,
         Collections.singletonList(new Schema.Field("nested_field", Schema.create(Schema.Type.DOUBLE)))));
     baseDataSchema.setFields(Arrays.asList(baseField1, baseField3));
-    return baseDataSchema;
+    return HoodieSchema.fromAvroSchema(baseDataSchema);
   }
 
   private IndexedRecord createSkeletonRecord(String field1, String field2, int field3) {
-    GenericRecord record = new GenericData.Record(SKELETON_SCHEMA);
+    GenericRecord record = new GenericData.Record(SKELETON_SCHEMA.toAvroSchema());
     record.put(0, field1);
     record.put(1, field2);
     record.put(2, field3);
@@ -363,9 +376,9 @@ class TestHoodieAvroReaderContext {
   }
 
   private IndexedRecord createBaseRecord(String field1, String field2, double field3) {
-    GenericRecord nested = new GenericData.Record(BASE_SCHEMA.getFields().get(2).schema());
+    GenericRecord nested = new GenericData.Record(BASE_SCHEMA.toAvroSchema().getFields().get(2).schema());
     nested.put(0, field3);
-    GenericRecord record = new GenericData.Record(BASE_SCHEMA);
+    GenericRecord record = new GenericData.Record(BASE_SCHEMA.toAvroSchema());
     record.put(0, field1);
     record.put(1, field2);
     record.put(2, nested);

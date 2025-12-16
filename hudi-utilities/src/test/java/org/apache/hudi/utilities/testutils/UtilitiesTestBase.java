@@ -20,13 +20,11 @@ package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -95,10 +93,10 @@ import java.util.Properties;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordToString;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -168,7 +166,7 @@ public class UtilitiesTestBase {
 
     jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4,1]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
-    sqlContext = new SQLContext(jsc);
+    sqlContext = SQLContext.getOrCreate(jsc.sc());
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
@@ -295,7 +293,6 @@ public class UtilitiesTestBase {
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
     props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     return new HiveSyncConfig(props);
   }
@@ -485,15 +482,6 @@ public class UtilitiesTestBase {
       return props;
     }
 
-    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, Schema schema) {
-      try {
-        Option<IndexedRecord> recordOpt = ((HoodieAvroRecord) hoodieRecord).getData().getInsertValue(schema);
-        return (GenericRecord) recordOpt.get();
-      } catch (IOException e) {
-        return null;
-      }
-    }
-
     public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
       return toGenericRecords(hoodieRecords, HoodieTestDataGenerator.AVRO_SCHEMA);
     }
@@ -501,28 +489,20 @@ public class UtilitiesTestBase {
     public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
       List<GenericRecord> records = new ArrayList<>();
       for (HoodieRecord hoodieRecord : hoodieRecords) {
-        records.add(toGenericRecord(hoodieRecord, schema));
+        records.add((GenericRecord) hoodieRecord.getData());
       }
       return records;
     }
 
-    public static String toJsonString(HoodieRecord hr) {
-      try {
-        return ((RawTripTestPayload) hr.getData()).getJsonData();
-      } catch (IOException ioe) {
-        return null;
-      }
-    }
-
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
-      return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+      return records.stream().map(HoodieTestDataGenerator::recordToString).filter(Option::isPresent).map(Option::get).toArray(String[]::new);
     }
 
     public static Tuple2<String, String>[] jsonifyRecordsByPartitions(List<HoodieRecord> records, int partitions) {
       Tuple2<String, String>[] data = new Tuple2[records.size()];
       for (int i = 0; i < records.size(); i++) {
         int key = i % partitions;
-        String value = Helpers.toJsonString(records.get(i));
+        String value = recordToString(records.get(i)).get();
         data[i] = new Tuple2<>(Long.toString(key), value);
       }
       return data;
@@ -531,7 +511,7 @@ public class UtilitiesTestBase {
     public static Tuple2<String, String>[] jsonifyRecordsByPartitionsWithNullKafkaKey(List<HoodieRecord> records, int partitions) {
       Tuple2<String, String>[] data = new Tuple2[records.size()];
       for (int i = 0; i < records.size(); i++) {
-        String value = Helpers.toJsonString(records.get(i));
+        String value = recordToString(records.get(i)).get();
         data[i] = new Tuple2<>(null, value);
       }
       return data;

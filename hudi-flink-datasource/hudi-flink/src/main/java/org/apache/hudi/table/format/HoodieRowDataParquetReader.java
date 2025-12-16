@@ -18,11 +18,12 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -33,13 +34,12 @@ import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.AvroSchemaConverter;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
@@ -56,7 +56,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   private final HoodieStorage storage;
   private final ParquetUtils parquetUtils;
   private final StoragePath path;
-  private Schema fileSchema;
+  private HoodieSchema fileSchema;
   private DataType fileRowType;
   private final List<ClosableIterator<RowData>> readerIterators = new ArrayList<>();
 
@@ -82,7 +82,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema, Collections.emptyList());
     readerIterators.add(rowDataItr);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
@@ -90,7 +90,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), schema, Collections.emptyList());
     return new CloseableMappingIterator<>(rowDataItr, rowData -> Objects.toString(rowData.getString(0)));
   }
@@ -98,15 +98,15 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   public ClosableIterator<RowData> getRowDataIterator(
       InternalSchemaManager internalSchemaManager,
       DataType dataType,
-      Schema requestedSchema,
+      HoodieSchema requestedSchema,
       List<Predicate> predicates) throws IOException {
     return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, predicates);
   }
 
   @Override
-  public Schema getSchema() {
+  public HoodieSchema getSchema() {
     if (fileSchema == null) {
-      fileSchema = AvroSchemaConverter.convertToSchema(getRowType().notNull().getLogicalType());
+      fileSchema = HoodieSchemaConverter.convertToSchema(getRowType().notNull().getLogicalType());
     }
     return fileSchema;
   }

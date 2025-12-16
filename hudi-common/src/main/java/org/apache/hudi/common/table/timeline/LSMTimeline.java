@@ -22,7 +22,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.model.HoodieLSMTimelineManifest;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ArchivedInstantReadSchemas;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
@@ -33,6 +33,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -141,7 +142,7 @@ public class LSMTimeline {
   public static boolean isFileInRange(HoodieArchivedTimeline.TimeRangeFilter filter, String fileName) {
     String minInstant = getMinInstantTime(fileName);
     String maxInstant = getMaxInstantTime(fileName);
-    return filter.isInRange(minInstant) || filter.isInRange(maxInstant);
+    return filter.hasOverlappingInRange(minInstant, maxInstant);
   }
 
   /**
@@ -149,17 +150,15 @@ public class LSMTimeline {
    */
   public static int latestSnapshotVersion(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
     StoragePath versionFilePath = getVersionFilePath(archivePath);
-    if (metaClient.getStorage().exists(versionFilePath)) {
-      try {
-        Option<byte[]> content =
-            FileIOUtils.readDataFromPath(metaClient.getStorage(), versionFilePath);
-        if (content.isPresent()) {
-          return Integer.parseInt(fromUTF8Bytes(content.get()));
-        }
-      } catch (Exception e) {
-        // fallback to manifest file listing.
-        LOG.warn("Error reading version file {}", versionFilePath, e);
+    try {
+      Option<byte[]> content =
+          FileIOUtils.readDataFromPath(metaClient.getStorage(), versionFilePath, true);
+      if (content.isPresent()) {
+        return Integer.parseInt(fromUTF8Bytes(content.get()));
       }
+    } catch (Exception e) {
+      // fallback to manifest file listing.
+      LOG.warn("Error reading version file {}", versionFilePath, e);
     }
 
     return allSnapshotVersions(metaClient, archivePath).stream().max(Integer::compareTo).orElse(-1);
@@ -169,15 +168,17 @@ public class LSMTimeline {
    * Returns all the valid snapshot versions.
    */
   public static List<Integer> allSnapshotVersions(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
-    if (!metaClient.getStorage().exists(archivePath)) {
+    try {
+      return metaClient.getStorage().listDirectEntries(archivePath,
+              getManifestFilePathFilter())
+          .stream()
+          .map(fileStatus -> fileStatus.getPath().getName())
+          .map(LSMTimeline::getManifestVersion)
+          .collect(Collectors.toList());
+    } catch (FileNotFoundException ex) {
+      LOG.debug("Archive path {} does not exist", archivePath);
       return Collections.emptyList();
     }
-    return metaClient.getStorage().listDirectEntries(archivePath,
-            getManifestFilePathFilter())
-        .stream()
-        .map(fileStatus -> fileStatus.getPath().getName())
-        .map(LSMTimeline::getManifestVersion)
-        .collect(Collectors.toList());
   }
 
   /**
@@ -255,7 +256,7 @@ public class LSMTimeline {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting file layout for archived file: {}", fileName);
+      LOG.warn("error getting file layout for archived file: {}", fileName, e);
     }
 
     // return default value in case of any errors

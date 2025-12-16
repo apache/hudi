@@ -224,5 +224,4 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       assertTrue(InstantComparison.compareTimestamps(hoodieInstant.requestedTime(), InstantComparison.LESSER_THAN, hoodieInstant.getCompletionTime()));
     });
   }
-
 }

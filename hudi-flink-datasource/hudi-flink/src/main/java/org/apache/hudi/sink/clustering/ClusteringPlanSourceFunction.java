@@ -82,7 +82,7 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunctionAdapter im
         sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
       }
     } else {
-      LOG.warn(clusteringInstantTime + " not found in pending clustering instants.");
+      LOG.warn("{} not found in pending clustering instants.", clusteringInstantTime);
     }
   }
 

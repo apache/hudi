@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -31,13 +32,14 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,8 +56,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
@@ -143,10 +145,10 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     HoodieDeleteRecord.Builder recordBuilder = HOODIE_DELETE_RECORD_BUILDER_STUB.get();
     List<HoodieDeleteRecord> deleteRecordList = Arrays.stream(getRecordsToDelete())
         .map(record -> HoodieDeleteRecord.newBuilder(recordBuilder)
-            .setRecordKey(record.getRecordKey())
-            .setPartitionPath(record.getPartitionPath())
-            .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
-            .build())
+          .setRecordKey(record.getRecordKey())
+          .setPartitionPath(record.getPartitionPath())
+          .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
+          .build())
         .collect(Collectors.toList());
     writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)
         .setDeleteRecordList(deleteRecordList)
@@ -163,9 +165,9 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     } else if (version == 2) {
       return SerializationUtils.deserialize(data);
     } else {
-      DatumReader<HoodieDeleteRecordList> reader = new SpecificDatumReader<>(HoodieDeleteRecordList.class);
+      DatumReader<GenericRecord> reader = new GenericDatumReader<>(HoodieDeleteRecordList.SCHEMA$);
       BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);
-      List<HoodieDeleteRecord> deleteRecordList = reader.read(null, decoder)
+      List<HoodieDeleteRecord> deleteRecordList = HoodieAvroUtils.convertToSpecificRecord(HoodieDeleteRecordList.class, reader.read(null, decoder))
           .getDeleteRecordList();
       return deleteRecordList.stream()
           .map(record -> DeleteRecord.create(

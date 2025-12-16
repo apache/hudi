@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 public class HudiDataStreamWriter {
 
   public static DataType ROW_DATA_TYPE = DataTypes.ROW(
-      DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+      DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
       DataTypes.FIELD("uuid", DataTypes.VARCHAR(40)),// record key
       DataTypes.FIELD("rider", DataTypes.VARCHAR(20)),
       DataTypes.FIELD("driver", DataTypes.VARCHAR(20)),
@@ -107,7 +107,7 @@ public class HudiDataStreamWriter {
     options.put(FlinkOptions.PATH.key(), basePath);
     options.put(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), "s3a");
     options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-    options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
     options.put(FlinkOptions.IGNORE_FAILED.key(), "true");
     return options;

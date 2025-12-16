@@ -109,6 +109,11 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public void unpersistWithDependencies() {
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(rddData.rdd());
+  }
+
+  @Override
   public boolean isEmpty() {
     return rddData.isEmpty();
   }
@@ -203,5 +208,10 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   @Override
   public HoodieData<T> repartition(int parallelism) {
     return HoodieJavaRDD.of(rddData.repartition(parallelism));
+  }
+
+  @Override
+  public HoodieData<T> coalesce(int parallelism) {
+    return HoodieJavaRDD.of(rddData.coalesce(parallelism));
   }
 }

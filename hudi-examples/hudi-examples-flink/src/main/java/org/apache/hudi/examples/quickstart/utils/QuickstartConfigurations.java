@@ -23,6 +23,8 @@ import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
 import org.apache.hudi.examples.quickstart.factory.ContinuousFileSourceFactory;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -42,15 +44,14 @@ import java.util.stream.Collectors;
 /**
  * Configurations for the test.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class QuickstartConfigurations {
-  private QuickstartConfigurations() {
-  }
 
   public static final DataType ROW_DATA_TYPE = DataTypes.ROW(
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
           DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
           DataTypes.FIELD("age", DataTypes.INT()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -68,7 +69,7 @@ public class QuickstartConfigurations {
           DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
           DataTypes.FIELD("age", DataTypes.INT()),
           DataTypes.FIELD("salary", DataTypes.DOUBLE()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 

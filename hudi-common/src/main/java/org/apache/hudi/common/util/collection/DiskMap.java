@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -155,7 +155,7 @@ public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, K
       try {
         FileIOUtils.deleteDirectory(new File(directoryPath));
       } catch (IOException exception) {
-        CLEANER_LOG.warn("Error while deleting the disk map directory=" + directoryPath, exception);
+        CLEANER_LOG.warn("Error while deleting the disk map directory={}", directoryPath, exception);
       }
     }
   }

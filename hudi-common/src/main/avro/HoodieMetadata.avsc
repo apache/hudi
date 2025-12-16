@@ -302,6 +302,40 @@
                                             "name": "value"
                                         }
                                     ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "ArrayWrapper",
+                                    "doc": "A record containing a list of wrapped values.",
+                                    "fields": [
+                                        {
+                                            "name": "wrappedValues",
+                                            "doc": "An array where each element is one of the supported wrapper types.",
+                                            "type": [
+                                                "null",
+                                                {
+                                                    "type": "array",
+                                                    "items": [
+                                                        "null",
+                                                        "org.apache.hudi.avro.model.BooleanWrapper",
+                                                        "org.apache.hudi.avro.model.IntWrapper",
+                                                        "org.apache.hudi.avro.model.LongWrapper",
+                                                        "org.apache.hudi.avro.model.FloatWrapper",
+                                                        "org.apache.hudi.avro.model.DoubleWrapper",
+                                                        "org.apache.hudi.avro.model.BytesWrapper",
+                                                        "org.apache.hudi.avro.model.StringWrapper",
+                                                        "org.apache.hudi.avro.model.DateWrapper",
+                                                        "org.apache.hudi.avro.model.DecimalWrapper",
+                                                        "org.apache.hudi.avro.model.TimeMicrosWrapper",
+                                                        "org.apache.hudi.avro.model.TimestampMicrosWrapper",
+                                                        "org.apache.hudi.avro.model.LocalDateWrapper"
+                                                    ]
+                                                }
+                                            ],
+                                            "default": null
+                                        }
+                                    ]
                                 }
                             ],
                             "default": null
@@ -328,7 +362,8 @@
                                 "org.apache.hudi.avro.model.DecimalWrapper",
                                 "org.apache.hudi.avro.model.TimeMicrosWrapper",
                                 "org.apache.hudi.avro.model.TimestampMicrosWrapper",
-                                "org.apache.hudi.avro.model.LocalDateWrapper"
+                                "org.apache.hudi.avro.model.LocalDateWrapper",
+                                "org.apache.hudi.avro.model.ArrayWrapper"
                             ],
                             "default": null
                         },
@@ -383,6 +418,35 @@
                             "name": "isTightBound",
                             "type": "boolean",
                             "default": false
+                        },
+                        {
+                            "doc": "Value type information containing enum ordinal and optional additional information",
+                            "name": "valueType",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "record",
+                                    "name": "HoodieValueTypeInfo",
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "fields": [
+                                        {
+                                            "doc": "Enum type ordinal representing the value type",
+                                            "name": "typeOrdinal",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "doc": "Optional additional information about the value type",
+                                            "name": "additionalInfo",
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ],
+                                            "default": null
+                                        }
+                                    ]
+                                }
+                            ],
+                            "default": null
                         }
                     ]
                 }

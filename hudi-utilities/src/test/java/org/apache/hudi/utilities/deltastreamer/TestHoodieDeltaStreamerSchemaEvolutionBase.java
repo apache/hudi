@@ -28,8 +28,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -42,7 +44,6 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -214,7 +215,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           transformerClassNames, PROPS_FILENAME_TEST_AVRO_KAFKA, false,  useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
     } else {
       prepareParquetDFSSource(false, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
-          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
+          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false, false);
       cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
           transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
           useSchemaProvider, dfsSourceLimitBytes, false, null, tableType, "timestamp", null);
@@ -225,9 +226,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected void addData(Dataset<Row> df, Boolean isFirst) {
     if (useSchemaProvider) {
-      TestSchemaProvider.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+      TestSchemaProvider.sourceSchema = HoodieSchema.fromAvroSchema(
+          AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE));
       if (withErrorTable && isFirst) {
-        TestSchemaProvider.setTargetSchema(AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
+        TestSchemaProvider.setTargetSchema(HoodieSchema.fromAvroSchema(
+            AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk")));
       }
     }
     if (useKafkaSource) {
@@ -311,24 +314,24 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   public static class TestSchemaProvider extends SchemaProvider {
 
-    public static Schema sourceSchema;
-    public static Schema targetSchema = null;
+    public static HoodieSchema sourceSchema;
+    public static HoodieSchema targetSchema = null;
 
     public TestSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
       super(props, jssc);
     }
 
     @Override
-    public Schema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return sourceSchema;
     }
 
     @Override
-    public Schema getTargetSchema() {
+    public HoodieSchema getTargetHoodieSchema() {
       return targetSchema != null ? targetSchema : sourceSchema;
     }
 
-    public static void setTargetSchema(Schema targetSchema) {
+    public static void setTargetSchema(HoodieSchema targetSchema) {
       TestSchemaProvider.targetSchema = targetSchema;
     }
 
@@ -352,6 +355,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
     public static List<JavaRDD> errorEvents = new ArrayList<>();
     public static Map<String,Option<JavaRDD>> commited = new HashMap<>();
+    // This instant time is only used for separate upsert and commit calls
+    // to maintain the instant time for the error table
+    private Option<String> errorTableInstantTime = Option.empty();
 
     public TestErrorTable(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
                           FileSystem fileSystem) {
@@ -364,18 +370,25 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public boolean commit(String errorTableInstantTime, JavaRDD writeStatuses) {
+    public boolean commit(JavaRDD writeStatuses) {
       if (writeStatuses == null) {
         throw new IllegalArgumentException("writeStatuses cannot be null");
       }
+      if (this.errorTableInstantTime.isEmpty()) {
+        return false;
+      }
       commited.clear();
-      commited.put(errorTableInstantTime, Option.of(writeStatuses));
+      commited.put(errorTableInstantTime.get(), Option.of(writeStatuses));
       return true;
     }
 
     @Override
-    public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option commitedInstantTime) {
+    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option commitedInstantTime) {
       if (errorEvents.size() > 0) {
+        if (errorTableInstantTime.isPresent()) {
+          throw new IllegalStateException("Error table instant time should be empty before calling upsert");
+        }
+        errorTableInstantTime = Option.of(InProcessTimeGenerator.createNewInstantTime());
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
           errorsCombined = errorsCombined.union(errorEvents.get(i));
@@ -418,7 +431,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
       return Option.empty();
     }
   }

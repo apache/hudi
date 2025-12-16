@@ -72,7 +72,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
     String className = getStringWithAltKeys(config, PROTO_SCHEMA_CLASS_NAME);
     ProtoConversionUtil.SchemaConfig schemaConfig = ProtoConversionUtil.SchemaConfig.fromProperties(props);
     try {
-      schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();
+      schemaString = ProtoConversionUtil.getSchemaForMessageClass(ReflectionUtils.getClass(className), schemaConfig).toString();
     } catch (Exception e) {
       throw new HoodieSchemaException(String.format("Error reading proto source schema for class: %s", className), e);
     }

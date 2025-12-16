@@ -19,26 +19,28 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
-import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
+import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
-import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getValidIndexedColumns
+import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -55,6 +57,7 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
+                              schema: HoodieSchema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false)
@@ -91,9 +94,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
-
+      val getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
+        getValidIndexedColumns(indexDefinition, schema, metaClient.getTableConfig).asScala.toSeq
+      }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
       }
     } else {
       Option.empty
@@ -147,7 +152,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
             //       of the transposed table in memory, facilitating execution of the subsequently chained operations
             //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
             //       Optimizer)
-            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
+            sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
           } else {
             val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
             spark.createDataFrame(rdd, indexSchema)
@@ -244,6 +249,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
+    val useJava8api = spark.sessionState.conf.datetimeJava8ApiEnabled
     val transposedRows: HoodieData[Row] = colStatsRecords
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
@@ -262,8 +268,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = sortedTargetColDataTypeMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+          val valueMetadata = getValueMetadata(r.getValueType)
+          val minValue = extractColStatsValue(minValueWrapper, colType, valueMetadata, useJava8api)
+          val maxValue = extractColStatsValue(maxValueWrapper, colType, valueMetadata, useJava8api)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -326,9 +333,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
         //       of the transposed table in memory, facilitating execution of the subsequently chained operations
         //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
         //       Optimizer)
-        createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
       } else {
-        createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
       }
     }
 
@@ -342,23 +349,19 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //    - Filtering out nulls
     checkState(targetColumns.nonEmpty)
 
-    // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-    val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
-    // encode column name and parition name if partition list is available
-    val keyPrefixes = if (prunedPartitions.isDefined) {
-      prunedPartitions.get.map(partitionPath =>
-        new PartitionIndexID(HoodieTableMetadataUtil.getPartitionIdentifier(partitionPath)).asBase64EncodedString()
-      ).flatMap(encodedPartition => {
-        encodedTargetColumnNames.map(encodedTargetColumn => encodedTargetColumn.concat(encodedPartition))
-      })
+    // Create raw key prefixes based on column names and optional partition names
+    val rawKeys = if (prunedPartitions.isDefined) {
+      val partitionsList = prunedPartitions.get.toList
+      targetColumns.flatMap(colName =>
+        partitionsList.map(partitionPath => new ColumnStatsIndexPrefixRawKey(colName, partitionPath))
+      )
     } else {
-      encodedTargetColumnNames
+      targetColumns.map(colName => new ColumnStatsIndexPrefixRawKey(colName))
     }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(
-        HoodieListData.eager(keyPrefixes.toSeq.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory,
-        HoodieTableMetadataUtil.IDENTITY_ENCODING)
+        HoodieListData.eager(rawKeys.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
@@ -381,7 +384,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
     val requiredIndexColumns =
       targetColumnStatsIndexColumns.map(colName =>
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"))
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.$colName"))
 
     colStatsDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredIndexColumns: _*)
@@ -449,6 +452,28 @@ object ColumnStatsIndexSupport {
   @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
+  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    valueMetadata.getValueType match {
+      case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
+      case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata, useJava8api)
+    }
+  }
+
+  private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    val colStatsValue = SparkValueMetadataUtils.convertJavaTypeToSparkType(SparkValueMetadataUtils.getValueMetadata(dataType, HoodieIndexVersion.V2)
+      .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)), useJava8api)
+    // TODO: should this be done here? Should we handle this with adding more value types?
+    // TODO: should this logic be in convertJavaTypeToSparkType?
+    dataType match {
+      case ShortType => colStatsValue.asInstanceOf[Int].toShort
+      case ByteType => colStatsValue.asInstanceOf[Int].toByte
+      case _ => colStatsValue
+    }
+  }
+
+  def extractWrapperValueV1(valueWrapper: AnyRef, dataType: DataType): Any =
+    deserialize(tryUnpackValueWrapper(valueWrapper), dataType)
+
   def tryUnpackValueWrapper(valueWrapper: AnyRef): Any = {
     valueWrapper match {
       case w: BooleanWrapper => w.getValue
@@ -473,45 +498,50 @@ object ColumnStatsIndexSupport {
   val decConv = new DecimalConversion()
 
   def deserialize(value: Any, dataType: DataType): Any = {
-    dataType match {
-      // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
-      //       manually encoding corresponding values as int and long w/in the Column Stats Index and
-      //       here we have to decode those back into corresponding logical representation.
-      case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-      case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
-      // Standard types
-      case StringType => value
-      case BooleanType => value
-      // Numeric types
-      case FloatType => value
-      case DoubleType => value
-      case LongType => value
-      case IntegerType => value
-      // NOTE: All integral types of size less than Int are encoded as Ints in MT
-      case ShortType => value.asInstanceOf[Int].toShort
-      case ByteType => value.asInstanceOf[Int].toByte
+    // Handle TimestampNTZType separately since it does not exist in version lower than spark3.5
+    if (SparkAdapterSupport.sparkAdapter.isTimestampNTZType(dataType)) {
+      DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
+    } else {
+      dataType match {
+        // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
+        //       manually encoding corresponding values as int and long w/in the Column Stats Index and
+        //       here we have to decode those back into corresponding logical representation.
+        case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
+        // Standard types
+        case StringType => value
+        case BooleanType => value
+        // Numeric types
+        case FloatType => value
+        case DoubleType => value
+        case LongType => value
+        case IntegerType => value
+        // NOTE: All integral types of size less than Int are encoded as Ints in MT
+        case ShortType => value.asInstanceOf[Int].toShort
+        case ByteType => value.asInstanceOf[Int].toByte
 
-      case dt: DecimalType =>
-        value match {
-          case buffer: ByteBuffer =>
-            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case bd: BigDecimal =>
-            // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
-            bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case bd: java.math.BigDecimal =>
-            bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case other =>
-            throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
-        }
-      case BinaryType =>
-        value match {
-          case b: ByteBuffer => toBytes(b)
-          case other => other
-        }
+        case dt: DecimalType =>
+          value match {
+            case buffer: ByteBuffer =>
+              val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+              decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case bd: BigDecimal =>
+              // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
+              bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case bd: java.math.BigDecimal =>
+              bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case other =>
+              throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
+          }
+        case BinaryType =>
+          value match {
+            case b: ByteBuffer => toBytes(b)
+            case other => other
+          }
 
-      case _ =>
-        throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
+        case _ =>
+          throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
+      }
     }
   }
 }

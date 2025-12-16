@@ -24,10 +24,13 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -74,16 +77,16 @@ public final class SchemaTestUtil {
   public SchemaTestUtil() {
   }
 
-  public static Schema getSimpleSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
+  public static HoodieSchema getSimpleSchema() throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
   }
   
-  public static Schema getSchemaFromResourceFilePath(String filePath) throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(filePath));
+  public static HoodieSchema getSchemaFromResourceFilePath(String filePath) throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(filePath));
   }
 
-  public static Schema getSchema(String path) throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(path));
+  public static HoodieSchema getSchema(String path) throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(path));
   }
 
   public static List<IndexedRecord> generateTestRecords(int from, int limit) throws IOException, URISyntaxException {
@@ -108,15 +111,23 @@ public final class SchemaTestUtil {
     }
   }
 
-  private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
+  public static HoodieSchema getSchemaFromFields(List<String> fields) {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    List<HoodieSchemaField> hoodieFields = fields.stream()
+        .map(fieldName -> HoodieSchemaField.of(fieldName, stringSchema))
+        .collect(Collectors.toList());
+    return HoodieSchema.createRecord("test_schema", "test_namespace", null, hoodieFields);
+  }
+
+  private static <T extends IndexedRecord> List<T> toRecords(HoodieSchema writerSchema, HoodieSchema readerSchema, int from, int limit)
       throws IOException, URISyntaxException {
-    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema.toAvroSchema(), readerSchema.toAvroSchema());
     Path dataPath = initializeSampleDataPath();
 
     try (Stream<String> stream = Files.lines(dataPath)) {
       return stream.skip(from).limit(limit).map(s -> {
         try {
-          return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema, s));
+          return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema.toAvroSchema(), s));
         } catch (IOException e) {
           throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
         }
@@ -126,15 +137,15 @@ public final class SchemaTestUtil {
     }
   }
 
-  private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, String path)
+  private static <T extends IndexedRecord> List<T> toRecords(HoodieSchema writerSchema, HoodieSchema readerSchema, String path)
       throws IOException, URISyntaxException {
-    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema.toAvroSchema(), readerSchema.toAvroSchema());
     Path dataPath = initializeSampleDataPath(path);
 
     try (Stream<String> stream = Files.lines(dataPath)) {
       return stream.map(s -> {
         try {
-          return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema, s));
+          return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema.toAvroSchema(), s));
         } catch (IOException e) {
           throw new HoodieIOException("Could not read data from " + path, e);
         }
@@ -219,10 +230,10 @@ public final class SchemaTestUtil {
                                                        String instantTime)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, recordKeyList.size());
-    Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    HoodieSchema hoodieFieldsSchema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
     List<IndexedRecord> recordsWithMetaFields = new ArrayList<>();
     for (int i = 0; i < recordKeyList.size(); i++) {
-      GenericRecord newRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) records.get(i), hoodieFieldsSchema);
+      GenericRecord newRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) records.get(i), hoodieFieldsSchema.toAvroSchema());
       newRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKeyList.get(i));
       newRecord.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
       newRecord.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
@@ -231,10 +242,10 @@ public final class SchemaTestUtil {
     return recordsWithMetaFields;
   }
 
-  public List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
+  public List<HoodieRecord> generateHoodieTestRecords(int from, int limit, HoodieSchema schema)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
-    return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
+    return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema.toAvroSchema()))
         .map(p -> convertToHoodieRecords(p, genRandomUUID(), "000/00/00")).collect(Collectors.toList());
   }
 
@@ -263,10 +274,10 @@ public final class SchemaTestUtil {
   }
 
   public static List<HoodieRecord> updateHoodieTestRecordsWithoutHoodieMetadata(List<HoodieRecord> oldRecords,
-      Schema schema, String fieldNameToUpdate, String newValue) {
+      HoodieSchema schema, String fieldNameToUpdate, String newValue) {
     return oldRecords.stream().map(r -> {
       try {
-        GenericRecord rec = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(schema).get();
+        GenericRecord rec = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(schema.toAvroSchema()).get();
         rec.put(fieldNameToUpdate, newValue);
         return new HoodieAvroRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
       } catch (IOException io) {
@@ -275,12 +286,12 @@ public final class SchemaTestUtil {
     }).collect(Collectors.toList());
   }
 
-  public static Schema getEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved.avsc"));
+  public static HoodieSchema getEvolvedSchema() throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved.avsc"));
   }
 
-  public static Schema getEvolvedCompatibleSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved-compatible.avsc"));
+  public static HoodieSchema getEvolvedCompatibleSchema() throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved-compatible.avsc"));
   }
 
   public static List<IndexedRecord> generateEvolvedTestRecords(int from, int limit)
@@ -288,43 +299,56 @@ public final class SchemaTestUtil {
     return toRecords(getSimpleSchema(), getEvolvedSchema(), from, limit);
   }
 
-  public static Schema getComplexEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avsc"));
+  public static HoodieSchema getComplexEvolvedSchema() throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avsc"));
   }
 
-  public static Schema getTimestampEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-test-evolved.avsc"));
+  public static HoodieSchema getTimestampEvolvedSchema() throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-test-evolved.avsc"));
   }
 
-  public static Schema getTimestampWithLogicalTypeSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-logical-type.avsc"));
+  public static HoodieSchema getTimestampWithLogicalTypeSchema() throws IOException {
+    return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-logical-type.avsc"));
   }
 
-  public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
+  public static GenericRecord generateAvroRecordFromJson(HoodieSchema schema, int recordNumber, String instantTime,
                                                          String fileId) throws IOException {
     return generateAvroRecordFromJson(schema, recordNumber, instantTime, fileId, true);
   }
 
-  public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
+  public static GenericRecord generateAvroRecordFromJson(HoodieSchema schema, int recordNumber, String instantTime,
       String fileId, boolean populateMetaFields) throws IOException {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
-    return CONVERTER.convert(record.toJsonString(), schema);
+    return CONVERTER.convert(record.toJsonString(), schema.toAvroSchema());
   }
 
-  public static Schema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
+  public static HoodieSchema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
     try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
-      Schema schema = new Schema.Parser().parse(schemaInputStream);
-      return withHoodieMetadata ? HoodieAvroUtils.addMetadataFields(schema) : schema;
+      HoodieSchema schema = new HoodieSchema.Parser().parse(schemaInputStream);
+      return withHoodieMetadata ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
     }
   }
 
-  public static Schema getSchemaFromResource(Class<?> clazz, String name) {
+  public static HoodieSchema getSchemaFromResource(Class<?> clazz, String name) {
     return getSchemaFromResource(clazz, name, false);
   }
 
-  public static List<IndexedRecord> generateTestRecordsForSchema(Schema schema) {
+  public static HoodieSchema getHoodieSchemaFromResource(Class<?> clazz, String name) {
+    return getHoodieSchemaFromResource(clazz, name, false);
+  }
+
+  public static HoodieSchema getHoodieSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
+    try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
+      HoodieSchema schema = new HoodieSchema.Parser().parse(schemaInputStream);
+      return withHoodieMetadata ? HoodieSchema.addMetadataFields(schema, false) : schema;
+    } catch (IOException e) {
+      throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
+    }
+  }
+
+  public static List<IndexedRecord> generateTestRecordsForSchema(HoodieSchema schema) {
     RandomData generator = new RandomData(schema, 1000);
     List<IndexedRecord> records = new ArrayList<>();
     for (Object o : generator) {
@@ -336,36 +360,36 @@ public final class SchemaTestUtil {
 
   //Taken from test pkg 1.8.2 avro. This is available as a util class in latest versions. When we upgrade avro we can remove this
   static class RandomData implements Iterable<Object> {
-    private final Schema root;
+    private final HoodieSchema root;
     private final long seed;
     private final int count;
 
-    public RandomData(Schema schema, int count) {
+    public RandomData(HoodieSchema schema, int count) {
       this(schema, count, System.currentTimeMillis());
     }
 
-    public RandomData(Schema schema, int count, long seed) {
+    public RandomData(HoodieSchema schema, int count, long seed) {
       this.root = schema;
       this.seed = seed;
       this.count = count;
     }
 
     @SuppressWarnings(value = "unchecked")
-    private static Object generate(Schema schema, Random random, int d) {
+    private static Object generate(HoodieSchema schema, Random random, int d) {
       switch (schema.getType()) {
         case RECORD:
-          GenericRecord record = new GenericData.Record(schema);
-          for (Schema.Field field : schema.getFields()) {
+          GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+          for (HoodieSchemaField field : schema.getFields()) {
             record.put(field.name(), generate(field.schema(), random, d + 1));
           }
           return record;
         case ENUM:
           List<String> symbols = schema.getEnumSymbols();
-          return new GenericData.EnumSymbol(schema, symbols.get(random.nextInt(symbols.size())));
+          return new GenericData.EnumSymbol(schema.toAvroSchema(), symbols.get(random.nextInt(symbols.size())));
         case ARRAY:
           int length = (random.nextInt(5) + 2) - d;
           GenericArray<Object> array =
-              new GenericData.Array(length <= 0 ? 0 : length, schema);
+              new GenericData.Array<>(Math.max(length, 0), schema.toAvroSchema());
           for (int i = 0; i < length; i++) {
             array.add(generate(schema.getElementType(), random, d + 1));
           }
@@ -379,13 +403,13 @@ public final class SchemaTestUtil {
           }
           return map;
         case UNION:
-          List<Schema> types = schema.getTypes();
+          List<HoodieSchema> types = schema.getTypes();
           //Dropping the null at the end.
           return generate(types.get(random.nextInt(types.size() - 1)), random, d);
         case FIXED:
           byte[] bytes = new byte[schema.getFixedSize()];
           random.nextBytes(bytes);
-          return new GenericData.Fixed(schema, bytes);
+          return new GenericData.Fixed(schema.toAvroSchema(), bytes);
         case STRING:
           return randomUtf8(random, 40);
         case BYTES:

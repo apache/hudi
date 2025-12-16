@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -112,7 +111,7 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  * @see AbstractStreamWriteFunction for the bootstrap event sending workflow
  */
 public class StreamWriteOperatorCoordinator
-    implements OperatorCoordinatorAdapter, CoordinationRequestHandler {
+    implements OperatorCoordinator, CoordinationRequestHandler {
   private static final Logger LOG = LoggerFactory.getLogger(StreamWriteOperatorCoordinator.class);
 
   /**
@@ -128,7 +127,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * Coordinator context.
    */
-  private final Context context;
+  protected final Context context;
 
   /**
    * Gateways for sending events to sub-tasks.
@@ -168,12 +167,12 @@ public class StreamWriteOperatorCoordinator
   /**
    * A single-thread executor to handle all the write metadata events.
    */
-  private NonThrownExecutor executor;
+  protected NonThrownExecutor executor;
 
   /**
    * A single-thread executor to handle the instant time request.
    */
-  private NonThrownExecutor instantRequestExecutor;
+  protected NonThrownExecutor instantRequestExecutor;
 
   /**
    * A single-thread executor to handle asynchronous hive sync.
@@ -318,7 +317,12 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
+  public void handleEventFromOperator(int subtask, int attemptNumber, OperatorEvent operatorEvent) {
+    handleEventFromOperator(subtask, operatorEvent);
+  }
+
+  @VisibleForTesting
+  public void handleEventFromOperator(int subtask, OperatorEvent operatorEvent) {
     ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
         "The coordinator can only handle WriteMetaEvent");
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
@@ -340,7 +344,7 @@ public class StreamWriteOperatorCoordinator
     }
   }
 
-  @Override
+  @VisibleForTesting
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
     // no operation
   }
@@ -350,9 +354,19 @@ public class StreamWriteOperatorCoordinator
     // no operation
   }
 
-  @Override
+  @VisibleForTesting
   public void subtaskReady(int i, SubtaskGateway subtaskGateway) {
     this.gateways[i] = subtaskGateway;
+  }
+
+  @Override
+  public void executionAttemptFailed(int i, int attemptNumber, Throwable reason) {
+    subtaskReady(i, null);
+  }
+
+  @Override
+  public void executionAttemptReady(int i, int attemptNumber, SubtaskGateway gateway) {
+    subtaskReady(i, gateway);
   }
 
   @Override
@@ -585,8 +599,8 @@ public class StreamWriteOperatorCoordinator
       StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
 
       if (hasErrors) {
-        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="
-            + totalErrorRecords + "/" + totalRecords);
+        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
+            totalErrorRecords, totalRecords);
       }
 
       final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
@@ -601,20 +615,23 @@ public class StreamWriteOperatorCoordinator
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
       }
     } else {
-      LOG.error("Error when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      LOG.error("The first 10 files with write errors:");
-      writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
-        if (ws.getGlobalError() != null) {
-          LOG.error("Global error for partition path {} and fileID {}: {}",
-              ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
-        }
-        if (!ws.getErrors().isEmpty()) {
-          LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
-              ws.getPartitionPath(), ws.getFileId());
-          ws.getErrors().entrySet().stream().limit(100).forEach(entry -> LOG.error("Error for key: "
-              + entry.getKey() + " and Exception: " + entry.getValue().getMessage()));
-        }
-      });
+      if (LOG.isErrorEnabled()) {
+        LOG.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+        LOG.error("The first 10 files with write errors:");
+        writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+          if (ws.getGlobalError() != null) {
+            LOG.error("Global error for partition path {} and fileID {}: {}",
+                ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
+          }
+          if (!ws.getErrors().isEmpty()) {
+            LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
+                ws.getPartitionPath(), ws.getFileId());
+            ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
+                LOG.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
+          }
+        });
+      }
+
       // Rolls back instant
       writeClient.rollback(instant);
       throw new HoodieException(String.format("Commit instant [%s] failed and rolled back !", instant));
@@ -652,6 +669,14 @@ public class StreamWriteOperatorCoordinator
       this.executor.close();
     }
     this.executor = executor;
+  }
+
+  @VisibleForTesting
+  public void setInstantRequestExecutor(NonThrownExecutor executor) throws Exception {
+    if (this.instantRequestExecutor != null) {
+      this.instantRequestExecutor.close();
+    }
+    this.instantRequestExecutor = executor;
   }
 
   // -------------------------------------------------------------------------

@@ -19,21 +19,17 @@
 
 package org.apache.hudi.merge;
 
-import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
-import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.util.AvroSchemaConverter;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -42,12 +38,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests for {@code HoodieFlinkRecordMerger}.
@@ -70,99 +64,79 @@ public class TestHoodieFlinkRecordMerger {
 
   private static final String RECORD_KEY = "key";
   private static final String PARTITION = "partition";
-
-  /**
-   * If the input records are not Flink HoodieRecord, it throws.
-   */
-  @Test
-  void testMergerWithAvroRecord() {
-    try (HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(0L)) {
-      List<HoodieRecord> records = dataGenerator.generateInserts("001", 2);
-      EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-      TypedProperties props = new TypedProperties();
-      Schema recordSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> merger.merge(records.get(0), recordSchema, records.get(1), recordSchema, props));
-    }
-  }
+  private final RecordContext<RowData> recordContext = mock(RecordContext.class);
 
   @Test
   void testMergingWithNewRecordAsDelete() throws IOException {
-    Schema schema = AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
-    HoodieFlinkRecord oldRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 1L, oldRow);
+    BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 1L, RECORD_KEY, false);
 
-    HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord<>(key, HoodieOperation.DELETE, 2L, HoodieRecord.HoodieRecordType.FLINK);
+    BufferedRecord<RowData> deleteRecord = BufferedRecords.fromEngineRecord(null, schema, recordContext, 2L, RECORD_KEY, true);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, deleteRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
+    BufferedRecord<RowData> mergingResult = merger.merge(oldRecord, deleteRecord, recordContext, new TypedProperties());
+    assertTrue(mergingResult.isDelete());
   }
 
   @Test
   void testMergingWithOldRecordAsDelete() throws IOException {
-    Schema schema = AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData newRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
-    HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 1L, newRow);
+    BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 1L, RECORD_KEY, false);
 
-    HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord<>(key, HoodieOperation.DELETE, 2L, HoodieRecord.HoodieRecordType.FLINK);
+    BufferedRecord<RowData> deleteRecord = BufferedRecords.fromEngineRecord(null, schema, recordContext, 2L, RECORD_KEY, true);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(deleteRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
+    BufferedRecord<RowData> mergingResult = merger.merge(deleteRecord, newRecord, recordContext, new TypedProperties());
+    assertTrue(mergingResult.isDelete());
   }
 
   @Test
   void testMergingWithOldRecordAccepted() throws IOException {
-    Schema schema = AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 3L);
-    HoodieFlinkRecord oldRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 3L, oldRow);
+    BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 3L, RECORD_KEY, false);
 
     RowData newRow = createRow(key, "001", "001_02", "file1", 2, "str_val2", 2L);
-    HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 2L, newRow);
+    BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 2L, RECORD_KEY, false);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(oldRecord.getData(), mergingResult.get().getLeft().getData());
+    BufferedRecord<RowData> mergingResult = merger.merge(oldRecord, newRecord, recordContext, new TypedProperties());
+    assertEquals(oldRecord.getRecord(), mergingResult.getRecord());
   }
 
   @Test
   void testMergingWithNewRecordAccepted() throws IOException {
-    Schema schema = AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
-    HoodieFlinkRecord oldRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 1L, oldRow);
+    BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 1L, RECORD_KEY, false);
 
     RowData newRow = createRow(key, "001", "001_02", "file1", 2, "str_val2", 2L);
-    HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 2L, newRow);
+    BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 1L, RECORD_KEY, false);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(newRecord.getData(), mergingResult.get().getLeft().getData());
+    BufferedRecord<RowData> mergingResult = merger.merge(oldRecord, newRecord, recordContext, new TypedProperties());
+    assertEquals(newRecord.getRecord(), mergingResult.getRecord());
   }
 
   @Test
   void testMergingWithCommitTimeRecordMerger() throws IOException {
-    Schema schema = AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 2L);
-    HoodieFlinkRecord oldRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 2L, oldRow);
+    BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 2L, RECORD_KEY, false);
 
     RowData newRow = createRow(key, "001", "001_02", "file1", 2, "str_val2", 1L);
-    HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 1L, newRow);
+    BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 1L, RECORD_KEY, false);
 
     CommitTimeFlinkRecordMerger merger = new CommitTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(newRecord.getData(), mergingResult.get().getLeft().getData());
+    BufferedRecord<RowData> mergingResult = merger.merge(oldRecord, newRecord, recordContext, new TypedProperties());
+    assertEquals(newRecord.getRecord(), mergingResult.getRecord());
   }
 
   private RowData createRow(HoodieKey key, String commitTime, String seqNo, String filePath,

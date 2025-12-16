@@ -20,21 +20,23 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.HoodieMergeOnReadRDDV2.CONFIG_INSTANTIATION_LOCK
-import org.apache.hudi.LogFileIterator.getPartitionPath
 import org.apache.hudi.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
+import org.apache.hudi.expression.{Predicate => HPredicate}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.avro.Schema
@@ -46,8 +48,8 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
-import org.apache.spark.sql.execution.datasources.FileFormat
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.execution.datasources.{FileFormat, SparkColumnarFileReader}
+import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 
@@ -109,10 +111,21 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
   private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
-  private val fileGroupParquetFileReader: Broadcast[SparkParquetReader] = {
+  private val fileGroupBaseFileReader: Broadcast[SparkColumnarFileReader] = {
     if (!metaClient.isMetadataTable) {
       val updatedOptions: Map[String, String] = options + (FileFormat.OPTION_RETURNING_BATCH -> "false") // disable vectorized reading for MOR
-      sc.broadcast(sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config))
+      if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
+        sc.broadcast(new MultipleColumnarFileFormatReader(
+          sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config),
+          sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema)
+        ))
+      } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.PARQUET) {
+        sc.broadcast(sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config))
+      } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.ORC) {
+        sc.broadcast(sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema))
+      } else {
+        throw new IllegalArgumentException(s"Unsupported base file format: ${metaClient.getTableConfig.getBaseFileFormat}")
+      }
     } else {
       null
     }
@@ -153,9 +166,9 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, fullPartitionPath)
 
         if (metaClient.isMetadataTable) {
-          val requestedSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
+          val requestedSchema = HoodieSchema.parse(requiredSchema.avroSchemaStr)
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
-          val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty())
+          val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
           val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)
@@ -164,13 +177,13 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
             .withProps(properties)
-            .withDataSchema(new Schema.Parser().parse(tableSchema.avroSchemaStr))
+            .withDataSchema(HoodieSchema.parse(tableSchema.avroSchemaStr))
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
-          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
+          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema.toAvroSchema)
         } else {
-          val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, optionalFilters,
+          val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
           val fileGroupReader = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContext)
@@ -180,8 +193,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
             .withProps(properties)
-            .withDataSchema(new Schema.Parser().parse(tableSchema.avroSchemaStr))
-            .withRequestedSchema(new Schema.Parser().parse(requiredSchema.avroSchemaStr))
+            .withDataSchema(HoodieSchema.parse(tableSchema.avroSchemaStr))
+            .withRequestedSchema(HoodieSchema.parse(requiredSchema.avroSchemaStr))
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)
@@ -242,6 +255,16 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
       override def close(): Unit = closeableFileGroupRecordIterator.close()
     }
+  }
+
+  private def getPartitionPath(split: HoodieMergeOnReadFileSplit): StoragePath = {
+    // Determine partition path as an immediate parent folder of either
+    //    - The base file
+    //    - Some log file
+    split.dataFile.map(baseFile =>
+        sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(baseFile))
+      .getOrElse(split.logFiles.head.getPath)
+      .getParent
   }
 }
 

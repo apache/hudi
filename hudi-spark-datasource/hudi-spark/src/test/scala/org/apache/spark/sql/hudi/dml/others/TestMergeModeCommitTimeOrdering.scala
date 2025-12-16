@@ -33,7 +33,8 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
   Seq(
     "cow,current,false,false", "cow,current,false,true", "cow,current,true,false",
     "mor,current,false,false", "mor,current,false,true", "mor,current,true,false",
-    "cow,6,true,false", "cow,6,true,true", "mor,6,true,true").foreach { args =>
+    "cow,6,true,false", "cow,6,true,true", "mor,6,true,true",
+    "cow,8,true,false", "cow,8,true,true", "mor,8,true,true").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val tableVersion = if (argList(1).equals("current")) {
@@ -43,7 +44,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     }
     val setRecordMergeConfigs = argList(2).toBoolean
     val setUpsertOperation = argList(3).toBoolean
-    val isUpsert = setUpsertOperation || (tableVersion.toInt != 6 && setRecordMergeConfigs)
+    val isUpsert = setUpsertOperation
     val storage = HoodieTestUtils.getDefaultStorage
     val mergeConfigClause = if (setRecordMergeConfigs) {
       // with precombine field set, UPSERT operation is used automatically
@@ -63,24 +64,31 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     } else {
       ""
     }
-    val expectedMergeConfigs = if (tableVersion.toInt == 6) {
-      Map(
-        HoodieTableConfig.VERSION.key -> "6",
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName)
-    } else {
-      Map(
-        HoodieTableConfig.VERSION.key -> tableVersion,
-        HoodieTableConfig.RECORD_MERGE_MODE.key -> COMMIT_TIME_ORDERING.name(),
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
-        HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
+    val expectedMergeConfigs: Map[String, String] = tableVersion.toInt match {
+      case 6 =>
+        Map(
+          HoodieTableConfig.VERSION.key -> "6",
+          HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName
+        )
+      case 8 =>
+        Map(
+          HoodieTableConfig.VERSION.key -> tableVersion,
+          HoodieTableConfig.RECORD_MERGE_MODE.key -> COMMIT_TIME_ORDERING.name(),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
+        )
+      case _ =>
+        Map(
+          HoodieTableConfig.VERSION.key -> tableVersion,
+          HoodieTableConfig.RECORD_MERGE_MODE.key -> COMMIT_TIME_ORDERING.name()
+        )
     }
     val nonExistentConfigs = if (tableVersion.toInt == 6) {
-      Seq(HoodieTableConfig.RECORD_MERGE_MODE.key, HoodieTableConfig.PRECOMBINE_FIELD.key)
+      Seq(HoodieTableConfig.RECORD_MERGE_MODE.key, HoodieTableConfig.ORDERING_FIELDS.key)
     } else {
       if (setRecordMergeConfigs) {
         Seq()
       } else {
-        Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
+        Seq(HoodieTableConfig.ORDERING_FIELDS.key)
       }
     }
 

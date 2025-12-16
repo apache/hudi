@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.cluster.strategy;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -31,6 +30,8 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
@@ -45,6 +46,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -63,18 +66,21 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
  */
 public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Serializable {
 
+  @Getter(AccessLevel.PROTECTED)
   private final HoodieTable<T, I, K, O> hoodieTable;
+  @Getter(AccessLevel.PROTECTED)
   private final transient HoodieEngineContext engineContext;
+  @Getter(AccessLevel.PROTECTED)
   protected HoodieWriteConfig writeConfig;
   protected final HoodieRecordType recordType;
-  protected final Schema readerSchemaWithMetaFields;
+  protected final HoodieSchema readerSchemaWithMetaFields;
 
   public ClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.writeConfig = writeConfig;
     this.hoodieTable = table;
     this.engineContext = engineContext;
     this.recordType = table.getConfig().getRecordMerger().getRecordType();
-    this.readerSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+    this.readerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(writeConfig.getSchema()));
   }
 
   /**
@@ -84,18 +90,6 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
    */
   public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime);
 
-  protected HoodieTable<T, I, K, O> getHoodieTable() {
-    return this.hoodieTable;
-  }
-
-  protected HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  protected HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
-  }
-
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     TypedProperties props = getReaderProperties(maxMemory);
 
@@ -103,9 +97,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
     FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient().getBasePath().toString(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
+    final boolean enableLogBlocksScan = getWriteConfig().enableOptimizedLogBlocksScan();
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
-      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, props, usePosition).getClosableHoodieRecordIterator();
+      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema,
+              readerContextFactory, instantTime, props, usePosition, enableLogBlocksScan).getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
@@ -144,12 +140,13 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return fileSlice;
   }
 
-  protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, Schema readerSchema, Option<InternalSchema> internalSchemaOption,
-                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime, TypedProperties properties, boolean usePosition) {
+  protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, HoodieSchema readerSchema, Option<InternalSchema> internalSchemaOption,
+                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime,
+                                                                   TypedProperties properties, boolean usePosition, boolean enableLogBlocksScan) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     return HoodieFileGroupReader.<R>newBuilder()
         .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
         .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withProps(properties).build();
+        .withShouldUseRecordPosition(usePosition).withEnableOptimizedLogBlockScan(enableLogBlocksScan).withProps(properties).build();
   }
 }

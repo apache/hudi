@@ -150,6 +150,10 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     writtenRecordCount.incrementAndGet();
   }
 
+  private static boolean isRequiredFieldNullError(String errorMessage) {
+    return errorMessage.contains("null") && errorMessage.contains("required");
+  }
+
   protected long getWrittenRecordCount() {
     return writtenRecordCount.get();
   }

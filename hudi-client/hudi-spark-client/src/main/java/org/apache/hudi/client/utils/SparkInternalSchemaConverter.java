@@ -25,6 +25,8 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ArrayType$;
@@ -57,6 +59,7 @@ import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
+import org.apache.spark.sql.types.TimestampNTZType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.sql.types.TimestampType$;
 import org.apache.spark.sql.types.UserDefinedType;
@@ -73,10 +76,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SparkInternalSchemaConverter {
-  private SparkInternalSchemaConverter() {
-
-  }
 
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
@@ -267,10 +268,14 @@ public class SparkInternalSchemaConverter {
       case DATE:
         return DateType$.MODULE$;
       case TIME:
+      case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to Spark", type));
       case TIMESTAMP:
-        // todo support TimeStampNTZ
+      case TIMESTAMP_MILLIS:
         return TimestampType$.MODULE$;
+      case LOCAL_TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+        return TimestampNTZType$.MODULE$;
       case STRING:
         return StringType$.MODULE$;
       case UUID:
@@ -280,7 +285,9 @@ public class SparkInternalSchemaConverter {
       case BINARY:
         return BinaryType$.MODULE$;
       case DECIMAL:
-        Types.DecimalType decimal = (Types.DecimalType) type;
+      case DECIMAL_BYTES:
+      case DECIMAL_FIXED:
+        Types.DecimalBase decimal = (Types.DecimalBase) type;
         return DecimalType$.MODULE$.apply(decimal.precision(), decimal.scale());
       default:
         throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Spark", type));

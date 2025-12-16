@@ -33,6 +33,7 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockNotGrantedException;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
@@ -75,6 +76,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   protected final AmazonDynamoDBLockClient client;
   protected final String tableName;
   protected final String dynamoDBPartitionKey;
+  @Getter
   protected volatile LockItem lock;
 
   protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
@@ -132,7 +134,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
         return;
       }
       if (!client.releaseLock(lock)) {
-        LOG.warn("The lock has already been stolen");
+        LOG.info("The lock has already been stolen");
       }
       lock = null;
       LOG.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
@@ -146,7 +148,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     try {
       if (lock != null) {
         if (!client.releaseLock(lock)) {
-          LOG.warn("The lock has already been stolen");
+          LOG.info("The lock has already been stolen");
         }
         lock = null;
       }
@@ -154,11 +156,6 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     } catch (Exception e) {
       LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
-  }
-
-  @Override
-  public LockItem getLock() {
-    return lock;
   }
 
   private static DynamoDbClient getDynamoDBClient(DynamoDbBasedLockConfig dynamoDbBasedLockConfig) {
@@ -203,7 +200,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
         .billingMode(billingMode);
     dynamoDB.createTable(createTableRequestBuilder.build());
 
-    LOG.info("Creating dynamoDB table " + tableName + ", waiting for table to be active");
+    LOG.info("Creating dynamoDB table {}, waiting for table to be active", tableName);
     try {
 
       DynamoTableUtils.waitUntilActive(dynamoDB, tableName, dynamoDbBasedLockConfig.getInt(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT), 20 * 1000);
@@ -212,7 +209,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     } catch (InterruptedException e) {
       throw new HoodieLockException("Thread interrupted while waiting for dynamoDB table to turn active", e);
     }
-    LOG.info("Created dynamoDB table " + tableName);
+    LOG.info("Created dynamoDB table {}", tableName);
   }
 
   protected String generateLogSuffixString() {

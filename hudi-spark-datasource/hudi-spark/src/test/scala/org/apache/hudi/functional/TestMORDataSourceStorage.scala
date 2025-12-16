@@ -23,12 +23,12 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDat
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieLogFile, HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -61,7 +61,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     "false,,false",
     "false,fare.currency,true"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String, useFileGroupReader: Boolean): Unit = {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, orderingFields: String, useFileGroupReader: Boolean): Unit = {
     val commonOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -69,7 +69,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       "hoodie.delete.shuffle.parallelism" -> "1",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
     )
@@ -78,8 +78,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
-    if (!StringUtils.isNullOrEmpty(preCombineField)) {
-      options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
+    if (!StringUtils.isNullOrEmpty(orderingFields)) {
+      options += (HoodieTableConfig.ORDERING_FIELDS.key() -> orderingFields)
     }
     if (useFileGroupReader) {
       options += (HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> String.valueOf(useFileGroupReader))
@@ -155,7 +155,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.WRITE_RECORD_POSITIONS.key -> "true",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
     )
 
@@ -207,7 +207,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.WRITE_RECORD_POSITIONS.key -> writeRecordPosition.toString,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieIndexConfig.INDEX_TYPE.key -> (if (enableNBCC) BUCKET.name else SIMPLE.name),
       HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
@@ -352,7 +352,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
                                         shouldContainRecordPosition: Boolean,
                                         logFileList: List[HoodieLogFile],
                                         shouldBaseFileInstantTimeMatch: Boolean): Unit = {
-    val schema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(
       context(), metaClient, HoodieMetadataConfig.newBuilder().build())
     logFileList.foreach(filename => {

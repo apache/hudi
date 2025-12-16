@@ -21,11 +21,16 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.io.Serializable;
 
 /**
  * Request for performing one rollback action.
  */
+@AllArgsConstructor
+@Getter
 public class ListingBasedRollbackRequest implements Serializable {
 
   /**
@@ -63,18 +68,6 @@ public class ListingBasedRollbackRequest implements Serializable {
     this(partitionPath, Option.empty(), Option.empty(), Option.empty(), type);
   }
 
-  public ListingBasedRollbackRequest(String partitionPath,
-                                     Option<String> fileId,
-                                     Option<String> latestBaseInstant,
-                                     Option<HoodieWriteStat> writeStat,
-                                     Type type) {
-    this.partitionPath = partitionPath;
-    this.fileId = fileId;
-    this.latestBaseInstant = latestBaseInstant;
-    this.writeStat = writeStat;
-    this.type = type;
-  }
-
   public static ListingBasedRollbackRequest createRollbackRequestWithDeleteDataFilesOnlyAction(String partitionPath) {
     return new ListingBasedRollbackRequest(partitionPath, Type.DELETE_DATA_FILES_ONLY);
   }
@@ -88,25 +81,5 @@ public class ListingBasedRollbackRequest implements Serializable {
                                                                                                String baseInstant,
                                                                                                HoodieWriteStat writeStat) {
     return new ListingBasedRollbackRequest(partitionPath, Option.of(fileId), Option.of(baseInstant), Option.of(writeStat), Type.APPEND_ROLLBACK_BLOCK);
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public Option<String> getFileId() {
-    return fileId;
-  }
-
-  public Option<String> getLatestBaseInstant() {
-    return latestBaseInstant;
-  }
-
-  public Option<HoodieWriteStat> getWriteStat() {
-    return writeStat;
-  }
-
-  public Type getType() {
-    return type;
   }
 }

@@ -26,22 +26,24 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
-import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -50,7 +52,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -59,7 +60,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader;
 import org.apache.spark.sql.sources.Filter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -87,7 +88,7 @@ import static org.mockito.Mockito.mock;
 public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctionalTestHarness {
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
   private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
-  private Schema avroSchema;
+  private HoodieSchema schema;
   private PositionBasedFileGroupRecordBuffer<InternalRow> buffer;
 
   private void prepareBuffer(RecordMergeMode mergeMode, String baseFileInstantTime) throws Exception {
@@ -95,7 +96,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
     writeConfigs.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     writeConfigs.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
-    writeConfigs.put("hoodie.datasource.write.precombine.field", mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING) ? "" : "timestamp");
+    writeConfigs.put(HoodieTableConfig.ORDERING_FIELDS.key(), mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING) ? "" : "timestamp");
     writeConfigs.put("hoodie.payload.ordering.field", "timestamp");
     writeConfigs.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     writeConfigs.put("hoodie.insert.shuffle.parallelism", "4");
@@ -121,9 +122,9 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         .setBasePath(basePath())
         .setConf(storageConf())
         .build();
-    avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    schema = new TableSchemaResolver(metaClient).getTableSchema();
 
-    SparkParquetReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
+    SparkColumnarFileReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
         Map$.MODULE$.empty(), storageConf().unwrapAs(Configuration.class));
     HoodieReaderContext<InternalRow> ctx = new SparkFileFormatInternalRowReaderContext(reader, JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(),
         JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(), storageConf(), metaClient.getTableConfig());
@@ -139,8 +140,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
       ctx.setRecordMerger(Option.empty());
     }
     ctx.setSchemaHandler(HoodieSparkUtils.gteqSpark3_5()
-        ? new ParquetRowIndexBasedSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig(), new TypedProperties())
-        : new FileGroupReaderSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig(), new TypedProperties()));
+        ? new ParquetRowIndexBasedSchemaHandler<>(ctx, schema, schema, Option.empty(), new TypedProperties(), metaClient)
+        : new FileGroupReaderSchemaHandler<>(ctx, schema, schema, Option.empty(), new TypedProperties(), metaClient));
     TypedProperties props = new TypedProperties();
     props.put("hoodie.write.record.merge.mode", mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
@@ -158,12 +159,12 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
-        Option.of("timestamp"),
+        Collections.singletonList("timestamp"),
         updateProcessor);
   }
 
   private void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> options) {
-    List<String> recs = RawTripTestPayload.recordsToStrings(recordList);
+    List<String> recs = HoodieTestDataGenerator.recordsToStrings(recordList);
     Dataset<Row> inputDF = spark().read().json(jsc().parallelize(recs, 2));
 
     inputDF.write().format("hudi")
@@ -178,7 +179,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
   private Map<HoodieLogBlock.HeaderMetadataType, String> getHeader(boolean shouldWriteRecordPositions,
                                                                   String baseFileInstantTime) {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, avroSchema.toString());
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     if (shouldWriteRecordPositions) {
       header.put(BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, baseFileInstantTime);
@@ -267,8 +268,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
     }
 
     @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(
-        HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props
+    public <T> BufferedRecord<T> merge(
+        BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props
     ) throws IOException {
       throw new IOException("Not implemented");
     }

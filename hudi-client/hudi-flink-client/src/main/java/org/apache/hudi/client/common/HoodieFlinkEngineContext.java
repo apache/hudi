@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -41,15 +42,21 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ForkJoinPool;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -105,16 +112,19 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
-    return data.stream().parallel().map(throwingMapWrapper(func)).collect(Collectors.toList());
+    return executeParallelStream(data.parallelStream(), stream -> stream.map(throwingMapWrapper(func)).collect(Collectors.toList()), parallelism);
   }
 
   @Override
   public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
-        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
-        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
-        .filter(Objects::nonNull)
-        .collect(Collectors.toList());
+    return executeParallelStream(
+        data.parallelStream(),
+        stream -> stream.map(throwingMapToPairWrapper(mapToPairFunc))
+            .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+            .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList()),
+        parallelism);
   }
 
   @Override
@@ -131,16 +141,21 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public <I, K, V> List<V> reduceByKey(
       List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    return data.stream().parallel()
-        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
-        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
-        .filter(Objects::nonNull)
-        .collect(Collectors.toList());
+    return executeParallelStream(
+        data.parallelStream(),
+        stream -> stream.collect(Collectors.groupingBy(Pair::getKey)).values().stream()
+            .map(list -> list.stream().map(Pair::getValue).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList()),
+        parallelism);
   }
 
   @Override
   public <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism) {
-    return data.stream().parallel().flatMap(throwingFlatMapWrapper(func)).collect(Collectors.toList());
+    return executeParallelStream(
+        data.parallelStream(),
+        stream -> stream.flatMap(throwingFlatMapWrapper(func)).collect(Collectors.toList()),
+        parallelism);
   }
 
   @Override
@@ -150,7 +165,24 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    return data.stream().parallel().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    return executeParallelStream(
+        data.parallelStream(),
+        stream -> stream.map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight)),
+        parallelism);
+  }
+
+  /**
+   * Execute a parallel stream with a dedicated ForkJoinPool.
+   */
+  private static <E, O> O executeParallelStream(Stream<E> paralelStream, Function<Stream<E>, O> transform, int parallelism) {
+    ForkJoinPool pool = new ForkJoinPool(parallelism);
+    try {
+      return pool.submit(() -> transform.apply(paralelStream)).get();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to execute parallel stream with dedicated ForkJoinPool.", e);
+    } finally {
+      pool.shutdown();
+    }
   }
 
   @Override
@@ -208,11 +240,20 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    return HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
+  }
+
+  @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
-      return new AvroReaderContextFactory(metaClient);
+      return new AvroReaderContextFactory(metaClient, new TypedProperties());
     }
+    return getEngineReaderContextFactory(metaClient);
+  }
+
+  public ReaderContextFactory<?> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
     return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
   }
 

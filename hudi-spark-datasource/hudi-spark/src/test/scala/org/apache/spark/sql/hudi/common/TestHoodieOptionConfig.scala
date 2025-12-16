@@ -38,7 +38,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     assertEquals("cow", with1("type"))
 
     val ops2 = Map("primaryKey" -> "id",
-      "preCombineField" -> "timestamp",
+      "orderingFields" -> "timestamp",
       "type" -> "mor",
       "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName,
       "recordMergeStrategyId" -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
@@ -50,7 +50,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   @Test
   def testMappingSqlOptionToTableConfig(): Unit = {
     val sqlOptions = Map("primaryKey" -> "id,addr",
-      "preCombineField" -> "timestamp",
+      "orderingFields" -> "timestamp",
       "type" -> "mor",
       "hoodie.index.type" -> "INMEMORY",
       "hoodie.compact.inline" -> "true"
@@ -59,7 +59,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
     assertTrue(tableConfigs.size == 5)
     assertTrue(tableConfigs(HoodieTableConfig.RECORDKEY_FIELDS.key) == "id,addr")
-    assertTrue(tableConfigs(HoodieTableConfig.PRECOMBINE_FIELD.key) == "timestamp")
+    assertTrue(tableConfigs(HoodieTableConfig.ORDERING_FIELDS.key) == "timestamp")
     assertTrue(tableConfigs(HoodieTableConfig.TYPE.key) == "MERGE_ON_READ")
     assertTrue(tableConfigs("hoodie.index.type") == "INMEMORY")
     assertTrue(tableConfigs("hoodie.compact.inline") == "true")
@@ -68,7 +68,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   @Test
   def testDeleteHoodieOptions(): Unit = {
     val sqlOptions = Map("primaryKey" -> "id,addr",
-      "preCombineField" -> "timestamp",
+      "orderingFields" -> "timestamp",
       "type" -> "mor",
       "hoodie.index.type" -> "INMEMORY",
       "hoodie.compact.inline" -> "true",
@@ -82,7 +82,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   @Test
   def testExtractSqlOptions(): Unit = {
     val sqlOptions = Map("primaryKey" -> "id,addr",
-      "preCombineField" -> "timestamp",
+      "orderingFields" -> "timestamp",
       "type" -> "mor",
       "hoodie.index.type" -> "INMEMORY",
       "hoodie.compact.inline" -> "true",
@@ -90,7 +90,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     )
     val tableConfigs = HoodieOptionConfig.extractSqlOptions(sqlOptions)
     assertTrue(tableConfigs.size == 3)
-    assertTrue(tableConfigs.keySet == Set("primaryKey", "preCombineField", "type"))
+    assertTrue(tableConfigs.keySet == Set("primaryKey", "orderingFields", "type"))
   }
 
   @Test
@@ -121,18 +121,18 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     // preCombine field not found
     val sqlOptions3 = baseSqlOptions ++ Map(
       "primaryKey" -> "id",
-      "preCombineField" -> "ts",
+      "orderingFields" -> "ts",
       "type" -> "mor"
     )
     val e3 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions3)
     }
-    assertTrue(e3.getMessage.contains("Can't find preCombineKey"))
+    assertTrue(e3.getMessage.contains("Can't find ordering fields"))
 
     // miss type parameter
     val sqlOptions4 = baseSqlOptions ++ Map(
       "primaryKey" -> "id",
-      "preCombineField" -> "timestamp"
+      "orderingFields" -> "timestamp"
     )
     val e4 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions4)
@@ -142,7 +142,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     // type is invalid
     val sqlOptions5 = baseSqlOptions ++ Map(
       "primaryKey" -> "id",
-      "preCombineField" -> "timestamp",
+      "orderingFields" -> "timestamp",
       "type" -> "abc"
     )
     val e5 = intercept[IllegalArgumentException] {
@@ -153,7 +153,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     // right options and schema
     val sqlOptions6 = baseSqlOptions ++ Map(
       "primaryKey" -> "id",
-      "preCombineField" -> "timestamp",
+      "orderingFields" -> "timestamp",
       "type" -> "cow"
     )
     HoodieOptionConfig.validateTable(spark, schema, sqlOptions6)

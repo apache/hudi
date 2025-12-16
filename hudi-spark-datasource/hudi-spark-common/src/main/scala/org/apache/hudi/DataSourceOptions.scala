@@ -23,8 +23,8 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
-import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -79,14 +79,17 @@ object DataSourceReadOptions {
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE
   val REALTIME_MERGE: ConfigProperty[String] = HoodieReaderConfig.MERGE_TYPE
 
+  @Deprecated
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()
     .markAdvanced()
     .withDocumentation("Comma separated list of file paths to read within a Hudi table.")
 
+  @Deprecated
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
+  @Deprecated
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
     .defaultValue(true)
@@ -219,6 +222,9 @@ object DataSourceReadOptions {
     .markAdvanced()
     .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
 
+  // 0.14.0 backport
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
+
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
@@ -253,6 +259,13 @@ object DataSourceReadOptions {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("A regex under the table's base path to get file system view information")
+
+  val POLARIS_CATALOG_CLASS_NAME: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.polaris.catalog.class")
+    .defaultValue("org.apache.polaris.spark.SparkCatalog")
+    .markAdvanced()
+    .sinceVersion("1.1.0")
+    .withDocumentation("Fully qualified class name of the catalog that is used by the Polaris spark client.")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -401,10 +414,13 @@ object DataSourceWriteOptions {
     .withDocumentation("Table name for the datasource write. Also used to register the table into meta stores.")
 
   /**
-   * Field used in preCombining before actual write. When two records have the same
-   * key value, we will pick the one with the largest value for the precombine field,
-   * determined by Object.compareTo(..)
+   * Field used in records merging comparison. When two records have the same
+   * key value, we will pick the one with the largest value for the ordering fields,
+   * determined by Object.compareTo(..).
    */
+  val ORDERING_FIELDS = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
+
+  // for b/w compatibility
   val PRECOMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
   /**
@@ -597,12 +613,11 @@ object DataSourceWriteOptions {
     .withValidValues(WriteOperationType.BULK_INSERT.value(), WriteOperationType.INSERT.value(), WriteOperationType.UPSERT.value())
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
-      "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
-      "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
-      "(if there are duplicates within the same batch being ingested, same dups will be ingested) with bulk_insert and insert and there is no index " +
-      "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
-      "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")
+    .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert,  "
+      + "insert and upsert. \"bulk_insert\" is generally meant for initial loads and is known to be performant compared to insert. " +
+      "\"insert\" is the default value for this config and does small file handling in addition to bulk_insert, but will ensure to retain " +
+      "duplicates if ingested. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". " +
+      "With upsert, Hudi will merge multiple versions of the record identified by record key configuration into one final record.")
 
   val ENABLE_MERGE_INTO_PARTIAL_UPDATES: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.spark.sql.merge.into.partial.updates")
@@ -657,8 +672,7 @@ object DataSourceWriteOptions {
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
-  @Deprecated
-  val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT
+
 
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
@@ -735,9 +749,6 @@ object DataSourceWriteOptions {
     .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
       "respect spark.sql.sources.partitionOverwriteMode")
 
-  /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
-  @Deprecated
-  val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()
   /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
   @Deprecated
   val HIVE_USE_JDBC_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_JDBC.key()
@@ -854,7 +865,7 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link TABLE_NAME} and its methods instead */
   @Deprecated
   val TABLE_NAME_OPT_KEY = TABLE_NAME.key()
-  /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
+  /** @deprecated Use {@link ORDERING_FIELDS} and its methods instead */
   @Deprecated
   val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()
 
@@ -1024,9 +1035,6 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
-    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getPreCombineField != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getPreCombineField)
-    }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
     }
@@ -1061,6 +1069,18 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
     getKeyGeneratorClassNameFromType(inferKeyGeneratorType(Option.ofNullable(recordsKeyFields), partitionFields))
+  }
+
+  /**
+   * Returns optional list of precombine fields from the provided parameteres.
+   */
+  @deprecated("Use ordering field key in table config", "1.1.0")
+  def getPreCombineFields(params: Map[String, String]): Option[java.util.List[String]] = params.get(DataSourceWriteOptions.ORDERING_FIELDS.key) match {
+    // NOTE: This is required to compensate for cases when empty string is used to stub
+    //       property value to avoid it being set with the default value
+    // TODO(HUDI-3456) cleanup
+    case Some(f) if !StringUtils.isNullOrEmpty(f) => Option.of(java.util.Arrays.asList(f.split(","): _*))
+    case _ => Option.empty()
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {

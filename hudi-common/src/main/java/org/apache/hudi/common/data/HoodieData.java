@@ -78,6 +78,13 @@ public interface HoodieData<T> extends Serializable {
   void unpersist();
 
   /**
+   * Un-persists this data and all its upstream dependencies recursively.
+   * This method traverses the dependency graph and unpersists any cached dependencies
+   * if the underlying hoodie engine has such capability.
+   */
+  void unpersistWithDependencies();
+
+  /**
    * Returns whether the collection is empty.
    */
   boolean isEmpty();
@@ -212,6 +219,15 @@ public interface HoodieData<T> extends Serializable {
    * @return {@link HoodieData<T>} holding re-partitioned collection
    */
   HoodieData<T> repartition(int parallelism);
+
+  /**
+   * Coalesces underlying collection (if applicable) making sure new {@link HoodieData} has
+   * exactly {@code parallelism} partitions or less.
+   *
+   * @param parallelism target number of partitions in the underlying collection
+   * @return {@link HoodieData<T>} holding coalesced collection
+   */
+  HoodieData<T> coalesce(int parallelism);
 
   default <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
     return mapToPair(i -> Pair.of(keyGetter.apply(i), i))

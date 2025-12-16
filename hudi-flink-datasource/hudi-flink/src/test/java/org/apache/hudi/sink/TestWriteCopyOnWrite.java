@@ -19,10 +19,11 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -32,8 +33,13 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.sink.utils.TestWriteBase;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
@@ -44,11 +50,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for stream write.
@@ -348,10 +356,14 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
-  @Test
-  public void testInsertWithMiniBatches() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInsertWithMiniBatches(boolean useFileGroupReaderBasedMergeHandle) throws Exception {
     // reset the config option
     conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    String mergeHandleClass = useFileGroupReaderBasedMergeHandle
+        ? FileGroupReaderBasedMergeHandle.class.getName() : HoodieWriteMergeHandle.class.getName();
+    conf.setString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -741,7 +753,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testReuseEmbeddedServer() throws IOException {
     conf.setString("hoodie.filesystem.view.remote.timeout.secs", "500");
     conf.setString("hoodie.metadata.enable","true");
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
 
     HoodieFlinkWriteClient writeClient = null;
     HoodieFlinkWriteClient writeClient2 = null;
@@ -785,5 +796,26 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // with LAZY cleaning strategy because clean action could roll back failed writes.
         .assertNextEvent()
         .end();
+  }
+
+  @ParameterizedTest
+  @EnumSource(MarkerType.class)
+  public void testMarkType(MarkerType markerType) throws Exception {
+    conf.setString(HoodieWriteConfig.MARKERS_TYPE.key(), markerType.toString());
+    TestHarness testHarness =
+        preparePipeline(conf)
+            .consume(TestData.DATA_SET_INSERT)
+            // no checkpoint, so the coordinator does not accept any events
+            .emptyEventBuffer()
+            .checkpoint(1)
+            .assertNextEvent(4, "par1,par2,par3,par4");
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    List<StoragePathInfo> files =  metaClient.getStorage().listFiles(new StoragePath(metaClient.getTempFolderPath()));
+    if (markerType == MarkerType.DIRECT) {
+      assertTrue(files.stream().allMatch(f -> f.getPath().getName().endsWith("marker.CREATE")));
+    } else {
+      assertTrue(files.stream().noneMatch(f -> f.getPath().getName().endsWith("marker.CREATE")));
+    }
+    testHarness.checkpointComplete(1).checkWrittenData(EXPECTED1).end();
   }
 }

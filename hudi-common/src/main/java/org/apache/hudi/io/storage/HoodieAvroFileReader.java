@@ -20,16 +20,18 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.expression.Predicate;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
@@ -39,23 +41,27 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRecord> {
 
   @Override
-  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema, requestedSchema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema) throws IOException {
     return getIndexedRecordIterator(readerSchema, readerSchema);
   }
 
-  public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
+    return getIndexedRecordIterator(readerSchema, requestedSchema, Collections.emptyMap());
+  }
+
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) throws IOException;
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
-                                                                                  Schema readerSchema)
+                                                                                  HoodieSchema readerSchema)
       throws IOException;
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
+      List<String> sortedKeyPrefixes, HoodieSchema readerSchema) throws IOException;
 
   // No key predicate support by default.
   public boolean supportKeyPredicate() {

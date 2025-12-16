@@ -32,19 +32,18 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.io.HoodieBinaryCopyHandle;
 import org.apache.hudi.io.BinaryCopyHandleFactory;
+import org.apache.hudi.io.HoodieBinaryCopyHandle;
 import org.apache.hudi.parquet.io.ParquetBinaryCopyChecker;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,9 +64,8 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  *  2. Sort function is not supported yet.
  *  3. Each clustering group only has one task to write.
  */
+@Slf4j
 public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndSizeExecutionStrategy<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkBinaryCopyClusteringExecutionStrategy.class);
 
   public SparkBinaryCopyClusteringExecutionStrategy(
       HoodieTable table,
@@ -87,20 +85,20 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
         .map(ClusteringGroupInfo::create)
         .collect(Collectors.toList());
     if (!supportBinaryStreamCopy(clusteringGroupInfos, clusteringPlan.getStrategy().getStrategyParams())) {
-      LOG.info("Required conditions for binary stream copy are currently not satisfied, falling back to default clustering behavior");
+      log.info("Required conditions for binary stream copy are currently not satisfied, falling back to default clustering behavior");
       // reset write config
       this.writeConfig = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build()).build();
       return super.performClustering(clusteringPlan, schema, instantTime);
     }
-    LOG.info("Required conditions are currently satisfied, enabling the optimization of using binary stream copy ");
+    log.info("Required conditions are currently satisfied, enabling the optimization of using binary stream copy ");
 
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     TaskContextSupplier taskContextSupplier = getEngineContext().getTaskContextSupplier();
     SerializableSchema serializableSchema = new SerializableSchema(schema);
     boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
     JavaRDD<ClusteringGroupInfo> groupInfoJavaRDD = engineContext.parallelize(clusteringGroupInfos, clusteringGroupInfos.size());
-    LOG.info("number of partitions for clustering " + groupInfoJavaRDD.getNumPartitions());
+    log.info("number of partitions for clustering " + groupInfoJavaRDD.getNumPartitions());
     JavaRDD<WriteStatus> writeStatusRDD = groupInfoJavaRDD
         .mapPartitions(clusteringOps -> {
           Iterable<ClusteringGroupInfo> clusteringOpsIterable = () -> clusteringOps;
@@ -159,7 +157,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
    */
   public boolean supportBinaryStreamCopy(List<ClusteringGroupInfo> inputGroups, Map<String, String> strategyParams) {
     if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
-      LOG.warn("Only support CoW table. Will fall back to common clustering execution strategy.");
+      log.warn("SparkBinaryCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
       return false;
     }
     Option<String[]> orderByColumnsOpt =
@@ -167,12 +165,12 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
             .map(listStr -> listStr.split(","));
 
     if (orderByColumnsOpt.isPresent()) {
-      LOG.warn("Not support to sort input records. Will fall back to common clustering execution strategy.");
+      log.warn("SparkBinaryCopyClusteringExecutionStrategy does not support sort by columns. Will fall back to common clustering execution strategy.");
       return false;
     }
 
     if (!getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
-      LOG.warn("Binary Copy only support parquet as base file format for now.");
+      log.warn("SparkBinaryCopyClusteringExecutionStrategy only supports parquet base files. Will fall back to common clustering execution strategy.");
       return false;
     }
 

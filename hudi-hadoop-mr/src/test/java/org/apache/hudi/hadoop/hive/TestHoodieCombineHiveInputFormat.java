@@ -22,6 +22,9 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -35,7 +38,7 @@ import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -119,7 +122,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   public void testInternalSchemaCacheForMR() throws Exception {
     // test for HUDI-8182
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     java.nio.file.Path path1 = tempDir.resolve("tblOne");
     java.nio.file.Path path2 = tempDir.resolve("tblTwo");
     HoodieTestUtils.init(conf, path1.toString(), HoodieTableType.MERGE_ON_READ);
@@ -131,7 +134,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     HoodieCommitMetadata commitMetadataOne = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     // mock the latest schema to the commit metadata
-    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(schema);
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
     commitMetadataOne.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
     // Create 3 parquet files with 10 records each for partition 2
@@ -178,7 +181,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 2);
     // Check the internal schema and avro is the same as the original one
     for (InputSplit split : splits) {
@@ -189,7 +192,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         Option<InternalSchema> internalSchemaFromCache = schemaEvolutionContext.getInternalSchemaFromCache();
         assertEquals(internalSchemaFromCache.get(), internalSchema);
         Schema avroSchemaFromCache = schemaEvolutionContext.getAvroSchemaFromCache();
-        assertEquals(avroSchemaFromCache, schema);
+        assertEquals(avroSchemaFromCache, schema.toAvroSchema());
       }
     }
   }
@@ -199,7 +202,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // test for HUDI-1718
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -243,7 +246,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
 
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
@@ -282,7 +285,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // test for HUDI-1718
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -327,11 +330,11 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    List<Schema.Field> fields = schema.getFields();
-    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+    List<HoodieSchemaField> fields = schema.getFields();
+    String names = fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
 
-    String hiveColumnNames = fields.stream().map(Schema.Field::name).collect(Collectors.joining(","));
+    String hiveColumnNames = fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",year,month,day";
     String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(tripsHiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string,string,string";
@@ -365,7 +368,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // test for hudi-1722
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -412,7 +415,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
@@ -435,7 +438,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
-    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -493,7 +496,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
 
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);

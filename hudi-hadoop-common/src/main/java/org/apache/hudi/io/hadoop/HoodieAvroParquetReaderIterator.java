@@ -26,15 +26,20 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.hadoop.ParquetReader;
 
+import java.util.Map;
+
 public class HoodieAvroParquetReaderIterator extends ParquetReaderIterator<IndexedRecord> {
   private final Schema promotedSchema;
-  public HoodieAvroParquetReaderIterator(ParquetReader<IndexedRecord> parquetReader, Schema promotedSchema) {
+  private final Map<String, String> renamedColumns;
+
+  public HoodieAvroParquetReaderIterator(ParquetReader<IndexedRecord> parquetReader, Schema promotedSchema, Map<String, String> renamedColumns) {
     super(parquetReader);
     this.promotedSchema = promotedSchema;
+    this.renamedColumns = renamedColumns;
   }
 
   @Override
   public IndexedRecord next() {
-    return HoodieAvroUtils.rewriteRecordWithNewSchema(super.next(), this.promotedSchema);
+    return HoodieAvroUtils.rewriteRecordWithNewSchema(super.next(), promotedSchema, renamedColumns);
   }
 }

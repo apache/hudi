@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -236,7 +237,7 @@ public class TestHoodieCommitMetadata {
       List<Schema.Field> newFields = new ArrayList<>();
       for (Schema.Field field : schema.getFields()) {
         Schema newFieldSchema = replaceEnumWithString(field.schema());
-        newFields.add(new Schema.Field(field.name(), newFieldSchema, field.doc(), field.defaultVal()));
+        newFields.add(createNewSchemaField(field.name(), newFieldSchema, field.doc(), field.defaultVal()));
       }
       return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, newFields);
     } else if (schema.getType() == Schema.Type.UNION) {

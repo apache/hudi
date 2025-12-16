@@ -20,6 +20,8 @@ package org.apache.hudi.avro.processors;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.time.LocalDate;
+
 public abstract class Parser {
   abstract Pair<Boolean, Object> handleNumberValue(Number value);
 
@@ -46,21 +48,19 @@ public abstract class Parser {
 
   public static class DateParser extends Parser {
 
-    private static final long MILLI_SECONDS_PER_DAY = 86400000;
-
     @Override
     public Pair<Boolean, Object> handleNumberValue(Number value) {
-      return Pair.of(true, new java.sql.Date(value.intValue() * MILLI_SECONDS_PER_DAY));
+      return Pair.of(true, LocalDate.ofEpochDay(value.intValue()));
     }
 
     @Override
     public Pair<Boolean, Object> handleStringNumber(String value) {
-      return Pair.of(true, new java.sql.Date(Integer.parseInt(value) * MILLI_SECONDS_PER_DAY));
+      return Pair.of(true, LocalDate.ofEpochDay(Integer.parseInt(value)));
     }
 
     @Override
     public Pair<Boolean, Object> handleStringValue(String value) {
-      return Pair.of(true, java.sql.Date.valueOf(value));
+      return Pair.of(true, java.sql.Date.valueOf(value).toLocalDate());
     }
   }
 

@@ -7,638 +7,488 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.data.HoodieListData
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordGlobalLocation, HoodieTableType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config._
-import org.apache.hudi.exception.HoodieWriteConflictException
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
-import org.apache.hudi.util.JavaConversions
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
+import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
+import org.apache.hudi.index.record.HoodieRecordIndex
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
-import org.apache.spark.sql._
+import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.functions.lit
-import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
-import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
-import java.util.{Collections, Properties}
-import java.util.concurrent.Executors
+import java.util
+import java.util.stream.Collectors
 
+import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration.Duration
-import scala.language.postfixOps
-import scala.util.Using
 
-@Tag("functional-b")
-class TestRecordLevelIndex extends RecordLevelIndexTestBase {
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIInitialization(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
+@Tag("functional")
+class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMixin {
+  private class testRecordLevelIndexHolder {
+    var bulkRecordKeys: java.util.List[String] = null
+    var options: Map[String, String] = null
+    var recordKeys: java.util.List[String] = null
+    var newRecordKeys: java.util.List[String] = null
   }
 
-  @Test
-  def testRLIInitializationForMorGlobalIndex(): Unit = {
-    val tableType = HoodieTableType.MERGE_ON_READ
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
-      (HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
-      (HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
-      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
-      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") -
-      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key
-
-    val dataGen1 = HoodieTestDataGenerator.createTestGeneratorFirstPartition()
-    val dataGen2 = HoodieTestDataGenerator.createTestGeneratorSecondPartition()
-
-    // batch1 inserts (5 records)
-    val instantTime1 = getNewInstantTime()
-    val latestBatch = recordsToStrings(dataGen1.generateInserts(instantTime1, 5)).asScala.toSeq
-    var operation = INSERT_OPERATION_OPT_VAL
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
-    latestBatchDf.cache()
-    latestBatchDf.write.format("org.apache.hudi")
-      .options(hudiOpts)
+  def testRecordLevelIndex(tableType: HoodieTableType, streamingWriteEnabled: Boolean, holder: testRecordLevelIndexHolder): Unit = {
+    val dataGen = new HoodieTestDataGenerator();
+    val inserts = dataGen.generateInserts("001", 5)
+    val latestBatchDf = toDataset(spark, inserts)
+    val insertDf = latestBatchDf.withColumn("data_partition_path", lit("partition1")).union(latestBatchDf.withColumn("data_partition_path", lit("partition2")))
+    val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "data_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key()-> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
+    holder.options = options
+    insertDf.write.format("hudi")
+      .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val deletedDf1 = calculateMergedDf(latestBatchDf, operation, true)
-    deletedDf1.cache()
+    assertEquals(10, spark.read.format("hudi").load(basePath).count())
+    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(options).asJava)
+    val writeConfig = HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath)
+      .build()
+    var metadata = metadataWriter(writeConfig).getTableMetadata
+    val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava.stream().collect(Collectors.toList())
+    holder.recordKeys = recordKeys
+    var partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
+    assertEquals(5, partition1Locations.size)
+    var partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    var df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(df, partition2Locations, "partition2")
 
-    // batch2. upsert. update few records to 2nd partition from partition1 and insert a few to partition2.
-    val instantTime2 = getNewInstantTime()
+    val newDeletes =  dataGen.generateUpdates("004", 1)
+    val updates =  dataGen.generateUniqueUpdates("002", 3)
+    val lowerOrderingValue = 1L
+    updates.addAll(dataGen.generateUniqueDeleteRecords("002", 2, lowerOrderingValue))
+    val nextBatchDf = toDataset(spark, updates)
+    val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
 
-    val latestBatch2_1 = recordsToStrings(dataGen1.generateUniqueUpdates(instantTime2, 3)).asScala.toSeq
-    val latestBatchDf2_1 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_1, 1))
-    val latestBatchDf2_2 = latestBatchDf2_1.withColumn("partition", lit(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH))
-      .withColumn("partition_path", lit(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH))
-    val latestBatch2_3 = recordsToStrings(dataGen2.generateInserts(instantTime2, 2)).asScala.toSeq
-    val latestBatchDf2_3 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_3, 1))
-    val latestBatchDf2Final = latestBatchDf2_3.union(latestBatchDf2_2)
-    latestBatchDf2Final.cache()
-    latestBatchDf2Final.write.format("org.apache.hudi")
-      .options(hudiOpts)
+    updateDf.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    operation = UPSERT_OPERATION_OPT_VAL
-    val deletedDf2 = calculateMergedDf(latestBatchDf2Final, operation, true)
-    deletedDf2.cache()
+    assertEquals(10, spark.read.format("hudi").load(basePath).count())
+    partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
+    assertEquals(5, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(df, partition2Locations, "partition2")
 
-    val hudiOpts2 = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
-      (HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
-      (HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
-      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
-      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") +
-      (HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true")
-
-    val instantTime3 = getNewInstantTime()
-    // batch3. update 2 records from newly inserted records from commit 2 to partition2
-    val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala.toSeq
-    val latestBatchDf3 = spark.read.json(spark.sparkContext.parallelize(latestBatch3, 1))
-    latestBatchDf3.cache()
-    latestBatchDf.write.format("org.apache.hudi")
-      .options(hudiOpts2)
+    val newInserts =  dataGen.generateInserts("003", 3)
+    val newInsertBatchDf = toDataset(spark, newInserts)
+    val newInsertDf = newInsertBatchDf.withColumn("data_partition_path", lit("partition2")).union(newInsertBatchDf.withColumn("data_partition_path", lit("partition3")))
+    newInsertDf.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val deletedDf3 = calculateMergedDf(latestBatchDf, operation, true)
-    deletedDf3.cache()
-    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
-    validateDataAndRecordIndices(hudiOpts, deletedDf3)
-  }
+    assertEquals(16, spark.read.format("hudi").load(basePath).count())
+    metadata = metadataWriter(writeConfig).getTableMetadata
+    partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
+    assertEquals(5, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(df, partition2Locations, "partition2")
 
-  private def getNewInstantTime(): String = {
-    InProcessTimeGenerator.createNewInstantTime();
-  }
+    val newRecordKeys = newInserts.asScala.map(i => i.getRecordKey).asJava.stream().collect(Collectors.toList())
+    holder.newRecordKeys = newRecordKeys
+    partition1Locations = readRecordIndex(metadata, newRecordKeys, HOption.of("partition1"))
+    assertEquals(0, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, newRecordKeys, HOption.of("partition2"))
+    assertEquals(3, partition2Locations.size)
+    var partition3Locations = readRecordIndex(metadata, newRecordKeys, HOption.of("partition3"))
+    assertEquals(3, partition3Locations.size)
+    validateDFWithLocations(df, partition3Locations, "partition3")
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIUpsert(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-  }
+    val newDeletesBatchDf = toDataset(spark, newDeletes)
+    val newDeletesDf = newDeletesBatchDf.withColumn("data_partition_path", lit("partition1"))
+    newDeletesDf.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), DELETE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertEquals(15, spark.read.format("hudi").load(basePath).count())
+    metadata = metadataWriter(writeConfig).getTableMetadata
+    partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
+    assertEquals(4, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(df, partition2Locations, "partition2")
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIUpsertNonPartitioned(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts - PARTITIONPATH_FIELD.key + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-  }
+    assertFalse(partition1Locations.contains(newDeletes.get(0).getRecordKey))
+    assertTrue(partition2Locations.contains(newDeletes.get(0).getRecordKey))
+    partition1Locations = readRecordIndex(metadata, newRecordKeys, HOption.of("partition1"))
+    assertEquals(0, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, newRecordKeys, HOption.of("partition2"))
+    assertEquals(3, partition2Locations.size)
+    partition3Locations = readRecordIndex(metadata, newRecordKeys, HOption.of("partition3"))
+    assertEquals(3, partition3Locations.size)
+    validateDFWithLocations(df, partition2Locations, "partition2")
+    validateDFWithLocations(df, partition3Locations, "partition3")
 
-  @ParameterizedTest
-  @CsvSource(Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
-  def testRLIBulkInsertThenInsertOverwrite(tableType: HoodieTableType, enableRowWriter: Boolean): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString
-    )
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-  }
+    val bulkInserts = dataGen.generateInserts("005", 5)
+    val bulkInsertDf = toDataset(spark, bulkInserts)
+    val bulkInsertPartitionedDf = bulkInsertDf.withColumn("data_partition_path", lit("partition0"))
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIUpsertAndRollback(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    rollbackLastInstant(hudiOpts)
-    validateDataAndRecordIndices(hudiOpts)
-  }
+    // Use bulk_insert operation explicitly
+    bulkInsertPartitionedDf.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIPartiallyFailedUpsertAndRollback(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+    val bulkRecordKeys = bulkInserts.asScala.map(_.getRecordKey).asJava
+    holder.bulkRecordKeys = bulkRecordKeys
+    metadata = metadataWriter(writeConfig).getTableMetadata
+    val partition0Locations = readRecordIndex(metadata, bulkRecordKeys, HOption.of("partition0"))
+    assertEquals(5, partition0Locations.size)
+    df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition0Locations, "partition0")
 
-    deleteLastCompletedCommitFromTimeline(hudiOpts)
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIPartiallyFailedMetadataTableCommitAndRollback(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-
-    deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDelete(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    val props = new Properties()
-    for ((k, v) <- hudiOpts) {
-      props.put(k, v)
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexRollback(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    val holder = new testRecordLevelIndexHolder
+    testRecordLevelIndex(testCase.tableType, testCase.streamingWriteEnabled, holder)
+    val writeConfig = getWriteConfig(holder.options)
+    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      .rollback(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
+    val metadata = metadataWriter(writeConfig).getTableMetadata
+    try {
+      val partition0Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition0"))
+      fail("rollback happened, so partition should be deleted")
+    } catch {
+      case t: Throwable => assertTrue(t.isInstanceOf[ArithmeticException])
     }
-    initMetaClient(tableType, props)
-
-    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    val deleteDf = insertDf.limit(1)
-    deleteDf.write.format("org.apache.hudi")
-      .options(hudiOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
-      .mode(SaveMode.Append)
-      .save(basePath)
-    val prevDf = mergedDfList.last
-    mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
-    validateDataAndRecordIndices(hudiOpts, deleteDf)
   }
 
-  @Test
-  def testRLIWithEmptyPayload(): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
-      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0")
-    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionedRecordLevelIndexCompact(streamingWriteEnabled: Boolean): Unit = {
+    val holder = new testRecordLevelIndexHolder
+    testRecordLevelIndex(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled, holder)
+    assertEquals("deltacommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    val writeConfig = getWriteConfig(holder.options)
+    var metadata = metadataWriter(writeConfig).getTableMetadata
+    doAllAssertions(holder, metadata)
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val timeOpt = writeClient.scheduleCompaction(HOption.empty())
+    assertTrue(timeOpt.isPresent)
+    writeClient.compact(timeOpt.get())
+    metaClient.reloadActiveTimeline()
+    assertEquals("compaction", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    metadata = metadataWriter(writeConfig).getTableMetadata
+    doAllAssertions(holder, metadata)
+  }
 
-    val deleteDf = insertDf.limit(2)
-    deleteDf.cache()
-    deleteDf.write.format("hudi")
-      .options(hudiOpts)
-      .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
+  @ParameterizedTest
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexCluster(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    val holder = new testRecordLevelIndexHolder
+    testRecordLevelIndex(testCase.tableType, testCase.streamingWriteEnabled, holder)
+    assertEquals(if (testCase.tableType.equals(HoodieTableType.MERGE_ON_READ)) "deltacommit" else "commit",
+      metaClient.getActiveTimeline.lastInstant().get().getAction)
+    val writeConfig = getWriteConfig(holder.options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> HoodieTestDataGenerator.AVRO_SCHEMA.toString))
+    var metadata = metadataWriter(writeConfig).getTableMetadata
+    doAllAssertions(holder, metadata)
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val timeOpt = writeClient.scheduleClustering(HOption.empty())
+    assertTrue(timeOpt.isPresent)
+    writeClient.cluster(timeOpt.get())
+    metaClient.reloadActiveTimeline()
+    assertEquals("replacecommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    metadata = metadataWriter(writeConfig).getTableMetadata
+    doAllAssertions(holder, metadata)
+  }
+
+  private def validateDFWithLocations(df: Array[Row], locations: Map[String, HoodieRecordGlobalLocation],
+                                       partition: String): Unit = {
+    var count: Int = 0
+    for (row <- df) {
+      val recordKey = row.getString(2)
+      locations.get(recordKey).foreach { loc =>
+        if (partition == row.getString(3)) {
+          count += 1
+          assertEquals(row.getString(3), loc.getPartitionPath)
+          assertEquals(FSUtils.getFileId(row.getString(4)), loc.getFileId)
+        }
+      }
+    }
+    assertEquals(locations.size, count)
+  }
+
+  private def doAllAssertions(holder: testRecordLevelIndexHolder, metadata: HoodieBackedTableMetadata): Unit = {
+    val df = spark.read.format("hudi").load(basePath).collect()
+    var partition0Locations = readRecordIndex(metadata, holder.recordKeys, HOption.of("partition0"))
+    assertEquals(0, partition0Locations.size)
+    var partition1Locations = readRecordIndex(metadata, holder.recordKeys, HOption.of("partition1"))
+    assertEquals(4, partition1Locations.size)
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    var partition2Locations = readRecordIndex(metadata, holder.recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    validateDFWithLocations(df, partition2Locations, "partition2")
+    var partition3Locations = readRecordIndex(metadata, holder.recordKeys, HOption.of("partition3"))
+    assertEquals(0, partition3Locations.size)
+
+    partition0Locations = readRecordIndex(metadata, holder.newRecordKeys, HOption.of("partition0"))
+    assertEquals(0, partition0Locations.size)
+    partition1Locations = readRecordIndex(metadata, holder.newRecordKeys, HOption.of("partition1"))
+    assertEquals(0, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, holder.newRecordKeys, HOption.of("partition2"))
+    assertEquals(3, partition2Locations.size)
+    validateDFWithLocations(df, partition2Locations, "partition2")
+    partition3Locations = readRecordIndex(metadata, holder.newRecordKeys, HOption.of("partition3"))
+    assertEquals(3, partition3Locations.size)
+    validateDFWithLocations(df, partition3Locations, "partition3")
+
+    partition0Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition0"))
+    assertEquals(5, partition0Locations.size)
+    validateDFWithLocations(df, partition0Locations, "partition0")
+    partition1Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition1"))
+    assertEquals(0, partition1Locations.size)
+    partition2Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition2"))
+    assertEquals(0, partition2Locations.size)
+    partition3Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition3"))
+    assertEquals(0, partition3Locations.size)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexInitializationBasic(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    testPartitionedRecordLevelIndexInitialization(testCase.tableType, testCase.streamingWriteEnabled, failAndDoRollback = false, compact = false, cluster = false)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexInitializationRollback(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    testPartitionedRecordLevelIndexInitialization(testCase.tableType, testCase.streamingWriteEnabled, failAndDoRollback = true, compact = false, cluster = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionedRecordLevelIndexInitializationCompact(streamingWriteEnabled: Boolean): Unit = {
+    testPartitionedRecordLevelIndexInitialization(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled, failAndDoRollback = false, compact = true, cluster = false)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexInitializationCluster(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    testPartitionedRecordLevelIndexInitialization(testCase.tableType, testCase.streamingWriteEnabled, failAndDoRollback = false, compact = false, cluster = true)
+  }
+
+  def testPartitionedRecordLevelIndexInitialization(tableType: HoodieTableType,
+                                                    streamingWriteEnabled: Boolean,
+                                                    failAndDoRollback: Boolean,
+                                                    compact: Boolean,
+                                                    cluster: Boolean): Unit = {
+    initMetaClient(tableType)
+    val dataGen = new HoodieTestDataGenerator()
+    val inserts = dataGen.generateInserts("001", 5)
+    val latestBatchDf = toDataset(spark, inserts)
+    val insertDf = latestBatchDf.withColumn("data_partition_path", lit("partition1")).union(latestBatchDf.withColumn("data_partition_path", lit("partition2")))
+    val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "data_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key()-> "false",
+      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
+    insertDf.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertEquals(10, spark.read.format("hudi").load(basePath).count())
+
+    val updates =  dataGen.generateUniqueUpdates("002", 3)
+    val nextBatchDf = toDataset(spark, updates)
+    val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
+    updateDf.write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val prevDf = mergedDfList.last
-    mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
-    validateDataAndRecordIndices(hudiOpts, deleteDf)
+    assertEquals(10, spark.read.format("hudi").load(basePath).count())
+    metaClient.reloadActiveTimeline()
+    val tableSchemaResolver = new TableSchemaResolver(metaClient)
+    val latestTableSchemaFromCommitMetadata = tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false)
+
+    if (failAndDoRollback) {
+      val updatesToFail =  dataGen.generateUniqueUpdates("003", 3)
+      val batchToFailDf = toDataset(spark, updatesToFail)
+      val failDf = batchToFailDf.withColumn("data_partition_path", lit("partition1")).union(batchToFailDf.withColumn("data_partition_path", lit("partition3")))
+      failDf.write.format("hudi")
+        .options(options)
+        .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Append)
+        .save(basePath)
+      assertEquals(13, spark.read.format("hudi").load(basePath).count())
+
+      metaClient.reloadActiveTimeline()
+      val lastInstant = metaClient.getActiveTimeline.lastInstant().get()
+      assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, metaClient.getInstantFileNameGenerator.getFileName(lastInstant))))
+      assertEquals(10, spark.read.format("hudi").load(basePath).count())
+
+      // rollback
+      val writeConfig = HoodieWriteConfig.newBuilder()
+        .withProps(TypedProperties.fromMap(JavaConverters
+          .mapAsJavaMapConverter(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestTableSchemaFromCommitMetadata.get().toString)).asJava))
+        .withPath(basePath)
+        .build()
+      new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+        .rollback(lastInstant.requestedTime())
+    }
+
+    if (compact) {
+      assertEquals("deltacommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
+      val writeConfig = getWriteConfig(options ++
+        Map(HoodieCompactionConfig.COMPACTION_STRATEGY.key() -> classOf[UnBoundedCompactionStrategy].getName,
+          HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1"))
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      val timeOpt = writeClient.scheduleCompaction(HOption.empty())
+      assertTrue(timeOpt.isPresent)
+      writeClient.compact(timeOpt.get())
+      metaClient.reloadActiveTimeline()
+      assertEquals("compaction", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    }
+
+    if (cluster) {
+      assertEquals(if (tableType.equals(HoodieTableType.MERGE_ON_READ)) "deltacommit" else "commit",
+        metaClient.getActiveTimeline.lastInstant().get().getAction)
+      val writeConfig = getWriteConfig(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> HoodieTestDataGenerator.AVRO_SCHEMA.toString))
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      val timeOpt = writeClient.scheduleClustering(HOption.empty())
+      assertTrue(timeOpt.isPresent)
+      writeClient.cluster(timeOpt.get())
+      metaClient.reloadActiveTimeline()
+      assertEquals("replacecommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
+    }
+
+    //init mdt
+    val updateOptions = options ++ Map(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestTableSchemaFromCommitMetadata.get().toString)
+    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(updateOptions).asJava)
+    val writeConfig = HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath)
+      .build()
+    val metadata = metadataWriter(writeConfig).getTableMetadata
+    val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava.stream().collect(Collectors.toList())
+    val partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
+    assertEquals(5, partition1Locations.size)
+    val partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    val df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(df, partition2Locations, "partition2")
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
+  }
+
+  def readRecordIndex(metadata: HoodieBackedTableMetadata, recordKeys: java.util.List[String], dataTablePartition: HOption[String]): Map[String, HoodieRecordGlobalLocation] = {
+    metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys), dataTablePartition)
+      .collectAsList().asScala.map(p => p.getKey -> p.getValue).toMap
   }
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIForDeletesWithHoodieIsDeletedColumn(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
+      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
+      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "false")
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
-    val deleteBatch = recordsToStrings(dataGen.generateUniqueDeleteRecords(getNewInstantTime, 1)).asScala
+    val instantTime = InProcessTimeGenerator.createNewInstantTime()
+    // Issue two deletes, where one has an older ordering value that should be ignored
+    val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1)
+    val inputRecords = new util.ArrayList[HoodieRecord[_]](deletedRecords)
+    val lowerOrderingValue = 1L
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, lowerOrderingValue))
+    val deleteBatch = recordsToStrings(inputRecords).asScala
     val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
     val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
-    deleteDf.write.format("org.apache.hudi")
+    deleteDf.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete)
-    validateDataAndRecordIndices(hudiOpts, deleteDf)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDeletePartition(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    val latestSnapshot = doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-
-    Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
-      val commitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION)
-      val deletingPartition = dataGen.getPartitionPaths.last
-      val partitionList = Collections.singletonList(deletingPartition)
-      val result = client.deletePartitions(partitionList, commitTime)
-      client.commit(commitTime, result.getWriteStatuses, org.apache.hudi.common.util.Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
-        result.getPartitionToReplaceFileIds, org.apache.hudi.common.util.Option.empty());
-
-      val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
-      validateDataAndRecordIndices(hudiOpts, deletedDf)
-    }
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIUpsertAndDropIndex(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-
-    val writeConfig = getWriteConfig(hudiOpts)
-    writeConfig.setSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-    getHoodieWriteClient(writeConfig).dropIndex(Collections.singletonList(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
-    assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
-    metaClient = HoodieTableMetaClient.reload(metaClient)
-    assertEquals(0, metaClient.getTableConfig.getMetadataPartitionsInflight.size())
-    // only files, col stats, partition stats partition should be present.
-    assertEquals(3, metaClient.getTableConfig.getMetadataPartitions.size())
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDTCleaning(tableType: HoodieTableType): Unit = {
-    var hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
-      hudiOpts = hudiOpts ++ Map(
-        HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-        HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
-        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "15"
-      )
-    }
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-
-    val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
-    assertTrue(lastCleanInstant.isPresent)
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().requestedTime
-      .compareTo(lastCleanInstant.get().requestedTime) > 0)
-
-    var rollbackedInstant: Option[HoodieInstant] = Option.empty
-    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getAction != ActionType.clean.name()) {
-      // rollback clean instant
-      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
-    }
-    validateDataAndRecordIndices(hudiOpts)
-  }
-
-  @Test
-  def testRLIWithDTCompaction(): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
-      HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
-      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
-    )
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-
-    var lastCompactionInstant = getLatestCompactionInstant()
-    assertTrue(lastCompactionInstant.isPresent)
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    assertTrue(getLatestCompactionInstant().get().requestedTime.compareTo(lastCompactionInstant.get().requestedTime) > 0)
-    lastCompactionInstant = getLatestCompactionInstant()
-
-    var rollbackedInstant: Option[HoodieInstant] = Option.empty
-    while (rollbackedInstant.isEmpty || rollbackedInstant.get.requestedTime != lastCompactionInstant.get().requestedTime) {
-      // rollback compaction instant
-      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
-    }
-    validateDataAndRecordIndices(hudiOpts)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDTClustering(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
-      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
-    )
-    val props = new Properties()
-    for ((k, v) <- hudiOpts) {
-      props.put(k, v)
-    }
-    initMetaClient(tableType, props)
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-
-    val lastClusteringInstant = getLatestClusteringInstant()
-    assertTrue(lastClusteringInstant.isPresent)
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-
-    assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
-    assertEquals(getLatestClusteringInstant(), metaClient.getActiveTimeline.lastInstant())
-    validateDataAndRecordIndices(hudiOpts)
-    // We are validating rollback of a DT clustering instant here
-    rollbackLastInstant(hudiOpts)
-    validateDataAndRecordIndices(hudiOpts)
-  }
-
-  @ParameterizedTest
-  @CsvSource(value = Array(
-    "COPY_ON_WRITE,COLUMN_STATS",
-    "COPY_ON_WRITE,BLOOM_FILTERS",
-    "COPY_ON_WRITE,COLUMN_STATS:BLOOM_FILTERS",
-    "MERGE_ON_READ,COLUMN_STATS",
-    "MERGE_ON_READ,BLOOM_FILTERS",
-    "MERGE_ON_READ,COLUMN_STATS:BLOOM_FILTERS")
-  )
-  def testRLIWithOtherMetadataPartitions(tableType: String, metadataPartitionTypes: String): Unit = {
-    var hudiOpts = commonOpts
-    val metadataPartitions = metadataPartitionTypes.split(":").toStream.map(p => MetadataPartitionType.valueOf(p)).toList
-    for (metadataPartition <- metadataPartitions) {
-      if (metadataPartition == MetadataPartitionType.COLUMN_STATS) {
-        hudiOpts += (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
-      } else if (metadataPartition == MetadataPartitionType.BLOOM_FILTERS) {
-        hudiOpts += (HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key() -> "true")
-      }
-    }
-
-    hudiOpts = hudiOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledPartitionTypes.containsAll(metadataPartitions.asJava))
-  }
-
-  @ParameterizedTest
-  @MethodSource(Array("testEnableDisableRLIParams"))
-  def testEnableDisableRLI(tableType: HoodieTableType, isPartitioned: Boolean): Unit = {
-    var hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()
-    )
-
-    if (!isPartitioned) {
-      hudiOpts = hudiOpts - PARTITIONPATH_FIELD.key
-    }
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-
-    hudiOpts += (HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "false")
-    metaClient.getTableConfig.setMetadataPartitionState(metaClient, MetadataPartitionType.RECORD_INDEX.getPartitionPath, false)
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      validate = false)
-
-    try {
-      validateDataAndRecordIndices(hudiOpts)
-    } catch {
-      case e: Exception =>
-        assertTrue(e.isInstanceOf[IllegalStateException])
-        assertTrue(e.getMessage.contains("Record index is not initialized in MDT"))
-    }
-
-    hudiOpts += (HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true")
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    validateDataAndRecordIndices(hudiOpts)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithMDTCompaction(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1"
-    )
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
-      .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
-    val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
-    val lastCompactionInstant = compactionTimeline
-      .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-        compactionTimeline.readCommitMetadata(instant)
-          .getOperationType == WriteOperationType.COMPACT))
-      .lastInstant()
-    val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
-      .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().requestedTime)))
-      .findAny()
-    assertTrue(compactionBaseFile.isPresent)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
-    var hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1")
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-
-    hudiOpts = hudiOpts + (
-      HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key() -> "1",
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "4"
-    )
-    val function = () => doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    executeFunctionNTimes(function, 5)
-
-    assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
-    rollbackLastInstant(hudiOpts)
-    // Rolling back clean instant from MDT
-    rollbackLastInstant(hudiOpts)
-    validateDataAndRecordIndices(hudiOpts)
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithMultiWriter(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> "optimistic_concurrency_control",
-      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> "LAZY",
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[PreferWriterConflictResolutionStrategy].getName
-    )
-
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite,
-      validate = false)
-
-    val executor = Executors.newFixedThreadPool(2)
-    implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-    val function = new Function0[Boolean] {
-      override def apply(): Boolean = {
-        try {
-          doWriteAndValidateDataAndRecordIndex(hudiOpts,
-            operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-            saveMode = SaveMode.Append,
-            validate = false)
-          true
-        } catch {
-          case _: HoodieWriteConflictException => false
-          case e => throw new Exception("Multi write failed", e)
-        }
-      }
-    }
-    val f1 = Future[Boolean] {
-      function.apply()
-    }
-    val f2 = Future[Boolean] {
-      function.apply()
-    }
-
-    Await.result(f1, Duration("5 minutes"))
-    Await.result(f2, Duration("5 minutes"))
-
-    assertTrue(f1.value.get.get || f2.value.get.get)
-    executor.shutdownNow()
-    validateDataAndRecordIndices(hudiOpts)
+    validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala.toSeq, 1)))
+    deleteDf.unpersist()
   }
 }
 
 object TestRecordLevelIndex {
 
-  def testEnableDisableRLIParams(): java.util.stream.Stream[Arguments] = {
+  case class TestPartitionedRecordLevelIndexTestCase(tableType: HoodieTableType, streamingWriteEnabled: Boolean)
+
+  def testArgsForPartitionedRecordLevelIndex: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-      arguments(HoodieTableType.COPY_ON_WRITE, new java.lang.Boolean(false)),
-      arguments(HoodieTableType.COPY_ON_WRITE, new java.lang.Boolean(true)),
-      arguments(HoodieTableType.MERGE_ON_READ, new java.lang.Boolean(false)),
-      arguments(HoodieTableType.MERGE_ON_READ, new java.lang.Boolean(true))
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.COPY_ON_WRITE, streamingWriteEnabled = true)),
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.COPY_ON_WRITE, streamingWriteEnabled = false)),
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled = true)),
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled = false))
     )
   }
 }

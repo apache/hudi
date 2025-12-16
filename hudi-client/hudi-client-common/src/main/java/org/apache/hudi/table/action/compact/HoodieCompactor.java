@@ -28,6 +28,7 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -44,10 +45,9 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -58,9 +58,8 @@ import static java.util.stream.Collectors.toList;
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
  */
+@Slf4j
 public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
@@ -121,7 +120,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // Compacting is very similar to applying updates to existing file
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    LOG.info("Compactor compacting {} fileGroups", operations.size());
+    log.info("Compactor compacting {} fileGroups", operations.size());
 
     String maxInstantTime = getMaxInstantTime(metaClient);
 
@@ -135,7 +134,13 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
               operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
           .flatMap(List::iterator);
     } else {
-      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+      ReaderContextFactory<T> readerContextFactory;
+      if (!metaClient.isMetadataTable()) {
+        readerContextFactory = context.getReaderContextFactory(metaClient);
+      } else {
+        // Payload and HFile caching props are required here
+        readerContextFactory = (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(metaClient, HoodieRecordType.AVRO, config.getProps());
+      }
       return context.parallelize(operations).map(
               operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, maxInstantTime, taskContextSupplier))
           .flatMap(List::iterator);
@@ -164,7 +169,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       Option<InstantRange> instantRange,
                                       HoodieTable table,
                                       TaskContextSupplier taskContextSupplier) throws IOException {
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty());
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+        table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty(), writeConfig.getProps());
     FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, operation,  taskContextSupplier, readerContext);
     appendHandle.doAppend();
     return appendHandle.close();

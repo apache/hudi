@@ -39,7 +39,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -49,7 +49,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_logfile_metadata(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect result for table
       val result = spark.sql(
@@ -79,7 +79,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -90,7 +90,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_logfile_records(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect result for table
       val result = spark.sql(

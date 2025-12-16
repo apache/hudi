@@ -21,6 +21,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -70,11 +71,11 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     val inserts = spark.createDataFrame(firstInsertData).toDF(columns: _*)
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key, "key").
-      option(PRECOMBINE_FIELD.key, "ts").
+      option(HoodieTableConfig.ORDERING_FIELDS.key, "ts").
       option(TABLE_TYPE.key, tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key, "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key, "false").
-      option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key, "true").
+      option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key, "true").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)

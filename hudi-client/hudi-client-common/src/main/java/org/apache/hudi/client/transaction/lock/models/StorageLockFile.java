@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,6 +34,7 @@ import java.io.OutputStream;
 public class StorageLockFile {
 
   private final StorageLockData data;
+  @Getter
   private final String versionId;
 
   // Get a custom object mapper. See StorageLockData for required properties.
@@ -97,14 +99,6 @@ public class StorageLockFile {
     } catch (JsonProcessingException e) {
       throw new HoodieIOException("Error writing object to byte array", e);
     }
-  }
-
-  /**
-   * Gets the version id.
-   * @return A string for the version id.
-   */
-  public String getVersionId() {
-    return this.versionId;
   }
 
   /**

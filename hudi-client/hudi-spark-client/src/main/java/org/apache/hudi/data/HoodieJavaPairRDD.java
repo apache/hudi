@@ -91,6 +91,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public void unpersistWithDependencies() {
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(pairRDDData.rdd());
+  }
+
+  @Override
   public HoodieData<K> keys() {
     return HoodieJavaRDD.of(pairRDDData.keys());
   }

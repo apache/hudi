@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.StringType;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
@@ -318,7 +319,7 @@ public class AvroOrcUtils {
       case STRUCT:
         StructColumnVector structColVec = (StructColumnVector) colVector;
 
-        GenericData.Record record = (GenericData.Record) value;
+        GenericRecord record = (GenericRecord) value;
 
         for (int i = 0; i < type.getFieldNames().size(); i++) {
           String fieldName = type.getFieldNames().get(i);
@@ -514,15 +515,23 @@ public class AvroOrcUtils {
         }
       case STRING:
         String stringType = avroSchema.getProp(GenericData.STRING_PROP);
+        Object parsedValue;
         if (stringType == null || !stringType.equals(StringType.String)) {
           int stringLength = ((BytesColumnVector) colVector).length[vectorPos];
           int stringOffset = ((BytesColumnVector) colVector).start[vectorPos];
           byte[] stringBytes = new byte[stringLength];
           System.arraycopy(((BytesColumnVector) colVector).vector[vectorPos], stringOffset, stringBytes, 0, stringLength);
-          return new Utf8(stringBytes);
+          parsedValue = new Utf8(stringBytes);
         } else {
-          return ((BytesColumnVector) colVector).toString(vectorPos);
+          parsedValue = ((BytesColumnVector) colVector).toString(vectorPos);
         }
+        if (avroSchema.getType() == Schema.Type.ENUM) {
+          String enumValue = parsedValue.toString();
+          if (!enumValue.isEmpty()) {
+            return new GenericData.EnumSymbol(avroSchema, enumValue);
+          }
+        }
+        return parsedValue;
       case DATE:
         // convert to daysSinceEpoch for LogicalType.Date
         return (int) ((LongColumnVector) colVector).vector[vectorPos];
@@ -554,7 +563,7 @@ public class AvroOrcUtils {
         if (baseType.equals(Schema.Type.FIXED)) {
           return new Conversions.DecimalConversion().toFixed(bigDecimal, avroSchema, logicalType);
         } else if (baseType.equals(Schema.Type.BYTES)) {
-          return bigDecimal.unscaledValue().toByteArray();
+          return ByteBuffer.wrap(bigDecimal.unscaledValue().toByteArray());
         } else {
           throw new HoodieIOException(baseType.getName() + "is not a valid type for LogicalTypes.DECIMAL.");
         }

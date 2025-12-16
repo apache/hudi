@@ -24,6 +24,9 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -33,7 +36,9 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -42,13 +47,11 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.utils.TestData;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -62,13 +65,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -105,7 +108,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public HoodieReaderContext<RowData> getHoodieReaderContext(
       String tablePath,
-      Schema avroSchema,
+      HoodieSchema schema,
       StorageConfiguration<?> storageConf,
       HoodieTableMetaClient metaClient) {
     return new FlinkRowDataReaderContext(
@@ -125,10 +128,10 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   protected void readWithFileGroupReader(
       HoodieFileGroupReader<RowData> fileGroupReader,
       List<RowData> recordList,
-      Schema recordSchema,
+      HoodieSchema recordSchema,
       HoodieReaderContext<RowData> readerContext,
       boolean sortOutput) throws IOException {
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema.toAvroSchema());
     try (ClosableIterator<RowData> iterator = fileGroupReader.getClosableIterator()) {
       while (iterator.hasNext()) {
         RowData rowData = rowDataSerializer.copy(iterator.next());
@@ -140,14 +143,15 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
+    conf.set(FlinkOptions.ORDERING_FIELDS, ConfigUtils.getOrderingFieldsStrDuringWrite(writeConfigs));
     conf.set(FlinkOptions.OPERATION, operation);
-    Schema localSchema = getRecordAvroSchema(schemaStr);
+    HoodieSchema localSchema = getRecordSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
     AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
-        RowDataAvroQueryContexts.fromAvroSchema(localSchema).getAvroToRowDataConverter();
+        RowDataAvroQueryContexts.fromAvroSchema(localSchema.getAvroSchema()).getAvroToRowDataConverter();
     List<RowData> rowDataList = recordList.stream().map(record -> {
       try {
-        return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema, CollectionUtils.emptyProps()).get().getData());
+        return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema.getAvroSchema(), CollectionUtils.emptyProps()).get().getData());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -161,15 +165,15 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   @Override
-  public void assertRecordsEqual(Schema schema, RowData expected, RowData actual) {
+  public void assertRecordsEqual(HoodieSchema schema, RowData expected, RowData actual) {
     TestData.assertRowDataEquals(
         Collections.singletonList(actual),
         Collections.singletonList(expected),
-        RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType());
+        RowDataAvroQueryContexts.fromAvroSchema(schema.toAvroSchema()).getRowType());
   }
 
   @Override
-  public void assertRecordMatchesSchema(Schema schema, RowData record) {
+  public void assertRecordMatchesSchema(HoodieSchema schema, RowData record) {
     // TODO: Add support for RowData
   }
 
@@ -202,16 +206,15 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     when(tableConfig.populateMetaFields()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
-    Schema schema = SchemaBuilder.builder()
-        .record("test")
-        .fields()
-        .requiredString("field1")
-        .optionalString("field2")
-        .optionalLong("ts")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field2", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("ts", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, HoodieSchema.NULL_VALUE)
+        ));
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
-    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Option.of("ts")));
-    assertEquals(DEFAULT_ORDERING_VALUE, readerContext.getOrderingValue(rowData, schema, Option.of("non_existent_col")));
+    assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
+    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
   }
 
   @Test
@@ -220,15 +223,14 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     when(tableConfig.populateMetaFields()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
-    Schema schema = SchemaBuilder.builder()
-        .record("test")
-        .fields()
-        .requiredString(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .optionalString("field2")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field2", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE)
+        ));
     String key = "my_key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("field2_val"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @Test
@@ -238,15 +240,14 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1"}));
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
-    Schema schema = SchemaBuilder.builder()
-        .record("test")
-        .fields()
-        .requiredString("field1")
-        .optionalString("field2")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field2", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, HoodieSchema.NULL_VALUE)
+        ));
     String key = "key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("other"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @Test
@@ -257,16 +258,15 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
 
-    Schema schema = SchemaBuilder.builder()
-        .record("test")
-        .fields()
-        .requiredString("field1")
-        .requiredString("field2")
-        .requiredString("field3")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("field3", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
     String key = "field1:va1,field2:__empty__";
     GenericRowData rowData = GenericRowData.of(StringData.fromString("va1"), StringData.fromString(""), StringData.fromString("other"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @ParameterizedTest
@@ -279,9 +279,10 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
       commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      String[] orderingFields = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING ? new String[0] : new String[] {ORDERING_FIELD_NAME};
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
-          initialRecords, initialRecords);
+          initialRecords, initialRecords, orderingFields);
 
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
@@ -289,7 +290,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
-          allRecords, CollectionUtils.combine(initialRecords, updates));
+          allRecords, CollectionUtils.combine(initialRecords, updates), orderingFields);
     }
   }
 
@@ -306,7 +307,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       commitToTable(initialRecords, firstCommitOperation.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), isFirstCommitInsert,
-          isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords);
+          isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords, new String[] {ORDERING_FIELD_NAME});
 
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(getStorageConf(), getBasePath());
       String latestCompleteTime = metaClient.getActiveTimeline().getLatestCompletionTime().get();
@@ -316,14 +317,14 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(getStorageConf(), getBasePath(),
-          isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates);
+          isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates, new String[] {ORDERING_FIELD_NAME});
       // reset instant range
       instantRangeOpt = Option.empty();
     }
   }
 
-  private static Schema getRecordAvroSchema(String schemaStr) {
-    Schema recordSchema = new Schema.Parser().parse(schemaStr);
-    return AvroSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromAvroSchema(recordSchema).getRowType().getLogicalType());
+  private static HoodieSchema getRecordSchema(String schemaStr) {
+    HoodieSchema recordSchema = new HoodieSchema.Parser().parse(schemaStr);
+    return HoodieSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromAvroSchema(recordSchema.getAvroSchema()).getRowType().getLogicalType());
   }
 }

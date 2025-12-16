@@ -19,6 +19,7 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.action.TableChangesHelper;
@@ -35,7 +36,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
-import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
+import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.convert;
 
 /**
  * Utility methods to support evolve old avro schema based on a given schema.
@@ -68,7 +69,7 @@ public class AvroSchemaEvolutionUtils {
     if (incomingSchema.getType() == Schema.Type.NULL) {
       return oldTableSchema;
     }
-    InternalSchema inComingInternalSchema = convert(incomingSchema, oldTableSchema.getNameToPosition());
+    InternalSchema inComingInternalSchema = convert(HoodieSchema.fromAvroSchema(incomingSchema), oldTableSchema.getNameToPosition());
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
     List<String> colNamesFromOldSchema = oldTableSchema.getAllColsFullName();
@@ -140,11 +141,16 @@ public class AvroSchemaEvolutionUtils {
           });
     }
 
-    return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    InternalSchema evolvedSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    // If evolvedSchema is exactly the same as the oldSchema, except the version number, return the old schema
+    if (evolvedSchema.equalsIgnoringVersion(oldTableSchema)) {
+      return oldTableSchema;
+    }
+    return evolvedSchema;
   }
 
   public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), makeMissingFieldsNullable), oldTableSchema.getFullName());
+    return convert(reconcileSchema(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable), oldTableSchema.getFullName()).toAvroSchema();
   }
 
   /**
@@ -172,9 +178,9 @@ public class AvroSchemaEvolutionUtils {
       return targetSchema;
     }
 
-    InternalSchema targetInternalSchema = convert(targetSchema);
+    InternalSchema targetInternalSchema = convert(HoodieSchema.fromAvroSchema(targetSchema));
     // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
-    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
+    InternalSchema sourceInternalSchema = convert(HoodieSchema.fromAvroSchema(sourceSchema), shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
@@ -194,7 +200,7 @@ public class AvroSchemaEvolutionUtils {
 
     if (nullableUpdateColsInSource.isEmpty() && typeUpdateColsInSource.isEmpty()) {
       //standardize order of unions
-      return convert(sourceInternalSchema, sourceSchema.getFullName());
+      return convert(sourceInternalSchema, sourceSchema.getFullName()).toAvroSchema();
     }
 
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
@@ -212,7 +218,7 @@ public class AvroSchemaEvolutionUtils {
     }
 
 
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName()).toAvroSchema();
   }
 }
 

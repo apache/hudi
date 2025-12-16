@@ -270,7 +270,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
   @ValueSource(booleans = {true, false})
   public void testSimpleInsertUpdateAndDelete(boolean populateMetaFields) throws Exception {
     Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
-    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    properties.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
@@ -468,7 +468,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     Random random = new Random();
     String fakeToken = "";
     do {
-      fakeToken = random.nextLong() + "-" + random.nextLong() + "-" + random.nextLong();
+      fakeToken = Math.abs(random.nextLong()) + "-" + Math.abs(random.nextLong()) + "-" + Math.abs(random.nextLong());
     } while (fakeToken.equals(correctWriteToken));
     return fakeToken;
   }

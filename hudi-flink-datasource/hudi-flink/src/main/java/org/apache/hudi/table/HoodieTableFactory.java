@@ -117,9 +117,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
           }
-          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)
-              && !conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
-            conf.set(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+          if (tableConfig.contains(HoodieTableConfig.ORDERING_FIELDS)
+              && !conf.contains(FlinkOptions.ORDERING_FIELDS)) {
+            conf.set(FlinkOptions.ORDERING_FIELDS, tableConfig.getString(HoodieTableConfig.ORDERING_FIELDS));
           }
           if (tableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
@@ -127,10 +127,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
-              LOG.warn(
-                  String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
-                      tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
-                      conf.get(FlinkOptions.TABLE_TYPE)));
+              LOG.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",
+                  tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE, conf.get(FlinkOptions.TABLE_TYPE));
               conf.set(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
             }
           }
@@ -177,7 +175,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
-    StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+    StreamerUtil.checkOrderingFields(conf, schema.getColumnNames());
   }
 
   /**
@@ -229,7 +227,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           });
     }
     if (schema.getPrimaryKey().isPresent() && conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()))   {
-      LOG.warn("PRIMARY KEY syntax and option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' was used. Priority of the PRIMARY KEY is higher!");
+      LOG.warn("PRIMARY KEY syntax and option '{}' was used. Value of the PRIMARY KEY will be used and option will be ignored!", FlinkOptions.RECORD_KEY_FIELD.key());
     }
   }
 

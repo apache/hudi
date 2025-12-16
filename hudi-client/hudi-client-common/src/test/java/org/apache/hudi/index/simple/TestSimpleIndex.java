@@ -24,12 +24,10 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,7 +39,7 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
-import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -56,6 +54,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,7 +63,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestSimpleIndex extends HoodieCommonTestHarness {
-  private static final Schema SCHEMA = getSchemaFromResource(TestSimpleIndex.class, "/exampleSchema.avsc", true);
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestSimpleIndex.class, "/exampleSchema.avsc", true);
 
   @BeforeEach
   void setUp() throws Exception {
@@ -81,25 +80,12 @@ class TestSimpleIndex extends HoodieCommonTestHarness {
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
     String rowKey4 = UUID.randomUUID().toString();
-    String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-26T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"" + rowKey4 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    RawTripTestPayload payload1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 = new HoodieAvroRecord(
-        new HoodieKey(payload1.getRowKey(), payload1.getPartitionPath()), payload1);
-    RawTripTestPayload payload2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 = new HoodieAvroRecord(
-        new HoodieKey(payload2.getRowKey(), payload2.getPartitionPath()), payload2);
-    RawTripTestPayload payload3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 = new HoodieAvroRecord(
-        new HoodieKey(payload3.getRowKey(), payload3.getPartitionPath()), payload3);
-    HoodieRecord record3WithNewPartition = new HoodieAvroRecord(
-        new HoodieKey(payload3.getRowKey(), partition1), payload3);
-    RawTripTestPayload payload4 = new RawTripTestPayload(recordStr4);
-    HoodieAvroRecord record4 = new HoodieAvroRecord(
-        new HoodieKey(payload4.getRowKey(), payload4.getPartitionPath()), payload4);
-    HoodieData<HoodieRecord<HoodieAvroRecord>> records = HoodieListData.eager(Arrays.asList(record1, record2, record3WithNewPartition, record4));
+    HoodieRecord<IndexedRecord> record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord<IndexedRecord> record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord<IndexedRecord> record3 = createSimpleRecord(rowKey3, "2016-01-26T03:16:41.415Z", 15);
+    HoodieRecord<IndexedRecord> record3WithNewPartition = createSimpleRecord(rowKey3, "2016-01-26T03:16:41.415Z", 15, Option.of(partition1));
+    HoodieRecord<IndexedRecord> record4 = createSimpleRecord(rowKey4, "2015-01-31T03:16:41.415Z", 32);
+    HoodieData<HoodieRecord<IndexedRecord>> records = HoodieListData.eager(Arrays.asList(record1, record2, record3WithNewPartition, record4));
 
     HoodieWriteConfig config = makeConfig(manuallySetPartitions);
     Configuration conf = new Configuration(false);
@@ -110,11 +96,11 @@ class TestSimpleIndex extends HoodieCommonTestHarness {
     when(table.getMetaClient()).thenReturn(metaClient);
     when(table.getStorage()).thenReturn(metaClient.getStorage());
     HoodieSimpleIndex simpleIndex = new HoodieSimpleIndex(config, Option.empty());
-    HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = simpleIndex.tagLocation(records, context, table);
+    HoodieData<HoodieRecord<IndexedRecord>> taggedRecordRDD = simpleIndex.tagLocation(records, context, table);
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(HoodieRecord::isCurrentLocationKnown));
 
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, conf);
-    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
 
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();

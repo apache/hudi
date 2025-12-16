@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -28,8 +28,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Objects;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * <ol>
@@ -45,7 +43,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, OrderingValues.getDefault()); // natural order
   }
 
   @Override
@@ -60,11 +58,11 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    if (recordBytes.length == 0 || isDeletedRecord) {
+    if (isEmptyRecord() || isDeletedRecord) {
       return Option.empty();
     }
 
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return getRecord(schema);
   }
 
   /**
@@ -80,9 +78,5 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   @Override
   public Comparable<?> getOrderingValue() {
     return this.orderingVal;
-  }
-
-  public byte[] getRecordBytes() {
-    return recordBytes;
   }
 }

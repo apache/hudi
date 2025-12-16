@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -30,6 +29,8 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -50,7 +51,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -88,7 +88,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
   public void testWritesViaMetadataWriteClient() throws Exception {
 
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).withEnableRecordIndex(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(1, 1).withStreamingWriteEnabled(true).build()).build();
 
     // trigger end to end write to data table so that metadata table is also initialized.
@@ -188,17 +188,17 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       List<FileSlice> filesFileSliceList = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.FILES.getPartitionPath());
       assertEquals(1, filesFileSliceList.size(), "File partition is expected to contain just 1 file slice");
       FileSlice filesFileSlice = filesFileSliceList.get(0);
-      readFromMDTFileSliceAndValidate(metadataMetaClient, filesFileSlice, filesPartitionExpectedRecordsMap, validMetadataInstant);
+      readFromMDTFileSliceAndValidate(metadataMetaClient, filesFileSlice, filesPartitionExpectedRecordsMap, validMetadataInstant, hoodieWriteConfig);
 
       List<FileSlice> rliFileSliceList = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.RECORD_INDEX.getPartitionPath());
       assertEquals(1, rliFileSliceList.size(), "RLI partition is expected to contain just 1 file slice");
       FileSlice rliFileSlice = rliFileSliceList.get(0);
-      readFromMDTFileSliceAndValidate(metadataMetaClient, rliFileSlice, rliPartitionExpectedRecordsMap, validMetadataInstant);
+      readFromMDTFileSliceAndValidate(metadataMetaClient, rliFileSlice, rliPartitionExpectedRecordsMap, validMetadataInstant, hoodieWriteConfig);
     }
   }
 
   private void readFromMDTFileSliceAndValidate(HoodieTableMetaClient metadataMetaClient, FileSlice fileSlice, Map<String, HoodieRecord> expectedRecordsMap,
-                                               String validMetadataInstant)
+                                               String validMetadataInstant, HoodieWriteConfig hoodieWriteConfig)
       throws IOException {
 
     // read from the file slice of interest.
@@ -214,7 +214,8 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    HoodieSchema metadataSchema = HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(metadataSchema);
 
     HoodieAvroReaderContext readerContext = new HoodieAvroReaderContext(metadataMetaClient.getStorageConf(), metadataMetaClient.getTableConfig(), Option.of(instantRange), Option.of(predicate));
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
@@ -222,9 +223,10 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
         .withHoodieTableMetaClient(metadataMetaClient)
         .withFileSlice(fileSlice)
         .withLatestCommitTime(validMetadataInstant)
-        .withRequestedSchema(HoodieMetadataRecord.getClassSchema())
+        .withRequestedSchema(metadataSchema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        .withEnableOptimizedLogBlockScan(hoodieWriteConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
     try (ClosableIterator<HoodieRecord<IndexedRecord>> records = fileGroupReader.getClosableHoodieRecordIterator()) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap = new HashMap<>();

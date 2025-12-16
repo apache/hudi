@@ -21,12 +21,17 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,14 +39,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestPartialUpdateHandler {
   @Test
   void testParseValidProperties() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=1,b=2,c=3");
-    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+      TypedProperties props = new TypedProperties();
+      props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=1,b=2,c=3");
+      Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
 
-    assertEquals(3, result.size());
-    assertEquals("1", result.get("a"));
-    assertEquals("2", result.get("b"));
-    assertEquals("3", result.get("c"));
+      assertEquals(3, result.size());
+      assertEquals("1", result.get("a"));
+      assertEquals("2", result.get("b"));
+      assertEquals("3", result.get("c"));
   }
 
   @Test
@@ -83,35 +88,36 @@ class TestPartialUpdateHandler {
     assertTrue(result.isEmpty());
   }
 
+
   @Test
   void testDirectMatch() {
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
-    assertTrue(PartialUpdateHandler.hasTargetType(stringSchema, Schema.Type.STRING));
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertTrue(PartialUpdateHandler.hasTargetType(stringSchema, HoodieSchemaType.STRING));
   }
 
   @Test
   void testUnionWithTargetType() {
-    Schema unionSchema = Schema.createUnion(
-        Schema.create(Schema.Type.NULL),
-        Schema.create(Schema.Type.BOOLEAN),
-        Schema.create(Schema.Type.STRING)
+    HoodieSchema unionSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        HoodieSchema.create(HoodieSchemaType.STRING)
     );
-    assertTrue(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertTrue(PartialUpdateHandler.hasTargetType(unionSchema, HoodieSchemaType.STRING));
   }
 
   @Test
   void testUnionWithoutTargetType() {
-    Schema unionSchema = Schema.createUnion(
-        Schema.create(Schema.Type.NULL),
-        Schema.create(Schema.Type.BOOLEAN),
-        Schema.create(Schema.Type.INT)
+    HoodieSchema unionSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        HoodieSchema.create(HoodieSchemaType.INT)
     );
-    assertFalse(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertFalse(PartialUpdateHandler.hasTargetType(unionSchema, HoodieSchemaType.STRING));
   }
 
   @Test
   void testNonUnionNonTargetType() {
-    Schema intSchema = Schema.create(Schema.Type.INT);
-    assertFalse(PartialUpdateHandler.hasTargetType(intSchema, Schema.Type.STRING));
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    assertFalse(PartialUpdateHandler.hasTargetType(intSchema, HoodieSchemaType.STRING));
   }
 }

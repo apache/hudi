@@ -18,16 +18,15 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.HoodieTableSchema
-
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-class InternalRowToJsonStringConverter(originTableSchema: HoodieTableSchema) {
+class InternalRowToJsonStringConverter(schema: StructType) {
 
   private lazy val mapper: ObjectMapper = {
     val _mapper = new ObjectMapper
@@ -38,15 +37,63 @@ class InternalRowToJsonStringConverter(originTableSchema: HoodieTableSchema) {
   }
 
   def convert(record: InternalRow): UTF8String = {
-    val map = scala.collection.mutable.Map.empty[String, Any]
-    originTableSchema.structTypeSchema.zipWithIndex.foreach {
+    // Use LinkedHashMap to preserve field order
+    val map = scala.collection.mutable.LinkedHashMap.empty[String, Any]
+    schema.zipWithIndex.foreach {
       case (field, idx) =>
-        if (field.dataType.isInstanceOf[StringType]) {
-          map(field.name) = Option(record.getUTF8String(idx)).map(_.toString).orNull
-        } else {
-          map(field.name) = record.get(idx, field.dataType)
-        }
+        map(field.name) = convertField(record.get(idx, field.dataType), field.dataType)
     }
     UTF8String.fromString(mapper.writeValueAsString(map))
+  }
+
+  private def convertField(value: Any, dataType: DataType): Any = {
+    if (value == null) {
+      null
+    } else {
+      dataType match {
+        case StringType => value.toString
+        case ArrayType(elementType, _) =>
+          value match {
+            case arrayData: ArrayData =>
+              val convertedArray = scala.collection.mutable.ArrayBuffer[Any]()
+              for (i <- 0 until arrayData.numElements()) {
+                val element = arrayData.get(i, elementType)
+                convertedArray += convertField(element, elementType)
+              }
+              convertedArray.toArray
+            case arr: Array[_] =>
+              arr.map(item => convertField(item, elementType))
+            case _ => value // fallback
+          }
+        case MapType(keyType, valueType, _) =>
+          value match {
+            case mapData: MapData =>
+              val convertedMap = scala.collection.mutable.LinkedHashMap[Any, Any]()
+              for (i <- 0 until mapData.numElements()) {
+                val key = mapData.keyArray().get(i, keyType)
+                val value = mapData.valueArray().get(i, valueType)
+                convertedMap(convertField(key, keyType)) = convertField(value, valueType)
+              }
+              convertedMap.toMap
+            case map: Map[_, _] =>
+              map.map { case (k, v) => (convertField(k, keyType), convertField(v, valueType)) }
+            case _ => value // fallback
+          }
+        case structType: StructType =>
+          value match {
+            case internalRow: InternalRow =>
+              val structMap = scala.collection.mutable.LinkedHashMap[String, Any]()
+              structType.zipWithIndex.foreach { case (field, idx) =>
+                val fieldValue = internalRow.get(idx, field.dataType)
+                structMap(field.name) = convertField(fieldValue, field.dataType)
+              }
+              structMap.toMap
+            case _ => value // fallback
+          }
+        case _ =>
+          // For primitive types and other unsupported types, return as is
+          value
+      }
+    }
   }
 }

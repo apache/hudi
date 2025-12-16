@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusValidator;
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
@@ -40,6 +39,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -53,10 +53,12 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 
 import com.codahale.metrics.Timer;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
@@ -65,11 +67,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+@Slf4j
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
   private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
@@ -108,7 +109,8 @@ public class SparkRDDWriteClient<T> extends
     final JavaRDD<WriteStatus> writeStatuses;
     if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
       // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
-      writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
+      writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime,
+          config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     } else {
       writeStatuses = rawWriteStatuses;
     }
@@ -146,7 +148,7 @@ public class SparkRDDWriteClient<T> extends
       return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
           false, Option.of(table));
     } else {
-      LOG.error("Exiting early due to errors with write operation ");
+      log.error("Exiting early due to errors with write operation ");
       return false;
     }
   }
@@ -421,64 +423,22 @@ public class SparkRDDWriteClient<T> extends
    * Slim WriteStatus to hold info like total records, total record records,
    * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
    */
+  @AllArgsConstructor
+  @Getter
+  @Setter
   static class SlimWriteStats implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
     private boolean isMetadataTable;
     private long totalRecords;
     private long totalErrorRecords;
     private HoodieWriteStat writeStat;
 
-    private SlimWriteStats(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
-      this.isMetadataTable = isMetadataTable;
-      this.totalRecords = totalRecords;
-      this.totalErrorRecords = totalErrorRecords;
-      this.writeStat = writeStat;
-    }
-
     public static List<SlimWriteStats> from(JavaRDD<WriteStatus> writeStatuses) {
       return writeStatuses.map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
           writeStatus.getStat())).collect();
-    }
-
-    public boolean isMetadataTable() {
-      return isMetadataTable;
-    }
-
-    public long getTotalRecords() {
-      return totalRecords;
-    }
-
-    public long getTotalErrorRecords() {
-      return totalErrorRecords;
-    }
-
-    public HoodieWriteStat getWriteStat() {
-      return writeStat;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setMetadataTable(boolean metadataTable) {
-      isMetadataTable = metadataTable;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setTotalRecords(long totalRecords) {
-      this.totalRecords = totalRecords;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setTotalErrorRecords(long totalErrorRecords) {
-      this.totalErrorRecords = totalErrorRecords;
-    }
-
-    // setter for efficient serialization,
-    // please do not remove it even if it is not used.
-    public void setWriteStat(HoodieWriteStat writeStat) {
-      this.writeStat = writeStat;
     }
   }
 }

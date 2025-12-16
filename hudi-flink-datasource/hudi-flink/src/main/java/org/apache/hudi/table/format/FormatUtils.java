@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -34,7 +36,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.util.FlinkClientUtil;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
@@ -55,13 +56,13 @@ public class FormatUtils {
 
   public static GenericRecord buildAvroRecordBySchema(
       IndexedRecord record,
-      Schema requiredSchema,
+      HoodieSchema requiredSchema,
       int[] requiredPos,
       GenericRecordBuilder recordBuilder) {
-    List<Schema.Field> requiredFields = requiredSchema.getFields();
+    List<HoodieSchemaField> requiredFields = requiredSchema.getFields();
     assert (requiredFields.size() == requiredPos.length);
     Iterator<Integer> positionIterator = Arrays.stream(requiredPos).iterator();
-    requiredFields.forEach(f -> recordBuilder.set(f, getVal(record, positionIterator.next())));
+    requiredFields.forEach(f -> recordBuilder.set(f.getAvroField(), getVal(record, positionIterator.next())));
     return recordBuilder.build();
   }
 
@@ -111,8 +112,8 @@ public class FormatUtils {
       HoodieWriteConfig writeConfig,
       InternalSchemaManager internalSchemaManager,
       FileSlice fileSlice,
-      Schema tableSchema,
-      Schema requiredSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
       String latestInstant,
       String mergeType,
       boolean emitDelete,
@@ -140,6 +141,7 @@ public class FormatUtils {
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)
+        .withEnableOptimizedLogBlockScan(writeConfig.enableOptimizedLogBlocksScan())
         .build();
   }
 

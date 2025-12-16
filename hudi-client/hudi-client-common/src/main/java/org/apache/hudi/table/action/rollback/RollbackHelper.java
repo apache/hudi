@@ -40,13 +40,11 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -60,10 +58,10 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
 /**
  * Contains common methods to be used across engines for rollback operation.
  */
+@Slf4j
 public class RollbackHelper implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(RollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
   protected final HoodieTable table;
@@ -131,9 +129,7 @@ public class RollbackHelper implements Serializable {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
       if (!filesToBeDeleted.isEmpty()) {
         List<HoodieRollbackStat> rollbackStats = deleteFiles(metaClient, filesToBeDeleted, doDelete);
-        List<Pair<String, HoodieRollbackStat>> partitionToRollbackStats = new ArrayList<>();
-        rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
-        return partitionToRollbackStats.stream();
+        return rollbackStats.stream().map(entry -> Pair.of(entry.getPartitionPath(), entry));
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
         final StoragePath filePath;
@@ -216,12 +212,18 @@ public class RollbackHelper implements Serializable {
             isDeleted = true;
           }
         }
+        if (!isDeleted) {
+          if (metaClient.getStorage().exists(fullDeletePath)) {
+            throw new HoodieIOException("Failing to delete file during rollback execution failed : " + fullDeletePath);
+          }
+          isDeleted = true;
+        }
         return HoodieRollbackStat.newBuilder()
             .withPartitionPath(partitionPath)
             .withDeletedFileResult(fullDeletePath.toString(), isDeleted)
             .build();
       } catch (IOException e) {
-        LOG.error("Fetching file status for ");
+        log.error("Fetching file status for ");
         throw new HoodieIOException("Fetching file status for " + fileToDelete + " failed ", e);
       }
     }).collect(Collectors.toList());

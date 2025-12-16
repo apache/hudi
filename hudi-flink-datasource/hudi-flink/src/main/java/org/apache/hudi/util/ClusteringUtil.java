@@ -108,7 +108,7 @@ public class ClusteringUtil {
     HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
     Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(instantTime, activeTimeline, table.getInstantGenerator());
     if (inflightInstantOpt.isPresent() && ClusteringUtils.isClusteringInstant(activeTimeline, inflightInstantOpt.get(), table.getInstantGenerator())) {
-      LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
+      LOG.warn("Failed to rollback clustering instant: [{}]", instantTime);
       table.rollbackInflightClustering(inflightInstantOpt.get(),
           commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());

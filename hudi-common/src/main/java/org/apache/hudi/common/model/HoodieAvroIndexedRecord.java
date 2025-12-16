@@ -18,10 +18,13 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.JoinedGenericRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -41,46 +44,96 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * This only use by reader returning.
  */
 public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
+  private static final long serialVersionUID = 1L;
+  private SerializableIndexedRecord binaryRecord;
 
   public HoodieAvroIndexedRecord(IndexedRecord data) {
-    super(null, data);
+    this(data, (Comparable) null);
+  }
+
+  public HoodieAvroIndexedRecord(IndexedRecord data, Comparable orderingValue) {
+    this(null, data);
+    this.orderingValue = orderingValue;
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data) {
-    super(key, data);
+    this(key, data, null, null, (HoodieRecordLocation) null);
   }
 
-  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(key, data, null, currentLocation, null);
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation) {
+    this(key, data, hoodieOperation, Option.empty(), null, null);
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation, HoodieRecordLocation currentLocation) {
+    this(key, data, hoodieOperation, currentLocation, null);
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue) {
+    this(key, data);
+    this.orderingValue = orderingValue;
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation) {
+    this(key, data, operation);
+    this.orderingValue = orderingValue;
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation, Boolean isDelete) {
+    this(key, data, operation);
+    this.orderingValue = orderingValue;
+    this.isDelete = isDelete;
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
-    super(key, data, operation, currentLocation, newLocation);
+    super(key, SerializableIndexedRecord.createInstance(data), operation, currentLocation, newLocation);
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(null, data, null, currentLocation, null);
+    this(null, data, null, currentLocation, null);
   }
 
   public HoodieAvroIndexedRecord(
       HoodieKey key,
       IndexedRecord data,
       HoodieOperation operation,
-      Option<Map<String, String>> metaData) {
-    super(key, data, operation, metaData);
+      Option<Map<String, String>> metaData,
+      Comparable orderingValue,
+      Boolean isDelete) {
+    super(key, SerializableIndexedRecord.createInstance(data), operation, metaData);
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
+    this.orderingValue = orderingValue;
+    this.isDelete = isDelete;
   }
 
-  public HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
-    super(record);
+  private HoodieAvroIndexedRecord(
+      HoodieKey key,
+      SerializableIndexedRecord data,
+      HoodieOperation operation,
+      Option<Map<String, String>> metaData,
+      Comparable orderingValue) {
+    super(key, data, operation, metaData);
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
+    this.orderingValue = orderingValue;
+  }
+
+  HoodieAvroIndexedRecord(HoodieAvroIndexedRecord record) {
+    super(record.getKey(), record.binaryRecord, record.getOperation(), record.getMetadata());
+    this.currentLocation = record.getCurrentLocation();
+    this.newLocation = record.getNewLocation();
+    this.ignoreIndexUpdate = record.getIgnoreIndexUpdate();
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
+    this.isDelete = record.isDelete;
+    this.orderingValue = record.orderingValue;
   }
 
   public HoodieAvroIndexedRecord() {
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
   @Override
@@ -90,16 +143,20 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieAvroIndexedRecord(key, data, op, metaData);
+    return new HoodieAvroIndexedRecord(key, this.binaryRecord, op, metaData, orderingValue);
   }
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key) {
-    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
+    return new HoodieAvroIndexedRecord(key, this.binaryRecord, operation, metaData, orderingValue);
   }
 
   @Override
   public String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    if (key != null) {
+      return key.getRecordKey();
+    }
+    decodeRecord(recordSchema);
     return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey((GenericRecord) data) : ((GenericRecord) data).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
   }
 
@@ -110,6 +167,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public String getRecordKey(Schema recordSchema, String keyFieldName) {
+    if (key != null) {
+      return key.getRecordKey();
+    }
+    decodeRecord(recordSchema);
     return Option.ofNullable(data.getSchema().getField(keyFieldName))
         .map(keyField -> data.get(keyField.pos()))
         .map(Object::toString).orElse(null);
@@ -117,52 +178,77 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    throw new UnsupportedOperationException();
+    decodeRecord(recordSchema);
+    Object[] results = new Object[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      results[i] = AvroRecordContext.getFieldValueFromIndexedRecord(data, columns[i]);
+    }
+    return results;
   }
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(data, column);
+    decodeRecord(recordSchema);
+    return AvroRecordContext.getFieldValueFromIndexedRecord(data, column);
   }
 
   @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
+    decodeRecord(targetSchema);
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
-    return new HoodieAvroIndexedRecord(key, record, operation, metaData);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData, orderingValue, isDelete);
   }
 
   @Override
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
+    decodeRecord(recordSchema);
+    GenericRecord genericRecord = (GenericRecord) data;
+    int metaFieldSize = targetSchema.getFields().size() - genericRecord.getSchema().getFields().size();
+    GenericRecord newAvroRecord = metaFieldSize == 0 ? genericRecord : new JoinedGenericRecord(genericRecord, metaFieldSize, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
-    return new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
+    HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData, orderingValue, isDelete);
+    newRecord.setNewLocation(this.newLocation);
+    newRecord.setCurrentLocation(this.currentLocation);
+    return newRecord;
   }
 
   @Override
   public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    decodeRecord(recordSchema);
     data.put(ordinal, value);
-    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData, orderingValue, isDelete);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
+    decodeRecord(recordSchema);
     GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
-    return new HoodieAvroIndexedRecord(key, record, operation, metaData);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData, orderingValue, isDelete);
   }
 
   @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
+    decodeRecord(recordSchema);
     ((GenericRecord) data).put(keyFieldName, StringUtils.EMPTY_STRING);
     return this;
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) {
-    return false;
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
+    if (data == null || HoodieOperation.isDelete(getOperation())) {
+      return true;
+    }
+
+    decodeRecord(deleteContext.getReaderSchema().toAvroSchema());
+    if (getData().equals(SENTINEL)) {
+      return false; // Sentinel record is not a delete
+    }
+    return AvroRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+    decodeRecord(recordSchema);
     return getData().equals(SENTINEL);
   }
 
@@ -181,13 +267,15 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) {
     String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
+    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+    decodeRecord(recordSchema);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, orderingFields, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema,
-      Properties props, Option<BaseKeyGenerator> keyGen) {
+                                                            Properties props, Option<BaseKeyGenerator> keyGen) {
+    decodeRecord(recordSchema);
     GenericRecord record = (GenericRecord) data;
     String key;
     String partition;
@@ -206,24 +294,33 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Option<Map<String, String>> getMetadata() {
-    return Option.empty();
+    if (metaData == null) {
+      return Option.empty();
+    }
+    return metaData;
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
-      return DEFAULT_ORDERING_VALUE;
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null || orderingFields.length == 0) {
+      return OrderingValues.getDefault();
     }
+    decodeRecord(recordSchema);
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    return (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data,
-        orderingField, true, consistentLogicalTimestampEnabled);
+    return OrderingValues.create(
+        orderingFields,
+        field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
+  }
+
+  private void decodeRecord(Schema recordSchema) {
+    binaryRecord.decodeRecord(recordSchema);
   }
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
+    decodeRecord(recordSchema);
     return Option.of(this);
   }
 
@@ -240,7 +337,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   protected final void writeRecordPayload(IndexedRecord payload, Kryo kryo, Output output) {
     // NOTE: We're leveraging Spark's default [[GenericAvroSerializer]] to serialize Avro
-    Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
+    Serializer<SerializableIndexedRecord> avroSerializer = kryo.getSerializer(SerializableIndexedRecord.class);
 
     kryo.writeObjectOrNull(output, payload, avroSerializer);
   }
@@ -252,10 +349,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @SuppressWarnings("unchecked")
   @Override
   protected final IndexedRecord readRecordPayload(Kryo kryo, Input input) {
-    // NOTE: We're leveraging Spark's default [[GenericAvroSerializer]] to serialize Avro
-    Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
+    SerializableIndexedRecord data = kryo.readObjectOrNull(input, SerializableIndexedRecord.class);
+    this.binaryRecord = data;
+    return data;
+  }
 
-    return kryo.readObjectOrNull(input, GenericRecord.class, avroSerializer);
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
   }
 
   static void updateMetadataValuesInternal(GenericRecord avroRecord, MetadataValues metadataValues) {
@@ -270,5 +374,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         avroRecord.put(HoodieMetadataField.values()[pos].getFieldName(), value);
       }
     }
+  }
+
+  @Override
+  public IndexedRecord getData() {
+    return binaryRecord;
   }
 }

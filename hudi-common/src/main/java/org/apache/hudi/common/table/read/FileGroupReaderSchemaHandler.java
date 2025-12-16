@@ -19,21 +19,31 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
+import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
@@ -48,28 +58,43 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
-import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
+import static org.apache.hudi.common.schema.HoodieSchemaCompatibility.areSchemasProjectionEquivalent;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.appendFieldsToSchemaDedupNested;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaField;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaFromFieldsWithReference;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.findNestedField;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
  * This class is responsible for handling the schema for the file group reader.
  */
 public class FileGroupReaderSchemaHandler<T> {
 
-  protected final Schema tableSchema;
+  @Getter
+  protected final HoodieSchema tableSchema;
 
+  @Getter
   // requestedSchema: the schema that the caller requests
-  protected final Schema requestedSchema;
+  protected final HoodieSchema requestedSchema;
 
+  @Getter
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
-  protected final Schema requiredSchema;
+  protected final HoodieSchema requiredSchema;
 
+  /**
+   * -- SETTER --
+   *  This is a special case for incoming records, which do not have metadata fields in schema.
+   */
+  // the schema for updates, usually it equals with the requiredSchema,
+  // the only exception is for incoming records, which do not include the metadata fields.
+  @Setter
+  @Getter
+  protected HoodieSchema schemaForUpdates;
+
+  @Getter
   protected final InternalSchema internalSchema;
 
+  @Getter
   protected final Option<InternalSchema> internalSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
@@ -77,71 +102,49 @@ public class FileGroupReaderSchemaHandler<T> {
   protected final HoodieReaderContext<T> readerContext;
 
   protected final TypedProperties properties;
-
-  private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
-  private final boolean hasBuiltInDelete;
-  private final int hoodieOperationPos;
+  @Getter
+  private final DeleteContext deleteContext;
+  private final HoodieTableMetaClient metaClient;
 
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
-                                      Schema tableSchema,
-                                      Schema requestedSchema,
+                                      HoodieSchema tableSchema,
+                                      HoodieSchema requestedSchema,
                                       Option<InternalSchema> internalSchemaOpt,
-                                      HoodieTableConfig hoodieTableConfig,
-                                      TypedProperties properties) {
+                                      TypedProperties properties,
+                                      HoodieTableMetaClient metaClient) {
     this.properties = properties;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
-    this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
-    this.hoodieTableConfig = hoodieTableConfig;
-    Pair<Option<Pair<String, String>>, Boolean> deleteConfigs = getDeleteConfigs(properties, tableSchema);
-    this.customDeleteMarkerKeyValue = deleteConfigs.getLeft();
-    this.hasBuiltInDelete = deleteConfigs.getRight();
-    this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema());
-    this.hoodieOperationPos = Option.ofNullable(requiredSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
+    this.requestedSchema = HoodieSchemaCache.intern(requestedSchema);
+    this.hoodieTableConfig = metaClient.getTableConfig();
+    this.deleteContext = new DeleteContext(properties, tableSchema);
+    this.requiredSchema = HoodieSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
+    this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
-  }
-
-  public Schema getTableSchema() {
-    return this.tableSchema;
-  }
-
-  public Schema getRequestedSchema() {
-    return this.requestedSchema;
-  }
-
-  public Schema getRequiredSchema() {
-    return this.requiredSchema;
-  }
-
-  public InternalSchema getInternalSchema() {
-    return this.internalSchema;
-  }
-
-  public Option<InternalSchema> getInternalSchemaOpt() {
-    return this.internalSchemaOpt;
+    this.metaClient = metaClient;
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
-    if (!requestedSchema.equals(requiredSchema)) {
-      return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
+    if (!areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
+      return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));
     }
     return Option.empty();
   }
 
-  public Option<Pair<String, String>> getCustomDeleteMarkerKeyValue() {
-    return customDeleteMarkerKeyValue;
+  public Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {
+    if (internalSchema.isEmptySchema()) {
+      return Pair.of(requiredSchema, Collections.emptyMap());
+    }
+    long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
+    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+        true, false, false).mergeSchemaGetRenamed();
+    HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
+    return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
   }
 
-  public boolean hasBuiltInDelete() {
-    return hasBuiltInDelete;
-  }
-
-  public int getHoodieOperationPos() {
-    return hoodieOperationPos;
-  }
-
-  private InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {
+  private InternalSchema pruneInternalSchema(HoodieSchema requiredSchema, Option<InternalSchema> internalSchemaOption) {
     if (!internalSchemaOption.isPresent()) {
       return InternalSchema.getEmptyInternalSchema();
     }
@@ -157,18 +160,17 @@ public class FileGroupReaderSchemaHandler<T> {
     return internalSchemaOpt;
   }
 
-  protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, internalSchema);
+  protected InternalSchema doPruneInternalSchema(HoodieSchema requiredSchema, InternalSchema internalSchema) {
+    return InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(requiredSchema, internalSchema);
   }
 
   @VisibleForTesting
-  Schema generateRequiredSchema() {
+  HoodieSchema generateRequiredSchema(DeleteContext deleteContext) {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
-        List<Schema.Field> addedFields = new ArrayList<>();
-        addedFields.add(getField(tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        List<HoodieSchemaField> addedFields = Collections.singletonList(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
         return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
       }
       return requestedSchema;
@@ -176,16 +178,16 @@ public class FileGroupReaderSchemaHandler<T> {
 
     if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
       if (!readerContext.getRecordMerger().get().isProjectionCompatible()) {
-        return tableSchema;
+        return this.tableSchema;
       }
     }
 
-    List<Schema.Field> addedFields = new ArrayList<>();
+    List<HoodieSchemaField> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(
-        hoodieTableConfig, properties, tableSchema, readerContext.getRecordMerger(),
-        hasBuiltInDelete, customDeleteMarkerKeyValue, hasInstantRange)) {
+        hoodieTableConfig, this.properties, this.tableSchema, readerContext.getRecordMerger(),
+        deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
-        addedFields.add(getField(tableSchema, field));
+        addedFields.add(getField(this.tableSchema, field));
       }
     }
 
@@ -198,19 +200,23 @@ public class FileGroupReaderSchemaHandler<T> {
 
   private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg,
                                                        TypedProperties props,
-                                                       Schema tableSchema,
+                                                       HoodieSchema tableSchema,
                                                        Option<HoodieRecordMerger> recordMerger,
                                                        boolean hasBuiltInDelete,
                                                        Option<Pair<String, String>> customDeleteMarkerKeyAndValue,
                                                        boolean hasInstantRange) {
-    Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
-        cfg.getRecordMergeMode(),
-        cfg.getPayloadClass(),
-        cfg.getRecordMergeStrategyId(),
-        cfg.getPreCombineField(),
-        cfg.getTableVersion());
+    RecordMergeMode mergeMode = cfg.getRecordMergeMode();
+    if (cfg.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
+          cfg.getRecordMergeMode(),
+          cfg.getPayloadClass(),
+          cfg.getRecordMergeStrategyId(),
+          cfg.getOrderingFieldsStr().orElse(null),
+          cfg.getTableVersion());
+      mergeMode = mergingConfigs.getLeft();
+    }
 
-    if (mergingConfigs.getLeft() == RecordMergeMode.CUSTOM) {
+    if (mergeMode == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(tableSchema, cfg, props);
     }
 
@@ -231,11 +237,9 @@ public class FileGroupReaderSchemaHandler<T> {
       }
     }
     // Add precombine field for event time ordering merge mode.
-    if (mergingConfigs.getLeft() == RecordMergeMode.EVENT_TIME_ORDERING) {
-      String preCombine = cfg.getPreCombineField();
-      if (!StringUtils.isNullOrEmpty(preCombine)) {
-        requiredFields.add(preCombine);
-      }
+    if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+      List<String> preCombineFields = cfg.getOrderingFields();
+      requiredFields.addAll(preCombineFields);
     }
     // Add `HOODIE_IS_DELETED_FIELD` field if exists.
     if (hasBuiltInDelete) {
@@ -246,16 +250,16 @@ public class FileGroupReaderSchemaHandler<T> {
       requiredFields.add(customDeleteMarkerKeyAndValue.get().getLeft());
     }
     // Add _hoodie_operation if it exists in table schema
-    if (tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
+    if (tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       requiredFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
     }
 
     return requiredFields.toArray(new String[0]);
   }
 
-  protected Schema prepareRequiredSchema() {
-    Schema preReorderRequiredSchema = generateRequiredSchema();
-    Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
+  protected HoodieSchema prepareRequiredSchema(DeleteContext deleteContext) {
+    HoodieSchema preReorderRequiredSchema = generateRequiredSchema(deleteContext);
+    Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
     readerContext.setNeedsBootstrapMerge(readerContext.getHasBootstrapBaseFile()
         && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty());
     return readerContext.getNeedsBootstrapMerge()
@@ -263,17 +267,17 @@ public class FileGroupReaderSchemaHandler<T> {
         : preReorderRequiredSchema;
   }
 
-  public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
+  public Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> getBootstrapRequiredFields() {
     return getDataAndMetaCols(requiredSchema);
   }
 
-  public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapDataFields() {
+  public Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> getBootstrapDataFields() {
     return getDataAndMetaCols(tableSchema);
   }
 
   @VisibleForTesting
-  static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
-    Map<Boolean, List<Schema.Field>> fieldsByMeta = schema.getFields().stream()
+  static Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> getDataAndMetaCols(HoodieSchema schema) {
+    Map<Boolean, List<HoodieSchemaField>> fieldsByMeta = schema.getFields().stream()
         //if there are no data fields, then we don't want to think the temp col is a data col
         .filter(f -> !Objects.equals(f.name(), PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME))
         .collect(Collectors.partitioningBy(f -> HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name())));
@@ -281,63 +285,18 @@ public class FileGroupReaderSchemaHandler<T> {
         fieldsByMeta.getOrDefault(false, Collections.emptyList()));
   }
 
-  public Schema createSchemaFromFields(List<Schema.Field> fields) {
+  public HoodieSchema createSchemaFromFields(List<HoodieSchemaField> fields) {
     //fields have positions set, so we need to remove them due to avro setFields implementation
-    for (int i = 0; i < fields.size(); i++) {
-      Schema.Field curr = fields.get(i);
-      fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
-    }
-    return createNewSchemaFromFieldsWithReference(tableSchema, fields);
+    List<HoodieSchemaField> newFields = new ArrayList<>(fields.size());
+    fields.forEach(f -> newFields.add(createNewSchemaField(f)));
+    return createNewSchemaFromFieldsWithReference(tableSchema, newFields);
   }
 
   /**
    * Get {@link Schema.Field} from {@link Schema} by field name.
    */
-  private static Schema.Field getField(Schema schema, String fieldName) {
-    Option<Schema.Field> foundFieldOpt = findNestedField(schema, fieldName);
-    if (!foundFieldOpt.isPresent()) {
-      throw new IllegalArgumentException("Field: " + fieldName + " does not exist in the table schema");
-    }
-    return foundFieldOpt.get();
-  }
-
-  /**
-   * Fetches the delete configs from the configs.
-   *
-   * @param props write and table configs that contain delete related properties
-   * @param tableSchema table schema
-   * @return a pair of custom delete marker key, value, and whether built-in delete marker
-   * (`_hoodie_is_deleted`) is included.
-   */
-  private static Pair<Option<Pair<String, String>>, Boolean> getDeleteConfigs(TypedProperties props,
-                                                                              Schema tableSchema) {
-    String deleteKey = props.getProperty(DELETE_KEY);
-    String deleteMarker = props.getProperty(DELETE_MARKER);
-    boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
-    boolean deleteMarkerExists = !StringUtils.isNullOrEmpty(deleteMarker);
-
-    Option<Pair<String, String>> customDeleteMarkerKeyAndValue;
-    // DELETE_KEY and DELETE_MARKER both should be set.
-    if (deleteKeyExists && deleteMarkerExists) {
-      // DELETE_KEY field exists in the schema.
-      customDeleteMarkerKeyAndValue = Option.of(Pair.of(deleteKey, deleteMarker));
-    } else if (!deleteKeyExists && !deleteMarkerExists) {
-      // Normal case.
-      customDeleteMarkerKeyAndValue = Option.empty();
-    } else {
-      throw new IllegalArgumentException("Either custom delete key or marker is not specified");
-    }
-    return Pair.of(customDeleteMarkerKeyAndValue, hasBuiltInDeleteField(tableSchema));
-  }
-
-  /**
-   * Check if "_hoodie_is_deleted" field (built-in deletes) exists in the schema.
-   * Assume the type of this column is boolean.
-   *
-   * @param schema table schema to check
-   * @return whether built-in delete field is included in the table schema
-   */
-  private static boolean hasBuiltInDeleteField(Schema schema) {
-    return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
+  private static HoodieSchemaField getField(HoodieSchema schema, String fieldName) {
+    Option<HoodieSchemaField> foundFieldOpt = findNestedField(schema, fieldName);
+    return foundFieldOpt.orElseThrow(() -> new IllegalArgumentException("Field: " + fieldName + " does not exist in the table schema"));
   }
 }

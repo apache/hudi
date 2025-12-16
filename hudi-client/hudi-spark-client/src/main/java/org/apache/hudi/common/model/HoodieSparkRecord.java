@@ -20,9 +20,11 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.model.HoodieInternalRow;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,6 +35,8 @@ import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -46,22 +50,22 @@ import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
 import scala.Function1;
 
-import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
+import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRowAsJava;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
-import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
@@ -111,6 +115,15 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy) {
     super(key, data);
+
+    validateRow(data, schema);
+    this.copy = copy;
+    this.schema = schema;
+  }
+
+  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
+    super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
 
     validateRow(data, schema);
     this.copy = copy;
@@ -192,7 +205,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return getFieldValueFromInternalRow(data, recordSchema, column);
+    return getFieldValueFromInternalRowAsJava(data, recordSchema, column);
   }
 
   @Override
@@ -245,26 +258,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) {
-    if (null == data) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
+    if (data == null || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
 
-    // Use metadata filed to decide.
-    Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
-    if (null != operationField
-        && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos(), StringType))) {
-      return true;
-    }
-
-    // Use data field to decide.
-    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
-      return false;
-    }
-
-    Object deleteMarker = data.get(
-        recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    return SparkFileFormatInternalRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override
@@ -341,18 +340,38 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
+  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (!isNullOrEmpty(orderingField)) {
-      scala.Option<NestedFieldPath> cachedNestedFieldPath =
-          HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-      if (cachedNestedFieldPath.isDefined()) {
-        NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-        return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
-      }
+    if (orderingFields != null) {
+      return OrderingValues.create(orderingFields, field -> {
+        scala.Option<NestedFieldPath> cachedNestedFieldPath =
+            HoodieInternalRowUtils.getCachedPosList(structType, field);
+        if (cachedNestedFieldPath.isDefined()) {
+          NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+          if (nestedFieldPath.parts()[0]._2.dataType() instanceof org.apache.spark.sql.types.StringType) {
+            return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory()
+                .wrapUTF8String((UTF8String) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath));
+          }
+          return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+        }
+        return OrderingValues.getDefault();
+      });
     }
-    return DEFAULT_ORDERING_VALUE;
+    return OrderingValues.getDefault();
+  }
+
+  @Override
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
+      });
+    }
   }
 
   /**
@@ -380,6 +399,27 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     return kryo.readObjectOrNull(input, UnsafeRow.class);
   }
 
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    if (fieldValue == null) {
+      return null;
+    }
+    LogicalType logicalType = fieldSchema.getLogicalType();
+
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
+    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+      return (Long) fieldValue;
+    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
+      return ((Long) fieldValue) / 1000;
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      return ((Decimal) fieldValue).toJavaBigDecimal();
+    }
+    return fieldValue;
+  }
+
   private static UnsafeRow convertToUnsafeRow(InternalRow payload, StructType schema) {
     if (payload == null) {
       return null;
@@ -398,7 +438,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     boolean containsMetaFields = hasMetaFields(structType);
     UTF8String[] metaFields = extractMetaFields(data, structType);
-    return new HoodieInternalRow(metaFields, data, containsMetaFields);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, data, containsMetaFields);
   }
 
   private static UTF8String[] extractMetaFields(InternalRow row, StructType structType) {

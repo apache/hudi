@@ -19,7 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
@@ -28,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -35,11 +39,15 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,8 +56,13 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
@@ -77,16 +90,75 @@ public class ConfigUtils {
   /**
    * Get ordering field.
    */
-  public static String getOrderingField(Properties properties) {
-    String orderField = null;
-    if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
-      orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key())) {
-      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key());
-    } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
+  @Nullable
+  public static String[] getOrderingFields(Properties properties) {
+    String orderField = getOrderingFieldsStr(properties);
+    return StringUtils.isNullOrEmpty(orderField) ? null : orderField.split(",");
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStr(Properties properties) {
+    String orderField = getOrderingFieldsStrDuringWrite(properties);
+    if (orderField == null && properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
     return orderField;
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStrDuringWrite(Properties properties) {
+    String orderField = null;
+    if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+      orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
+    }
+    return orderField;
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStrDuringWrite(Map<String, String> properties) {
+    String orderField = null;
+    if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+      orderField = properties.get("hoodie.datasource.write.precombine.field");
+    }
+    return orderField;
+  }
+
+  /**
+   * Ensures that ordering field is populated for mergers and legacy payloads.
+   *
+   * <p> See also {@link #getOrderingFields(Properties)}.
+   */
+  public static TypedProperties supplementOrderingFields(TypedProperties props, List<String> orderingFields) {
+    String orderingFieldsAsString = String.join(",", orderingFields);
+    props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
+    props.putIfAbsent(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFieldsAsString);
+    return props;
+  }
+
+  /**
+   * Ensures that the prefixed merge properties are populated for mergers.
+   */
+  public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
+    Map<String, String> mergeProps = tableConfig.getTableMergeProperties();
+    if (mergeProps.isEmpty()) {
+      return props;
+    }
+    TypedProperties copied = TypedProperties.copy(props);
+    mergeProps.forEach(copied::setProperty);
+    return copied;
   }
 
   /**
@@ -94,6 +166,30 @@ public class ConfigUtils {
    */
   public static String getPayloadClass(Properties props) {
     return HoodieRecordPayload.getPayloadClassName(props);
+  }
+
+  /**
+   * Check if event time metadata should be tracked.
+   */
+  public static boolean isTrackingEventTimeWatermark(TypedProperties props) {
+    return props.getBoolean("hoodie.write.track.event.time.watermark", false);
+  }
+
+  /**
+   * Check if logical timestamp should be made consistent.
+   */
+  public static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
+    return Boolean.parseBoolean(props.getProperty(
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
+  /**
+   * Extract event_time field name from configuration.
+   */
+  @Nullable
+  public static String getEventTimeFieldName(TypedProperties props) {
+    return props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
   }
 
   public static List<String> split2List(String param) {
@@ -212,11 +308,11 @@ public class ConfigUtils {
    * Whether the properties contain a config. If any of the key or alternative keys of the
    * {@link ConfigProperty} exists in the properties, this method returns {@code true}.
    *
-   * @param props          Configs in {@link TypedProperties}
+   * @param props          Configs in {@link Properties}
    * @param configProperty Config to look up.
    * @return {@code true} if exists; {@code false} otherwise.
    */
-  public static boolean containsConfigProperty(TypedProperties props,
+  public static boolean containsConfigProperty(Properties props,
                                                ConfigProperty<?> configProperty) {
     if (!props.containsKey(configProperty.key())) {
       for (String alternative : configProperty.getAlternatives()) {
@@ -237,7 +333,7 @@ public class ConfigUtils {
    * @param configProperty Config to look up.
    * @return {@code true} if exists; {@code false} otherwise.
    */
-  public static boolean containsConfigProperty(Map<String, Object> props,
+  public static boolean containsConfigProperty(Map<String, ?> props,
                                                ConfigProperty<?> configProperty) {
     return containsConfigProperty(props::containsKey, configProperty);
   }
@@ -309,9 +405,7 @@ public class ConfigUtils {
     }
     for (String alternative : configProperty.getAlternatives()) {
       if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return Option.ofNullable(props.get(alternative));
       }
     }
@@ -409,8 +503,8 @@ public class ConfigUtils {
    * and there is default value defined in the {@link ConfigProperty} config and is convertible to
    * String type; {@code null} otherwise.
    */
-  public static String getStringWithAltKeys(Map<String, Object> props,
-                                            ConfigProperty<?> configProperty) {
+  public static <V> String getStringWithAltKeys(Map<String, V> props,
+                                                ConfigProperty<?> configProperty) {
     return getStringWithAltKeys(props::get, configProperty);
   }
 
@@ -434,13 +528,16 @@ public class ConfigUtils {
     for (String alternative : configProperty.getAlternatives()) {
       value = keyMapper.apply(alternative);
       if (value != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return value.toString();
       }
     }
     return configProperty.hasDefaultValue() ? configProperty.defaultValue().toString() : null;
+  }
+
+  private static void deprecationWarning(String alternative, ConfigProperty<?> configProperty) {
+    LOG.warn("The configuration key '{}' has been deprecated and may be removed in the future."
+        + " Please use the new key '{}' instead.", alternative, configProperty.key());
   }
 
   /**
@@ -585,9 +682,9 @@ public class ConfigUtils {
           }
           return props;
         } catch (IOException e) {
-          LOG.warn(String.format("Could not read properties from %s: %s", path, e));
+          LOG.warn("Could not read properties from {}: {}", path, e);
         } catch (IllegalArgumentException e) {
-          LOG.warn(String.format("Invalid properties file %s: %s", path, props));
+          LOG.warn("Invalid properties file {}: {}", path, props);
         }
       }
 
@@ -610,13 +707,49 @@ public class ConfigUtils {
     }
   }
 
+  public static boolean isPropertiesInvalid(TypedProperties props) {
+    // For older versions if checksum is not present, table name needs to be present to generate the checksum
+    if (!props.containsKey(TABLE_CHECKSUM.key())) {
+      return !props.containsKey(NAME.key());
+    }
+
+    // If checkSum is present we need to validate
+    return !HoodieTableConfig.validateChecksum(props);
+  }
+
   public static void recoverIfNeeded(HoodieStorage storage, StoragePath cfgPath,
                                      StoragePath backupCfgPath) throws IOException {
+    boolean needCopy = false;
     if (!storage.exists(cfgPath)) {
-      // copy over from backup
-      try (InputStream in = storage.open(backupCfgPath);
-           OutputStream out = storage.create(cfgPath, false)) {
-        FileIOUtils.copy(in, out);
+      needCopy = true;
+    } else {
+      TypedProperties props = new TypedProperties();
+      try (InputStream in = storage.open(cfgPath)) {
+        props.load(in);
+        if (isPropertiesInvalid(props)) {
+          // the cfg file is invalid
+          storage.deleteFile(cfgPath);
+          needCopy = true;
+        }
+      }
+    }
+    if (needCopy && storage.exists(backupCfgPath)) {
+      byte[] bytes = FileIOUtils.readAsByteArray(storage.open(backupCfgPath));
+      // check whether existing backup file is valid or not
+      try (InputStream backupStream = new ByteArrayInputStream(bytes)) {
+        TypedProperties backupProps = new TypedProperties();
+        backupProps.load(backupStream);
+        if (isPropertiesInvalid(backupProps)) {
+          // need to delete the backup as anyway reads will also fail
+          // subsequent writes will recover and update
+          storage.deleteFile(backupCfgPath);
+          LOG.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
+          throw new IOException("Corrupted backup file");
+        }
+        // copy over from backup
+        try (OutputStream out = storage.create(cfgPath, false)) {
+          out.write(bytes);
+        }
       }
     }
     // regardless, we don't need the backup anymore.
@@ -634,12 +767,93 @@ public class ConfigUtils {
   public static HoodieConfig getReaderConfigs(StorageConfiguration<?> storageConf) {
     HoodieConfig config = new HoodieConfig();
     config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
-    config.setValue(USE_NATIVE_HFILE_READER,
-        Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
+    return config;
+  }
+
+  /**
+   * Apply HFile cache configurations from options to a HoodieConfig.
+   * This method extracts HFile cache-related settings from the provided options map
+   * and applies them to the given HoodieConfig instance.
+   *
+   * @param options Map of options containing HFile cache configurations
+   * @return HoodieConfig with HFile reader configurations
+   */
+  public static HoodieReaderConfig getHFileCacheConfigs(Map<String, String> options) {
+    HoodieReaderConfig config = new HoodieReaderConfig();
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES,
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     return config;
   }
 
   public static TypedProperties loadGlobalProperties() {
     return ((PropertiesConfig) ReflectionUtils.loadClass("org.apache.hudi.common.config.DFSPropertiesConfiguration")).getGlobalProperties();
+  }
+
+  /**
+   * Extract all properties whose keys start with a given prefix.
+   * E.g., if the prefix is "a.b.c.", and the props contain:
+   * "a.b.c.K1=V1", "a.b.c.K2=V2", "a.b.c.K3=V3".
+   * Then the output is:
+   * Map(K1->V1, K2->V2, K3->V3).
+   */
+  public static Map<String, String> extractWithPrefix(TypedProperties props, String prefix) {
+    if (props == null || props.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    int prefixLength = prefix.length();
+    Map<String, String> mergeProperties = new HashMap<>();
+    for (Map.Entry<Object, Object> entry : props.entrySet()) {
+      String key = entry.getKey().toString();
+      // Early exit if key is shorter than prefix or doesn't start with prefix
+      if (key.length() <= prefixLength || !key.startsWith(prefix)) {
+        continue;
+      }
+      // Extract and validate the property key
+      String propKey = key.substring(prefixLength).trim();
+      if (propKey.isEmpty()) {
+        continue;
+      }
+      // Extract and trim the value
+      Object value = entry.getValue();
+      String stringValue = (value != null) ? value.toString().trim() : "";
+      mergeProperties.put(propKey, stringValue);
+    }
+    return mergeProperties;
+  }
+
+  /**
+   * Derive necessary properties for FG reader.
+   */
+  public static TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig,
+                                                               boolean shouldReuse) {
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
+        .fromProperties(metadataConfig.getProps()).build();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        MAX_MEMORY_FOR_MERGE.key(),
+        Long.toString(metadataConfig.getMaxReaderMemory()));
+    props.setProperty(
+        SPILLABLE_MAP_BASE_PATH.key(),
+        metadataConfig.getSplliableMapDir());
+    props.setProperty(
+        SPILLABLE_DISK_MAP_TYPE.key(),
+        commonConfig.getSpillableDiskMapType().name());
+    props.setProperty(
+        DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+        Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        shouldReuse ? "true" : metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
+    return props;
   }
 }

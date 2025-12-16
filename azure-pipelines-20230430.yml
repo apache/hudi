@@ -34,6 +34,7 @@ parameters:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
       - 'hudi-spark-datasource/hudi-spark3.5.x'
+      - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job10UTModules
     type: object
@@ -51,6 +52,7 @@ parameters:
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.5.x'
+      - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
       - '!hudi-utilities'
   - name: job10FTModules
@@ -73,6 +75,7 @@ parameters:
       - 'org.apache.spark.sql.avro'
       - 'org.apache.spark.sql.execution'
       - 'org.apache.spark.sql.hudi.analysis'
+      - 'org.apache.spark.sql.hudi.catalog'
       - 'org.apache.spark.sql.hudi.command'
       - 'org.apache.spark.sql.hudi.common'
       - 'org.apache.spark.sql.hudi.ddl'
@@ -212,7 +215,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT spark-datasource Java Test 1
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install

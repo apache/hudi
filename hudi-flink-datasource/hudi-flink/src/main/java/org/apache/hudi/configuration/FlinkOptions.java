@@ -110,14 +110,15 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final String NO_PRE_COMBINE = "no_precombine";
-  public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
-      .key("precombine.field")
+  public static final ConfigOption<String> ORDERING_FIELDS = ConfigOptions
+      .key("ordering.fields")
       .stringType()
       .defaultValue("ts")
-      .withFallbackKeys("write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
-      .withDescription("Field used in preCombining before actual write. When two records have the same\n"
-          + "key value, we will pick the one with the largest value for the precombine field,\n"
-          + "determined by Object.compareTo(..)");
+      .withFallbackKeys("precombine.field", "write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
+      .withDescription("Comma separated list of fields used in records merging. When two records have the same\n"
+          + "key value, we will pick the one with the largest value for the ordering field,\n"
+          + "determined by Object.compareTo(..). For multiple fields if first key comparison is same, second key comparison is made and so on.\n"
+          + "Config precombine.field is now deprecated, please use ordering.fields instead.");
 
   @AdvancedConfig
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
@@ -134,13 +135,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("")
       .withDescription("Insert partitioner to use aiming to re-balance records and reducing small file number "
           + "in the scenario of multi-level partitioning. For example dt/hour/eventID"
-          + "Currently support org.apache.hudi.sink.partitioner.DefaultInsertPartitioner");
+          + "Currently support org.apache.hudi.sink.partitioner.GroupedInsertPartitioner");
 
   public static final ConfigOption<Integer> DEFAULT_PARALLELISM_PER_PARTITION = ConfigOptions
       .key("write.insert.partitioner.default_parallelism_per_partition")
       .intType()
       .defaultValue(30)
-      .withDescription("The parallelism to use in each partition when using DefaultInsertPartitioner.");
+      .withDescription("The parallelism to use in each partition when using GroupedInsertPartitioner.");
 
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
@@ -389,6 +390,14 @@ public class FlinkOptions extends HoodieConfig {
           + "the avg read instants number per-second would be 'read.commits.limit'/'read.streaming.check-interval', by "
           + "default no limit");
 
+  public static final ConfigOption<Integer> READ_SPLITS_LIMIT = ConfigOptions
+      .key("read.splits.limit")
+      .intType()
+      .defaultValue(Integer.MAX_VALUE)
+      .withDescription("The maximum number of splits allowed to read in each instant check, if it is streaming read, "
+          + "the avg read splits number per-second would be 'read.splits.limit'/'read.streaming.check-interval', by "
+          + "default no limit");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
       .key("read.cdc.from.changelog")
@@ -621,6 +630,30 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(1024D) // 1GB
       .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_BUFFER_SORT_ENABLED = ConfigOptions
+      .key("write.buffer.sort.enabled")
+      .booleanType()
+      .defaultValue(false) // default no sort
+      .withDescription("Whether to enable buffer sort within append write function. Data is sorted within the buffer configured by number of records or buffer size."
+          + " The order of entire parquet file is not guaranteed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_SORT_KEYS = ConfigOptions
+      .key("write.buffer.sort.keys")
+      .stringType()
+      .noDefaultValue() // default no sort key
+      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. Data is sorted within the buffer configured by number of records or buffer size."
+          + " The order of entire parquet file is not guaranteed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
+      .key("write.buffer.size")
+      .longType()
+      .defaultValue(1000L) // 1000 records
+      .withDescription("Buffer size of each partition key for buffer sort in append write function. Data is sorted within the buffer configured by number of records."
+          +  " The order of entire parquet file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions

@@ -18,21 +18,16 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.OrderingValues;
 
-import org.apache.avro.Schema;
+import javax.annotation.Nullable;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.Properties;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+import java.util.function.UnaryOperator;
 
 /**
  * Buffered Record used by file group reader.
@@ -40,42 +35,22 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  * @param <T> The type of the engine specific row.
  */
 public class BufferedRecord<T> implements Serializable {
-  private final String recordKey;
-  private final Comparable orderingValue;
+  private String recordKey;
   private T record;
+  private final Comparable orderingValue;
   private final Integer schemaId;
-  private final boolean isDelete;
+  @Nullable private HoodieOperation hoodieOperation;
 
-  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
+  public BufferedRecord() {
+    this(null, null, null, null, null);
+  }
+
+  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, @Nullable HoodieOperation hoodieOperation) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
     this.schemaId = schemaId;
-    this.isDelete = isDelete;
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, HoodieReaderContext<T> readerContext, Properties props) {
-    HoodieKey hoodieKey = record.getKey();
-    String recordKey = hoodieKey == null ? readerContext.getRecordKey(record.getData(), schema) : hoodieKey.getRecordKey();
-    Integer schemaId = readerContext.encodeAvroSchema(schema);
-    boolean isDelete;
-    try {
-      isDelete = record.isDelete(schema, props);
-    } catch (IOException e) {
-      throw new HoodieException("Failed to get isDelete from record.", e);
-    }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props), record.getData(), schemaId, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, HoodieReaderContext<T> readerContext, Option<String> orderingFieldName, boolean isDelete) {
-    String recordKey = readerContext.getRecordKey(record, schema);
-    Integer schemaId = readerContext.encodeAvroSchema(schema);
-    Comparable orderingValue = readerContext.getOrderingValue(record, schema, orderingFieldName);
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
+    this.hoodieOperation = hoodieOperation;
   }
 
   public String getRecordKey() {
@@ -95,17 +70,57 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public boolean isDelete() {
-    return isDelete;
+    return HoodieOperation.isDelete(hoodieOperation) || HoodieOperation.isUpdateBefore(hoodieOperation);
+  }
+
+  public boolean isEmpty() {
+    return record == null;
   }
 
   public boolean isCommitTimeOrderingDelete() {
-    return isDelete && getOrderingValue().equals(DEFAULT_ORDERING_VALUE);
+    return isDelete() && OrderingValues.isDefault(orderingValue);
   }
 
-  public BufferedRecord<T> toBinary(HoodieReaderContext<T> readerContext) {
+  public void setHoodieOperation(HoodieOperation hoodieOperation) {
+    this.hoodieOperation = hoodieOperation;
+  }
+
+  public HoodieOperation getHoodieOperation() {
+    return this.hoodieOperation;
+  }
+
+  public BufferedRecord<T> toBinary(RecordContext<T> recordContext) {
     if (record != null) {
-      record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
+      HoodieSchema schema = recordContext.getSchemaFromBufferRecord(this);
+      // Schema can be null in test scenarios where schemas are not registered in the RecordContext (e.g. in tests)
+      if (schema != null) {
+        record = recordContext.seal(recordContext.toBinaryRow(schema, record));
+      }
     }
+    return this;
+  }
+
+  public BufferedRecord<T> seal(RecordContext<T> recordContext) {
+    if (record != null) {
+      this.record = recordContext.seal(record);
+    }
+    return this;
+  }
+
+  public BufferedRecord<T> project(UnaryOperator<T> converter) {
+    if (record != null) {
+      this.record = converter.apply(record);
+    }
+    return this;
+  }
+
+  public BufferedRecord<T> replaceRecord(T record) {
+    this.record = record;
+    return this;
+  }
+
+  public BufferedRecord<T> replaceRecordKey(String recordKey) {
+    this.recordKey = recordKey;
     return this;
   }
 
@@ -118,12 +133,12 @@ public class BufferedRecord<T> implements Serializable {
       return false;
     }
     BufferedRecord<?> that = (BufferedRecord<?>) o;
-    return isDelete == that.isDelete && Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
-        && Objects.equals(record, that.record) && Objects.equals(schemaId, that.schemaId);
+    return Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
+        && Objects.equals(record, that.record) && Objects.equals(schemaId, that.schemaId) && hoodieOperation == that.hoodieOperation;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(recordKey, orderingValue, record, schemaId, isDelete);
+    return Objects.hash(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 }

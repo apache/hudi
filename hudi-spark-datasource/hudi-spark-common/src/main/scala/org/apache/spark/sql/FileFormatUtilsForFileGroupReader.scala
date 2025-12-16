@@ -18,7 +18,8 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.{HoodieCDCFileIndex, SparkAdapterSupport, SparkHoodieTableFileIndex}
+import org.apache.hudi.{SparkAdapterSupport, SparkHoodieTableFileIndex}
+import org.apache.hudi.cdc.HoodieCDCFileIndex
 
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
@@ -34,7 +35,7 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
     val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
     ff.isProjected = true
     val tableSchema = fs.location match {
-      case index: HoodieCDCFileIndex => index.cdcRelation.schema
+      case _: HoodieCDCFileIndex => HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
       case index: SparkHoodieTableFileIndex => index.schema
     }
     val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)

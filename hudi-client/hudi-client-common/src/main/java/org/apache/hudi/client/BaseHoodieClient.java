@@ -49,8 +49,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -62,17 +62,18 @@ import java.util.Set;
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
  * embedded timeline-server if enabled.
  */
+@Slf4j
 public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
   private static final long serialVersionUID = 1L;
   protected final transient HoodieStorage storage;
   protected final transient HoodieEngineContext context;
   protected final transient StorageConfiguration<?> storageConf;
   protected final transient HoodieMetrics metrics;
+  @Getter
   protected final HoodieWriteConfig config;
   protected final String basePath;
+  @Getter
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
   protected final TimeGenerator timeGenerator;
@@ -82,7 +83,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
    * incremental fashion.
    */
-  private transient Option<EmbeddedTimelineService> timelineServer;
+  @Getter private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
@@ -137,7 +138,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
     if (timelineServer.isPresent() && shouldStopTimelineServer) {
       // Stop only if owner
-      LOG.info("Stopping Timeline service !!");
+      log.info("Stopping Timeline service !!");
       timelineServer.get().stopForBasePath(basePath);
     }
 
@@ -155,14 +156,14 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         try {
           timelineServer = Option.of(EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, config));
         } catch (IOException e) {
-          LOG.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
+          log.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
           stopEmbeddedServerView(false);
         }
       } else {
-        LOG.info("Timeline Server already running. Not restarting the service");
+        log.debug("Timeline Server already running. Not restarting the service");
       }
     } else {
-      LOG.info("Embedded Timeline Server is disabled. Not starting timeline service");
+      log.info("Embedded Timeline Server is disabled. Not starting timeline service");
     }
   }
 
@@ -179,10 +180,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       }
       ((HoodieClientInitCallback) callback).call(this);
     });
-  }
-
-  public HoodieWriteConfig getConfig() {
-    return config;
   }
 
   public HoodieEngineContext getEngineContext() {
@@ -211,14 +208,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   public String createNewInstantTime(boolean shouldLock) {
     return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
-  }
-
-  public Option<EmbeddedTimelineService> getTimelineServer() {
-    return timelineServer;
-  }
-
-  public HoodieHeartbeatClient getHeartbeatClient() {
-    return heartbeatClient;
   }
 
   /**
@@ -261,7 +250,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       if (finalizeCtx != null) {
         Option<Long> durationInMs = Option.of(metrics.getDurationInMs(finalizeCtx.stop()));
         durationInMs.ifPresent(duration -> {
-          LOG.info("Finalize write elapsed time (milliseconds): {}", duration);
+          log.info("Finalize write elapsed time (milliseconds): {}", duration);
           metrics.updateFinalizeWriteMetrics(duration, stats.size());
         });
       }

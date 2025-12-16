@@ -24,11 +24,10 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
@@ -43,9 +42,11 @@ import scala.collection.mutable
 
 class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType),
-    ProcedureParameter.optional(2, "targetColumns", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "partition", DataTypes.StringType),
+    ProcedureParameter.optional(3, "targetColumns", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -64,19 +65,24 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
-    val partitions = getArgValueOrDefault(args, PARAMETERS(1)).getOrElse("").toString
+    val path = getArgValueOrDefault(args, PARAMETERS(1))
+    val partitions = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
     val partitionsSeq = partitions.split(",").filter(_.nonEmpty).toSeq
 
-    val targetColumns = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
+    val targetColumns = getArgValueOrDefault(args, PARAMETERS(3)).getOrElse("").toString
     val targetColumnsSeq = targetColumns.split(",").toSeq
-    val basePath = getBasePath(table)
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
+    val basePath = getBasePath(table, path)
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .enable(true)
       .build
     val metaClient = createMetaClient(jsc, basePath)
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val hoodieSchema = schemaUtil.getTableSchema
+    val structSchema = AvroConversionUtils.convertAvroSchemaToStructType(hoodieSchema.toAvroSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, hoodieSchema, metadataConfig, metaClient)
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val fsView = buildFileSystemView(table, engineCtx)
@@ -104,7 +110,8 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
           getColumnStatsValue(c.getMaxValue), c.getNullCount.longValue())
       }
 
-    rows.toList.sortBy(r => r.getString(1))
+    val results = rows.toList.sortBy(r => r.getString(1))
+    applyFilter(results, filter, outputType)
   }
 
   private def getColumnStatsValue(stats_value: Any): String = {
@@ -145,8 +152,6 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
 object ShowMetadataTableColumnStatsProcedure {
   val NAME = "show_metadata_table_column_stats"
 
-  def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ShowMetadataTableColumnStatsProcedure()
-  }
+  def builder: Supplier[ProcedureBuilder] = () => new ShowMetadataTableColumnStatsProcedure()
 }
 

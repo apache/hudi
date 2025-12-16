@@ -19,10 +19,16 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
@@ -32,25 +38,35 @@ import java.io.IOException;
  * <p>It should only be used for deduplication among incoming records.
  */
 public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
-  public static final HoodiePreCombineAvroRecordMerger INSTANCE = new HoodiePreCombineAvroRecordMerger();
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Option.of(preCombine(older, oldSchema, newer, newSchema, props));
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
+      return newer;
+    }
+    init(props);
+    return preCombine(older, newer, recordContext, recordContext.getSchemaFromBufferRecord(newer), props);
   }
 
   @SuppressWarnings("rawtypes, unchecked")
-  private Pair<HoodieRecord, Schema> preCombine(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
-    HoodieRecordPayload newerPayload = ((HoodieAvroRecord) newer).getData();
-    HoodieRecordPayload olderPayload = ((HoodieAvroRecord) older).getData();
-    HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema, props);
-    if (payload == olderPayload) {
-      return Pair.of(older, oldSchema);
-    } else if (payload == newerPayload) {
-      return Pair.of(newer, newSchema);
-    } else {
-      HoodieRecord mergedRecord = new HoodieAvroRecord(newer.getKey(), payload, newer.getOperation());
-      return Pair.of(mergedRecord, newSchema);
+  private <T> BufferedRecord<T> preCombine(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, HoodieSchema newSchema, TypedProperties props) {
+    GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
+    GenericRecord olderAvroRecord = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+    HoodieRecordPayload newerPayload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
+    HoodieRecordPayload olderPayload = HoodieRecordUtils.loadPayload(payloadClass, olderAvroRecord, older.getOrderingValue());
+    HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema.toAvroSchema(), props);
+    try {
+      if (payload == olderPayload) {
+        return older;
+      } else if (payload == newerPayload) {
+        return newer;
+      } else {
+        Option<IndexedRecord> indexedRecord = payload.getIndexedRecord(newSchema.toAvroSchema(), props);
+        T mergedRecord = indexedRecord.map(recordContext::convertAvroRecord).orElse(null);
+        return BufferedRecords.fromEngineRecord(mergedRecord, newSchema, recordContext, orderingFields, newer.getRecordKey(), indexedRecord.isEmpty());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to combine records", e);
     }
   }
 }

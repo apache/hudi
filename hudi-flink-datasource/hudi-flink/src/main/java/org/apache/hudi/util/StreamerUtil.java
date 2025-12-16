@@ -32,10 +32,10 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -71,7 +71,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -137,12 +136,12 @@ public class StreamerUtil {
     return properties;
   }
 
-  public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
+  public static HoodieSchema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
-      return new FilebasedSchemaProvider(conf).getSourceSchema();
+      return new FilebasedSchemaProvider(conf).getSourceHoodieSchema();
     } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
       final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
-      return new Schema.Parser().parse(schemaStr);
+      return HoodieSchema.parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
@@ -175,8 +174,8 @@ public class StreamerUtil {
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
     return HoodiePayloadConfig.newBuilder()
         .withPayloadClass(conf.get(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
-        .withPayloadEventTimeField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadOrderingFields(conf.get(FlinkOptions.ORDERING_FIELDS))
+        .withPayloadEventTimeField(conf.get(FlinkOptions.ORDERING_FIELDS))
         .build();
   }
 
@@ -296,7 +295,7 @@ public class StreamerUtil {
           .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
-          .setPreCombineField(OptionsResolver.getPreCombineField(conf))
+          .setOrderingFields(OptionsResolver.getOrderingFieldsStr(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(
@@ -320,16 +319,7 @@ public class StreamerUtil {
   }
 
   private static String getMergeStrategyId(Configuration conf) {
-    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
-      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-    } else if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
-      // for the compatibility of legacy payload class configuration
-      String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
-      if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
-        return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-      }
-    }
-    return null;
+    return conf.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), null);
   }
 
   private static String getPayloadClass(Configuration conf) {
@@ -368,15 +358,15 @@ public class StreamerUtil {
   public static String getMergerClasses(Configuration conf, RecordMergeMode mergeMode, String payloadClass) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return EventTimeFlinkRecordMerger.class.getName();
-      case COMMIT_TIME_ORDERING:
-        return CommitTimeFlinkRecordMerger.class.getName();
-      default:
         if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
           return PartialUpdateFlinkRecordMerger.class.getName();
         } else {
-          return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
+          return EventTimeFlinkRecordMerger.class.getName();
         }
+      case COMMIT_TIME_ORDERING:
+        return CommitTimeFlinkRecordMerger.class.getName();
+      default:
+        return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
     }
   }
 
@@ -403,8 +393,13 @@ public class StreamerUtil {
    * @return The correct merging behaviour: <merge_mode, payload_class, merge_strategy_id>
    */
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
-    return HoodieTableConfig.inferCorrectMergingBehavior(
-        getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
+    String payloadClassName = getPayloadClass(conf);
+    Map<String, String> mergeConf = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        getMergeMode(conf), payloadClassName, getMergeStrategyId(conf), OptionsResolver.getOrderingFieldsStr(conf), HoodieTableVersion.current());
+    String mergeMode = mergeConf.get(HoodieTableConfig.RECORD_MERGE_MODE.key());
+    String mergeStrategyId = mergeConf.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key());
+    ValidationUtils.checkArgument(mergeMode != null, "Merge mode should not be null");
+    return Triple.of(RecordMergeMode.valueOf(mergeMode), payloadClassName, mergeStrategyId);
   }
 
   /**
@@ -504,7 +499,7 @@ public class StreamerUtil {
     StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
-        return Option.of(new HoodieTableConfig(storage, metaPath, null, null, null));
+        return Option.of(new HoodieTableConfig(storage, metaPath));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Get table config error", e);
@@ -613,21 +608,21 @@ public class StreamerUtil {
     return (long) conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
   }
 
-  public static Schema getTableAvroSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
+  public static HoodieSchema getTableSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    return schemaUtil.getTableAvroSchema(includeMetadataFields);
+    return schemaUtil.getTableSchema(includeMetadataFields);
   }
 
-  public static Schema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
+  public static HoodieSchema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
     if (StringUtils.isNullOrEmpty(path) || !StreamerUtil.tableExists(path, hadoopConf)) {
       return null;
     }
 
     try {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
-      return getTableAvroSchema(metaClient, false);
+      return getTableSchema(metaClient, false);
     } catch (Exception e) {
-      LOG.warn("Error while resolving the latest table schema", e);
+      LOG.error("Failed to resolve the latest table schema", e);
     }
     return null;
   }
@@ -656,18 +651,18 @@ public class StreamerUtil {
   /**
    * Validate pre_combine key.
    */
-  public static void checkPreCombineKey(Configuration conf, List<String> fields) {
-    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
+  public static void checkOrderingFields(Configuration conf, List<String> fields) {
+    String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
+    if (!fields.contains(orderingFields)) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+        throw new HoodieValidationException("Option '" + FlinkOptions.ORDERING_FIELDS.key()
                 + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
       }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.set(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-                + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      if (orderingFields.equals(FlinkOptions.ORDERING_FIELDS.defaultValue())) {
+        conf.set(FlinkOptions.ORDERING_FIELDS, FlinkOptions.NO_PRE_COMBINE);
+      } else if (!orderingFields.equals(FlinkOptions.NO_PRE_COMBINE)) {
+        throw new HoodieValidationException("Field " + orderingFields + " does not exist in the table schema."
+                + "Please check '" + FlinkOptions.ORDERING_FIELDS.key() + "' option.");
       }
     }
   }

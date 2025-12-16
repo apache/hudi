@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,7 +43,6 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineLoade
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -58,9 +56,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -81,31 +78,33 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.EIGHT_TO_SIX_TIMELINE_ACTION_MAP;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertCompletionTimeToEpoch;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
  * Version 8 is the placeholder version to track 1.x.
  */
+@Slf4j
 public class EightToSevenDowngradeHandler implements DowngradeHandler {
-
-  private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()), HoodieTableVersion.EIGHT);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
+    if (config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
+    }
     // Handle timeline downgrade:
     //  - Rename instants in active timeline to old format for table version 6
     //  - Convert LSM timeline format to archived timeline for table version 6
@@ -115,7 +114,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           ActiveTimelineV2.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
-      LOG.error("Failed to get instants from filesystem", ioe);
+      log.error("Failed to get instants from filesystem", ioe);
       throw new HoodieIOException("Failed to get instants from filesystem", ioe);
     }
 
@@ -133,7 +132,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     // downgrade table properties
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetInitialVersion(metaClient.getTableConfig(), tablePropsToAdd);
-    List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
+    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     tablePropsToRemove.addAll(unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd));
     tablePropsToRemove.add(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID);
     downgradeKeyGeneratorType(metaClient.getTableConfig(), tablePropsToAdd);
@@ -145,7 +144,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
     }
-    return Pair.of(tablePropsToAdd, tablePropsToRemove);
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
   static void downgradePartitionFields(HoodieWriteConfig config,
@@ -227,9 +226,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
             flusher);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to downgrade LSM timeline to old archived format");
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to downgrade LSM timeline to old archived format", e);
+      } else {
+        log.warn("Failed to downgrade LSM timeline to old archived format", e);
       }
     }
   }
@@ -243,6 +243,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     private final int batchSize;
     private final StoragePath archivePath;
     private final HoodieTableMetaClient metaClient;
+    private final Object lock = new Object();
 
     public ArchiveEntryFlusher(HoodieTableMetaClient metaClient, TimelineArchiverV1 archiverV1, int batchSize, StoragePath archivePath) {
       this.metaClient = metaClient;
@@ -254,24 +255,28 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     @Override
     public void accept(String s, GenericRecord archiveEntry) {
-      if (buffer.size() >= batchSize) {
-        archiverV1.flushArchiveEntries(new ArrayList<>(buffer), archivePath);
-        buffer.clear();
-      } else {
-        try {
-          GenericRecord legacyArchiveEntry = MetadataConversionUtils.createMetaWrapper(metaClient, archiveEntry);
-          buffer.add(legacyArchiveEntry);
-        } catch (IOException e) {
-          throw new HoodieException("Convert lsm archive entry to legacy error", e);
+      synchronized (lock) {
+        if (buffer.size() >= batchSize) {
+          archiverV1.flushArchiveEntries(new ArrayList<>(buffer), archivePath);
+          buffer.clear();
+        } else {
+          try {
+            GenericRecord legacyArchiveEntry = MetadataConversionUtils.createMetaWrapper(metaClient, archiveEntry);
+            buffer.add(legacyArchiveEntry);
+          } catch (IOException e) {
+            throw new HoodieException("Convert lsm archive entry to legacy error", e);
+          }
         }
       }
     }
 
     @Override
     public void close() {
-      if (!buffer.isEmpty()) {
-        archiverV1.flushArchiveEntries(new ArrayList<>(buffer), this.archivePath);
-        buffer.clear();
+      synchronized (lock) {
+        if (!buffer.isEmpty()) {
+          archiverV1.flushArchiveEntries(new ArrayList<>(buffer), this.archivePath);
+          buffer.clear();
+        }
       }
     }
   }
@@ -293,7 +298,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     try {
       return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, activeTimelineV1);
     } catch (IOException e) {
-      LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
+      log.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
       throw new HoodieException(e);
     }
   }

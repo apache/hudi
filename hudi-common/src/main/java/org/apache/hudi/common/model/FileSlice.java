@@ -18,13 +18,16 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -104,6 +107,15 @@ public class FileSlice implements Serializable {
     }
   }
 
+  public FileSlice filterLogFiles(SerializableFunctionUnchecked<HoodieLogFile, Boolean> filter) {
+    List<HoodieLogFile> filtered = logFiles.stream().filter(filter::apply).collect(Collectors.toList());
+    if (filtered.size() == logFiles.size()) {
+      // nothing filtered, returns this directly.
+      return this;
+    }
+    return new FileSlice(fileGroupId, baseInstantTime, baseFile, filtered);
+  }
+
   public boolean hasBootstrapBase() {
     return getBaseFile().isPresent() && getBaseFile().get().getBootstrapBaseFile().isPresent();
   }
@@ -138,6 +150,16 @@ public class FileSlice implements Serializable {
 
   public Option<HoodieLogFile> getLatestLogFile() {
     return Option.fromJavaOptional(logFiles.stream().findFirst());
+  }
+
+  /**
+   * Return file names list of base file and log files.
+   */
+  public List<String> getAllFileNames() {
+    List<String> fileList = new ArrayList<>();
+    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(hoodieBaseFile.getFileName()));
+    getLogFiles().forEach(hoodieLogFile -> fileList.add(hoodieLogFile.getFileName()));
+    return fileList;
   }
 
   public long getTotalFileSize() {

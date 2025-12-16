@@ -59,7 +59,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
-import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
@@ -143,8 +142,8 @@ public class BootstrapExecutor implements Serializable {
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .withProps(props);
 
-    if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
-      builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
+    if (null != schemaProvider && null != schemaProvider.getTargetHoodieSchema()) {
+      builder = builder.withSchema(schemaProvider.getTargetHoodieSchema().toString());
     }
     this.bootstrapConfig = builder.build();
     LOG.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
@@ -190,7 +189,7 @@ public class BootstrapExecutor implements Serializable {
     Path basePath = new Path(cfg.targetBasePath);
     if (fs.exists(basePath)) {
       if (cfg.bootstrapOverwrite) {
-        LOG.warn("Target base path already exists, overwrite it");
+        LOG.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
         throw new HoodieException("target base path already exists at " + cfg.targetBasePath
@@ -207,7 +206,7 @@ public class BootstrapExecutor implements Serializable {
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
-        .setPreCombineField(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
+        .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(props))
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setTableFormat(props.getString(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
         .setPopulateMetaFields(props.getBoolean(

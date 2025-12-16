@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
@@ -70,9 +71,11 @@ import scala.collection.mutable
  */
 class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType),
-    ProcedureParameter.optional(2, "targetColumns", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "partition", DataTypes.StringType),
+    ProcedureParameter.optional(3, "targetColumns", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -95,26 +98,31 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0))
-    val partitions = getArgValueOrDefault(args, PARAMETERS(1)).getOrElse("").toString
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val partitions = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
     val partitionsSeq = partitions.split(",").filter(_.nonEmpty).toSeq
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
 
     val targetColumnsSeq = getTargetColumnsSeq(args)
-    val basePath = getBasePath(table)
+    val basePath = getBasePath(tableName, tablePath)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build
     val metaClient = createMetaClient(jsc, basePath)
-    val schema = getSchema(metaClient)
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-    val fsView = buildFileSystemView(table)
+    val hoodieSchema = getSchema(metaClient)
+    val structSchema = getStructSchema(hoodieSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, hoodieSchema, metadataConfig, metaClient)
+    val fsView = buildFileSystemView(basePath)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val metaTable = metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
     val allFileSlices = getAllFileSlices(partitionsSeq, metaTable, fsView)
     val fileSlicesSizeByPartition = allFileSlices.groupBy(_.getPartitionPath).mapValues(_.size)
 
     val allFileNamesMap = getAllFileNamesMap(allFileSlices)
-    val colStatsRecords = getColStatsRecords(targetColumnsSeq, columnStatsIndex, schema)
+    val colStatsRecords = getColStatsRecords(targetColumnsSeq, columnStatsIndex, structSchema)
 
-    val pointList = getPointList(colStatsRecords, allFileNamesMap, schema)
+    val pointList = getPointList(colStatsRecords, allFileNamesMap, structSchema)
 
     // Group points by column name
     val groupedPoints = pointList.groupBy(p => (p.partitionPath, p.columnName))
@@ -123,11 +131,12 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     addStatisticsToRows(groupedPoints, fileSlicesSizeByPartition.toMap, rows)
 
     // The returned results are sorted by column name and average value
-    rows.asScala.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
+    val results = rows.asScala.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
+    applyFilter(results, filter, outputType)
   }
 
   private def getTargetColumnsSeq(args: ProcedureArgs): Seq[String] = {
-    val targetColumns = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
+    val targetColumns = getArgValueOrDefault(args, PARAMETERS(3)).getOrElse("").toString
     if (targetColumns != "") {
       targetColumns.split(",").toSeq
     } else {
@@ -135,9 +144,12 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     }
   }
 
-  def getSchema(metaClient: HoodieTableMetaClient): StructType = {
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+  def getSchema(metaClient: HoodieTableMetaClient): HoodieSchema = {
+    new TableSchemaResolver(metaClient).getTableSchema
+  }
+
+  def getStructSchema(hoodieSchema: HoodieSchema): StructType = {
+    AvroConversionUtils.convertAvroSchemaToStructType(hoodieSchema.toAvroSchema)
   }
 
 
@@ -252,8 +264,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     values(index)
   }
 
-  def buildFileSystemView(table: Option[Any]): HoodieTableFileSystemView = {
-    val basePath = getBasePath(table)
+  def buildFileSystemView(basePath: String): HoodieTableFileSystemView = {
     val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
     val globPath = s"$basePath/**"

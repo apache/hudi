@@ -22,18 +22,17 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieKey, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode, HoodieCDCUtils}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -54,7 +53,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     RECORDKEY_FIELD.key -> "_row_key",
-    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
     HoodieCleanConfig.AUTO_CLEAN.key -> "false",
@@ -118,7 +117,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     })
   }
 
-  protected def getCDCBlocks(relativeLogFile: String, cdcSchema: Schema): List[HoodieDataBlock] = {
+  protected def getCDCBlocks(relativeLogFile: String, cdcSchema: HoodieSchema): List[HoodieDataBlock] = {
     val logFile = new HoodieLogFile(
       metaClient.getStorage.getPathInfo(new StoragePath(metaClient.getBasePath, relativeLogFile)))
     val reader = HoodieLogFormat.newReader(storage, logFile, cdcSchema)
@@ -129,7 +128,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     blocks.toList
   }
 
-  protected def readCDCLogFile(relativeLogFile: String, cdcSchema: Schema): List[HoodieRecord[_]] = {
+  protected def readCDCLogFile(relativeLogFile: String, cdcSchema: HoodieSchema): List[HoodieRecord[_]] = {
     val records = scala.collection.mutable.ListBuffer.empty[HoodieRecord[_]]
     val blocks = getCDCBlocks(relativeLogFile, cdcSchema)
     blocks.foreach { block =>
@@ -139,14 +138,14 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def checkCDCDataForInsertOrUpdate(loggingMode: HoodieCDCSupplementalLoggingMode,
-                                              cdcSchema: Schema,
-                                              dataSchema: Schema,
+                                              cdcSchema: HoodieSchema,
+                                              dataSchema: HoodieSchema,
                                               cdcRecords: Seq[HoodieRecord[_]],
                                               newHoodieRecords: java.util.List[HoodieRecord[_]],
                                               op: HoodieCDCOperation): Unit = {
     val cdcRecord = cdcRecords.head.getData.asInstanceOf[GenericRecord]
     // check schema
-    assertEquals(cdcRecord.getSchema, cdcSchema)
+    assertEquals(cdcRecord.getSchema , cdcSchema.toAvroSchema)
     if (loggingMode == OP_KEY_ONLY) {
       // check record key
       assert(cdcRecords.map(_.getData.asInstanceOf[GenericRecord].get(1).toString).sorted == newHoodieRecords.asScala.map(_.getKey.getRecordKey).sorted)
@@ -157,9 +156,8 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
       if (op == HoodieCDCOperation.INSERT) {
         assertNull(cdcRecord.get("before"))
       } else {
-        val payload = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcRecord.get("record_key").toString).get
-          .getData.asInstanceOf[RawTripTestPayload]
-        val genericRecord = payload.getInsertValue(dataSchema).get.asInstanceOf[GenericRecord]
+        val genericRecord = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcRecord.get("record_key").toString).get
+          .getData.asInstanceOf[GenericRecord]
         val cdcBeforeValue = cdcRecord.get("before").asInstanceOf[GenericRecord]
         assertNotEquals(genericRecord.get("begin_lat"), cdcBeforeValue.get("begin_lat"))
       }
@@ -170,14 +168,12 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
         // check before
         assertNull(cdcBeforeValue)
         // check after
-        val payload = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
-          .getData.asInstanceOf[RawTripTestPayload]
-        val genericRecord = payload.getInsertValue(dataSchema).get.asInstanceOf[GenericRecord]
+        val genericRecord = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
+          .getData.asInstanceOf[GenericRecord]
         assertEquals(genericRecord.get("begin_lat"), cdcAfterValue.get("begin_lat"))
       } else {
-        val payload = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
-          .getData.asInstanceOf[RawTripTestPayload]
-        val genericRecord = payload.getInsertValue(dataSchema).get.asInstanceOf[GenericRecord]
+        val genericRecord = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
+          .getData.asInstanceOf[GenericRecord]
         // check before
         assertNotEquals(genericRecord.get("begin_lat"), cdcBeforeValue.get("begin_lat"))
         // check after
@@ -187,12 +183,12 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def checkCDCDataForDelete(loggingMode: HoodieCDCSupplementalLoggingMode,
-                                      cdcSchema: Schema,
+                                      cdcSchema: HoodieSchema,
                                       cdcRecords: Seq[IndexedRecord],
                                       deletedKeys: java.util.List[HoodieKey]): Unit = {
     val cdcRecord = cdcRecords.head.asInstanceOf[GenericRecord]
     // check schema
-    assertEquals(cdcRecord.getSchema, cdcSchema)
+    assertEquals(cdcRecord.getSchema, cdcSchema.toAvroSchema)
     if (loggingMode == OP_KEY_ONLY) {
       // check record key
       assert(cdcRecords.map(_.get(1).toString).sorted == deletedKeys.asScala.map(_.getRecordKey).sorted)

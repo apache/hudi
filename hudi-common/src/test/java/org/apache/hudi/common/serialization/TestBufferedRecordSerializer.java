@@ -18,18 +18,24 @@
 
 package org.apache.hudi.common.serialization;
 
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -37,12 +43,12 @@ import java.util.HashMap;
 public class TestBufferedRecordSerializer {
   @Test
   void testAvroRecordSerAndDe() throws IOException {
-    Schema schema = SchemaTestUtil.getSimpleSchema();
-    GenericRecord record = new GenericData.Record(schema);
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
     byte[] avroBytes = avroRecordSerializer.serialize(record);
     IndexedRecord result = avroRecordSerializer.deserialize(avroBytes, 1);
     Assertions.assertEquals(record, result);
@@ -58,14 +64,14 @@ public class TestBufferedRecordSerializer {
 
   @Test
   void testBufferedRecordSerAndDe() throws IOException {
-    Schema schema = SchemaTestUtil.getSimpleSchema();
-    GenericRecord record = new GenericData.Record(schema);
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
 
-    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
 
     byte[] bytes = bufferedRecordSerializer.serialize(bufferedRecord);
@@ -75,7 +81,7 @@ public class TestBufferedRecordSerializer {
     avroRecordSerializer = new AvroRecordSerializer(integer -> HoodieMetadataRecord.SCHEMA$);
     bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
     HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
-    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, false);
+    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, null);
     bytes = bufferedRecordSerializer.serialize(bufferedRecord);
     result = bufferedRecordSerializer.deserialize(bytes);
 
@@ -83,8 +89,33 @@ public class TestBufferedRecordSerializer {
     Assertions.assertEquals(bufferedRecord.getOrderingValue(), result.getOrderingValue());
     Assertions.assertEquals(bufferedRecord.getSchemaId(), result.getSchemaId());
     Assertions.assertEquals(bufferedRecord.isDelete(), result.isDelete());
+    Assertions.assertEquals(bufferedRecord.getHoodieOperation(), result.getHoodieOperation());
     for (int i = 0; i < metadataRecord.getSchema().getFields().size(); i++) {
       Assertions.assertEquals(metadataRecord.get(i), result.getRecord().get(i));
     }
+    // assert the records are equivalent
+    Assertions.assertEquals(bufferedRecord.getRecord().toString(), result.getRecord().toString());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieOperation.class,  names = {"UPDATE_BEFORE", "DELETE"})
+  void testDeleteRecordSerAndDe(HoodieOperation hoodieOperation) throws IOException {
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
+    DeleteRecord record = DeleteRecord.create("id", "partition", 100);
+    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, AvroRecordContext.getFieldAccessorInstance());
+    bufferedRecord.setHoodieOperation(hoodieOperation);
+
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
+    BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
+
+    byte[] bytes = bufferedRecordSerializer.serialize(bufferedRecord);
+    BufferedRecord<IndexedRecord> result = bufferedRecordSerializer.deserialize(bytes);
+
+    Assertions.assertEquals(bufferedRecord.getRecordKey(), result.getRecordKey());
+    Assertions.assertEquals(bufferedRecord.getOrderingValue(), result.getOrderingValue());
+    Assertions.assertEquals(bufferedRecord.getSchemaId(), result.getSchemaId());
+    Assertions.assertEquals(bufferedRecord.isDelete(), result.isDelete());
+    Assertions.assertEquals(bufferedRecord.getHoodieOperation(), result.getHoodieOperation());
+    Assertions.assertNull(result.getRecord());
   }
 }

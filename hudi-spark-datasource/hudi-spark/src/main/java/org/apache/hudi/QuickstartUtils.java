@@ -22,11 +22,11 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
@@ -63,7 +63,7 @@ public class QuickstartUtils {
         + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
         + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
         + "{\"name\":\"fare\",\"type\": \"double\"}]}";
-    static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+    static HoodieSchema schema = HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA);
 
     private static final Random RAND = new Random(46474747);
 
@@ -102,7 +102,7 @@ public class QuickstartUtils {
 
     public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
                                                       long timestamp) {
-      GenericRecord rec = new GenericData.Record(avroSchema);
+      GenericRecord rec = new GenericData.Record(schema.getAvroSchema());
       rec.put("uuid", rowKey);
       rec.put("ts", timestamp);
       rec.put("rider", riderName);
@@ -239,7 +239,7 @@ public class QuickstartUtils {
   private static Option<String> convertToString(HoodieRecord record) {
     try {
       String str = ((OverwriteWithLatestAvroPayload) record.getData())
-          .getInsertValue(DataGenerator.avroSchema)
+          .getInsertValue(DataGenerator.schema.getAvroSchema())
           .toString();
       str = "{" + str.substring(str.indexOf("\"ts\":"));
       return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));

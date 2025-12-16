@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.model.debezium;
 
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
 import org.apache.avro.Schema;
@@ -29,6 +31,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Objects;
+
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for MysqlDB.
@@ -45,6 +50,8 @@ import java.util.Objects;
 public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
   private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
+
+  public static final String ORDERING_FIELDS = FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME;
 
   public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -71,26 +78,39 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     if (!currentSourceSeqOpt.isPresent()) {
       return false;
     }
+    return isCurrentSeqLatest(currentSourceSeqOpt.get(), insertSourceSeq);
+  }
 
+  @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if (oldValue.getRecordBytes().length == 0) {
+      // use natural order for delete record
+      return this;
+    }
+    if (isCurrentSeqLatest(String.valueOf(oldValue.getOrderingValue()), String.valueOf(orderingVal))) {
+      return oldValue;
+    }
+    return this;
+  }
+
+  @VisibleForTesting
+  static boolean isCurrentSeqLatest(String currentSeq, String newSeq) {
     // Seq is file+pos string like "001.000010", getting [001,000010] from it
-    String[] currentFilePos = currentSourceSeqOpt.get().split("\\.");
-    String[] insertFilePos = insertSourceSeq.split("\\.");
+    String[] currentFilePos = currentSeq.split("\\.");
+    String[] newFilePos = newSeq.split("\\.");
 
-    long currentFileNum = Long.valueOf(currentFilePos[0]);
-    long insertFileNum = Long.valueOf(insertFilePos[0]);
-
-    if (insertFileNum < currentFileNum) {
-      // pick the current value
+    // pick the payload with the greatest seq based on file+pos
+    long currentFileNum = Long.parseLong(currentFilePos[0]);
+    long newFileNum = Long.parseLong(newFilePos[0]);
+    if (newFileNum < currentFileNum) {
       return true;
-    } else if (insertFileNum > currentFileNum) {
-      // pick the insert value
+    } else if (newFileNum > currentFileNum) {
       return false;
     }
 
     // file name is the same, compare the position in the file
-    Long currentPos = Long.valueOf(currentFilePos[1]);
-    Long insertPos = Long.valueOf(insertFilePos[1]);
-
-    return insertPos <= currentPos;
+    long currentPos = Long.parseLong(currentFilePos[1]);
+    long newPos = Long.parseLong(newFilePos[1]);
+    return newPos < currentPos;
   }
 }

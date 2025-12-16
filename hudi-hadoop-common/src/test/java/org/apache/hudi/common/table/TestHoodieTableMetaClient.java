@@ -27,9 +27,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
@@ -39,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -204,7 +207,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
-    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
@@ -218,7 +221,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     // test table name and type and precombine field also match
     assertEquals(metaClient1.getTableConfig().getTableName(), metaClient2.getTableConfig().getTableName());
     assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
-    assertEquals(metaClient1.getTableConfig().getPreCombineField(), metaClient2.getTableConfig().getPreCombineField());
+    assertEquals(metaClient1.getTableConfig().getOrderingFields(), metaClient2.getTableConfig().getOrderingFields());
     // default table version should be current version
     assertEquals(HoodieTableVersion.current(), metaClient2.getTableConfig().getTableVersion());
   }
@@ -273,14 +276,106 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexOptions(Collections.emptyMap())
         .build();
     metaClient.buildIndexDefinition(indexDefinition);
+    assertTrue(metaClient.getIndexMetadata().isPresent());
     assertTrue(metaClient.getIndexForMetadataPartition(indexName).isPresent());
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     metaClient.deleteIndexDefinition(indexName);
-    assertTrue(metaClient.getIndexMetadata().isEmpty());
+    assertFalse(metaClient.getIndexMetadata().isPresent());
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     // Read from storage
     HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(
         new String(FileIOUtils.readDataFromPath(metaClient.getStorage(), new StoragePath(metaClient.getIndexDefinitionPath())).get()));
     assertTrue(indexMetadata.getIndexDefinitions().isEmpty());
+  }
+
+  @Test
+  void testReadIndexDefFromStorage() throws Exception {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t8";
+
+    // No index definition path configured - should return empty
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+
+    Method readIndexDefMethod = HoodieTableMetaClient.class
+        .getDeclaredMethod("readIndexDefFromStorage",
+            org.apache.hudi.storage.HoodieStorage.class,
+            StoragePath.class,
+            HoodieTableConfig.class);
+    readIndexDefMethod.setAccessible(true);
+
+    @SuppressWarnings("unchecked")
+    Option<HoodieIndexMetadata> result = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+    assertTrue(result.isEmpty(), "Should return empty when no index definition path is configured");
+
+    // Empty index definition path - should return empty
+    metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "");
+    @SuppressWarnings("unchecked")
+    Option<HoodieIndexMetadata> result2 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+    assertTrue(result2.isEmpty(), "Should return empty when index definition path is empty string");
+
+    // Valid path but file doesn't exist - should return empty HoodieIndexMetadata
+    String relativePath = ".hoodie/.index_defs/index.json";
+    metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), relativePath);
+    @SuppressWarnings("unchecked")
+    Option<HoodieIndexMetadata> result3 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+    assertTrue(result3.isPresent(), "Should return present Option when path is configured but file doesn't exist");
+    assertTrue(result3.get().getIndexDefinitions().isEmpty(), "Should return empty HoodieIndexMetadata when file doesn't exist");
+
+    // Valid path with existing empty file - should return empty HoodieIndexMetadata
+    StoragePath indexPath = new StoragePath(metaClient.getBasePath(), relativePath);
+    FileIOUtils.createFileInPath(metaClient.getStorage(), indexPath,
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter("{}".getBytes())));
+    @SuppressWarnings("unchecked")
+    Option<HoodieIndexMetadata> result4 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+    assertTrue(result4.isPresent(), "Should return present Option when file exists");
+    assertTrue(result4.get().getIndexDefinitions().isEmpty(), "Should return empty HoodieIndexMetadata for empty file");
+
+    // Valid path with valid index metadata - should return populated HoodieIndexMetadata
+    Map<String, Map<String, String>> columnsMap = new HashMap<>();
+    columnsMap.put("c1", Collections.emptyMap());
+    String indexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "test_idx";
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType("column_stats")
+        .withIndexFunction("identity")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
+        .withSourceFields(new ArrayList<>(columnsMap.keySet()))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+
+    Map<String, HoodieIndexDefinition> indexDefMap = new HashMap<>();
+    indexDefMap.put(indexName, indexDefinition);
+    HoodieIndexMetadata validIndexMetadata = new HoodieIndexMetadata(indexDefMap);
+
+    FileIOUtils.createFileInPath(metaClient.getStorage(), indexPath,
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter(validIndexMetadata.toJson().getBytes())));
+    @SuppressWarnings("unchecked")
+    Option<HoodieIndexMetadata> result5 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+    assertTrue(result5.isPresent(), "Should return present Option when valid file exists");
+    assertFalse(result5.get().getIndexDefinitions().isEmpty(), "Should return populated HoodieIndexMetadata");
+    assertEquals(1, result5.get().getIndexDefinitions().size(), "Should have one index definition");
+    assertTrue(result5.get().getIndexDefinitions().containsKey(indexName), "Should contain the test index");
+    assertEquals("column_stats", result5.get().getIndexDefinitions().get(indexName).getIndexType(), "Index type should match");
+
+    // Invalid JSON file - should throw HoodieIOException
+    FileIOUtils.createFileInPath(metaClient.getStorage(), indexPath,
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter("invalid json".getBytes())));
+    assertThrows(HoodieIOException.class, () -> {
+      try {
+        readIndexDefMethod.invoke(null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+      } catch (java.lang.reflect.InvocationTargetException e) {
+        if (e.getCause() instanceof HoodieIOException) {
+          throw (HoodieIOException) e.getCause();
+        }
+        throw new RuntimeException(e);
+      }
+    }, "Should throw HoodieIOException for invalid JSON");
   }
 }

@@ -40,7 +40,7 @@ class TestRunRollbackInflightTableServiceProcedure extends HoodieSparkProcedureT
            | options (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | partitioned by(ts)
            | location '$basePath'
@@ -84,38 +84,41 @@ class TestRunRollbackInflightTableServiceProcedure extends HoodieSparkProcedureT
              | options (
              |  primaryKey ='id',
              |  type = 'mor',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(ts)
              | location '$basePath'
          """.stripMargin)
-        spark.sql("set hoodie.parquet.max.file.size = 10000")
-        // disable automatic inline compaction
-        spark.sql("set hoodie.compact.inline=false")
-        spark.sql("set hoodie.compact.schedule.inline=false")
+        withSQLConf(
+          "hoodie.parquet.max.file.size" -> "10000",
+          // disable automatic inline compaction
+          "hoodie.compact.inline" -> "false",
+          "hoodie.compact.schedule.inline" -> "false"
+        ) {
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
-        spark.sql(s"update $tableName set price = 11 where id = 1")
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+          spark.sql(s"update $tableName set price = 11 where id = 1")
 
-        spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')")
-        spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+          spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')")
+          spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
 
-        // delete compaction commit file
-        val metaClient = HoodieTableMetaClient.builder
-          .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration)).setBasePath(basePath).build
-        val compactionInstant: HoodieInstant = metaClient.getActiveTimeline.getReverseOrderedInstants.findFirst().get()
+          // delete compaction commit file
+          val metaClient = HoodieTableMetaClient.builder
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration)).setBasePath(basePath).build
+          val compactionInstant: HoodieInstant = metaClient.getActiveTimeline.getReverseOrderedInstants.findFirst().get()
 
-        metaClient.getActiveTimeline.deleteInstantFileIfExists(compactionInstant)
-        val compactionInstantTime = compactionInstant.requestedTime
+          metaClient.getActiveTimeline.deleteInstantFileIfExists(compactionInstant)
+          val compactionInstantTime = compactionInstant.requestedTime
 
-        spark.sql(s"call run_rollback_inflight_tableservice(table => '$tableName', pending_instant => '$compactionInstantTime', delete_request_instant_file => true)")
-        Assertions.assertTrue(!metaClient.reloadActiveTimeline().getInstants
-          .contains(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime)))
-        Assertions.assertTrue(!metaClient.reloadActiveTimeline().getInstants
-          .contains(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime)))
+          spark.sql(s"call run_rollback_inflight_tableservice(table => '$tableName', pending_instant => '$compactionInstantTime', delete_request_instant_file => true)")
+          Assertions.assertTrue(!metaClient.reloadActiveTimeline().getInstants
+            .contains(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime)))
+          Assertions.assertTrue(!metaClient.reloadActiveTimeline().getInstants
+            .contains(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime)))
+        }
       }
     }
   }

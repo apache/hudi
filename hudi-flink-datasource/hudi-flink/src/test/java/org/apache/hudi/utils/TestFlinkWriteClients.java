@@ -26,15 +26,23 @@ import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.DirectWriteMarkers;
+import org.apache.hudi.table.marker.TimelineServerBasedWriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -49,7 +57,9 @@ import java.io.File;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -94,6 +104,31 @@ public class TestFlinkWriteClients {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"", "DIRECT", "TIMELINE_SERVER_BASED"})
+  void testMarkerType(String markerType) throws Exception {
+    // create table
+    StreamerUtil.initTableIfNotExists(conf);
+    // This is expected to be used by the driver, the client can then send requests for files view.
+    FlinkWriteClients.createWriteClient(conf);
+
+    // do not set mark type to test the default behavior
+    if (!markerType.isEmpty()) {
+      conf.setString(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.valueOf(markerType).name());
+    }
+    // This is expected to be used by writer client
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, true);
+    try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(HoodieFlinkEngineContext.DEFAULT, writeConfig)) {
+      HoodieTable table = writeClient.getHoodieTable();
+      String markerClass = WriteMarkersFactory.get(writeConfig.getMarkersType(), table, "001").getClass().getSimpleName();
+      if (markerType.isEmpty() || markerType.equals("DIRECT")) {
+        assertEquals(DirectWriteMarkers.class.getSimpleName(), markerClass);
+      } else {
+        assertEquals(TimelineServerBasedWriteMarkers.class.getSimpleName(), markerClass);
+      }
+    }
+  }
+
+  @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testRecordMergeConfigForEventTimeOrdering(boolean useLegacyConfig) throws Exception {
     if (useLegacyConfig) {
@@ -105,8 +140,8 @@ public class TestFlinkWriteClients {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
-    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(EventTimeAvroPayload.class.getName()));
+    assertNull(tableConfig.getRecordMergeStrategyId());
+    assertThat(tableConfig.getPayloadClass(), is(DefaultHoodieRecordPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
@@ -125,8 +160,9 @@ public class TestFlinkWriteClients {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.COMMIT_TIME_ORDERING));
-    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID));
+    assertNull(tableConfig.getRecordMergeStrategyId());
     assertThat(tableConfig.getPayloadClass(), is(OverwriteWithLatestAvroPayload.class.getName()));
+
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
@@ -144,15 +180,24 @@ public class TestFlinkWriteClients {
       conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
       conf.set(FlinkOptions.RECORD_MERGER_IMPLS, PartialUpdateFlinkRecordMerger.class.getName());
     }
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
-    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.CUSTOM));
-    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
+    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
+    assertNull(tableConfig.getRecordMergeStrategyId());
+    assertThat(tableConfig.getPayloadClass(), is(DefaultHoodieRecordPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
     assertThat(mergerClasses, is(PartialUpdateFlinkRecordMerger.class.getName()));
+  }
+
+  @Test
+  void testWriteMergeHandleForPreV9Table() throws Exception {
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    StreamerUtil.initTableIfNotExists(conf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertThat(writeConfig.getMergeHandleClassName(), is(FileGroupReaderBasedMergeHandle.class.getName()));
   }
 }

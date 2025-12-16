@@ -28,8 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -41,9 +40,8 @@ import java.util.Set;
  * This abstract class provides abstract methods of different marker operations, so that
  * different marker write mechanism can be implemented.
  */
+@Slf4j
 public abstract class WriteMarkers implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(WriteMarkers.class);
 
   protected final String basePath;
   protected final transient StoragePath markerDirPath;
@@ -166,7 +164,7 @@ public abstract class WriteMarkers implements Serializable {
       context.setJobStatus(this.getClass().getSimpleName(), "Deleting marker directory: " + basePath);
       deleteMarkerDir(context, parallelism);
     } catch (Exception e) {
-      LOG.warn("Error deleting marker directory for instant " + instantTime, e);
+      log.warn("Error deleting marker directory for instant {}", instantTime, e);
     }
   }
 

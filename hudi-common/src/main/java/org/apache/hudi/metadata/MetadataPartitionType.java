@@ -26,10 +26,12 @@ import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
+import org.apache.hudi.stats.ValueMetadata;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -43,8 +45,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -89,7 +89,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsR
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 2) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isEnabled();
     }
 
@@ -105,7 +105,7 @@ public enum MetadataPartitionType {
   },
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 3) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isColumnStatsIndexEnabled();
     }
 
@@ -127,7 +127,7 @@ public enum MetadataPartitionType {
   },
   BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 4) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isBloomFilterIndexEnabled();
     }
 
@@ -158,8 +158,8 @@ public enum MetadataPartitionType {
   },
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
-      return metadataConfig.isRecordIndexEnabled();
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      return metadataConfig.isGlobalRecordLevelIndexEnabled() || metadataConfig.isRecordLevelIndexEnabled();
     }
 
     @Override
@@ -181,7 +181,7 @@ public enum MetadataPartitionType {
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isExpressionIndexEnabled();
     }
 
@@ -203,7 +203,7 @@ public enum MetadataPartitionType {
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isSecondaryIndexEnabled();
     }
 
@@ -237,8 +237,8 @@ public enum MetadataPartitionType {
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
-      return metadataConfig.isPartitionStatsIndexEnabled();
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      return tableConfig.isTablePartitioned() && metadataConfig.isPartitionStatsIndexEnabled();
     }
 
     @Override
@@ -260,7 +260,7 @@ public enum MetadataPartitionType {
   // ALL_PARTITIONS is just another record type in FILES partition
   ALL_PARTITIONS(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 1) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isEnabled();
     }
 
@@ -304,14 +304,16 @@ public enum MetadataPartitionType {
       checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
           String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
+      ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnStatsRecord);
       HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
           .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
           .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
           // AVRO-2377 1.9.2 Modified the type of org.apache.avro.Schema#FIELD_RESERVED to Collections.unmodifiableSet.
           // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
           // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
-          .setMinValue(wrapValueIntoAvro(unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
-          .setMaxValue(wrapValueIntoAvro(unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
+          .setMinValue(valueMetadata.wrapValue(valueMetadata.unwrapValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
+          .setMaxValue(valueMetadata.wrapValue(valueMetadata.unwrapValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
+          .setValueType(valueMetadata.getValueTypeInfo())
           .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
           .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
           .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
@@ -355,7 +357,7 @@ public enum MetadataPartitionType {
   /**
    * Check if the metadata partition is enabled based on the metadata config.
    */
-  public abstract boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig);
+  public abstract boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig);
 
   /**
    * Check if the metadata partition is available based on the table config.
@@ -420,7 +422,10 @@ public enum MetadataPartitionType {
    * Check if the partition path should be deleted on restore.
    */
   public static boolean shouldDeletePartitionOnRestore(String partitionPath) {
-    return fromPartitionPath(partitionPath) != FILES && fromPartitionPath(partitionPath) != RECORD_INDEX;
+    MetadataPartitionType partitionType = fromPartitionPath(partitionPath);
+    return partitionType != FILES
+        && partitionType != RECORD_INDEX
+        && partitionType != COLUMN_STATS;
   }
 
   /**
@@ -470,7 +475,7 @@ public enum MetadataPartitionType {
       return Collections.emptyList();
     }
     return Arrays.stream(getValidValues())
-        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig, metaClient.getTableConfig()) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
   }
 

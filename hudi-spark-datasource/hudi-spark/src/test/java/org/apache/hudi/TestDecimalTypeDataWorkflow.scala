@@ -21,12 +21,12 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types.{Decimal, DecimalType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -66,7 +66,7 @@ class TestDecimalTypeDataWorkflow extends SparkClientFunctionalTestHarness{
       .toDF("id", "decimal_col").sort("id")
     insertDf.write.format("hudi")
       .option(RECORDKEY_FIELD.key(), "id")
-      .option(PRECOMBINE_FIELD.key(), "decimal_col")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key(), "decimal_col")
       .option(TABLE_TYPE.key, "MERGE_ON_READ")
       .option(TABLE_NAME.key, "test_table")
       .options(opts)

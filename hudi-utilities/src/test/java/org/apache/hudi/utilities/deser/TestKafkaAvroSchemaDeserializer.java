@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deser;
 
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
 
@@ -33,8 +33,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,9 +47,9 @@ public class TestKafkaAvroSchemaDeserializer {
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;
   private final String topic;
-  private final Schema origSchema = createUserSchema();
-  private final Schema evolSchema = createExtendUserSchema();
-  private Properties config = new Properties();
+  private final HoodieSchema origSchema = createUserSchema();
+  private final HoodieSchema evolSchema = createExtendUserSchema();
+  private final Properties config = new Properties();
 
   public TestKafkaAvroSchemaDeserializer() {
     config.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
@@ -60,33 +58,31 @@ public class TestKafkaAvroSchemaDeserializer {
     topic = "test";
   }
 
-  private Schema createUserSchema() {
+  private HoodieSchema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
         + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
-    Schema.Parser parser = new Schema.Parser();
-    return parser.parse(userSchema);
+    return HoodieSchema.parse(userSchema);
   }
 
   private IndexedRecord createUserRecord() {
-    Schema schema = createUserSchema();
-    GenericRecord avroRecord = new GenericData.Record(schema);
+    HoodieSchema schema = createUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema.toAvroSchema());
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private Schema createExtendUserSchema() {
+  private HoodieSchema createExtendUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
         + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, "
         + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"default\": null}]}";
-    Schema.Parser parser = new Schema.Parser();
-    return parser.parse(userSchema);
+    return HoodieSchema.parse(userSchema);
   }
 
   private IndexedRecord createExtendUserRecord() {
-    Schema schema = createExtendUserSchema();
-    GenericRecord avroRecord = new GenericData.Record(schema);
+    HoodieSchema schema = createExtendUserSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema.toAvroSchema());
     avroRecord.put("name", "testUser");
     avroRecord.put("age", 30);
     return avroRecord;
@@ -105,7 +101,7 @@ public class TestKafkaAvroSchemaDeserializer {
     avroDeserializer.configure(new HashMap(config), false);
     bytesOrigRecord = avroSerializer.serialize(topic, avroRecord);
     // record is serialized in orig schema and deserialized using same schema.
-    assertEquals(avroRecord, avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema));
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema.toAvroSchema()));
 
     IndexedRecord avroRecordWithAllField = createExtendUserRecord();
     byte[] bytesExtendedRecord = avroSerializer.serialize(topic, avroRecordWithAllField);
@@ -115,26 +111,18 @@ public class TestKafkaAvroSchemaDeserializer {
     avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(config));
     avroDeserializer.configure(new HashMap(config), false);
     // record is serialized w/ evolved schema, and deserialized w/ evolved schema
-    IndexedRecord avroRecordWithAllFieldActual = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesExtendedRecord, evolSchema);
+    IndexedRecord avroRecordWithAllFieldActual = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesExtendedRecord, evolSchema.toAvroSchema());
     assertEquals(avroRecordWithAllField, avroRecordWithAllFieldActual);
-    assertEquals(avroRecordWithAllFieldActual.getSchema(), evolSchema);
+    assertEquals(HoodieSchema.fromAvroSchema(avroRecordWithAllFieldActual.getSchema()), evolSchema);
 
     // read old record w/ evolved schema.
-    IndexedRecord actualRec = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema);
+    IndexedRecord actualRec = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema.toAvroSchema());
     // record won't be equal to original record as we read w/ evolved schema. "age" will be added w/ default value of null
     assertNotEquals(avroRecord, actualRec);
     GenericRecord genericRecord = (GenericRecord) actualRec;
     GenericRecord origGenRec = (GenericRecord) avroRecord;
     assertEquals(genericRecord.get("name").toString(), origGenRec.get("name").toString());
-    assertEquals(actualRec.getSchema(), evolSchema);
+    assertEquals(HoodieSchema.fromAvroSchema(actualRec.getSchema()), evolSchema);
     assertNull(genericRecord.get("age"));
-  }
-
-  protected TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {
-    TypedProperties typedProperties = new TypedProperties();
-    for (Entry<String, ?> entry : configs.entrySet()) {
-      typedProperties.put(entry.getKey(), entry.getValue());
-    }
-    return typedProperties;
   }
 }

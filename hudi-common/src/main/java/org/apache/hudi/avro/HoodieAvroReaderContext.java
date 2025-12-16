@@ -21,32 +21,37 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -54,11 +59,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -68,16 +72,98 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * This implementation does not rely on a specific engine and can be used in any JVM environment as a result.
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private final String payloadClass;
+  private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
+  private final boolean isMultiFormat;
+
+  /**
+   * Constructs an instance of the reader context that will read data into Avro records.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap(), tableConfig.getPayloadClass(), new HoodieConfig(props));
+  }
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
-    this.payloadClass = tableConfig.getPayloadClass();
-    this.typeConverter = new AvroReaderContextTypeConverter();
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap(), tableConfig.getPayloadClass(), ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER);
+  }
+
+  /**
+   * Constructs an instance of the reader context with an optional cache of reusable file readers.
+   * This provides an opportunity for increased performance when repeatedly reading from the same files.
+   * The caller of this constructor is responsible for managing the lifecycle of the reusable file readers.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   * @param reusableFileReaders a map of reusable file readers, keyed by their storage paths.
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), new HoodieConfig(props));
+  }
+
+  /**
+   * Constructs an instance of the reader context for writer workflows
+   *
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig          the configuration of the Hudi table being read
+   * @param payloadClassName     the payload class for the writer
+   * @param props                the reader configurations that should be used when performing reads
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      String payloadClassName,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, new HoodieConfig(props));
+  }
+
+  private HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
+      String payloadClassName,
+      HoodieConfig hoodieReaderConfig) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName), hoodieReaderConfig);
+    this.reusableFileReaders = reusableFileReaders;
+    this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    boolean isLogFile = FSUtils.isLogFile(storagePathInfo.getPath());
+    HoodieAvroFileReader reader = getOrCreateFileReader(storagePathInfo.getPath(), isLogFile, format -> {
+      try {
+        return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieReaderConfig,
+                storagePathInfo, format, Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to create avro records iterator from file path " + storagePathInfo.getPath(), e);
+      }
+    });
+
+    return getFileRecordIterator(reader, storagePathInfo.getPath(), isLogFile, dataSchema, requiredSchema);
   }
 
   @Override
@@ -85,14 +171,55 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       StoragePath filePath,
       long start,
       long length,
-      Schema dataSchema,
-      Schema requiredSchema,
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, baseFileFormat, Option.empty());
+    boolean isLogFile = FSUtils.isLogFile(filePath);
+    HoodieAvroFileReader reader = getOrCreateFileReader(filePath, isLogFile, format -> {
+      try {
+        return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieReaderConfig,
+                filePath, format, Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to create avro records iterator from file path " + filePath, e);
+      }
+    });
+
+    return getFileRecordIterator(reader, filePath, isLogFile, dataSchema, requiredSchema);
+  }
+
+  private HoodieAvroFileReader getOrCreateFileReader(
+      StoragePath path, boolean isLogFile, Function<HoodieFileFormat, HoodieAvroFileReader> func) throws IOException {
+    if (reusableFileReaders.containsKey(path)) {
+      return reusableFileReaders.get(path);
+    } else {
+      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(path.getFileExtension()) : baseFileFormat;
+      try {
+        return func.apply(fileFormat);
+      } catch (HoodieIOException e) {
+        throw e.getIOException();
+      }
+    }
+  }
+
+  public ClosableIterator<IndexedRecord> getFileRecordIterator(
+      HoodieAvroFileReader reader,
+      StoragePath filePath,
+      boolean isLogFile,
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema) throws IOException {
+    HoodieSchema fileOutputSchema;
+    Map<String, String> renamedColumns;
+    if (isLogFile) {
+      fileOutputSchema = requiredSchema;
+      renamedColumns = Collections.emptyMap();
+    } else {
+      Pair<HoodieSchema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
+      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
+      renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
+    }
     if (keyFilterOpt.isEmpty()) {
-      return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
@@ -106,22 +233,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
       }
     }
-    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
-  }
-
-  @Override
-  public IndexedRecord convertAvroRecord(IndexedRecord record) {
-    return record;
-  }
-
-  @Override
-  public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
-    return (GenericRecord) record;
-  }
-
-  @Override
-  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
   }
 
   @Override
@@ -143,147 +255,22 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
-    return getFieldValueFromIndexedRecord(record, fieldName);
-  }
-
-  @Override
-  public String getMetaFieldValue(IndexedRecord record, int pos) {
-    return record.get(pos).toString();
-  }
-
-  @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          partitionPath,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
-    }
-    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
-  }
-
-  @Override
-  public IndexedRecord mergeEngineRecord(Schema schema,
-                                         Map<Integer, Object> updateValues,
-                                         BufferedRecord<IndexedRecord> baseRecord) {
-    IndexedRecord engineRecord = baseRecord.getRecord();
-    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
-      engineRecord.put(value.getKey(), value.getValue());
-    }
-    return engineRecord;
-  }
-
-  @Override
-  public IndexedRecord createEngineRecord(Schema schema, List<Object> values) {
-    List<Schema.Field> fields = schema.getFields();
-    if (fields.size() != values.size()) {
-      throw new IllegalArgumentException(
-          "Value count (" + values.size() + ") does not match field count (" + fields.size() + ")");
-    }
-
-    GenericData.Record record = new GenericData.Record(schema);
-    for (int i = 0; i < fields.size(); i++) {
-      record.put(i, values.get(i));
-    }
-    return record;
-  }
-
-  @Override
-  public IndexedRecord seal(IndexedRecord record) {
-    return record;
-  }
-
-  @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
-    return record;
-  }
-
-  @Override
   public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
-    return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
+    return new AvroRecordSizeEstimator(getSchemaHandler().getSchemaForUpdates().toAvroSchema());
   }
 
   @Override
   public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
-    return new BufferedRecordSerializer<>(new AvroRecordSerializer(this::decodeAvroSchema));
+    return new BufferedRecordSerializer<>(new AvroRecordSerializer(versionId -> getRecordContext().decodeAvroSchema(versionId).toAvroSchema()));
   }
 
   @Override
   public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
-                                                               Schema skeletonRequiredSchema,
+                                                               HoodieSchema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
-                                                               Schema dataRequiredSchema,
+                                                               HoodieSchema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldAndValues) {
     return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
-  }
-
-  @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    if (!renamedColumns.isEmpty()) {
-      throw new UnsupportedOperationException("Column renaming is not supported for the HoodieAvroReaderContext");
-    }
-    Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
-        .boxed()
-        .collect(Collectors.toMap(
-            i -> from.getFields().get(i).name(), i -> i));
-    Map<String, Integer> toFields = IntStream.range(0, to.getFields().size())
-        .boxed()
-        .collect(Collectors.toMap(
-            i -> to.getFields().get(i).name(), i -> i));
-
-    // Check if source schema contains all fields from target schema.
-    List<Schema.Field> missingFields = to.getFields().stream()
-        .filter(f -> !fromFields.containsKey(f.name())).collect(Collectors.toList());
-    if (!missingFields.isEmpty()) {
-      throw new HoodieException("There are some fields missing in source schema: "
-          + missingFields);
-    }
-
-    // Build the mapping from source schema to target schema.
-    Map<Integer, Integer> fieldMap = toFields.entrySet().stream()
-        .filter(e -> fromFields.containsKey(e.getKey()))
-        .collect(Collectors.toMap(
-            e -> fromFields.get(e.getKey()), Map.Entry::getValue));
-
-    // Do the transformation.
-    return record -> {
-      IndexedRecord outputRecord = new GenericData.Record(to);
-      for (int i = 0; i < from.getFields().size(); i++) {
-        if (!fieldMap.containsKey(i)) {
-          continue;
-        }
-        int j = fieldMap.get(i);
-        outputRecord.put(j, record.get(i));
-      }
-      return outputRecord;
-    };
-  }
-
-  public static Object getFieldValueFromIndexedRecord(
-      IndexedRecord record,
-      String fieldName) {
-    Schema currentSchema = record.getSchema();
-    IndexedRecord currentRecord = record;
-    String[] path = fieldName.split("\\.");
-    for (int i = 0; i < path.length; i++) {
-      if (currentSchema.isUnion()) {
-        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
-      }
-      Schema.Field field = currentSchema.getField(path[i]);
-      if (field == null) {
-        return null;
-      }
-      Object value = currentRecord.get(field.pos());
-      if (i == path.length - 1) {
-        return value;
-      }
-      currentSchema = field.schema();
-      currentRecord = (IndexedRecord) value;
-    }
-    return null;
   }
 
   /**
@@ -292,24 +279,28 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
    */
   private static class BootstrapIterator implements ClosableIterator<IndexedRecord> {
     private final ClosableIterator<IndexedRecord> skeletonFileIterator;
-    private final Schema skeletonRequiredSchema;
+    private final HoodieSchema skeletonRequiredSchema;
     private final ClosableIterator<IndexedRecord> dataFileIterator;
-    private final Schema dataRequiredSchema;
-    private final Schema mergedSchema;
+    private final HoodieSchema dataRequiredSchema;
+    private final HoodieSchema mergedSchema;
     private final int skeletonFields;
     private final int[] partitionFieldPositions;
     private final Object[] partitionValues;
 
-    public BootstrapIterator(ClosableIterator<IndexedRecord> skeletonFileIterator, Schema skeletonRequiredSchema,
-                             ClosableIterator<IndexedRecord> dataFileIterator, Schema dataRequiredSchema,
+    public BootstrapIterator(ClosableIterator<IndexedRecord> skeletonFileIterator, HoodieSchema skeletonRequiredSchema,
+                             ClosableIterator<IndexedRecord> dataFileIterator, HoodieSchema dataRequiredSchema,
                              List<Pair<String, Object>> partitionFieldAndValues) {
       this.skeletonFileIterator = skeletonFileIterator;
       this.skeletonRequiredSchema = skeletonRequiredSchema;
       this.dataFileIterator = dataFileIterator;
       this.dataRequiredSchema = dataRequiredSchema;
-      this.mergedSchema = AvroSchemaUtils.mergeSchemas(skeletonRequiredSchema, dataRequiredSchema);
+      this.mergedSchema = HoodieSchemaUtils.mergeSchemas(skeletonRequiredSchema, dataRequiredSchema);
       this.skeletonFields = skeletonRequiredSchema.getFields().size();
-      this.partitionFieldPositions = partitionFieldAndValues.stream().map(Pair::getLeft).map(field -> mergedSchema.getField(field).pos()).mapToInt(Integer::intValue).toArray();
+      this.partitionFieldPositions = partitionFieldAndValues.stream()
+          .map(Pair::getLeft)
+          .map(field -> mergedSchema.getField(field).orElseThrow(() -> new IllegalArgumentException("Field not found: " + field)).pos())
+          .mapToInt(Integer::intValue)
+          .toArray();
       this.partitionValues = partitionFieldAndValues.stream().map(Pair::getValue).toArray();
     }
 
@@ -330,13 +321,13 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     public IndexedRecord next() {
       IndexedRecord skeletonRecord = skeletonFileIterator.next();
       IndexedRecord dataRecord = dataFileIterator.next();
-      GenericRecord mergedRecord = new GenericData.Record(mergedSchema);
+      GenericRecord mergedRecord = new GenericData.Record(mergedSchema.toAvroSchema());
 
-      for (Schema.Field skeletonField : skeletonRequiredSchema.getFields()) {
+      for (HoodieSchemaField skeletonField : skeletonRequiredSchema.getFields()) {
         Schema.Field sourceField = skeletonRecord.getSchema().getField(skeletonField.name());
         mergedRecord.put(skeletonField.pos(), skeletonRecord.get(sourceField.pos()));
       }
-      for (Schema.Field dataField : dataRequiredSchema.getFields()) {
+      for (HoodieSchemaField dataField : dataRequiredSchema.getFields()) {
         Schema.Field sourceField = dataRecord.getSchema().getField(dataField.name());
         mergedRecord.put(dataField.pos() + skeletonFields, dataRecord.get(sourceField.pos()));
       }

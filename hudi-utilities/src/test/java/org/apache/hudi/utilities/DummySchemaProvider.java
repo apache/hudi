@@ -19,9 +19,10 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class DummySchemaProvider extends SchemaProvider {
@@ -30,7 +31,7 @@ public class DummySchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
-    return Schema.create(Schema.Type.NULL);
+  public HoodieSchema getSourceHoodieSchema() {
+    return HoodieSchema.create(HoodieSchemaType.NULL);
   }
 }

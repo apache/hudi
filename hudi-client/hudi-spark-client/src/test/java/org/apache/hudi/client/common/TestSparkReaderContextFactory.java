@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -39,7 +40,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.FileFormat;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Test;
@@ -70,6 +71,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
     when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     when(metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants()).thenReturn(timeline);
     when(metaClient.getTimelineLayout().getInstantFileNameGenerator()).thenReturn(fileNameGenerator);
+    when(metaClient.getTableConfig()).thenReturn(new HoodieTableConfig());
 
     InstantGeneratorV2 instantGen = new InstantGeneratorV2();
     Types.RecordType record = Types.RecordType.get(Collections.singletonList(
@@ -89,8 +91,8 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(true)));
     ArgumentCaptor<Configuration> configurationArgumentCaptor = ArgumentCaptor.forClass(Configuration.class);
-    SparkParquetReader sparkParquetReader = mock(SparkParquetReader.class);
-    when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
+    SparkColumnarFileReader sparkParquetReader = mock(SparkColumnarFileReader.class);
+    when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sparkSession().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
         .thenReturn(sparkParquetReader);
 
     SparkReaderContextFactory sparkHoodieReaderContextFactory = new SparkReaderContextFactory(context, metaClient, schemaResolver, sparkAdapter);

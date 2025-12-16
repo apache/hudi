@@ -18,8 +18,10 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
@@ -66,7 +68,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          |""".stripMargin)
     // insert data
@@ -93,7 +95,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts',
+         |  orderingFields = 'ts',
          |  hoodie.clean.commits.retained= '1'
          | )
          |""".stripMargin)
@@ -121,7 +123,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
           .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -140,7 +142,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
           .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
@@ -154,9 +156,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         ensureLastCommitIncludesProperSchema(tablePath)
 
         // trigger clean so that partition deletion kicks in.
-        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
+        withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
+        }
         ensureLastCommitIncludesProperSchema(tablePath)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
@@ -199,7 +202,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
           .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -214,7 +217,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
@@ -258,7 +261,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          | partitioned by (dt)
          |""".stripMargin)
@@ -277,9 +280,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     ensureLastCommitIncludesProperSchema(getTableStoragePath(tableName))
 
     // trigger clean so that partition deletion kicks in.
-    spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-    spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-      .collect()
+    withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+      spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+        .collect()
+    }
 
     checkAnswer(s"select id, name, ts, dt from $tableName")(
       Seq(2, "l4", "v1", "2021-10-02"),
@@ -305,7 +309,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -329,7 +333,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
@@ -343,9 +347,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
         // trigger clean so that partition deletion kicks in.
-        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
+        withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
+        }
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
@@ -373,86 +378,88 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
   Seq(false, true).foreach { hiveStyle =>
     test(s"Lazy Clean drop multi-level partitioned table's partitions, isHiveStylePartitioning: $hiveStyle") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val schemaFields = Seq("id", "name", "ts", "year", "month", "day")
+      withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val schemaFields = Seq("id", "name", "ts", "year", "month", "day")
 
-        import spark.implicits._
-        val df = Seq((1, "z3", "v1", "2021", "10", "01")).toDF(schemaFields :_*)
+          import spark.implicits._
+          val df = Seq((1, "z3", "v1", "2021", "10", "01")).toDF(schemaFields: _*)
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
-          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
+          df.write.format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+            .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+            .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+            .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+            .mode(SaveMode.Overwrite)
+            .save(tablePath)
 
-        // register meta to spark catalog by creating table
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '$tablePath'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts',
-             |  hoodie.clean.commits.retained= '1'
-             | )
-             |""".stripMargin)
+          // register meta to spark catalog by creating table
+          spark.sql(
+            s"""
+               |create table $tableName using hudi
+               |location '$tablePath'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts',
+               |  hoodie.clean.commits.retained= '1'
+               | )
+               |""".stripMargin)
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
-          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Append)
-          .save(tablePath)
+          df.write.format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+            .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+            .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+            .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+            .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+            .mode(SaveMode.Append)
+            .save(tablePath)
 
-        // drop 2021-10-01 partition
-        spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
-        ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
+          // drop 2021-10-01 partition
+          spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+          ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
-        // trigger clean so that partition deletion kicks in.
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
-        ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
+          // trigger clean so that partition deletion kicks in.
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
+          ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
-        val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
-        var totalDeletedFiles = 0
-        cleanPartitionMeta.foreach(entry =>
-        {
-          totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
-        })
-        assertTrue(totalDeletedFiles > 0)
+          val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+          val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
+          var totalDeletedFiles = 0
+          cleanPartitionMeta.foreach(entry =>
+          {
+            totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
+          })
+          assertTrue(totalDeletedFiles > 0)
 
-        // insert data
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+          // insert data
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
-        checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
-          Seq(2, "l4", "v1", "2021", "10", "02")
-        )
+          checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+            Seq(2, "l4", "v1", "2021", "10", "02")
+          )
 
-        assertResult(false)(existsPath(
-          s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
+          assertResult(false)(existsPath(
+            s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
 
-        // show partitions
-        if (hiveStyle) {
-          checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
-        } else {
-          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          // show partitions
+          if (hiveStyle) {
+            checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
+          } else {
+            checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          }
         }
       }
     }
@@ -477,7 +484,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (dt)
        """.stripMargin)
@@ -532,7 +539,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(ts)
              | location '$basePath'
@@ -573,34 +580,34 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | options (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.index.type = 'INMEMORY'
            | )
            | partitioned by(ts)
            | location '$basePath'
            | """.stripMargin)
       // disable automatic inline compaction to test with pending compaction instants
-      spark.sql("set hoodie.compact.inline=false")
-      spark.sql("set hoodie.compact.schedule.inline=false")
-      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
-      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+      withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.schedule.inline" -> "false") {
+        // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
-      // Generate the first compaction plan
-      val firstScheduleInstant = client.scheduleCompaction(HOption.empty())
-      assertTrue(firstScheduleInstant.isPresent)
+        // Generate the first compaction plan
+        val firstScheduleInstant = client.scheduleCompaction(HOption.empty())
+        assertTrue(firstScheduleInstant.isPresent)
 
-      checkAnswer(s"call show_compaction('$tableName')")(
-        Seq(firstScheduleInstant.get(), 5, HoodieInstant.State.REQUESTED.name())
-      )
+        checkAnswer(s"call show_compaction('$tableName')")(
+          Seq(firstScheduleInstant.get(), 5, HoodieInstant.State.REQUESTED.name())
+        )
 
-      val partition = "ts=1002"
-      val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
-      checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+        val partition = "ts=1002"
+        val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
+        checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      }
     }
   }
 
@@ -621,30 +628,30 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | options (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.index.type = 'INMEMORY'
            | )
            | partitioned by(ts)
            | location '$basePath'
            | """.stripMargin)
       // disable automatic inline compaction to test with pending compaction instants
-      spark.sql("set hoodie.compact.inline=false")
-      spark.sql("set hoodie.compact.schedule.inline=false")
-      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
-      // Write everything into the same FileGroup but into separate blocks
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
-      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+      withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.schedule.inline" -> "false") {
+        // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
+        // Write everything into the same FileGroup but into separate blocks
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
-      // Generate the first log_compaction plan
-      assertTrue(client.scheduleLogCompaction(HOption.empty()).isPresent)
+        // Generate the first log_compaction plan
+        assertTrue(client.scheduleLogCompaction(HOption.empty()).isPresent)
 
-      val partition = "ts=1000"
-      val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
-      checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+        val partition = "ts=1000"
+        val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
+        checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      }
     }
   }
 
@@ -666,7 +673,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | ) partitioned by (partition_date_col)
          """.stripMargin)
         spark.sql(s"insert into $tableName values " +

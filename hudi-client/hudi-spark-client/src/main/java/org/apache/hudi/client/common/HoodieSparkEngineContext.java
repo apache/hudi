@@ -19,6 +19,7 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -44,7 +45,10 @@ import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.data.partitioner.ConditionalRangePartitioner;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -53,9 +57,11 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.catalyst.InternalRow;
 
 import javax.annotation.concurrent.ThreadSafe;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -74,7 +80,9 @@ import scala.Tuple2;
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
+  @Getter
   private final JavaSparkContext javaSparkContext;
+  @Getter
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
 
@@ -88,16 +96,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     this.sqlContext = sqlContext;
   }
 
-  public JavaSparkContext getJavaSparkContext() {
-    return javaSparkContext;
-  }
-
   public JavaSparkContext jsc() {
     return javaSparkContext;
-  }
-
-  public SQLContext getSqlContext() {
-    return sqlContext;
   }
 
   public static JavaSparkContext getSparkContext(HoodieEngineContext context) {
@@ -255,8 +255,13 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
-      return new AvroReaderContextFactory(metaClient);
+      return new AvroReaderContextFactory(metaClient, new TypedProperties());
     }
+    return getEngineReaderContextFactory(metaClient);
+  }
+
+  @Override
+  public ReaderContextFactory<InternalRow> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
     return new SparkReaderContextFactory(this, metaClient);
   }
 
@@ -299,6 +304,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     HoodiePairData<K, V> repartitionedData = rangeBasedRepartitionForEachKey(
         data, keySpace, 0.02, 100000, System.nanoTime());
     return repartitionedData.values().mapPartitions(processFunc, preservesPartitioning);
+  }
+
+  @Override
+  public KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    return HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
   }
 
   /**

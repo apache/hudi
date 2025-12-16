@@ -17,10 +17,14 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.util.JavaScalaConverters;
 
@@ -31,6 +35,9 @@ import java.io.IOException;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieWriterUtils extends HoodieClientTestBase {
 
@@ -42,5 +49,114 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     TypedProperties properties = TypedProperties.copy(tableConfig.getProps());
     properties.put(HoodieTableConfig.DATABASE_NAME.key(), "databaseFromCatalog");
     Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), tableConfig));
+  }
+
+  @Test
+  void testReturnsKeyWhenTableConfigIsNull() {
+    assertEquals("randomKey", HoodieWriterUtils.getKeyInTableConfig("randomKey", null));
+  }
+
+  @Test
+  void testPayloadClassNameNotVersion9() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, "8");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
+    assertEquals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), result);
+  }
+
+  @Test
+  void testPayloadClassNameVersion9WithLegacyPayload() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "com.example.LegacyPayload");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
+    assertEquals(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key(), result);
+  }
+
+  @Test
+  void testPayloadClassNameVersion9WithoutLegacyPayload() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
+    assertEquals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), result);
+  }
+
+  @Test
+  void testRecordMergeModeMappingWithVersion9() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "9");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_MODE.key(), config);
+    assertEquals(HoodieTableConfig.RECORD_MERGE_MODE.key(), result);
+  }
+
+  @Test
+  void testRecordMergeModeMappingWithVersion8() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "8");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_MODE.key(), config);
+    assertEquals(HoodieWriteConfig.RECORD_MERGE_MODE.key(), result);
+  }
+
+  @Test
+  void testRecordMergeStrategyIdMappingWithVersion9() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "9");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), config);
+    assertEquals(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), result);
+  }
+
+  @Test
+  void testRecordMergeStrategyIdMappingWithVersion8() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "8");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), config);
+    assertEquals(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), result);
+  }
+
+  @Test
+  void testFallbackToOriginalKey() {
+    HoodieConfig config = new HoodieConfig();
+    String result = HoodieWriterUtils.getKeyInTableConfig("my.custom.key", config);
+    assertEquals("my.custom.key", result);
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithCustomMergeMode() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+
+    String payloadClass = "com.example.CustomPayload";
+    assertFalse(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithEmptyPayload() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
+
+    String payloadClass = "";
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithCommitTimeOrdering() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
+
+    String payloadClass = "com.example.CustomPayload";
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithEventTimeOrdering() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+
+    String payloadClass = "com.example.CustomPayload";
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
   }
 }

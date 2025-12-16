@@ -48,12 +48,12 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
-import org.apache.hudi.util.WriteStatMerger;
 
 import com.codahale.metrics.Timer;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -72,12 +72,11 @@ import java.util.stream.Collectors;
  *
  * @param <T> type of the payload
  */
+@Slf4j
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkWriteClient<T>
     extends BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements FlinkRowDataWriteClient<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteClient.class);
 
   /**
    * FileID to write handle mapping in order to record the write handles for each file group,
@@ -105,13 +104,7 @@ public class HoodieFlinkWriteClient<T>
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
                         Option<WriteStatusValidator> writeStatusValidatorOpt) {
     List<HoodieWriteStat> writeStats = writeStatuses.parallelStream().map(WriteStatus::getStat).collect(Collectors.toList());
-    // for eager flush, multiple write stat may share one file path.
-    List<HoodieWriteStat> merged = writeStats.stream()
-        .collect(Collectors.groupingBy(writeStat -> writeStat.getPartitionPath() + writeStat.getPath()))
-        .values().stream()
-        .map(duplicates -> duplicates.stream().reduce(WriteStatMerger::merge).get())
-        .collect(Collectors.toList());
-    return commitStats(instantTime, merged, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
   @Override
@@ -348,9 +341,9 @@ public class HoodieFlinkWriteClient<T>
    */
   public void waitForCleaningFinish() {
     if (tableServiceClient.asyncCleanerService != null) {
-      LOG.info("Cleaner has been spawned already. Waiting for it to finish");
+      log.info("Cleaner has been spawned already. Waiting for it to finish");
       tableServiceClient.asyncClean();
-      LOG.info("Cleaner has finished");
+      log.info("Cleaner has finished");
     }
   }
 
@@ -367,12 +360,6 @@ public class HoodieFlinkWriteClient<T>
   @Override
   protected void mayBeCleanAndArchive(HoodieTable table) {
     autoArchiveOnCommit(table);
-  }
-
-  @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
-    // only used for metadata table, the compaction happens in single thread
-    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }
 
   @Override
@@ -508,6 +495,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   private final class AutoCloseableWriteHandle implements AutoCloseable {
+    @Getter(AccessLevel.PACKAGE)
     private final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 
     AutoCloseableWriteHandle(
@@ -525,10 +513,6 @@ public class HoodieFlinkWriteClient<T>
         HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
         boolean overwrite) {
       this.writeHandle = getOrCreateWriteHandle(bucketInfo, getConfig(), instantTime, table, recordIterator, overwrite);
-    }
-
-    HoodieWriteHandle<?, ?, ?, ?> getWriteHandle() {
-      return writeHandle;
     }
 
     @Override

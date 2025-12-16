@@ -21,12 +21,13 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.client.validator.{SqlQueryEqualityPreCommitValidator, SqlQueryInequalityPreCommitValidator}
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -59,7 +60,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     "hoodie.delete.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "false"
   )
@@ -71,28 +72,21 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|true",
-    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|true",
-    "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|true",
-    "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|true",
-    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|true",
-    "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|true",
-    "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|false",
-    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|false",
-    "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|false",
-    "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|false",
-    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|false",
-    "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|false"
+    "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
+    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency",
+    "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key",
+    "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
+    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency",
+    "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key"
   ), delimiter = '|')
-  def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String, fileGroupReaderEnabled: Boolean): Unit = {
+  def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String): Unit = {
     var options: Map[String, String] = commonOpts ++ Map(
       HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled),
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeys,
       HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true")
 
-    val readOptions = Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(isMetadataEnabled),
-      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> String.valueOf(fileGroupReaderEnabled))
+    val readOptions = Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(isMetadataEnabled))
 
     val isTimestampBasedKeyGen: Boolean = classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)
     if (isTimestampBasedKeyGen) {
@@ -143,6 +137,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
 
+    val completionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     val snapshotDF2 = spark.read.format("hudi")
       .options(readOptions)
       .load(basePath)
@@ -178,7 +173,6 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .save(basePath)
 
     val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val completionTime3 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query
@@ -195,7 +189,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOptions)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
       .load(basePath)
     assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
@@ -225,7 +219,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .options(readOptions)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime2)
       .load(basePath)
 
     assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -237,7 +231,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val hoodieIncViewDF3 = spark.read.format("org.apache.hudi")
       .options(readOptions)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime2)
       .option(DataSourceReadOptions.INCR_PATH_GLOB.key, if (isTimestampBasedKeyGen) "/2016*/*" else "/2016/*/*/*")
       .load(basePath)
     assertEquals(hoodieIncViewDF2
@@ -246,7 +240,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val timeTravelDF = spark.read.format("org.apache.hudi")
       .options(readOptions)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled

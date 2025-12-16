@@ -23,7 +23,8 @@ import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
@@ -41,7 +42,6 @@ import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerStageSubmitted;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
-import org.apache.spark.sql.HoodieUnsafeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.types.StructType;
@@ -132,7 +132,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), "0000000001");
+        new HoodieTableConfig(), new NonSortPartitionerWithRows(), "0000000001");
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -176,7 +176,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
         .build();
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), "000001111");
+        new HoodieTableConfig(), new NonSortPartitionerWithRows(), "000001111");
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -204,7 +204,10 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   public void testBulkInsertPreCombine(boolean enablePreCombine) {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet("_row_key"))
             .combineInput(enablePreCombine, enablePreCombine)
-            .withPreCombineField("ts").build();
+            .build();
+    config.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);
     List<Row> updates = DataSourceTestUtils.updateRowsWithUpdatedTs(toUpdateDataset);
@@ -213,7 +216,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     rows.addAll(updates);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), "000001111");
+        tableConfig, new NonSortPartitionerWithRows(), "000001111");
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), enablePreCombine ? 10 : 15);
@@ -317,7 +320,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), "000001111");
+          new HoodieTableConfig(), new NonSortPartitionerWithRows(), "000001111");
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
@@ -329,7 +332,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), "000001111");
+          new HoodieTableConfig(), new NonSortPartitionerWithRows(), "000001111");
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
@@ -341,7 +344,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-          new NonSortPartitionerWithRows(), "000001111");
+          new HoodieTableConfig(), new NonSortPartitionerWithRows(), "000001111");
       preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
@@ -357,7 +360,10 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   public void testBulkInsertParallelismParam() {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet("_row_key"))
         .combineInput(true, true)
-        .withPreCombineField("ts").build();
+        .build();
+    config.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ts");
     int checkParallelism = 7;
     config.setValue("hoodie.bulkinsert.shuffle.parallelism", String.valueOf(checkParallelism));
     StageCheckBulkParallelismListener stageCheckBulkParallelismListener =
@@ -365,10 +371,10 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     sqlContext.sparkContext().addSparkListener(stageCheckBulkParallelismListener);
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(inserts, structType).repartition(3);
-    assertNotEquals(checkParallelism, HoodieUnsafeUtils.getNumPartitions(dataset));
+    assertNotEquals(checkParallelism, SparkAdapterSupport$.MODULE$.sparkAdapter().getUnsafeUtils().getNumPartitions(dataset));
     assertNotEquals(checkParallelism, sqlContext.sparkContext().defaultParallelism());
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
-        new NonSortPartitionerWithRows(), "000001111");
+        tableConfig, new NonSortPartitionerWithRows(), "000001111");
     // trigger job
     result.count();
     assertEquals(checkParallelism, stageCheckBulkParallelismListener.getParallelism());

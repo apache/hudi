@@ -133,10 +133,10 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             CloudObjectsSelectorCommon.S3_OBJECT_KEY,
             CloudObjectsSelectorCommon.S3_OBJECT_SIZE, true,
             Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
-    LOG.info("Querying S3 with:" + cloudObjectIncrCheckpoint + ", queryInfo:" + queryInfo);
+    LOG.info("Querying S3 with:{}, queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.warn("Already caught up. No new data to process");
+      LOG.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), new StreamerCheckpointV1(queryInfo.getEndInstant()));
     }
     return cloudDataFetcher.fetchPartitionedSource(S3, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);

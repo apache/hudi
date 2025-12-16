@@ -41,9 +41,8 @@ import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -76,9 +75,8 @@ import java.util.Set;
  * > metadata list-partitions
  */
 @ShellComponent
+@Slf4j
 public class MetadataCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MetadataCommand.class);
   private static String metadataBaseDirectory;
   private JavaSparkContext jsc;
 
@@ -224,7 +222,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<String> partitions = metadata.getAllPartitionPaths();
-      LOG.debug("Metadata Partition listing took {} ms", timer.endTimer());
+      log.debug("Metadata Partition listing took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       partitions.stream().sorted(Comparator.reverseOrder()).forEach(p -> {
@@ -257,7 +255,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<StoragePathInfo> pathInfoList = metaReader.getAllFilesInPartition(partitionPath);
-      LOG.debug("Took {} ms", timer.endTimer());
+      log.debug("Took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       pathInfoList.stream()
@@ -293,7 +291,7 @@ public class MetadataCommand {
 
     HoodieTimer timer = HoodieTimer.start();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
-    LOG.debug("Metadata Listing partitions Took {} ms", timer.endTimer());
+    log.debug("Metadata Listing partitions Took {} ms", timer.endTimer());
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);
@@ -303,9 +301,9 @@ public class MetadataCommand {
     allPartitions.addAll(metadataPartitions);
 
     if (!fsPartitions.equals(metadataPartitions)) {
-      LOG.error("FS partition listing is not matching with metadata partition listing!");
-      LOG.error("All FS partitions: " + Arrays.toString(fsPartitions.toArray()));
-      LOG.error("All Metadata partitions: " + Arrays.toString(metadataPartitions.toArray()));
+      log.error("FS partition listing is not matching with metadata partition listing!");
+      log.error("All FS partitions: " + Arrays.toString(fsPartitions.toArray()));
+      log.error("All Metadata partitions: " + Arrays.toString(metadataPartitions.toArray()));
     }
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -348,18 +346,18 @@ public class MetadataCommand {
       }
 
       if (metadataPathInfoList.size() != pathInfoList.size()) {
-        LOG.error(" FS and metadata files count not matching for " + partition
+        log.error(" FS and metadata files count not matching for " + partition
             + ". FS files count " + pathInfoList.size()
             + ", metadata base files count " + metadataPathInfoList.size());
       }
 
       for (Map.Entry<String, StoragePathInfo> entry : pathInfoMap.entrySet()) {
         if (!metadataPathInfoMap.containsKey(entry.getKey())) {
-          LOG.error("FS file not found in metadata " + entry.getKey());
+          log.error("FS file not found in metadata " + entry.getKey());
         } else {
           if (entry.getValue().getLength()
               != metadataPathInfoMap.get(entry.getKey()).getLength()) {
-            LOG.error(" FS file size mismatch " + entry.getKey() + ", size equality "
+            log.error(" FS file size mismatch " + entry.getKey() + ", size equality "
                 + (entry.getValue().getLength()
                 == metadataPathInfoMap.get(entry.getKey()).getLength())
                 + ". FS size " + entry.getValue().getLength()
@@ -369,10 +367,10 @@ public class MetadataCommand {
       }
       for (Map.Entry<String, StoragePathInfo> entry : metadataPathInfoMap.entrySet()) {
         if (!pathInfoMap.containsKey(entry.getKey())) {
-          LOG.error("Metadata file not found in FS " + entry.getKey());
+          log.error("Metadata file not found in FS " + entry.getKey());
         } else {
           if (entry.getValue().getLength() != pathInfoMap.get(entry.getKey()).getLength()) {
-            LOG.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
+            log.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
                 + (entry.getValue().getLength() == pathInfoMap.get(entry.getKey()).getLength())
                 + ". Metadata size " + entry.getValue().getLength() + ", FS size "
                 + metadataPathInfoMap.get(entry.getKey()).getLength());

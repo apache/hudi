@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
@@ -40,8 +41,6 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,9 +50,8 @@ import java.util.stream.Collectors;
 /**
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
+@Slf4j
 public class HoodieMergeOnReadTestUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeOnReadTestUtils.class);
 
   public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
                                                                String basePath) {
@@ -103,7 +101,7 @@ public class HoodieMergeOnReadTestUtils {
       fields = schema.getFields();
     }
     final Schema projectedSchema = Schema.createRecord(fields.stream()
-        .map(f -> new Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
+        .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList()));
 
     List<GenericRecord> records = new ArrayList<>();
@@ -130,7 +128,7 @@ public class HoodieMergeOnReadTestUtils {
         recordReader.close();
       }
     } catch (IOException ie) {
-      LOG.error("Read records error", ie);
+      log.error("Read records error", ie);
     }
     return records;
   }

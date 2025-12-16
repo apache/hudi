@@ -95,11 +95,12 @@ import static org.apache.hudi.common.model.HoodieWriteStat.NULL_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.testutils.DataSourceTestUtils.validateCommitMetadata;
 import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -418,7 +419,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
           expectedInserts = 0;
           expectedUpdates = 80;
         }
-        validateCompactionMetadata(compactionMetadata, previousCommit, 90, expectedUpdates, expectedInserts, 10);
+        validateCommitMetadata(compactionMetadata, previousCommit, 90, expectedUpdates, expectedInserts, 10);
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -521,7 +522,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         String logCompactionInstantTime = writeClient.scheduleLogCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime, true);
         HoodieCommitMetadata compactionMetadata = metaClient.getActiveTimeline().readCommitMetadata(metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline().lastInstant().get());
-        validateCompactionMetadata(compactionMetadata, firstCommitTime, 80, 80, 0, 10);
+        validateCommitMetadata(compactionMetadata, firstCommitTime, 80, 80, 0, 10);
         validateLogCompactionMetadataHeaders(compactionMetadata, metaClient.getBasePath(), "102,101");
 
         // Verify that recently written compacted data file has no log file
@@ -600,40 +601,13 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     assertEquals(expectedDeletes, totalDeletes);
   }
 
-  private static void validateCompactionMetadata(HoodieCommitMetadata compactionMetadata, String previousCommit, long expectedTotalRecordsWritten, long expectedTotalUpdatedRecords,
-                                                 long expectedTotalInsertedRecords, long expectedTotalDeletedRecords) {
-    long totalRecordsWritten = 0;
-    long totalDeletedRecords = 0;
-    long totalUpdatedRecords = 0;
-    long totalInsertedRecords = 0;
-    for (HoodieWriteStat writeStat : compactionMetadata.getWriteStats()) {
-      totalRecordsWritten += writeStat.getNumWrites();
-      totalDeletedRecords += writeStat.getNumDeletes();
-      totalUpdatedRecords += writeStat.getNumUpdateWrites();
-      totalInsertedRecords += writeStat.getNumInserts();
-      assertEquals(previousCommit, writeStat.getPrevCommit());
-      assertNotNull(writeStat.getFileId());
-      assertNotNull(writeStat.getPath());
-      assertTrue(writeStat.getFileSizeInBytes() > 0);
-      assertTrue(writeStat.getTotalWriteBytes() > 0);
-      assertTrue(writeStat.getTotalLogBlocks() > 0);
-      assertTrue(writeStat.getTotalLogSizeCompacted() > 0);
-      assertTrue(writeStat.getTotalLogFilesCompacted() > 0);
-      assertTrue(writeStat.getTotalLogRecords() > 0);
-    }
-    assertEquals(expectedTotalRecordsWritten, totalRecordsWritten);
-    assertEquals(expectedTotalUpdatedRecords, totalUpdatedRecords);
-    assertEquals(expectedTotalInsertedRecords, totalInsertedRecords);
-    assertEquals(expectedTotalDeletedRecords, totalDeletedRecords);
-  }
-
   private void validateLogCompactionMetadataHeaders(HoodieCommitMetadata compactionMetadata, StoragePath basePath, String expectedCompactedBlockTimes) {
     compactionMetadata.getFileIdAndFullPaths(basePath).values().stream()
         .map(StoragePath::new)
         .filter(path -> FSUtils.isLogFile(path.getName()))
         .forEach(logFilePath -> {
           try {
-            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), AVRO_SCHEMA, 10000, false,
+            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), HOODIE_SCHEMA, 10000, false,
                 false, "_row_key", null);
             Map<HoodieLogBlock.HeaderMetadataType, String> headers = Collections.emptyMap();
             while (reader.hasNext()) {

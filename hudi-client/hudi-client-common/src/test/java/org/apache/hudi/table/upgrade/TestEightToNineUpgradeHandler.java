@@ -21,12 +21,24 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
@@ -35,83 +47,194 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_LSN_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.common.table.PartialUpdateMode.FILL_UNAVAILABLE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class TestEightToNineUpgradeHandler {
-
+  private final EightToNineUpgradeHandler handler = new EightToNineUpgradeHandler();
+  private final HoodieStorage storage = mock(HoodieStorage.class);
+  private final HoodieEngineContext context = mock(HoodieEngineContext.class);
+  private final HoodieTable table = mock(HoodieTable.class);
+  private final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+  private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+  private final SupportsUpgradeDowngrade upgradeDowngradeHelper =
+      mock(SupportsUpgradeDowngrade.class);
+  private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Collections.emptyMap();
+  private static final Set<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptySet();
+  private static final UpgradeDowngrade.TableConfigChangeSet DEFAULT_UPGRADE_RESULT =
+      new UpgradeDowngrade.TableConfigChangeSet(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);
+  private static final String INSTANT_TIME = "20231201120000";
+  private StoragePath indexDefPath;
   @TempDir
   private Path tempDir;
 
-  @Mock
-  private HoodieWriteConfig config;
-  @Mock
-  private HoodieEngineContext context;
-  @Mock
-  private SupportsUpgradeDowngrade upgradeDowngradeHelper;
-  @Mock
-  private HoodieTable table;
-  @Mock
-  private HoodieTableMetaClient metaClient;
-  @Mock
-  private HoodieTableConfig tableConfig;
-  @Mock
-  private HoodieStorage storage;
-
-  private EightToNineUpgradeHandler upgradeHandler;
-  private static final String INSTANT_TIME = "20231201120000";
-  private StoragePath indexDefPath;
-
   @BeforeEach
-  void setUp() throws IOException {
-    upgradeHandler = new EightToNineUpgradeHandler();
-    
+  public void setUp() throws IOException {
+    when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(config.autoUpgrade()).thenReturn(true);
+    when(config.getPayloadClass()).thenReturn(null);
+
     // Setup common mocks
     when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(metaClient.getStorage()).thenReturn(storage);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
-    
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+
     // Use a temp file for index definition path
     indexDefPath = new StoragePath(tempDir.resolve("index.json").toString());
     when(metaClient.getIndexDefinitionPath()).thenReturn(indexDefPath.toString());
-    
+
     // Mock storage methods for file creation
     when(storage.exists(any(StoragePath.class))).thenReturn(false);
     when(storage.createNewFile(any(StoragePath.class))).thenReturn(true);
-    
+
     // Mock create method to capture written content
     ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
     when(storage.create(any(StoragePath.class), anyBoolean())).thenReturn(capturedContent);
-    
+
     // Mock autoUpgrade to return true
     when(config.autoUpgrade()).thenReturn(true);
+  }
+
+  static Stream<Arguments> payloadClassTestCases() {
+    List<Arguments> arguments = new ArrayList<>();
+    arguments.addAll(getArguments(DefaultHoodieRecordPayload.class.getName(), "",
+        null, null, "DefaultHoodieRecordPayload"));
+    arguments.addAll(getArguments(EventTimeAvroPayload.class.getName(), "",
+        EVENT_TIME_ORDERING.name(), null, "EventTimeAvroPayload"));
+    arguments.addAll(getArguments(OverwriteWithLatestAvroPayload.class.getName(), "",
+        null, null, "OverwriteWithLatestAvroPayload"));
+    arguments.addAll(getArguments(AWSDmsAvroPayload.class.getName(), RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=Op,"
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=D", // mergeProperties
+        COMMIT_TIME_ORDERING.name(), null, "AWSDmsAvroPayload"));
+    arguments.addAll(getArguments(PostgresDebeziumAvroPayload.class.getName(), RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE + "=" + DEBEZIUM_UNAVAILABLE_VALUE + ","
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=_change_operation_type,"
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=d",
+        EVENT_TIME_ORDERING.name(), FILL_UNAVAILABLE.name(), "PostgresDebeziumAvroPayload"));
+    arguments.addAll(getArguments(PartialUpdateAvroPayload.class.getName(), "",
+        EVENT_TIME_ORDERING.name(), PartialUpdateMode.IGNORE_DEFAULTS.name(), "PartialUpdateAvroPayload"));
+    arguments.addAll(getArguments(MySqlDebeziumAvroPayload.class.getName(), RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=_change_operation_type,"
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=d",
+        EVENT_TIME_ORDERING.name(), null, "MySqlDebeziumAvroPayload"));
+    arguments.addAll(getArguments(OverwriteNonDefaultsWithLatestAvroPayload.class.getName(), "",
+        COMMIT_TIME_ORDERING.name(), PartialUpdateMode.IGNORE_DEFAULTS.name(), "OverwriteNonDefaultsWithLatestAvroPayload"));
+    return arguments.stream();
+  }
+
+  private static List<Arguments> getArguments(String payloadClassName, String expectedMergeProperties,
+                                              String expectedRecordMergeMode, String expectedPartialUpdateMode,
+                                              String testName) {
+    return Arrays.asList(
+        Arguments.of(payloadClassName, expectedMergeProperties,
+            expectedRecordMergeMode, expectedPartialUpdateMode, testName, true),
+        Arguments.of(payloadClassName, expectedMergeProperties,
+            expectedRecordMergeMode, expectedPartialUpdateMode, testName, false));
+  }
+
+  @ParameterizedTest(name = "testUpgradeWith{4}")
+  @MethodSource("payloadClassTestCases")
+  void testUpgradeWithPayloadClass(String payloadClassName, String expectedMergeProperties,
+                                   String expectedRecordMergeMode, String expectedPartialUpdateMode,
+                                   String testName, boolean isPayloadClassConfiguredInTableConfig) {
+    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+              any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      if (isPayloadClassConfiguredInTableConfig) {
+        when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.ofNullable(payloadClassName));
+      } else {
+        when(config.getPayloadClass()).thenReturn(payloadClassName);
+      }
+      when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+      when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
+      when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+      UpgradeDowngrade.TableConfigChangeSet propertiesToHandle =
+          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.propertiesToUpdate();
+      Set<ConfigProperty> propertiesToRemove = propertiesToHandle.propertiesToDelete();
+      // Assert merge properties
+      if (!StringUtils.isNullOrEmpty(expectedMergeProperties)) {
+        String[] configs = expectedMergeProperties.split(",");
+        for (String config : configs) {
+          String[] kv = config.split("=");
+          boolean found = false;
+          for (Map.Entry<ConfigProperty, String> e : propertiesToAdd.entrySet()) {
+            if (e.getKey().key().equals(kv[0])) {
+              assertEquals(kv[1], e.getValue());
+              found = true;
+            }
+          }
+          assertTrue(found);
+        }
+      }
+      // Assert record merge mode
+      if (expectedRecordMergeMode == null) {
+        assertFalse(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      } else {
+        assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+        assertEquals(expectedRecordMergeMode, propertiesToAdd.get(RECORD_MERGE_MODE));
+      }
+      // Assert partial update mode
+      if (expectedPartialUpdateMode != null) {
+        assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
+        assertEquals(expectedPartialUpdateMode, propertiesToAdd.get(PARTIAL_UPDATE_MODE));
+      } else {
+        assertFalse(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
+      }
+      // Assert payload class change
+      assertPayloadClassChange(propertiesToAdd, propertiesToRemove, payloadClassName);
+    }
   }
 
   @Test
@@ -126,15 +249,39 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
       // Setup: No index metadata present
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
-      
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
-
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(
+          Collections.singleton(RECORD_MERGE_STRATEGY_ID), result.propertiesToDelete());
+    }
+  }
+
+  private void assertPayloadClassChange(Map<ConfigProperty, String> propertiesToAdd,
+                                        Set<ConfigProperty> propertiesToRemove,
+                                        String payloadClass) {
+    if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName()) || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      assertEquals(3, propertiesToRemove.size());
+      assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
+    } else {
+      assertEquals(2, propertiesToRemove.size());
+    }
+    assertTrue(propertiesToRemove.contains(PAYLOAD_CLASS_NAME));
+    assertTrue(propertiesToRemove.contains(RECORD_MERGE_STRATEGY_ID));
+    assertTrue(propertiesToAdd.containsKey(LEGACY_PAYLOAD_CLASS_NAME));
+    assertEquals(
+        payloadClass,
+        propertiesToAdd.get(LEGACY_PAYLOAD_CLASS_NAME));
+    if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.ORDERING_FIELDS));
+      assertEquals(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME, propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS));
+      assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
+    } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      assertEquals(FLATTENED_LSN_COL_NAME, propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS));
     }
   }
 
@@ -144,14 +291,14 @@ class TestEightToNineUpgradeHandler {
          MockedStatic<HoodieTableMetaClient> mockedMetaClient = mockStatic(HoodieTableMetaClient.class)) {
       // Mock the static method to do nothing - avoid NPE
       mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-          any(HoodieTable.class), 
-          any(HoodieEngineContext.class), 
-          any(HoodieWriteConfig.class), 
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
           any(SupportsUpgradeDowngrade.class),
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Mock the writeIndexMetadataToStorage to call the real method
       mockedMetaClient.when(() -> HoodieTableMetaClient.writeIndexMetadataToStorage(
           any(),
@@ -159,12 +306,12 @@ class TestEightToNineUpgradeHandler {
           any(HoodieIndexMetadata.class),
           any(HoodieTableVersion.class)
       )).thenCallRealMethod();
-      
+
       // Setup: Index metadata present with missing versions
       HoodieIndexMetadata indexMetadata = createIndexMetadataWithMissingVersions();
       assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
       assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-      
+
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
 
       // Capture the output stream to verify written content
@@ -172,18 +319,22 @@ class TestEightToNineUpgradeHandler {
       when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(Collections.emptyMap(), result);
-      
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(
+          Collections.singleton(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
+          result.propertiesToDelete());
+
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
       verify(storage).create(indexDefPath, true);
-      
+
       // Verify the written content by parsing the JSON and validating the object
       String writtenJson = capturedContent.toString();
-      
+
       // Expected JSON for table version 8 with V1 versions
       String expectedJson = "{\n"
           + "  \"indexDefinitions\": {\n"
@@ -205,14 +356,14 @@ class TestEightToNineUpgradeHandler {
           + "    }\n"
           + "  }\n"
           + "}";
-      
+
       // Parse the written JSON and validate against expected
       HoodieIndexMetadata writtenMetadata = HoodieIndexMetadata.fromJson(writtenJson);
       HoodieIndexMetadata expectedMetadata = HoodieIndexMetadata.fromJson(expectedJson);
-      
+
       // Validate the parsed objects match
       assertEquals(expectedMetadata.getIndexDefinitions().size(), writtenMetadata.getIndexDefinitions().size());
-      
+
       // Validate column_stats index
       HoodieIndexDefinition writtenColumnStats = writtenMetadata.getIndexDefinitions().get("column_stats");
       HoodieIndexDefinition expectedColumnStats = expectedMetadata.getIndexDefinitions().get("column_stats");
@@ -222,7 +373,7 @@ class TestEightToNineUpgradeHandler {
       assertEquals(expectedColumnStats.getSourceFields(), writtenColumnStats.getSourceFields());
       assertEquals(expectedColumnStats.getIndexOptions(), writtenColumnStats.getIndexOptions());
       assertEquals(expectedColumnStats.getVersion(), writtenColumnStats.getVersion());
-      
+
       // Validate secondary_index_idx_price index
       HoodieIndexDefinition writtenSecondaryIndex = writtenMetadata.getIndexDefinitions().get("secondary_index_idx_price");
       HoodieIndexDefinition expectedSecondaryIndex = expectedMetadata.getIndexDefinitions().get("secondary_index_idx_price");
@@ -247,20 +398,20 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Setup: Index metadata present with existing versions
       HoodieIndexMetadata indexMetadata = createIndexMetadataWithVersions();
       // TODO: assert index defs of indexMetadata have version field
-      // Note: Since we can't import HoodieIndexVersion due to dependency issues, 
+      // Note: Since we can't import HoodieIndexVersion due to dependency issues,
       // we'll skip this test for now and focus on testing the storage functionality
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
-
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
-      // Verify the written json is the same as before
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(
+          Collections.singleton(RECORD_MERGE_STRATEGY_ID), result.propertiesToDelete());
     }
   }
 
@@ -276,16 +427,17 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Setup: Empty index metadata (no index definitions)
       HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata();
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
-
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(
+          Collections.singleton(RECORD_MERGE_STRATEGY_ID), result.propertiesToDelete());
     }
   }
 
@@ -302,7 +454,7 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Mock the writeIndexMetadataToStorage to call the real method
       mockedMetaClient.when(() -> HoodieTableMetaClient.writeIndexMetadataToStorage(
           any(),
@@ -310,7 +462,7 @@ class TestEightToNineUpgradeHandler {
           any(HoodieIndexMetadata.class),
           any(HoodieTableVersion.class)
       )).thenCallRealMethod();
-      
+
       // Setup: File already exists
       HoodieIndexMetadata indexMetadata = createIndexMetadataWithMissingVersions();
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
@@ -321,18 +473,22 @@ class TestEightToNineUpgradeHandler {
       when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(Collections.emptyMap(), result);
-      
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(
+          Collections.singleton(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
+          result.propertiesToDelete());
+
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
       verify(storage).create(indexDefPath, true);
-      
+
       // Verify the written content by parsing the JSON and validating the object
       String writtenJson = capturedContent.toString();
-      
+
       // Expected JSON for table version 8 with V1 versions
       String expectedJson = "{\n"
           + "  \"indexDefinitions\": {\n"
@@ -354,14 +510,14 @@ class TestEightToNineUpgradeHandler {
           + "    }\n"
           + "  }\n"
           + "}";
-      
+
       // Parse the written JSON and validate against expected
       HoodieIndexMetadata writtenMetadata = HoodieIndexMetadata.fromJson(writtenJson);
       HoodieIndexMetadata expectedMetadata = HoodieIndexMetadata.fromJson(expectedJson);
-      
+
       // Validate the parsed objects match
       assertEquals(expectedMetadata.getIndexDefinitions().size(), writtenMetadata.getIndexDefinitions().size());
-      
+
       // Validate column_stats index
       HoodieIndexDefinition writtenColumnStats = writtenMetadata.getIndexDefinitions().get("column_stats");
       HoodieIndexDefinition expectedColumnStats = expectedMetadata.getIndexDefinitions().get("column_stats");
@@ -371,7 +527,7 @@ class TestEightToNineUpgradeHandler {
       assertEquals(expectedColumnStats.getSourceFields(), writtenColumnStats.getSourceFields());
       assertEquals(expectedColumnStats.getIndexOptions(), writtenColumnStats.getIndexOptions());
       assertEquals(expectedColumnStats.getVersion(), writtenColumnStats.getVersion());
-      
+
       // Validate secondary_index_idx_price index
       HoodieIndexDefinition writtenSecondaryIndex = writtenMetadata.getIndexDefinitions().get("secondary_index_idx_price");
       HoodieIndexDefinition expectedSecondaryIndex = expectedMetadata.getIndexDefinitions().get("secondary_index_idx_price");
@@ -389,7 +545,7 @@ class TestEightToNineUpgradeHandler {
    */
   private HoodieIndexMetadata createIndexMetadataWithMissingVersions() {
     Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
-    
+
     // Column stats index without version
     HoodieIndexDefinition columnStatsDef = HoodieIndexDefinition.newBuilder()
         .withIndexName("column_stats")
@@ -398,7 +554,7 @@ class TestEightToNineUpgradeHandler {
         .withSourceFields(java.util.Arrays.asList("field1", "field2"))
         .withIndexOptions(Collections.emptyMap())
         .build();
-    
+
     // Secondary index without version
     HoodieIndexDefinition secondaryIndexDef = HoodieIndexDefinition.newBuilder()
         .withIndexName("secondary_index_idx_price")
@@ -407,10 +563,10 @@ class TestEightToNineUpgradeHandler {
         .withSourceFields(java.util.Arrays.asList("price"))
         .withIndexOptions(Collections.emptyMap())
         .build();
-    
+
     indexDefinitions.put("column_stats", columnStatsDef);
     indexDefinitions.put("secondary_index_idx_price", secondaryIndexDef);
-    
+
     return new HoodieIndexMetadata(indexDefinitions);
   }
 
@@ -430,7 +586,7 @@ class TestEightToNineUpgradeHandler {
         .withIndexOptions(Collections.emptyMap())
         .withVersion(HoodieIndexVersion.V1)
         .build();
-    
+
     // Secondary index with version
     HoodieIndexDefinition secondaryIndexDef = HoodieIndexDefinition.newBuilder()
         .withIndexName("secondary_index_idx_price")
@@ -440,10 +596,10 @@ class TestEightToNineUpgradeHandler {
         .withIndexOptions(Collections.emptyMap())
         .withVersion(HoodieIndexVersion.V1)
         .build();
-    
+
     indexDefinitions.put("column_stats", columnStatsDef);
     indexDefinitions.put("secondary_index_idx_price", secondaryIndexDef);
-    
+
     return new HoodieIndexMetadata(indexDefinitions);
   }
 
@@ -459,21 +615,21 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Test with table version 8 - should populate missing versions with V1
       HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion1.json");
-      
+
       // Verify initial state - no versions
       assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
       assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-      
+
       // Apply the method
       EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
-      
+
       // Verify versions are populated with V1
       assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
       assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-      
+
       // Verify other fields remain unchanged
       validateAllFieldsExcludingVersion(indexMetadata);
     }
@@ -491,17 +647,17 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Test with indexMissingVersion2.json which has some versions already set
       HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion2.json");
-      
+
       // Verify initial state - column_stats has no version, secondary_index has V2
       assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
       assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-      
+
       // Apply the method with table version 8
       EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
-      
+
       // Verify column_stats gets V1, secondary_index remains V2 (since it already had a version)
       assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
       assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
@@ -520,7 +676,7 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
+
       // Test with empty option - should not throw exception
       assertDoesNotThrow(() ->
           EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.empty()));
@@ -543,8 +699,8 @@ class TestEightToNineUpgradeHandler {
     assertEquals("column_stats", colStatsDef.getIndexFunction());
     assertEquals(Collections.emptyMap(), colStatsDef.getIndexOptions());
     assertEquals(Arrays.asList(
-        "_hoodie_commit_time", "_hoodie_partition_path", "_hoodie_record_key", "key", "secKey", "partition", "intField",
-        "city", "textField1", "textField2", "textField3", "textField4", "decimalField", "longField", "incrLongField", "round"),
+            "_hoodie_commit_time", "_hoodie_partition_path", "_hoodie_record_key", "key", "secKey", "partition", "intField",
+            "city", "textField1", "textField2", "textField3", "textField4", "decimalField", "longField", "incrLongField", "round"),
         colStatsDef.getSourceFields());
 
     HoodieIndexDefinition secIdxDef = loadedDef.getIndexDefinitions().get("secondary_index_idx_price");
@@ -554,4 +710,4 @@ class TestEightToNineUpgradeHandler {
     assertEquals(Collections.singletonList("price"), secIdxDef.getSourceFields());
     assertEquals(Collections.emptyMap(), secIdxDef.getIndexOptions());
   }
-} 
+}

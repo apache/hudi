@@ -33,7 +33,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +75,7 @@ public class CompactionUtil {
    */
   public static void setAvroSchema(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchema(false);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
   }
 
@@ -87,7 +87,7 @@ public class CompactionUtil {
    */
   public static void setAvroSchema(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchema(false);
     writeConfig.setSchema(tableAvroSchema.toString());
   }
 
@@ -100,10 +100,10 @@ public class CompactionUtil {
    *
    * @param conf The configuration
    */
-  public static void setPreCombineField(Configuration conf, HoodieTableMetaClient metaClient) {
-    String preCombineField = metaClient.getTableConfig().getPreCombineField();
-    if (preCombineField != null) {
-      conf.set(FlinkOptions.PRECOMBINE_FIELD, preCombineField);
+  public static void setOrderingFields(Configuration conf, HoodieTableMetaClient metaClient) {
+    String orderingFields = metaClient.getTableConfig().getOrderingFieldsStr().orElse(null);
+    if (orderingFields != null) {
+      conf.set(FlinkOptions.ORDERING_FIELDS, orderingFields);
     }
   }
 
@@ -131,8 +131,8 @@ public class CompactionUtil {
    */
   public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
-    if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
+    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchemaFromDataFile());
+    if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
     }
   }
@@ -155,7 +155,7 @@ public class CompactionUtil {
   public static void rollbackCompaction(HoodieFlinkTable<?> table, String instantTime, TransactionManager transactionManager) {
     HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
-      LOG.warn("Rollback failed compaction instant: [" + instantTime + "]");
+      LOG.warn("Failed to rollback compaction instant: [{}]", instantTime);
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
     }
   }

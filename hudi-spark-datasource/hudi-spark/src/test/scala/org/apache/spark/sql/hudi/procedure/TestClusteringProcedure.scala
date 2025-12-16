@@ -58,86 +58,88 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(partition)
              | location '$basePath'
        """.stripMargin)
         // disable automatic inline compaction so that HoodieDataSourceHelpers.allCompletedCommitsCompactions
         // does not count compaction instants
-        spark.sql("set hoodie.compact.inline=false")
-        spark.sql("set hoodie.compact.schedule.inline=false")
+        withSQLConf(
+          "hoodie.compact.inline" -> "false",
+          "hoodie.compact.schedule.inline" -> "false"
+        ) {
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1001)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
+          val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+          // Generate the first clustering plan
+          val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1001)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
-        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
-        // Generate the first clustering plan
-        val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
+          // Generate the second clustering plan
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
+          val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
+          checkAnswer(s"call show_clustering('$tableName')")(
+            Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
+            Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
+          )
 
-        // Generate the second clustering plan
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
-        val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
-        checkAnswer(s"call show_clustering('$tableName')")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
-        )
+          // Do clustering for all clustering plan generated above, and no new clustering
+          // instant will be generated because of there is no commit after the second
+          // clustering plan generated
+          checkAnswer(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)")(
+            Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "partition=1003"),
+            Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001,partition=1002")
+          )
 
-        // Do clustering for all clustering plan generated above, and no new clustering
-        // instant will be generated because of there is no commit after the second
-        // clustering plan generated
-        checkAnswer(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "partition=1003"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001,partition=1002")
-        )
+          // No new commits
+          val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+          assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, secondScheduleInstant))
 
-        // No new commits
-        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
-        assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, secondScheduleInstant))
+          // Check the number of finished clustering instants
+          val finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+            .getInstants
+            .iterator().asScala
+            .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+            .toSeq
+          assertResult(2)(finishedClustering.size)
 
-        // Check the number of finished clustering instants
-        val finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-          .getInstants
-          .iterator().asScala
-          .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
-          .toSeq
-        assertResult(2)(finishedClustering.size)
+          checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+            Seq(1, "a1", 10.0, 1000, 1000),
+            Seq(2, "a2", 10.0, 1001, 1001),
+            Seq(3, "a3", 10.0, 1002, 1002),
+            Seq(4, "a4", 10.0, 1003, 1003)
+          )
 
-        checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
-          Seq(1, "a1", 10.0, 1000, 1000),
-          Seq(2, "a2", 10.0, 1001, 1001),
-          Seq(3, "a3", 10.0, 1002, 1002),
-          Seq(4, "a4", 10.0, 1003, 1003)
-        )
+          // After clustering there should be no pending clustering and all clustering instants should be completed
+          checkAnswer(s"call show_clustering(table => '$tableName')")(
+            Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
+            Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+          )
 
-        // After clustering there should be no pending clustering and all clustering instants should be completed
-        checkAnswer(s"call show_clustering(table => '$tableName')")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
-        )
+          // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
+          spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004, 1004)")
+          spark.sql(s"insert into $tableName values(6, 'a6', 10, 1005, 1005)")
+          spark.sql(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)").show()
 
-        // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
-        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004, 1004)")
-        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1005, 1005)")
-        spark.sql(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)").show()
+          val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+            .findInstantsAfter(secondScheduleInstant)
+            .getInstants
+            .iterator().asScala
+            .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+            .toSeq
+          // Should have a new replace commit after the second clustering command.
+          assertResult(1)(thirdClusteringInstant.size)
 
-        val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-          .findInstantsAfter(secondScheduleInstant)
-          .getInstants
-          .iterator().asScala
-          .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
-          .toSeq
-        // Should have a new replace commit after the second clustering command.
-        assertResult(1)(thirdClusteringInstant.size)
-
-        checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
-          Seq(1, "a1", 10.0, 1000, 1000),
-          Seq(2, "a2", 10.0, 1001, 1001),
-          Seq(3, "a3", 10.0, 1002, 1002),
-          Seq(4, "a4", 10.0, 1003, 1003),
-          Seq(5, "a5", 10.0, 1004, 1004),
-          Seq(6, "a6", 10.0, 1005, 1005)
-        )
+          checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+            Seq(1, "a1", 10.0, 1000, 1000),
+            Seq(2, "a2", 10.0, 1001, 1001),
+            Seq(3, "a3", 10.0, 1002, 1002),
+            Seq(4, "a4", 10.0, 1003, 1003),
+            Seq(5, "a5", 10.0, 1004, 1004),
+            Seq(6, "a6", 10.0, 1005, 1005)
+          )
+        }
       }
     }
   }
@@ -159,7 +161,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(partition)
              | location '$basePath'
@@ -243,7 +245,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(partition)
              | location '$basePath'
@@ -408,6 +410,45 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
             .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
           assertResult(0)(resultD.length)
         }
+      }
+    }
+  }
+
+  test("Test Call run_clustering Procedure With Partition Pruning Regex") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts bigint,
+             |  sex string,
+             |  addr string
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(sex, addr)
+             | location '$basePath'
+       """.stripMargin)
+        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+        // Test partition pruning with single predicate
+        var resultA: Array[Seq[Any]] = Array.empty
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 's1', 'addr1')")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 's2', 'addr1')")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 's1', 'addr2')")
+        // clustering table with partition predicate
+        resultA = spark.sql(s"call run_clustering(table => '$tableName', partition_regex_pattern => 'sex=s1/.*', order => 'ts', show_involved_partition => true)")
+          .collect()
+          .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+        assertResult(1)(resultA.length)
+        assertResult("sex=s1/addr=addr1,sex=s1/addr=addr2")(resultA(0)(3))
       }
     }
   }

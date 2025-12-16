@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -58,7 +59,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     return orderingVal;
   }
 
@@ -124,7 +125,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     return true;
   }
 
@@ -186,6 +187,13 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
     this.type = kryo.readObject(input, HoodieRecordType.class);
     this.orderingVal = (Comparable<?>) kryo.readClassAndObject(input);
     // NOTE: [[EmptyRecord]]'s payload is always null
+    return null;
+  }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
     return null;
   }
 }

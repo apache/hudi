@@ -31,8 +31,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexRule;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -51,15 +51,18 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
 import static org.apache.hudi.index.HoodieIndex.IndexType.FLINK_STATE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
+import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
 
 /**
  * Indexing related config.
  */
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "Common Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     subGroupName = ConfigGroups.SubGroupNames.INDEX,
@@ -67,14 +70,12 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
     description = "")
 public class HoodieIndexConfig extends HoodieConfig {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexConfig.class);
-
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
-      .withValidValues(INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
-          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name())
+      .withValidValues(INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(), SIMPLE.name(), GLOBAL_SIMPLE.name(),
+          BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name(), RECORD_LEVEL_INDEX.name(), GLOBAL_RECORD_LEVEL_INDEX.name())
       .withDocumentation(HoodieIndex.IndexType.class);
 
 
@@ -566,6 +567,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static class Builder {
 
+    @Getter
     private EngineType engineType = EngineType.SPARK;
     private final HoodieIndexConfig hoodieIndexConfig = new HoodieIndexConfig();
 
@@ -758,10 +760,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       }
     }
 
-    public EngineType getEngineType() {
-      return engineType;
-    }
-
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         // check the bucket index hash field
@@ -785,14 +783,14 @@ public class HoodieIndexConfig extends HoodieConfig {
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_MAX_NUM_BUCKETS))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, Integer.toString(bucketNum));
         } else if (hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS) < bucketNum) {
-          LOG.warn("Maximum bucket number is smaller than bucket number, maximum: " + hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS) + ", bucketNum: " + bucketNum);
+          log.warn("Maximum bucket number is smaller than bucket number, maximum: {}, bucketNum: {}", hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS), bucketNum);
           hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, Integer.toString(bucketNum));
         }
 
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_MIN_NUM_BUCKETS))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, Integer.toString(bucketNum));
         } else if (hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS) > bucketNum) {
-          LOG.warn("Minimum bucket number is larger than the bucket number, minimum: " + hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS) + ", bucketNum: " + bucketNum);
+          log.warn("Minimum bucket number is larger than the bucket number, minimum: {}, bucketNum: {}", hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS), bucketNum);
           hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, Integer.toString(bucketNum));
         }
       }

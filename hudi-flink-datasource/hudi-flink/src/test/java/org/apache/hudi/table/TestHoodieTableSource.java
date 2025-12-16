@@ -19,20 +19,20 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
-import org.apache.avro.Schema;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
@@ -100,9 +100,9 @@ public class TestHoodieTableSource {
   void testGetReadPaths() throws Exception {
     beforeEach();
     HoodieTableSource tableSource = getEmptyStreamingSource();
-    List<StoragePathInfo> fileList = tableSource.getReadFiles();
-    assertNotNull(fileList);
-    assertThat(fileList.size(), is(4));
+    List<FileSlice> fileSlices = tableSource.getBaseFileOnlyFileSlices();
+    assertNotNull(fileSlices);
+    assertThat(fileSlices.size(), is(4));
     // apply partition pruning
     FieldReferenceExpression partRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4);
     ValueLiteralExpression partLiteral = new ValueLiteralExpression("par1", DataTypes.STRING().notNull());
@@ -113,9 +113,9 @@ public class TestHoodieTableSource {
     HoodieTableSource tableSource2 = getEmptyStreamingSource();
     tableSource2.applyFilters(Arrays.asList(partFilter));
 
-    List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
-    assertNotNull(fileList2);
-    assertThat(fileList2.size(), is(1));
+    List<FileSlice> fileSlices2 = tableSource2.getBaseFileOnlyFileSlices();
+    assertNotNull(fileSlices2);
+    assertThat(fileSlices2.size(), is(1));
   }
 
   @Test
@@ -145,8 +145,8 @@ public class TestHoodieTableSource {
   void testGetTableAvroSchema() {
     HoodieTableSource tableSource = getEmptyStreamingSource();
     assertNull(tableSource.getMetaClient(), "Streaming source with empty table path is allowed");
-    final String schemaFields = tableSource.getTableAvroSchema().getFields().stream()
-        .map(Schema.Field::name)
+    final String schemaFields = tableSource.getTableSchema().getFields().stream()
+        .map(HoodieSchemaField::name)
         .collect(Collectors.joining(","));
     final String expected = "_hoodie_commit_time,"
         + "_hoodie_commit_seqno,"
@@ -178,7 +178,6 @@ public class TestHoodieTableSource {
   void testDataSkippingWithPartitionStatsPruning(List<ResolvedExpression> filters, List<String> expectedPartitions) throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -204,8 +203,8 @@ public class TestHoodieTableSource {
     int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
     assertThat(tableSource1.getDataBucketFunc().get().apply(numBuckets), is(1));
-    List<StoragePathInfo> fileList = tableSource1.getReadFiles();
-    assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
+    List<FileSlice> fileSlices = tableSource1.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned by bucket id 1", fileSlices.size(), CoreMatchers.is(2));
 
     // test multiple primary keys filtering
     Configuration conf2 = conf1.clone();
@@ -219,8 +218,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
     assertThat(tableSource2.getDataBucketFunc().get().apply(numBuckets), is(3));
-    List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
-    assertThat("Files should be pruned by bucket id 3", fileList2.size(), CoreMatchers.is(3));
+    List<FileSlice> fileSlices2 = tableSource2.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned by bucket id 3", fileSlices2.size(), CoreMatchers.is(3));
 
     // apply the filters in different order and test again.
     tableSource2.reset();
@@ -228,7 +227,7 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny"),
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
     assertThat(tableSource2.getDataBucketFunc().get().apply(numBuckets), is(3));
-    assertThat("Files should be pruned by bucket id 3", tableSource2.getReadFiles().size(),
+    assertThat("Files should be pruned by bucket id 3", tableSource2.getBaseFileOnlyFileSlices().size(),
         CoreMatchers.is(3));
 
     // test partial primary keys filtering
@@ -243,8 +242,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
     assertTrue(tableSource3.getDataBucketFunc().isEmpty());
-    List<StoragePathInfo> fileList3 = tableSource3.getReadFiles();
-    assertThat("Partial pk filtering does not prune any files", fileList3.size(),
+    List<FileSlice> fileSlices3 = tableSource3.getBaseFileOnlyFileSlices();
+    assertThat("Partial pk filtering does not prune any files", fileSlices3.size(),
         CoreMatchers.is(7));
 
     // test single primary keys filtering together with non-primary key predicate
@@ -258,8 +257,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
 
     assertThat(tableSource4.getDataBucketFunc().get().apply(numBuckets), is(1));
-    List<StoragePathInfo> fileList4 = tableSource4.getReadFiles();
-    assertThat("Files should be pruned by bucket id 1", fileList4.size(), CoreMatchers.is(2));
+    List<FileSlice> fileSlices4 = tableSource4.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned by bucket id 1", fileSlices4.size(), CoreMatchers.is(2));
   }
 
   @ParameterizedTest
@@ -270,7 +269,7 @@ public class TestHoodieTableSource {
     final String f1 = "f_timestamp";
     conf1.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf1.set(FlinkOptions.RECORD_KEY_FIELD, f1);
-    conf1.set(FlinkOptions.PRECOMBINE_FIELD, f1);
+    conf1.set(FlinkOptions.ORDERING_FIELDS, f1);
     conf1.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
     conf1.setString(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), logicalTimestamp + "");
     int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
@@ -283,8 +282,8 @@ public class TestHoodieTableSource {
             LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")))));
 
     assertThat(tableSource1.getDataBucketFunc().get().apply(numBuckets), is(logicalTimestamp ? 1 : 0));
-    List<StoragePathInfo> fileList = tableSource1.getReadFiles();
-    assertThat("Files should be pruned", fileList.size(), CoreMatchers.is(1));
+    List<FileSlice> fileSlices = tableSource1.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned", fileSlices.size(), CoreMatchers.is(1));
 
     // test date filtering
     Configuration conf2 = conf1.clone();
@@ -292,15 +291,15 @@ public class TestHoodieTableSource {
     String tablePath2 = new Path(tempFile.getAbsolutePath(), "tbl2").toString();
     conf2.set(FlinkOptions.PATH, tablePath2);
     conf2.set(FlinkOptions.RECORD_KEY_FIELD, f2);
-    conf2.set(FlinkOptions.PRECOMBINE_FIELD, f2);
+    conf2.set(FlinkOptions.ORDERING_FIELDS, f2);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf2);
     HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
     tableSource2.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f2, 1, DataTypes.DATE().notNull(), LocalDate.ofEpochDay(1))));
 
     assertThat(tableSource2.getDataBucketFunc().get().apply(numBuckets), is(1));
-    List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
-    assertThat("Files should be pruned", fileList2.size(), CoreMatchers.is(1));
+    List<FileSlice> fileSlices2 = tableSource2.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned", fileSlices2.size(), CoreMatchers.is(1));
 
     // test decimal filtering
     Configuration conf3 = conf1.clone();
@@ -308,7 +307,7 @@ public class TestHoodieTableSource {
     String tablePath3 = new Path(tempFile.getAbsolutePath(), "tbl3").toString();
     conf3.set(FlinkOptions.PATH, tablePath3);
     conf3.set(FlinkOptions.RECORD_KEY_FIELD, f3);
-    conf3.set(FlinkOptions.PRECOMBINE_FIELD, f3);
+    conf3.set(FlinkOptions.ORDERING_FIELDS, f3);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
     tableSource3.applyFilters(Collections.singletonList(
@@ -316,8 +315,8 @@ public class TestHoodieTableSource {
             new BigDecimal("1.11"))));
 
     assertThat(tableSource3.getDataBucketFunc().get().apply(numBuckets), is(0));
-    List<StoragePathInfo> fileList3 = tableSource3.getReadFiles();
-    assertThat("Files should be pruned", fileList3.size(), CoreMatchers.is(1));
+    List<FileSlice> fileSlices3 = tableSource3.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned", fileSlices3.size(), CoreMatchers.is(1));
   }
 
   @Test
@@ -374,8 +373,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
     assertThat(tableSource1.getDataBucketFunc().get().apply(4), is(1));
-    List<StoragePathInfo> fileList = tableSource1.getReadFiles();
-    assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
+    List<FileSlice> fileSlices = tableSource1.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned by bucket id 1", fileSlices.size(), CoreMatchers.is(2));
   }
 
   /**
@@ -404,8 +403,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
     assertThat(tableSource.getDataBucketFunc().get().apply(4), is(3));
-    List<StoragePathInfo> fileList = tableSource.getReadFiles();
-    assertThat("Files should be pruned by bucket id 3", fileList.size(), CoreMatchers.is(3));
+    List<FileSlice> fileSlices = tableSource.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned by bucket id 3", fileSlices.size(), CoreMatchers.is(3));
   }
 
   /**
@@ -434,8 +433,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
     assertTrue(tableSource.getDataBucketFunc().isEmpty());
-    List<StoragePathInfo> fileList = tableSource.getReadFiles();
-    assertThat("Partial pk filtering does not prune any files", fileList.size(),
+    List<FileSlice> fileSlices = tableSource.getBaseFileOnlyFileSlices();
+    assertThat("Partial pk filtering does not prune any files", fileSlices.size(),
         CoreMatchers.is(7));
   }
 
@@ -464,8 +463,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
 
     assertThat(tableSource.getDataBucketFunc().get().apply(4), is(1));
-    List<StoragePathInfo> fileList = tableSource.getReadFiles();
-    assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
+    List<FileSlice> fileSlices = tableSource.getBaseFileOnlyFileSlices();
+    assertThat("Files should be pruned by bucket id 1", fileSlices.size(), CoreMatchers.is(2));
   }
 
   // -------------------------------------------------------------------------

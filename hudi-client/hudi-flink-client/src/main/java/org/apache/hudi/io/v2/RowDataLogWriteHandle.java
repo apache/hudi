@@ -19,7 +19,6 @@
 package org.apache.hudi.io.v2;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.AppendResult;
@@ -36,13 +35,14 @@ import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.log.block.HoodieFlinkAvroDataBlock;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
 /**
  * A write handle that supports creating a log file and writing records based on record Iterator.
@@ -66,10 +67,9 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONA
  * <p>The back-up writer may roll over to a new log file if there already exists a log file for the
  * given file group and instant.
  */
+@Slf4j
 public class RowDataLogWriteHandle<T, I, K, O>
     extends FlinkAppendHandle<T, I, K, O> implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RowDataLogWriteHandle.class);
 
   public RowDataLogWriteHandle(
       HoodieWriteConfig config,
@@ -107,24 +107,22 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
     // for parquet data block, we can get column stats from parquet footer directly.
     if (config.isMetadataColumnStatsIndexEnabled()) {
+      HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
-              Option.of(HoodieRecord.HoodieRecordType.FLINK)).keySet());
+              Option.of(HoodieRecord.HoodieRecordType.FLINK), indexVersion).keySet());
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata;
       if (dataBlock.isEmpty()) {
         // only delete block exists
         columnRangeMetadata = new HashMap<>();
-        for (String col: columnsToIndexSet) {
-          columnRangeMetadata.put(col, HoodieColumnRangeMetadata.create(
-              stat.getPath(), col, null, null, 0L, 0L, 0L, 0L));
-        }
+        columnsToIndexSet.forEach(col -> columnRangeMetadata.put(col, HoodieColumnRangeMetadata.createEmpty(stat.getPath(), col, indexVersion)));
       } else {
         ValidationUtils.checkArgument(dataBlock.get() instanceof ColumnRangeMetadataProvider,
             "Log block for Flink ingestion should always be an instance of ColumnRangeMetadataProvider for collecting column stats efficiently.");
         columnRangeMetadata =
-            ((ColumnRangeMetadataProvider) dataBlock.get()).getColumnRangeMeta(stat.getPath()).entrySet().stream()
+            ((ColumnRangeMetadataProvider) dataBlock.get()).getColumnRangeMeta(stat.getPath(), indexVersion).entrySet().stream()
                 .filter(e -> columnsToIndexSet.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
@@ -132,7 +130,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
     }
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;
-    LOG.info("WriteHandle for partitionPath {} filePath {}, took {} ms.",
+    log.info("WriteHandle for partitionPath {} filePath {}, took {} ms.",
         partitionPath, stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
     timer.startTimer();
   }

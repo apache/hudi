@@ -26,8 +26,10 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -44,11 +46,20 @@ import java.util.stream.Collectors;
 
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
 
-  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler;
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
+    this(context, clientConfig, timelineService, new StreamingMetadataWriteHandler());
+  }
+
+  @VisibleForTesting
+  public SparkRDDTableServiceClient(HoodieEngineContext context,
+                                       HoodieWriteConfig clientConfig,
+                                       Option<EmbeddedTimelineService> timelineService,
+                                       StreamingMetadataWriteHandler streamingMetadataWriteHandler) {
     super(context, clientConfig, timelineService);
+    this.streamingMetadataWriteHandler = streamingMetadataWriteHandler;
   }
 
   @Override
@@ -80,9 +91,11 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> partialUpdateTableMetadata(
       HoodieTable table,
       HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
-      String instantTime) {
+      String instantTime,
+      WriteOperationType writeOperationType) {
     if (isStreamingWriteToMetadataEnabled(table)) {
-      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime));
+      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime,
+          config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     }
     return writeMetadata;
   }

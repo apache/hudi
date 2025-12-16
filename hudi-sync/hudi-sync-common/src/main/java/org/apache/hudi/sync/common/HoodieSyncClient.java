@@ -21,6 +21,7 @@ package org.apache.hudi.sync.common;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.ParquetTableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -34,7 +35,6 @@ import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +48,9 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
@@ -88,6 +90,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     return metaClient;
   }
 
+  public String getTableName() {
+    return config.getString(META_SYNC_TABLE_NAME);
+  }
+
+  public String getDatabaseName() {
+    return config.getString(META_SYNC_DATABASE_NAME);
+  }
+
   /**
    * Get the set of dropped partitions since the last synced commit.
    * If last sync time is not known then consider only active timeline.
@@ -98,21 +108,36 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   @Override
-  public MessageType getStorageSchema() {
+  public HoodieSchema getStorageSchema() {
     try {
-      return tableSchemaResolver.getTableParquetSchema();
+      return tableSchemaResolver.getTableSchema();
     } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read schema from storage.", e);
+      throw new HoodieSyncException(buildSchemaReadErrorMessage(e), e);
     }
   }
 
   @Override
-  public MessageType getStorageSchema(boolean includeMetadataField) {
+  public HoodieSchema getStorageSchema(boolean includeMetadataField) {
     try {
-      return tableSchemaResolver.getTableParquetSchema(includeMetadataField);
+      return tableSchemaResolver.getTableSchema(includeMetadataField);
     } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read schema from storage.", e);
+      throw new HoodieSyncException(buildSchemaReadErrorMessage(e), e);
     }
+  }
+
+  private String buildSchemaReadErrorMessage(Exception e) {
+    String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
+    if (e instanceof java.io.FileNotFoundException) {
+      return String.format(
+          "Cannot read Hudi table schema.%n%n"
+              + "Required data file missing .%n%n"
+              + "This indicates:%n"
+              + "  1. Aggressive cleaner retention compared to query run times\n"
+              + "  2. Manual file deletions (timeline files or data files)\n"
+              + "  3. Concurrent writers without proper locking or configurations set\n\n"
+              + "Original error: %s", errorMessage);
+    }
+    return String.format("Failed to read schema from storage.%nError: %s", errorMessage);
   }
 
   /**
@@ -209,11 +234,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (droppedPartitionsOnStorage.contains(storagePartition)) {
-        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
-      } else {
-        if (!storagePartitionValues.isEmpty()) {
-          String storageValue = String.join(", ", storagePartitionValues);
+      if (!storagePartitionValues.isEmpty()) {
+        String storageValue = String.join(", ", storagePartitionValues);
+        if (droppedPartitionsOnStorage.contains(storagePartition)) {
+          if (paths.containsKey(storageValue)) {
+            // Add partition drop event only if it exists in the metastore
+            events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+          }
+        } else {
           if (!paths.containsKey(storageValue)) {
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {

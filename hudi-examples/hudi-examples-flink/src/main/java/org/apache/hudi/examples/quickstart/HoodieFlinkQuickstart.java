@@ -24,6 +24,9 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
 import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -49,14 +52,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations.sql;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HoodieFlinkQuickstart {
   private EnvironmentSettings settings = null;
+  @Getter
   private TableEnvironment streamTableEnv = null;
 
   private String tableName;
-
-  private HoodieFlinkQuickstart() {
-  }
 
   public static HoodieFlinkQuickstart instance() {
     return new HoodieFlinkQuickstart();
@@ -103,10 +105,6 @@ public final class HoodieFlinkQuickstart {
       execConf.setString("restart-strategy.fixed-delay.attempts", "0");
       this.streamTableEnv = streamTableEnv;
     }
-  }
-
-  public TableEnvironment getStreamTableEnv() {
-    return streamTableEnv;
   }
 
   public TableEnvironment getBatchTableEnv() {

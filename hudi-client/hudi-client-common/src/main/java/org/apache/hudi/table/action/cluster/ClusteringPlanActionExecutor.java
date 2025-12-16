@@ -34,16 +34,14 @@ import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
 import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanActionExecutor.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
@@ -57,7 +55,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePl
   }
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
-    LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
+    log.info("Checking if clustering needs to be run on {}", config.getBasePath());
     Option<HoodieInstant> lastClusteringInstant =
         table.getActiveTimeline().getLastClusteringInstant();
 
@@ -66,20 +64,19 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePl
         .countInstants();
 
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.warn("Not scheduling inline clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getInlineClusterMaxCommits());
+      log.info("Not scheduling inline clustering as only {} commits was found since last clustering {}. Waiting for {}",
+          commitsSinceLastClustering, lastClusteringInstant,
+          config.getInlineClusterMaxCommits());
       return Option.empty();
     }
 
     if ((config.isAsyncClusteringEnabled() || config.scheduleInlineClustering()) && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.warn("Not scheduling async clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getAsyncClusterMaxCommits());
+      log.info("Not scheduling async clustering as only {} commits was found since last clustering {}. Waiting for {}",
+          commitsSinceLastClustering, lastClusteringInstant, config.getAsyncClusterMaxCommits());
       return Option.empty();
     }
 
-    LOG.info("Generating clustering plan for table " + config.getBasePath());
+    log.info("Generating clustering plan for table {}", config.getBasePath());
     ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
         ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
             new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);

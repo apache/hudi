@@ -33,8 +33,7 @@ public enum PartialUpdateMode {
   IGNORE_DEFAULTS,
 
   @EnumFieldDescription(
-      "For columns having unavailable values in the current record, pick value from previous version of the record during write."
-      + "Unavailable value can be defined using `hoodie.write.partial.update.unavailable.value`, which should be added to"
-      + "the value of table config `hoodie.write.partial.update.properties`.")
+      "For columns having unavailable values in the current record, pick value from previous version of the record during write. "
+         + "Unavailable value can be defined using `hoodie.write.partial.update.unavailable.value` in the table property.")
   FILL_UNAVAILABLE
 }

@@ -75,7 +75,7 @@ public class SparkValidatorUtils {
         writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
       }
       Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
-      SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
+      SQLContext sqlContext = SQLContext.getOrCreate(HoodieSparkEngineContext.getSparkContext(context).sc());
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
       Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
@@ -141,8 +141,7 @@ public class SparkValidatorUtils {
                 new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema()));
       } catch (Exception e) {
         LOG.warn("Cannot get table schema from before state.", e);
-        LOG.warn("Use the schema from after state (current transaction) to create the empty Spark "
-            + "dataframe: " + newStructTypeSchema);
+        LOG.warn("Using the schema from after state (current transaction) to create the empty Spark dataframe: {}", newStructTypeSchema);
         return sqlContext.createDataFrame(
             sqlContext.emptyDataFrame().rdd(), newStructTypeSchema);
       }
@@ -154,7 +153,7 @@ public class SparkValidatorUtils {
    * Get records from specified list of data files.
    */
   public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaScalaConverters.<String>convertJavaListToScalaSeq(baseFilePaths));
+    return sqlContext.read().parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
   }
 
   /**

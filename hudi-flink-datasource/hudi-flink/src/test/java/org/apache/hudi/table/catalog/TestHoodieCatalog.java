@@ -54,12 +54,14 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.DefaultCatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -103,9 +105,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link HoodieCatalog}.
  */
-public class TestHoodieCatalog {
+public class TestHoodieCatalog extends BaseTestHoodieCatalog {
 
-  private static final String TEST_DEFAULT_DATABASE = "test_db";
   private static final String NONE_EXIST_DATABASE = "none_exist_database";
   private static final List<Column> CREATE_COLUMNS = Arrays.asList(
       Column.physical("uuid", DataTypes.VARCHAR(20)),
@@ -114,7 +115,7 @@ public class TestHoodieCatalog {
       Column.physical("tss", DataTypes.TIMESTAMP(3)),
       Column.physical("partition", DataTypes.VARCHAR(10))
   );
-  private static final UniqueConstraint CONSTRAINTS = UniqueConstraint.primaryKey("uuid", Arrays.asList("uuid"));
+
   private static final ResolvedSchema CREATE_TABLE_SCHEMA =
       new ResolvedSchema(
           CREATE_COLUMNS,
@@ -149,14 +150,6 @@ public class TestHoodieCatalog {
           .collect(Collectors.toList());
   private static final ResolvedSchema EXPECTED_TABLE_SCHEMA =
       new ResolvedSchema(EXPECTED_TABLE_COLUMNS, Collections.emptyList(), CONSTRAINTS);
-
-  private static final Map<String, String> EXPECTED_OPTIONS = new HashMap<>();
-
-  static {
-    EXPECTED_OPTIONS.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    EXPECTED_OPTIONS.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
-    EXPECTED_OPTIONS.put(FlinkOptions.PRE_COMBINE.key(), "true");
-  }
 
   private static final ResolvedCatalogTable EXPECTED_CATALOG_TABLE = new ResolvedCatalogTable(
       CatalogUtils.createCatalogTable(
@@ -371,7 +364,7 @@ public class TestHoodieCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() {
+  void testCreateTableWithoutOrderingFields() {
     Map<String, String> options = getDefaultCatalogOption();
     options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(options));
@@ -383,7 +376,7 @@ public class TestHoodieCatalog {
             + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
 
     Map<String, String> options2 = getDefaultCatalogOption();
-    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    options2.put(FlinkOptions.ORDERING_FIELDS.key(), "not_exists");
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(options2));
     catalog.open();
     ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");
@@ -457,6 +450,30 @@ public class TestHoodieCatalog {
   }
 
   @Test
+  public void testAlterTable() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    // create table
+    catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true);
+
+    DefaultCatalogTable oldTable = (DefaultCatalogTable) catalog.getTable(tablePath);
+    // same as old table
+    ResolvedCatalogTable newTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+            oldTable.getPartitionKeys(),
+            oldTable.getOptions(),
+            "test"),
+        CREATE_TABLE_SCHEMA
+    );
+    catalog.alterTable(tablePath, newTable, true);
+
+    // validate primary key property is not missing
+    DefaultCatalogTable table = (DefaultCatalogTable) catalog.getTable(tablePath);
+    assertTrue(table.getUnresolvedSchema().getPrimaryKey().isPresent());
+    assertTrue(table.isPartitioned());
+  }
+
+  @Test
   public void testDropPartition() throws Exception {
     ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
     // create table
@@ -489,5 +506,10 @@ public class TestHoodieCatalog {
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
     assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
     assertFalse(catalog.partitionExists(tablePath, partitionSpec));
+  }
+
+  @Override
+  AbstractCatalog getCatalog() {
+    return catalog;
   }
 }

@@ -27,10 +27,12 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -51,12 +53,13 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -85,17 +88,23 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.keygen.constant.KeyGeneratorType.USER_PROVIDED;
 import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 
 /**
@@ -168,7 +177,7 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
+  private Option<HoodieIndexMetadata> indexMetadataOpt;
   private HoodieTableFormat tableFormat;
 
   /**
@@ -176,10 +185,9 @@ public class HoodieTableMetaClient implements Serializable {
    * Can only be called if table already exists
    */
   protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
-                                ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
+                                  ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                   HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig) {
-    LOG.info("Loading HoodieTableMetaClient from " + basePath);
+    LOG.debug("Loading HoodieTableMetaClient from " + basePath);
     this.timeGeneratorConfig = timeGeneratorConfig;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
@@ -187,8 +195,8 @@ public class HoodieTableMetaClient implements Serializable {
     this.storage = storage;
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
-    this.tableConfig = new HoodieTableConfig(this.storage, metaPath, recordMergeMode, payloadClassName, recordMergerStrategy);
-    this.indexMetadataOpt = getIndexMetadata();
+    this.tableConfig = new HoodieTableConfig(this.storage, metaPath);
+    this.indexMetadataOpt = readIndexDefFromStorage(this.storage, this.basePath, this.tableConfig);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -205,7 +213,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
+    LOG.debug("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
@@ -258,6 +266,13 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       writeIndexMetadataToStorage();
+      String indexMetaPath = getIndexDefinitionPath();
+      // update table config if necessary
+      if (!tableConfig.getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !tableConfig.getRelativeIndexDefinitionPath().isPresent()) {
+        tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(basePath, new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(storage, metaPath, tableConfig.getProps());
+      }
     }
     return updateIndexDefn;
   }
@@ -271,6 +286,9 @@ public class HoodieTableMetaClient implements Serializable {
     checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     writeIndexMetadataToStorage();
+    if (indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
+      indexMetadataOpt = Option.empty();
+    }
   }
 
   /**
@@ -307,6 +325,7 @@ public class HoodieTableMetaClient implements Serializable {
       // Ensure we write out valid index metadata.
       indexMetadata.getIndexDefinitions().values().forEach(d ->
           ValidationUtils.checkArgument(isValidIndexDefinition(tableVersion, d), "Found invalid index definition " + d));
+      HoodieIndexMetadata.validateIndexMetadata(indexMetadata);
       // TODO[HUDI-9094]: should not write byte array directly
       FileIOUtils.createFileInPath(storage, new StoragePath(indexDefinitionPath),
           Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
@@ -319,20 +338,16 @@ public class HoodieTableMetaClient implements Serializable {
    * Returns Option of {@link HoodieIndexMetadata} from index definition file if present, else returns empty Option.
    */
   public Option<HoodieIndexMetadata> getIndexMetadata() {
-    if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
-      return indexMetadataOpt;
-    }
-    Option<HoodieIndexMetadata> indexDefOption = Option.empty();
-    if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
-    }
-    return indexDefOption;
+    return indexMetadataOpt;
   }
 
-  private static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
-      StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
-    StoragePath indexDefinitionPath =
-        new StoragePath(basePath, relativeIndexDefinitionPath);
+  private static Option<HoodieIndexMetadata> readIndexDefFromStorage(
+      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig) {
+    Option<String> indexDefinitionPathOpt = tableConfig.getRelativeIndexDefinitionPath();
+    if (indexDefinitionPathOpt.isEmpty() || StringUtils.isNullOrEmpty(indexDefinitionPathOpt.get())) {
+      return Option.empty();
+    }
+    StoragePath indexDefinitionPath = new StoragePath(basePath, indexDefinitionPathOpt.get());
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
@@ -341,7 +356,7 @@ public class HoodieTableMetaClient implements Serializable {
         return Option.of(new HoodieIndexMetadata());
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load index definition at path: " + relativeIndexDefinitionPath, e);
+      throw new HoodieIOException("Could not load index definition at path: " + indexDefinitionPath, e);
     }
   }
 
@@ -352,8 +367,6 @@ public class HoodieTableMetaClient implements Serializable {
         .setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
         .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig)
         .setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion))
-        .setPayloadClassName(null)
-        .setRecordMergerStrategy(null)
         .setTimeGeneratorConfig(oldMetaClient.timeGeneratorConfig)
         .setFileSystemRetryConfig(oldMetaClient.fileSystemRetryConfig).build();
   }
@@ -889,18 +902,16 @@ public class HoodieTableMetaClient implements Serializable {
 
   private static HoodieTableMetaClient newMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                                      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                                     RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
                                                      HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                                      HoodieMetaserverConfig metaserverConfig) {
     if (metaserverConfig.isMetaserverEnabled()) {
       return (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
           new Class<?>[] {HoodieStorage.class, String.class, ConsistencyGuardConfig.class, RecordMergeMode.class, String.class, String.class, HoodieTimeGeneratorConfig.class,
               FileSystemRetryConfig.class, Option.class, Option.class, HoodieMetaserverConfig.class},
-          storage, basePath, consistencyGuardConfig, recordMergeMode, payloadClassName, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig,
+          storage, basePath, consistencyGuardConfig, timeGeneratorConfig, fileSystemRetryConfig,
           Option.ofNullable(metaserverConfig.getDatabaseName()), Option.ofNullable(metaserverConfig.getTableName()), metaserverConfig);
     } else {
-      return new HoodieTableMetaClient(storage, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, recordMergeMode, payloadClassName, recordMergerStrategy,
-          timeGeneratorConfig, fileSystemRetryConfig);
+      return new HoodieTableMetaClient(storage, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, timeGeneratorConfig, fileSystemRetryConfig);
     }
   }
 
@@ -917,9 +928,6 @@ public class HoodieTableMetaClient implements Serializable {
     private HoodieStorage storage;
     private String basePath;
     private boolean loadActiveTimelineOnLoad = false;
-    private String payloadClassName = null;
-    private RecordMergeMode recordMergeMode = null;
-    private String recordMergerStrategy = null;
     private HoodieTimeGeneratorConfig timeGeneratorConfig = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
@@ -948,21 +956,6 @@ public class HoodieTableMetaClient implements Serializable {
 
     public Builder setLoadActiveTimelineOnLoad(boolean loadActiveTimelineOnLoad) {
       this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-      return this;
-    }
-
-    public Builder setPayloadClassName(String payloadClassName) {
-      this.payloadClassName = payloadClassName;
-      return this;
-    }
-
-    public Builder setRecordMergerStrategy(String recordMergerStrategy) {
-      this.recordMergerStrategy = recordMergerStrategy;
-      return this;
-    }
-
-    public Builder setRecordMergeMode(RecordMergeMode recordMergeMode) {
-      this.recordMergeMode = recordMergeMode;
       return this;
     }
 
@@ -1008,8 +1001,7 @@ public class HoodieTableMetaClient implements Serializable {
         storage = getStorage(new StoragePath(basePath), conf, consistencyGuardConfig, fileSystemRetryConfig);
       }
       return newMetaClient(storage, basePath,
-          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, recordMergeMode, payloadClassName,
-          recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig, metaserverConfig);
+          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, timeGeneratorConfig, fileSystemRetryConfig, metaserverConfig);
     }
   }
 
@@ -1069,7 +1061,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String timelinePath;
     private String timelineHistoryPath;
     private String baseFileFormat;
-    private String preCombineField;
+    private String orderingFields;
     private String partitionFields;
     private Boolean cdcEnabled;
     private String cdcSupplementalLoggingMode;
@@ -1091,6 +1083,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     private String indexDefinitionPath;
     private String tableFormat;
+    private Pair<String, String> deleteFieldAndMarker;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1190,8 +1183,12 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setPreCombineField(String preCombineField) {
-      this.preCombineField = preCombineField;
+    /**
+     * Sets ordering fields as a comma separated string in the table
+     * @param orderingFieldsAsString - Comma separated ordering fields which need to be set for the table
+     */
+    public TableBuilder setOrderingFields(String orderingFieldsAsString) {
+      this.orderingFields = orderingFieldsAsString;
       return this;
     }
 
@@ -1295,6 +1292,21 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    /**
+     * When the value in the specified field matches the marker value, the record is considered a deletion.
+     * @param deleteFieldName the field name which should be checked for deletion marker value
+     * @param markerValue the value to compare against
+     * @return the builder instance
+     */
+    public TableBuilder setRecordDeleteFieldAndMarker(String deleteFieldName, String markerValue) {
+      // check that parameters are not null or empty
+      if (StringUtils.isNullOrEmpty(deleteFieldName) || StringUtils.isNullOrEmpty(markerValue)) {
+        return this;
+      }
+      this.deleteFieldAndMarker = Pair.of(deleteFieldName, markerValue);
+      return this;
+    }
+
     public TableBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (containsConfigProperty(props, configProperty)) {
@@ -1394,8 +1406,8 @@ public class HoodieTableMetaClient implements Serializable {
         setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
       }
 
-      if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)) {
-        setPreCombineField(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+      if (hoodieConfig.contains(HoodieTableConfig.ORDERING_FIELDS)) {
+        setOrderingFields(hoodieConfig.getString(HoodieTableConfig.ORDERING_FIELDS));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_FIELDS)) {
         setPartitionFields(
@@ -1451,6 +1463,19 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH)) {
         setIndexDefinitionPath(hoodieConfig.getString(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH));
       }
+      // set delete field and marker value, if both are present
+      // check if config is prefixed for the table config or passed in from older write config properties
+      if (hoodieConfig.contains(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY)) {
+        String deleteFieldName = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY);
+        String markerValue = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER);
+        setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
+      }
+      // Check if legacy payload configs are provided. The delete key and marker were only used with the DefaultHoodieRecordPayload.
+      if (hoodieConfig.getStringOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME, "").equals(DefaultHoodieRecordPayload.class.getName()) && hoodieConfig.contains(DELETE_KEY)) {
+        String deleteFieldName = hoodieConfig.getString(DELETE_KEY);
+        String markerValue = hoodieConfig.getString(DELETE_MARKER);
+        setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
+      }
       return this;
     }
 
@@ -1475,14 +1500,6 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
-
-      Triple<RecordMergeMode, String, String> mergeConfigs =
-          HoodieTableConfig.inferCorrectMergingBehavior(
-              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineField,
-              tableVersion);
-      tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
-      tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-      tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
 
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);
@@ -1527,8 +1544,8 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
       }
 
-      if (StringUtils.nonEmpty(preCombineField)) {
-        tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELD, preCombineField);
+      if (StringUtils.nonEmpty(orderingFields)) {
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, orderingFields);
       }
 
       if (null != partitionFields) {
@@ -1547,9 +1564,17 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.fromClassName(keyGeneratorClassProp).name());
+        KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+        if (USER_PROVIDED == type) {
+          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        }
       } else if (null != keyGeneratorType) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
+        checkArgument(!keyGeneratorType.equals(USER_PROVIDED.name()),
+            String.format("When key generator type is %s, the key generator class must be set properly",
+                USER_PROVIDED.name()));
+        KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));
@@ -1584,6 +1609,27 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != tableFormat) {
         tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
+      // For table version <= 8
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        Triple<RecordMergeMode, String, String> mergeConfigs =
+            inferMergingConfigsForPreV9Table(
+                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
+                tableVersion);
+        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
+        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
+        tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
+      } else { // For table version >= 9
+        Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
+            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
+        for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
+          tableConfig.setValue(config.getKey(), config.getValue());
+        }
+      }
+      if (null != deleteFieldAndMarker) {
+        tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, deleteFieldAndMarker.getLeft());
+        tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, deleteFieldAndMarker.getRight());
+      }
+
       return tableConfig.getProps();
     }
 

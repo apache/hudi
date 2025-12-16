@@ -27,12 +27,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -41,8 +40,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Validator framework to run sql queries and compare table state at different locations.
  */
+@Slf4j
 public abstract class SqlQueryPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SparkPreCommitValidator<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryPreCommitValidator.class);
   private static final AtomicInteger TABLE_COUNTER = new AtomicInteger(0);
 
   public SqlQueryPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
@@ -61,7 +60,7 @@ public abstract class SqlQueryPreCommitValidator<T, I, K, O extends HoodieData<W
     before.registerTempTable(hoodieTableBeforeCurrentCommit);
     after.registerTempTable(hoodieTableWithInflightCommit);
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-    SQLContext sqlContext = new SQLContext(jsc);
+    SQLContext sqlContext = SQLContext.getOrCreate(jsc.sc());
 
     String[] queries = getQueriesToRun();
 
@@ -79,9 +78,9 @@ public abstract class SqlQueryPreCommitValidator<T, I, K, O extends HoodieData<W
   }
   
   protected void printAllRowsIfDebugEnabled(Dataset<Row> dataset) {
-    if (LOG.isDebugEnabled()) {
+    if (log.isDebugEnabled()) {
       dataset = dataset.cache();
-      LOG.debug("Printing all rows from query validation:");
+      log.debug("Printing all rows from query validation:");
       dataset.show(Integer.MAX_VALUE,false);
     }
   }

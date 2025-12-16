@@ -20,14 +20,15 @@
 package org.apache.hudi.merge;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
@@ -47,10 +48,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * This can be used by any Spark {@link HoodieRecordMerger} implementation.
  */
 public class SparkRecordMergingUtils {
-  private static final Map<Schema, Map<Integer, StructField>> FIELD_ID_TO_FIELD_MAPPING_CACHE = new ConcurrentHashMap<>();
-  private static final Map<Schema, Map<String, Integer>> FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
-  private static final Map<Pair<Pair<Schema, Schema>, Schema>,
-      Pair<Map<Integer, StructField>, Pair<StructType, Schema>>> MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
+  private static final Map<HoodieSchema, Map<Integer, StructField>> FIELD_ID_TO_FIELD_MAPPING_CACHE = new ConcurrentHashMap<>();
+  private static final Map<HoodieSchema, Map<String, Integer>> FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Pair<Pair<HoodieSchema, HoodieSchema>, HoodieSchema>,
+      Pair<Map<Integer, StructField>, Pair<StructType, HoodieSchema>>> MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Merges records which can contain partial updates.
@@ -92,28 +93,28 @@ public class SparkRecordMergingUtils {
    * ts | price | tags
    * 16 |  2.8  | fruit,juicy
    *
-   * @param older        Older {@link HoodieSparkRecord}.
-   * @param oldSchema    Schema of the older record.
-   * @param newer        Newer {@link HoodieSparkRecord}.
-   * @param newSchema    Schema of the newer record.
-   * @param readerSchema Reader schema containing all the fields to read. This is used to maintain
-   *                     the ordering of the fields of the merged record.
-   * @param props        Configuration in {@link TypedProperties}.
+   * @param older         Older {@link HoodieSparkRecord}.
+   * @param oldSchema     Schema of the older record.
+   * @param newer         Newer {@link HoodieSparkRecord}.
+   * @param newSchema     Schema of the newer record.
+   * @param readerSchema  Reader schema containing all the fields to read. This is used to maintain
+   *                      the ordering of the fields of the merged record.
+   * @param recordContext Record context for working with the records.
    * @return The merged record and schema.
    */
-  public static Pair<HoodieRecord, Schema> mergePartialRecords(HoodieSparkRecord older,
-                                                               Schema oldSchema,
-                                                               HoodieSparkRecord newer,
-                                                               Schema newSchema,
-                                                               Schema readerSchema,
-                                                               TypedProperties props) {
+  public static BufferedRecord<InternalRow> mergePartialRecords(BufferedRecord<InternalRow> older,
+                                                                HoodieSchema oldSchema,
+                                                                BufferedRecord<InternalRow> newer,
+                                                                HoodieSchema newSchema,
+                                                                HoodieSchema readerSchema,
+                                                                RecordContext<InternalRow> recordContext) {
     // The merged schema contains fields that only appear in either older and/or newer record
-    Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mergedSchemaPair =
+    Pair<Map<Integer, StructField>, Pair<StructType, HoodieSchema>> mergedSchemaPair =
         getCachedMergedSchema(oldSchema, newSchema, readerSchema);
     boolean isNewerPartial = isPartial(newSchema, mergedSchemaPair.getRight().getRight());
     if (isNewerPartial) {
-      InternalRow oldRow = older.getData();
-      InternalRow newPartialRow = newer.getData();
+      InternalRow oldRow = older.getRecord();
+      InternalRow newPartialRow = newer.getRecord();
 
       Map<Integer, StructField> mergedIdToFieldMapping = mergedSchemaPair.getLeft();
       Map<String, Integer> oldNameToIdMapping = getCachedFieldNameToIdMapping(oldSchema);
@@ -131,22 +132,20 @@ public class SparkRecordMergingUtils {
         }
       }
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
-
-      HoodieSparkRecord mergedSparkRecord = new HoodieSparkRecord(
-          mergedRow, mergedSchemaPair.getRight().getLeft());
-      return Pair.of(mergedSparkRecord, mergedSchemaPair.getRight().getRight());
+      return BufferedRecords.fromEngineRecord(mergedRow, mergedSchemaPair.getRight().getRight(),
+          recordContext, newer.getOrderingValue(), newer.getRecordKey(), newer.isDelete());
     } else {
-      return Pair.of(newer, newSchema);
+      return newer;
     }
   }
 
   /**
-   * @param avroSchema Avro schema.
+   * @param providedSchema provided schema.
    * @return The field ID to {@link StructField} instance mapping.
    */
-  public static Map<Integer, StructField> getCachedFieldIdToFieldMapping(Schema avroSchema) {
-    return FIELD_ID_TO_FIELD_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+  public static Map<Integer, StructField> getCachedFieldIdToFieldMapping(HoodieSchema providedSchema) {
+    return FIELD_ID_TO_FIELD_MAPPING_CACHE.computeIfAbsent(providedSchema, schema -> {
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
       Map<Integer, StructField> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
 
@@ -160,12 +159,12 @@ public class SparkRecordMergingUtils {
   }
 
   /**
-   * @param avroSchema Avro schema.
+   * @param providedSchema provided schema.
    * @return The field name to ID mapping.
    */
-  public static Map<String, Integer> getCachedFieldNameToIdMapping(Schema avroSchema) {
-    return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+  public static Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema providedSchema) {
+    return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(providedSchema, schema -> {
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
 
@@ -186,16 +185,16 @@ public class SparkRecordMergingUtils {
    * @param newSchema    New schema.
    * @param readerSchema Reader schema containing all the fields to read.
    * @return The ID to {@link StructField} instance mapping of the merged schema, and the
-   * {@link StructType} and Avro schema of the merged schema.
+   * {@link StructType} and {@link HoodieSchema} of the merged schema.
    */
-  public static Pair<Map<Integer, StructField>, Pair<StructType, Schema>> getCachedMergedSchema(Schema oldSchema,
-                                                                                                Schema newSchema,
-                                                                                                Schema readerSchema) {
+  public static Pair<Map<Integer, StructField>, Pair<StructType, HoodieSchema>> getCachedMergedSchema(HoodieSchema oldSchema,
+                                                                                                      HoodieSchema newSchema,
+                                                                                                      HoodieSchema readerSchema) {
     return MERGED_SCHEMA_CACHE.computeIfAbsent(
         Pair.of(Pair.of(oldSchema, newSchema), readerSchema), schemaPair -> {
-          Schema schema1 = schemaPair.getLeft().getLeft();
-          Schema schema2 = schemaPair.getLeft().getRight();
-          Schema refSchema = schemaPair.getRight();
+          HoodieSchema schema1 = schemaPair.getLeft().getLeft();
+          HoodieSchema schema2 = schemaPair.getLeft().getRight();
+          HoodieSchema refSchema = schemaPair.getRight();
           Map<String, Integer> nameToIdMapping1 = getCachedFieldNameToIdMapping(schema1);
           Map<String, Integer> nameToIdMapping2 = getCachedFieldNameToIdMapping(schema2);
           // Mapping of field ID/position to the StructField instance of the readerSchema
@@ -219,18 +218,18 @@ public class SparkRecordMergingUtils {
             }
           }
           StructType mergedStructType = new StructType(mergedFieldList.toArray(new StructField[0]));
-          Schema mergedSchema = AvroSchemaCache.intern(AvroConversionUtils.convertStructTypeToAvroSchema(
-              mergedStructType, readerSchema.getName(), readerSchema.getNamespace()));
+          HoodieSchema mergedSchema = HoodieSchemaCache.intern(HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
+              mergedStructType, readerSchema.getName(), readerSchema.getNamespace().orElse(null))));
           return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
         });
   }
 
   /**
-   * @param schema       Avro schema to check.
+   * @param schema       Schema to check.
    * @param mergedSchema The merged schema for the merged record.
-   * @return whether the Avro schema is partial compared to the merged schema.
+   * @return whether the schema is partial compared to the merged schema.
    */
-  public static boolean isPartial(Schema schema, Schema mergedSchema) {
+  public static boolean isPartial(HoodieSchema schema, HoodieSchema mergedSchema) {
     return !schema.equals(mergedSchema);
   }
 }

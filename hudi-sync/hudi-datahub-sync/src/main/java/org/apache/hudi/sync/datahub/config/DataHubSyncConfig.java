@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
@@ -36,6 +37,9 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
 
@@ -115,6 +119,63 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .defaultValue(true)
       .markAdvanced()
       .withDocumentation("Suppress exceptions during DataHub sync. This is true by default to ensure that when running inline with other jobs, the sync does not fail the job.");
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATABASE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.database.name")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_DATABASE_NAME.key()))
+          .or(() -> Option.of(cfg.getStringOrDefault(DATABASE_NAME, META_SYNC_DATABASE_NAME.defaultValue()))))
+      .markAdvanced()
+      .withDocumentation("The name of the destination database that we should sync the hudi table to.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TABLE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.table.name")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_TABLE_NAME.key()))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY)))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
+      .markAdvanced()
+      .withDocumentation("The name of the destination table that we should sync the hudi table to.");
+
+  // TLS Configuration Properties
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_CA_CERT_PATH = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.ca.cert.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Path to the CA certificate file for TLS verification. "
+          + "Used when connecting to DataHub over HTTPS with custom CA certificates.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_KEYSTORE_PATH = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.keystore.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Path to the keystore file for TLS client authentication. "
+          + "Used when connecting to DataHub over HTTPS with mutual TLS authentication.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.keystore.password")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Password for the keystore file. Optional but recommended for security. "
+          + "If not provided, an empty password will be used.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.truststore.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Path to the truststore file for TLS server verification. "
+          + "Alternative to CA certificate file for trust management.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.truststore.password")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Password for the truststore file. Optional but recommended for security. "
+          + "If not provided, an empty password will be used.");
 
   public DataHubSyncConfig(Properties props) {
     super(props);
@@ -136,7 +197,16 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
 
   public RestEmitter getRestEmitter() {
     if (contains(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS)) {
-      return ((DataHubEmitterSupplier) ReflectionUtils.loadClass(getString(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS))).get();
+      String supplierClass = getString(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS);
+      
+      // Check if the supplier has a constructor that takes TypedProperties
+      if (ReflectionUtils.hasConstructor(supplierClass, new Class<?>[] {TypedProperties.class})) {
+        return ((DataHubEmitterSupplier) ReflectionUtils.loadClass(supplierClass, 
+            new Class<?>[] {TypedProperties.class}, props)).get();
+      } else {
+        // Fall back to no-arg constructor for backward compatibility
+        return ((DataHubEmitterSupplier) ReflectionUtils.loadClass(supplierClass)).get();
+      }
     } else if (contains(META_SYNC_DATAHUB_EMITTER_SERVER)) {
       return RestEmitter.create(b -> b.server(getString(META_SYNC_DATAHUB_EMITTER_SERVER)).token(getStringOrDefault(META_SYNC_DATAHUB_EMITTER_TOKEN, null)));
     } else {
@@ -177,6 +247,21 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--emitter-supplier-class"}, description = "Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.")
     public String emitterSupplierClass;
 
+    @Parameter(names = {"--tls-ca-cert-path"}, description = "Path to the CA certificate file for TLS verification when connecting to DataHub over HTTPS with custom CA certificates.")
+    public String tlsCaCertPath;
+
+    @Parameter(names = {"--tls-keystore-path"}, description = "Path to the keystore file for TLS client authentication.")
+    public String tlsKeystorePath;
+
+    @Parameter(names = {"--tls-keystore-password"}, description = "Password for the keystore file. Optional but recommended for security.")
+    public String tlsKeystorePassword;
+
+    @Parameter(names = {"--tls-truststore-path"}, description = "Path to the truststore file for TLS server verification.")
+    public String tlsTruststorePath;
+
+    @Parameter(names = {"--tls-truststore-password"}, description = "Password for the truststore file. Optional but recommended for security.")
+    public String tlsTruststorePassword;
+
     @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its "
         + "corresponding DataPlatform entity within Datahub")
     public String dataPlatformName;
@@ -187,6 +272,12 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
 
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
     public String datasetEnv;
+
+    @Parameter(names = {"--database-name"}, description = "Database name to use for datahub sync")
+    public String databaseName;
+
+    @Parameter(names = {"--table-name"}, description = "Table name to use for datahub sync")
+    public String tableName;
 
     @Parameter(names = {
         "--domain"}, description = "Domain identifier for the dataset. When provided all datasets will be attached to the provided domain. Must be in urn form (e.g., urn:li:domain:_domain_id).")
@@ -206,6 +297,11 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SERVER.key(), emitterServer);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), emitterToken);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), tlsCaCertPath);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), tlsKeystorePath);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD.key(), tlsKeystorePassword);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), tlsTruststorePath);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), tlsTruststorePassword);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), dataPlatformName);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME.key(), dataPlatformInstanceName);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_ENV.key(), datasetEnv);
@@ -216,6 +312,8 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       } else {
         props.setProperty(META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS.key(), String.valueOf(suppressExceptions));
       }
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TABLE_NAME.key(), tableName);
       return props;
     }
   }

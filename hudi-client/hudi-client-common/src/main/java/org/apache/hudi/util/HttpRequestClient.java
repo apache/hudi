@@ -24,11 +24,10 @@ import org.apache.hudi.exception.HoodieException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
@@ -36,8 +35,8 @@ import java.util.Map;
 /**
  * Helper class for executing timeline server requests.
  */
+@Slf4j
 public class HttpRequestClient {
-  private static final Logger LOG = LoggerFactory.getLogger(HttpRequestClient.class);
   private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private final String serverHost;
   private final int serverPort;
@@ -65,7 +64,7 @@ public class HttpRequestClient {
       try {
         return executeRequest(requestPath, queryParameters, reference, method);
       } catch (IOException e) {
-        LOG.warn("Failed to execute request (" + requestPath + ") to timeline server", e);
+        log.warn("Failed to execute request ({}) to timeline server", requestPath, e);
       }
     }
     throw new HoodieException("Failed to execute timeline server request (" + requestPath + ")");
@@ -79,7 +78,7 @@ public class HttpRequestClient {
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    LOG.debug("Sending request : ( {} )", url);
+    log.debug("Sending request : ( {} )", url);
     Response response;
     int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {

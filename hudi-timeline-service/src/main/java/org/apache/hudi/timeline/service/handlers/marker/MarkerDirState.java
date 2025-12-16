@@ -53,7 +53,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
@@ -222,12 +222,12 @@ public class MarkerDirState implements Serializable {
             try {
               conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
             } catch (HoodieEarlyConflictDetectionException he) {
-              LOG.warn("Detected the write conflict due to a concurrent writer, "
+              LOG.error("Detected the write conflict due to a concurrent writer, "
                   + "failing the marker creation as the early conflict detection is enabled", he);
               future.setResult(false);
               continue;
             } catch (Exception e) {
-              LOG.warn("Failed to execute early conflict detection.", e);
+              LOG.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
               // When early conflict detection fails to execute, we still allow the marker creation
               // to continue
               addMarkerToMap(fileIndex, markerName);

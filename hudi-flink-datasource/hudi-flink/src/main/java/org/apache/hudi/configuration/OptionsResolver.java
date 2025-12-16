@@ -152,12 +152,12 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns the preCombine field
+   * Returns the ordering fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
-  public static String getPreCombineField(Configuration conf) {
-    final String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    return preCombineField.equals(FlinkOptions.NO_PRE_COMBINE) ? null : preCombineField;
+  public static String getOrderingFieldsStr(Configuration conf) {
+    final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
+    return orderingFields.equals(FlinkOptions.NO_PRE_COMBINE) ? null : orderingFields;
   }
 
   /**
@@ -510,6 +510,14 @@ public class OptionsResolver {
     } catch (Throwable e) {
       throw new HoodieException("Could not create custom insert partitioner " + insertPartitionerClass, e);
     }
+  }
+
+  /**
+   * Returns whether complex keygen encodes single record key with field name.
+   */
+  public static boolean useComplexKeygenNewEncoding(Configuration conf) {
+    return Boolean.parseBoolean(conf.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+        HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.defaultValue().toString()));
   }
 
   // -------------------------------------------------------------------------

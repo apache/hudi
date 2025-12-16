@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -30,29 +29,28 @@ import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
 
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 5 to 6.
  * Since we do not write/read compaction plan from .aux folder anyone, the
  * upgrade handler will delete compaction files from .aux folder.
  */
+@Slf4j
 public class FiveToSixUpgradeHandler implements UpgradeHandler {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FiveToSixUpgradeHandler.class);
-
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
     deleteCompactionRequestedFileFromAuxiliaryFolder(table);
 
-    return Collections.emptyMap();
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 
   /**
@@ -66,12 +64,12 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
 
     compactionTimeline.getInstantsAsStream().forEach(
         deleteInstant -> {
-          LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
+          log.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
           StoragePath metaFile = new StoragePath(metaClient.getMetaAuxiliaryPath(), factory.getFileName(deleteInstant));
           try {
             if (metaClient.getStorage().exists(metaFile)) {
               metaClient.getStorage().deleteFile(metaFile);
-              LOG.info("Deleted instant file in auxiliary meta path : " + metaFile);
+              log.info("Deleted instant file in auxiliary meta path : " + metaFile);
             }
           } catch (IOException e) {
             throw new HoodieUpgradeDowngradeException(HoodieTableVersion.FIVE.versionCode(), HoodieTableVersion.SIX.versionCode(), true, e);

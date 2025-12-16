@@ -20,8 +20,8 @@ package org.apache.hudi.client.transaction.lock.models;
 
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -40,6 +40,7 @@ import java.util.function.Supplier;
  * It should be responsible for the entire lifecycle of the heartbeat task.
  * Importantly, a new instance should be created for each lock provider.
  */
+@Slf4j
 @ThreadSafe
 public class LockProviderHeartbeatManager implements HeartbeatManager {
   public static long DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS = 15_000L;
@@ -123,8 +124,6 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private final Semaphore heartbeatSemaphore;
 
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(LockProviderHeartbeatManager.class);
-
   /**
    * Initializes a heartbeat manager.
    * @param ownerId The identifier for logging of who owns this heartbeat manager.
@@ -142,7 +141,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
             DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
             heartbeatFuncToExec,
             new Semaphore(1),
-            DEFAULT_LOGGER);
+            log);
   }
 
   @VisibleForTesting
@@ -179,7 +178,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     }
 
     if (this.hasActiveHeartbeat()) {
-      logger.warn("Owner {}: Heartbeat is already running.", ownerId);
+      logger.error("Owner {}: Heartbeat is already running.", ownerId);
       return false;
     }
     try {
@@ -213,7 +212,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
-      logger.warn("Owner {}: Heartbeat function did not succeed.", ownerId);
+      logger.error("Owner {}: Heartbeat function did not succeed.", ownerId);
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }
@@ -268,7 +267,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     if (heartbeatStillInflight) {
       // If waiting for cancellation was interrupted, do not log an error.
       if (Thread.currentThread().isInterrupted()) {
-        logger.warn("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
+        logger.info("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
       } else {
         logger.error("Owner {}: Heartbeat is still in flight!", ownerId);
       }
@@ -290,7 +289,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private synchronized boolean cancelRecurringHeartbeatTask(boolean mayInterruptIfRunning) {
     if (!this.hasActiveHeartbeat()) {
-      logger.warn("Owner {}: No active heartbeat task to stop.", ownerId);
+      logger.info("Owner {}: No active heartbeat task to stop.", ownerId);
       return true;
     }
 
@@ -310,7 +309,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       // means we wait any inflight task execution to finish synchronously.
       heartbeatStillInflight = !heartbeatSemaphore.tryAcquire(stopHeartbeatTimeoutMs, TimeUnit.MILLISECONDS);
       if (heartbeatStillInflight) {
-        logger.warn("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
+        logger.error("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();

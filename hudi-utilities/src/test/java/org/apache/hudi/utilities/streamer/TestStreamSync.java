@@ -21,13 +21,16 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
@@ -37,7 +40,6 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -46,12 +48,14 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -66,6 +70,7 @@ import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -147,7 +152,7 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     verify(spy, times(1)).getDeducedSchemaProvider(any(), any(), any());
 
     //make sure the deduced schema is actually used
-    assertEquals(deducedSchemaProvider.getTargetSchema(), batch.getSchemaProvider().getTargetSchema());
+    assertEquals(deducedSchemaProvider.getTargetHoodieSchema(), batch.getSchemaProvider().getTargetHoodieSchema());
 
     //make sure we use error table when we should
     verify(propsSpy, shouldTryWriteToErrorTable ? times(1) : never())
@@ -227,10 +232,10 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
   private SchemaProvider getSchemaProvider(String name, boolean isNullTargetSchema) {
     SchemaProvider schemaProvider = mock(SchemaProvider.class);
-    Schema sourceSchema = mock(Schema.class);
-    Schema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(Schema.class);
-    when(schemaProvider.getSourceSchema()).thenReturn(sourceSchema);
-    when(schemaProvider.getTargetSchema()).thenReturn(targetSchema);
+    HoodieSchema sourceSchema = mock(HoodieSchema.class);
+    HoodieSchema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(HoodieSchema.class);
+    when(schemaProvider.getSourceHoodieSchema()).thenReturn(sourceSchema);
+    when(schemaProvider.getTargetHoodieSchema()).thenReturn(targetSchema);
     when(sourceSchema.toString()).thenReturn(name + "SourceSchema");
     if (!isNullTargetSchema) {
       when(targetSchema.toString()).thenReturn(name + "TargetSchema");
@@ -388,5 +393,62 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     expected.put(CHECKPOINT_IGNORE_KEY, "test-ignore");
     expected.put(CHECKPOINT_RESET_KEY, "test-checkpoint");
     assertEquals(expected, result, "Should return default metadata when checkpoint is null");
+  }
+
+  @Nested
+  class TestsWithoutSetup {
+    @Test
+    void testParseOverridingMergeConfigsWithEmptyConfigs() {
+      List<String> configs = Collections.emptyList();
+      Option<Triple<RecordMergeMode, String, String>> result = StreamSync.parseOverridingMergeConfigs(configs);
+      assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testParseOverridingMergeConfigsWithNullConfigs() {
+      Option<Triple<RecordMergeMode, String, String>> result = StreamSync.parseOverridingMergeConfigs(null);
+      assertTrue(result.isEmpty(), "Should return empty option when configs list is null");
+    }
+
+    @Test
+    void testParseOverridingMergeConfigsWithNonMergeConfigs() {
+      List<String> configs = Arrays.asList(
+          "hoodie.datasource.write.table.name=testTable",
+          "hoodie.datasource.write.operation=upsert"
+      );
+      Option<Triple<RecordMergeMode, String, String>> result = StreamSync.parseOverridingMergeConfigs(configs);
+      assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testParseOverridingMergeConfigsWithSomeMergeConfigs() {
+      List<String> configs = Arrays.asList(
+          "hoodie.datasource.write.table.name=testTable",
+          "hoodie.datasource.write.operation=upsert",
+          "hoodie.write.record.merge.mode=COMMIT_TIME_ORDERING"
+      );
+      Option<Triple<RecordMergeMode, String, String>> result = StreamSync.parseOverridingMergeConfigs(configs);
+      assertTrue(result.isPresent());
+      assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, result.get().getLeft());
+      assertNull(result.get().getMiddle());
+      assertNull(result.get().getRight());
+    }
+
+    @Test
+    void testParseOverridingMergeConfigsWithMixedConfigs() {
+      List<String> configs = Arrays.asList(
+          "hoodie.datasource.write.table.name=testTable",
+          "hoodie.write.record.merge.mode=COMMIT_TIME_ORDERING",
+          "hoodie.datasource.write.operation=upsert",
+          "hoodie.write.record.merge.strategy.id=any_id",
+          "hoodie.datasource.write.payload.class=org.apache.hudi.common.model.OverwriteWithLatestPayload"
+      );
+      Option<Triple<RecordMergeMode, String, String>> result = StreamSync.parseOverridingMergeConfigs(configs);
+      assertTrue(result.isPresent());
+      Triple<RecordMergeMode, String, String> triple = result.get();
+      assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, triple.getLeft());
+      assertEquals("org.apache.hudi.common.model.OverwriteWithLatestPayload", triple.getMiddle());
+      assertEquals("any_id", triple.getRight());
+    }
   }
 }

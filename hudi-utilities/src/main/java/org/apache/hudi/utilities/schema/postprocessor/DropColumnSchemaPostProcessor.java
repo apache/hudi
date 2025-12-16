@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
@@ -68,8 +69,8 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
         this.config, SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN);
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn(String.format("Param %s is null or empty, return original schema",
-          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key()));
+      LOG.warn("Param {} is null or empty, return original schema",
+          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
     }
 
     // convert field to lowerCase for compare purpose
@@ -82,7 +83,7 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
     for (Schema.Field sourceField : sourceFields) {
       if (!columnsToDelete.contains(sourceField.name().toLowerCase(Locale.ROOT))) {
-        targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+        targetFields.add(createNewSchemaField(sourceField));
       }
     }
 

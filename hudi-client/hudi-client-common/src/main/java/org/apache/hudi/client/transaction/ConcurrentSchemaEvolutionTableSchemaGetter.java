@@ -33,11 +33,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.util.Lazy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -61,9 +60,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Helper class to read table schema. ONLY USE IT FOR SimpleConcurrentFileWritesConflictResolutionStrategy.
  */
+@Slf4j
 class ConcurrentSchemaEvolutionTableSchemaGetter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConcurrentSchemaEvolutionTableSchemaGetter.class);
 
   protected final HoodieTableMetaClient metaClient;
 
@@ -189,7 +187,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
             }
             return isValidSchemaStr;
           } catch (IOException e) {
-            LOG.warn("Failed to parse commit metadata for instant {} ", s, e);
+            log.warn("Failed to parse commit metadata for instant {} ", s, e);
           }
           return false;
         })

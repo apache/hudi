@@ -66,7 +66,10 @@ public final class SparkHoodieIndexFactory {
             throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }
       case RECORD_INDEX:
-        return new SparkMetadataTableRecordIndex(config);
+      case GLOBAL_RECORD_LEVEL_INDEX:
+        return new SparkMetadataTableGlobalRecordLevelIndex(config);
+      case RECORD_LEVEL_INDEX:
+        return new SparkMetadataTableRecordLevelIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -92,7 +95,10 @@ public final class SparkHoodieIndexFactory {
       case BUCKET:
         return false;
       case RECORD_INDEX:
+      case GLOBAL_RECORD_LEVEL_INDEX:
         return true;
+      case RECORD_LEVEL_INDEX:
+        return false;
       default:
         return createIndex(config).isGlobal();
     }

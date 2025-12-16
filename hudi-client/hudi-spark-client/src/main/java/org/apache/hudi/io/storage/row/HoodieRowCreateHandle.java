@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
@@ -39,11 +40,10 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -53,11 +53,10 @@ import java.util.function.Function;
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
  */
+@Slf4j
 public class HoodieRowCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowCreateHandle.class);
   private static final AtomicLong GLOBAL_SEQ_NO = new AtomicLong(1);
 
   private final HoodieTable table;
@@ -148,7 +147,7 @@ public class HoodieRowCreateHandle implements Serializable {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
 
-    LOG.info("New handle created for partition: {} with fileId {}", partitionPath, fileId);
+    log.info("New handle created for partition: {} with fileId {}", partitionPath, fileId);
   }
 
   /**
@@ -175,17 +174,18 @@ public class HoodieRowCreateHandle implements Serializable {
       //          and [[String]])
       //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
       //          over again)
+      UTF8String[] metaFields = new UTF8String[5];
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
-      UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
+      metaFields[3] = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
       // This is the only meta-field that is generated dynamically, hence conversion b/w
       // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
-      UTF8String seqId = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+      metaFields[1] = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
           : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
-      UTF8String writeCommitTime = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+      metaFields[0] = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
           : commitTime;
-
-      InternalRow updatedRow = new HoodieInternalRow(writeCommitTime, seqId, recordKey,
-          partitionPath, fileName, row, true);
+      metaFields[2] = recordKey;
+      metaFields[4] = fileName;
+      InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
@@ -243,7 +243,7 @@ public class HoodieRowCreateHandle implements Serializable {
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     for (Pair<HoodieRecordDelegate, Throwable> pair : writeStatus.getFailedRecords()) {
-      LOG.error("Failed to write {}", pair.getLeft(), pair.getRight());
+      log.error("Failed to write {}", pair.getLeft(), pair.getRight());
     }
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
     runtimeStats.setTotalCreateTime(currTimer.endTimer());

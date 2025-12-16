@@ -19,8 +19,8 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.IndexedRecord;
 
@@ -29,13 +29,21 @@ import org.apache.avro.generic.IndexedRecord;
  */
 public class AvroReaderContextFactory implements ReaderContextFactory<IndexedRecord> {
   private final HoodieTableMetaClient metaClient;
+  private final String payloadClassName;
+  private final TypedProperties props;
 
-  public AvroReaderContextFactory(HoodieTableMetaClient metaClient) {
+  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, TypedProperties props) {
+    this(metaClient, metaClient.getTableConfig().getPayloadClass(), props);
+  }
+
+  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName, TypedProperties props) {
     this.metaClient = metaClient;
+    this.payloadClassName = payloadClassName;
+    this.props = props;
   }
 
   @Override
   public HoodieReaderContext<IndexedRecord> getContext() {
-    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
+    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName, props);
   }
 }

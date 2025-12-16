@@ -19,12 +19,13 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -34,9 +35,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
+import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -93,7 +94,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   public interface HiveReaderCreator {
     org.apache.hadoop.mapred.RecordReader<NullWritable, ArrayWritable> getRecordReader(
         final org.apache.hadoop.mapred.InputSplit split,
-        final org.apache.hadoop.mapred.JobConf job
+        final org.apache.hadoop.mapred.JobConf job,
+        Schema dataSchema
     ) throws IOException;
   }
 
@@ -104,6 +106,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   private final InputSplit inputSplit;
   private final JobConf jobConfCopy;
   private final UnaryOperator<ArrayWritable> reverseProjection;
+  private final boolean containsBaseFile;
 
   public HoodieFileGroupReaderBasedRecordReader(HiveReaderCreator readerCreator,
                                                 final InputSplit split,
@@ -120,11 +123,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .setBasePath(tableBasePath)
         .build();
     String latestCommitTime = getLatestCommitTime(split, metaClient);
-    Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
-    Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
+    HoodieSchema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
+    HoodieSchema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
     this.readerContext = new HiveHoodieReaderContext(readerCreator,
-        getStoredPartitionFieldNames(jobConfCopy, tableSchema),
-        new ObjectInspectorCache(tableSchema, jobConfCopy), new HadoopStorageConfiguration(jobConfCopy),
+        getStoredPartitionFieldNames(jobConfCopy, tableSchema), new HadoopStorageConfiguration(jobConfCopy),
         metaClient.getTableConfig());
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
@@ -142,11 +144,13 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
+    FileSlice fileSlice = getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath);
+    this.containsBaseFile = fileSlice.getBaseFile().isPresent();
     this.recordIterator = HoodieFileGroupReader.<ArrayWritable>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestCommitTime)
-        .withFileSlice(getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath))
+        .withFileSlice(fileSlice)
         .withDataSchema(tableSchema)
         .withRequestedSchema(requestedSchema)
         .withProps(props)
@@ -156,10 +160,29 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .build()
         .getClosableIterator();
     // it expects the partition columns to be at the end
-    Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
+    HoodieSchema outputSchema = HoodieSchemaUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),
             partitionColumns.stream()).collect(Collectors.toList()));
-    this.reverseProjection = readerContext.reverseProjectRecord(requestedSchema, outputSchema);
+    this.reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(requestedSchema, outputSchema);
+  }
+
+  @VisibleForTesting
+  HoodieFileGroupReaderBasedRecordReader(
+      HiveHoodieReaderContext readerContext,
+      ClosableIterator<ArrayWritable> recordIterator,
+      ArrayWritable arrayWritable,
+      InputSplit inputSplit,
+      JobConf jobConf,
+      UnaryOperator<ArrayWritable> reverseProjection,
+      boolean containsBaseFile
+  ) {
+    this.readerContext = readerContext;
+    this.recordIterator = recordIterator;
+    this.arrayWritable = arrayWritable;
+    this.inputSplit = inputSplit;
+    this.jobConfCopy = jobConf;
+    this.reverseProjection = reverseProjection;
+    this.containsBaseFile = containsBaseFile;
   }
 
   @Override
@@ -184,7 +207,12 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public long getPos() throws IOException {
-    return readerContext.getPos();
+    if (this.containsBaseFile) {
+      return readerContext.getPos();
+    }
+
+    // for log only split, we return 0 to make it consistent with non HoodieFileGroupReader based Record Readers
+    return 0;
   }
 
   @Override
@@ -194,15 +222,20 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public float getProgress() throws IOException {
-    return readerContext.getProgress();
+    if (this.containsBaseFile) {
+      return readerContext.getProgress();
+    }
+
+    // for log only split, we return 0 to make it consistent with non HoodieFileGroupReader based Record Readers
+    return 0;
   }
 
   /**
    * List of partition fields that are actually written to the file
    */
   @VisibleForTesting
-  static List<String> getStoredPartitionFieldNames(JobConf jobConf, Schema writerSchema) {
-    return getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
+  static List<String> getStoredPartitionFieldNames(JobConf jobConf, HoodieSchema writerSchema) {
+    return getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n).isPresent()).collect(Collectors.toList());
   }
 
   public RealtimeSplit getSplit() {
@@ -213,12 +246,12 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return jobConfCopy;
   }
 
-  private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
+  private static HoodieSchema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
       Schema schema = tableSchemaResolver.getTableAvroSchema(latestCommitTime);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-      return HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf));
+      return HoodieSchema.fromAvroSchema(HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf)));
     } catch (Exception e) {
       throw new RuntimeException("Unable to get table schema", e);
     }
@@ -279,12 +312,12 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return null;
   }
 
-  private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
+  @VisibleForTesting
+  public static HoodieSchema createRequestedSchema(HoodieSchema tableSchema, JobConf jobConf) {
     String readCols = jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
     if (StringUtils.isNullOrEmpty(readCols)) {
-      Schema emptySchema = Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(),
-          tableSchema.getNamespace(), tableSchema.isError());
-      emptySchema.setFields(Collections.emptyList());
+      HoodieSchema emptySchema = HoodieSchema.createRecord(tableSchema.getName(), tableSchema.getDoc().orElse(null),
+          tableSchema.getNamespace().orElse(null), tableSchema.isError(), Collections.emptyList());
       return emptySchema;
     }
     // hive will handle the partition cols
@@ -297,7 +330,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     }
     // if they are actually written to the file, then it is ok to read them from the file
     tableSchema.getFields().forEach(f -> partitionColumns.remove(f.name().toLowerCase(Locale.ROOT)));
-    return HoodieAvroUtils.generateProjectionSchema(tableSchema,
-        Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
+    return HoodieSchemaUtils.generateProjectionSchema(tableSchema,
+        // The READ_COLUMN_NAMES_CONF_STR includes all columns from the query, including those used in the WHERE clause,
+        // so any column referenced in the filter (non-partition) will appear twice if already present in the project schema,
+        // here distinct() is used here to deduplicate the read columns.
+        Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).distinct().collect(Collectors.toList()));
   }
 }

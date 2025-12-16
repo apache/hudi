@@ -22,6 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -32,31 +35,29 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.MessageTypeParser;
 import software.amazon.awssdk.services.glue.model.Column;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 public class GlueTestUtil {
 
   public static TypedProperties glueSyncProps;
-  private static final String DB_NAME = "testdb";
-  private static final String TABLE_NAME = "test1";
+  public static final String DB_NAME = "testdb";
+  public static final String TABLE_NAME = "test1";
   private static String basePath;
   public static FileSystem fileSystem;
   private static HiveSyncConfig hiveSyncConfig;
@@ -69,10 +70,9 @@ public class GlueTestUtil {
     glueSyncProps = new TypedProperties();
     glueSyncProps.setProperty(HIVE_USER.key(), "");
     glueSyncProps.setProperty(HIVE_PASS.key(), "");
-    glueSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
-    glueSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), TABLE_NAME);
+    glueSyncProps.setProperty(GLUE_SYNC_DATABASE_NAME.key(), DB_NAME);
+    glueSyncProps.setProperty(GLUE_SYNC_TABLE_NAME.key(), TABLE_NAME);
     glueSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    glueSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     glueSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
     glueSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     glueSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
@@ -115,8 +115,12 @@ public class GlueTestUtil {
     createMetaFile(basePath, new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime), commitMetadata);
   }
 
-  public static MessageType getSimpleSchema() {
-    return MessageTypeParser.parseMessageType("message example_schema {" + "  required int32 id;" + "  required binary name (UTF8);" + "}");
+  public static HoodieSchema getSimpleSchema() {
+    return HoodieSchema.createRecord("example_schema", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
   }
 
   private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)

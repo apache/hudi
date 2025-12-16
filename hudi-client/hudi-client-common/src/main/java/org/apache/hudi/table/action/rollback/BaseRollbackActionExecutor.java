@@ -47,8 +47,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -60,9 +59,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
+@Slf4j
 public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackActionExecutor.class);
 
   protected final HoodieInstant instantToRollback;
   protected final boolean deleteInstants;
@@ -215,7 +213,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     if (!table.getIndex().rollbackCommit(instantToRollback.requestedTime())) {
       throw new HoodieRollbackException("Rollback index changes failed, for time :" + instantToRollback);
     }
-    LOG.info("Index rolled back for commits " + instantToRollback);
+    log.info("Index rolled back for commits " + instantToRollback);
   }
 
   public List<HoodieRollbackStat> doRollbackAndGetStats(HoodieRollbackPlan hoodieRollbackPlan) {
@@ -236,7 +234,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
     try {
       List<HoodieRollbackStat> stats = executeRollback(hoodieRollbackPlan);
-      LOG.info("Rolled back inflight instant " + instantTimeToRollback);
+      log.info("Rolled back inflight instant " + instantTimeToRollback);
       if (!isPendingCompaction) {
         rollBackIndex();
       }
@@ -290,7 +288,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         // when skipLocking is true, the caller should have already held the lock.
         table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant, rollbackMetadata,
             completedInstant -> table.getMetaClient().getTableFormat().completedRollback(completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-        LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+        log.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
     } finally {
       if (enableLocking) {
@@ -310,7 +308,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
                                                    HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
     if (deleteInstant) {
-      LOG.info("Deleting instant=" + instantToBeDeleted);
+      log.info("Deleting instant={}", instantToBeDeleted);
       activeTimeline.deletePending(instantToBeDeleted);
       if (instantToBeDeleted.isInflight() && !table.getMetaClient().getTimelineLayoutVersion().isNullVersion()) {
         // Delete corresponding requested instant
@@ -318,15 +316,15 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
             instantToBeDeleted.requestedTime());
         activeTimeline.deletePending(instantToBeDeleted);
       }
-      LOG.info("Deleted pending commit " + instantToBeDeleted);
+      log.info("Deleted pending commit {}", instantToBeDeleted);
     } else {
-      LOG.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
+      log.info("Rollback finished without deleting inflight instant file. Instant={}", instantToBeDeleted);
     }
   }
 
   protected void dropBootstrapIndexIfNeeded(HoodieInstant instantToRollback) {
     if (compareTimestamps(instantToRollback.requestedTime(), EQUALS, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)) {
-      LOG.info("Dropping bootstrap index as metadata bootstrap commit is getting rolled back !!");
+      log.info("Dropping bootstrap index as metadata bootstrap commit is getting rolled back !!");
       BootstrapIndex.getBootstrapIndex(table.getMetaClient()).dropIndex();
     }
   }
@@ -357,10 +355,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     for (HoodieInstant instant : instantsToBackup) {
       try {
         activeTimeline.copyInstant(instant, backupDir);
-        LOG.info("Copied instant {} to backup dir {} during rollback at {}", instant, backupDir, instantTime);
+        log.info("Copied instant {} to backup dir {} during rollback at {}", instant, backupDir, instantTime);
       } catch (HoodieIOException e) {
         // Ignoring error in backing up
-        LOG.warn("Failed to backup rollback instant", e);
+        log.warn("Failed to backup rollback instant", e);
       }
     }
   }

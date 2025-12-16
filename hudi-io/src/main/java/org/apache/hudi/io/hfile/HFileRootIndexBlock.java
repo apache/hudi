@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -100,30 +101,27 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
   }
 
   @Override
-  public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize());
-    for (BlockIndexEntry entry : entries) {
-      buf.putLong(entry.getOffset());
-      buf.putInt(entry.getSize());
+  public ByteBuffer getUncompressedBlockDataToWrite() throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(context.getBlockSize());
+    try (DataOutputStream outputStream = new DataOutputStream(baos)) {
+      for (BlockIndexEntry entry : entries) {
+        outputStream.writeLong(entry.getOffset());
+        outputStream.writeInt(entry.getSize());
 
-      // Key length + 2.
-      try {
-        byte[] keyLength = getVariableLengthEncodedBytes(
-            entry.getFirstKey().getLength() + SIZEOF_INT16);
-        buf.put(keyLength);
-      } catch (IOException e) {
-        throw new RuntimeException(
-            "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
+        // Key length + 2.
+        try {
+          byte[] keyLength = getVariableLengthEncodedBytes(
+              entry.getFirstKey().getLength() + SIZEOF_INT16);
+          outputStream.write(keyLength);
+        } catch (IOException e) {
+          throw new RuntimeException(
+              "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
+        }
+        // Key length.
+        outputStream.writeShort((short) entry.getFirstKey().getLength());
+        // Key.
+        outputStream.write(entry.getFirstKey().getBytes());
       }
-      // Key length.
-      buf.putShort((short) entry.getFirstKey().getLength());
-      // Key.
-      buf.put(entry.getFirstKey().getBytes());
-      // Copy to output stream.
-      baos.write(buf.array(), 0, buf.position());
-      // Clear the buffer.
-      buf.clear();
     }
 
     // Output all data in a buffer.

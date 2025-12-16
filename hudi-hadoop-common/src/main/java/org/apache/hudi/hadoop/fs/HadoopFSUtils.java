@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -399,7 +398,7 @@ public class HadoopFSUtils {
    */
   public static String getFileIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(1);
@@ -410,7 +409,7 @@ public class HadoopFSUtils {
    */
   public static String getDeltaCommitTimeFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(2);
@@ -565,34 +564,5 @@ public class HadoopFSUtils {
       }
     }
     return result;
-  }
-
-  public static Map<String, Boolean> deleteFilesParallelize(
-      HoodieTableMetaClient metaClient,
-      List<String> paths,
-      HoodieEngineContext context,
-      int parallelism,
-      boolean ignoreFailed) {
-    return HadoopFSUtils.parallelizeFilesProcess(context,
-        (FileSystem) metaClient.getStorage().getFileSystem(),
-        parallelism,
-        pairOfSubPathAndConf -> {
-          Path file = new Path(pairOfSubPathAndConf.getKey());
-          try {
-            FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
-            if (fs.exists(file)) {
-              return fs.delete(file, false);
-            }
-            return true;
-          } catch (IOException e) {
-            if (!ignoreFailed) {
-              throw new HoodieIOException("Failed to delete : " + file, e);
-            } else {
-              LOG.warn("Ignore failed deleting : " + file);
-              return true;
-            }
-          }
-        },
-        paths);
   }
 }

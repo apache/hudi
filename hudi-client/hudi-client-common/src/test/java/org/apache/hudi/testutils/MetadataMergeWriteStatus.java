@@ -23,6 +23,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,7 @@ import java.util.Map.Entry;
  */
 public class MetadataMergeWriteStatus extends WriteStatus {
 
+  @Getter(AccessLevel.PRIVATE)
   private Map<String, String> mergedMetadataMap = new HashMap<>();
 
   public MetadataMergeWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
@@ -60,12 +64,12 @@ public class MetadataMergeWriteStatus extends WriteStatus {
       if (!mergeToMap.containsKey(key)) {
         mergeToMap.put(key, "0");
       }
-      mergeToMap.put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
+      mergeToMap.put(key, addStrsAsLong(entry.getValue(), mergeToMap.get(key)));
     }
   }
 
-  private static String addStrsAsInt(String a, String b) {
-    return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
+  private static String addStrsAsLong(String a, String b) {
+    return String.valueOf(Long.parseLong(a) + Long.parseLong(b));
   }
 
   @Override
@@ -82,9 +86,5 @@ public class MetadataMergeWriteStatus extends WriteStatus {
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }
-  }
-
-  private Map<String, String> getMergedMetadataMap() {
-    return mergedMetadataMap;
   }
 }

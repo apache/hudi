@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -50,7 +51,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)
+      .defaultValue(HoodieTableConfig.getDefaultPayloadClassName())
       .markAdvanced()
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
         + "the record payload class to merge records in the log against each other, merge again with the base file and "
@@ -58,7 +59,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   /** @deprecated Use {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} and its methods instead */
   @Deprecated
-  public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
+  public static final ConfigProperty<String> ORDERING_FIELDS = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .noDefaultValue()
       .markAdvanced()
@@ -93,8 +94,10 @@ public class HoodiePayloadConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withPayloadOrderingField(String payloadOrderingField) {
-      payloadConfig.setValue(ORDERING_FIELD, String.valueOf(payloadOrderingField));
+    public Builder withPayloadOrderingFields(String payloadOrderingFields) {
+      if (StringUtils.nonEmpty(payloadOrderingFields)) {
+        payloadConfig.setValue(ORDERING_FIELDS, payloadOrderingFields);
+      }
       return this;
     }
 

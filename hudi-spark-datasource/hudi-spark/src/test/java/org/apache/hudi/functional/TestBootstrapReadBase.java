@@ -25,6 +25,7 @@ import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelect
 import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -47,10 +48,11 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
@@ -75,10 +77,11 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
   @BeforeEach
   public void setUp() throws Exception {
-    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/bootstrapBasePath";
-    hudiBasePath = tmpFolder.toAbsolutePath() + "/hudiBasePath";
-    bootstrapTargetPath = tmpFolder.toAbsolutePath() + "/bootstrapTargetPath";
-    initSparkContexts();
+    String randomUuid = UUID.randomUUID().toString();
+    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/bootstrapBasePath";
+    hudiBasePath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/hudiBasePath";
+    bootstrapTargetPath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/bootstrapTargetPath";
+    initSparkContexts(this.getClass().getSimpleName() + randomUuid);
   }
 
   @AfterEach
@@ -105,7 +108,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
         options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
       }
     }
-    options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    options.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     if (tableType.equals(MERGE_ON_READ)) {
       options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
     }
@@ -206,8 +209,18 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
   }
 
   protected void compareDf(Dataset<Row> df1, Dataset<Row> df2) {
-    assertEquals(0, df1.except(df2).count());
-    assertEquals(0, df2.except(df1).count());
+    Dataset<Row> difference1 = df1.except(df2);
+    long diff1Count = difference1.count();
+    if (diff1Count > 0) {
+      difference1.show(100, false);
+    }
+    Dataset<Row> difference2 = df2.except(df1);
+    long diff2Count = difference2.count();
+    if (diff2Count > 0) {
+      difference2.show(100, false);
+    }
+    assertEquals(0, diff1Count);
+    assertEquals(0, diff2Count);
   }
 
   protected void setupDirs()  {

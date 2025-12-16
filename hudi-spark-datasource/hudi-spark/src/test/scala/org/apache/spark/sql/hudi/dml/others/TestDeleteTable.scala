@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.SaveMode
@@ -50,30 +51,30 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+            // insert data to table
+            spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 10.0, 1000)
+            )
 
-          // insert data to table
-          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 10.0, 1000)
-          )
+            // delete data from table
+            spark.sql(s"delete from $tableName where id = 1")
+            checkAnswer(s"select count(1) from $tableName")(
+              Seq(0)
+            )
 
-          // delete data from table
-          spark.sql(s"delete from $tableName where id = 1")
-          checkAnswer(s"select count(1) from $tableName")(
-            Seq(0)
-          )
+            spark.sql(s"insert into $tableName select 2, 'a2', 10, 1000")
+            spark.sql(s"delete from $tableName where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(2, "a2", 10.0, 1000)
+            )
 
-          spark.sql(s"insert into $tableName select 2, 'a2', 10, 1000")
-          spark.sql(s"delete from $tableName where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(2, "a2", 10.0, 1000)
-          )
-
-          spark.sql(s"delete from $tableName")
-          checkAnswer(s"select count(1) from $tableName")(
-            Seq(0)
-          )
+            spark.sql(s"delete from $tableName")
+            checkAnswer(s"select count(1) from $tableName")(
+              Seq(0)
+            )
+          }
         }
       }
     }
@@ -82,57 +83,57 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
   test("Test Delete Table Without Primary Key") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        Seq (true, false).foreach { isPartitioned =>
-        val tableName = generateTableName
-        val partitionedClause = if (isPartitioned) {
-          "PARTITIONED BY (name)"
-        } else {
-          ""
-        }
-        // create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  price double,
-             |  ts long,
-             |  name string
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  type = '$tableType',
-             |  preCombineField = 'ts'
-             | )
-             | $partitionedClause
+        Seq(true, false).foreach { isPartitioned =>
+          val tableName = generateTableName
+          val partitionedClause = if (isPartitioned) {
+            "PARTITIONED BY (name)"
+          } else {
+            ""
+          }
+          // create table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  price double,
+               |  ts long,
+               |  name string
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | $partitionedClause
    """.stripMargin)
 
-        // test with optimized sql writes enabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+          // test with optimized sql writes enabled.
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
+            // insert data to table
+            spark.sql(s"insert into $tableName select 1, 10, 1000, 'a1'")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 10.0, 1000)
+            )
 
-        // insert data to table
-        spark.sql(s"insert into $tableName select 1, 10, 1000, 'a1'")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+            // delete data from table
+            spark.sql(s"delete from $tableName where id = 1")
+            checkAnswer(s"select count(1) from $tableName")(
+              Seq(0)
+            )
 
-        // delete data from table
-        spark.sql(s"delete from $tableName where id = 1")
-        checkAnswer(s"select count(1) from $tableName")(
-          Seq(0)
-        )
+            spark.sql(s"insert into $tableName select 2, 10, 1000, 'a2'")
+            spark.sql(s"delete from $tableName where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(2, "a2", 10.0, 1000)
+            )
 
-        spark.sql(s"insert into $tableName select 2, 10, 1000, 'a2'")
-        spark.sql(s"delete from $tableName where id = 1")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(2, "a2", 10.0, 1000)
-        )
-
-        spark.sql(s"delete from $tableName")
-        checkAnswer(s"select count(1) from $tableName")(
-          Seq(0)
-        )
+            spark.sql(s"delete from $tableName")
+            checkAnswer(s"select count(1) from $tableName")(
+              Seq(0)
+            )
+          }
+        }
       }
-    }
     }
   }
 
@@ -158,37 +159,38 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
+          // insert data to table
+          spark.sql(
+            s"""
+               |insert into $tableName
+               |values
+               |  (1, 'a1', cast(10.0 as double), 1000),
+               |  (2, 'a2', cast(20.0 as double), 1000),
+               |  (3, 'a2', cast(30.0 as double), 1000)
+               |""".stripMargin)
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a2", 30.0, 1000)
+          )
 
-        // insert data to table
-        spark.sql(
-          s"""
-             |insert into $tableName
-             |values
-             |  (1, 'a1', cast(10.0 as double), 1000),
-             |  (2, 'a2', cast(20.0 as double), 1000),
-             |  (3, 'a2', cast(30.0 as double), 1000)
-             |""".stripMargin)
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 20.0, 1000),
-          Seq(3, "a2", 30.0, 1000)
-        )
+          // delete data from table
+          spark.sql(s"delete from $tableName where id = 1")
 
-        // delete data from table
-        spark.sql(s"delete from $tableName where id = 1")
-
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(2, "a2", 20.0, 1000),
-          Seq(3, "a2", 30.0, 1000)
-        )
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a2", 30.0, 1000)
+          )
+        }
       }
     }
   }
 
   test("Test Delete Table On Non-PK Condition") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach {tableType =>
+      Seq("cow", "mor").foreach { tableType =>
+
         /** non-partitioned table */
         val tableName = generateTableName
         // create table
@@ -277,7 +279,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
   test("Test Delete Table with op upsert") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach {tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         // create table
         spark.sql(
@@ -304,7 +306,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
         // delete data from table
         spark.sql(s"delete from $tableName where id = 1")
-        checkAnswer(s"select count(1) from $tableName") (
+        checkAnswer(s"select count(1) from $tableName")(
           Seq(0)
         )
 
@@ -337,7 +339,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
             .option(HoodieWriteConfig.TBL_NAME.key, tableName)
             .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
             .option(RECORDKEY_FIELD.key, "id")
-            .option(PRECOMBINE_FIELD.key, "ts")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
             .option(PARTITIONPATH_FIELD.key, "dt")
             .option(URL_ENCODE_PARTITIONING.key(), urlencode)
             .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -353,16 +355,16 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
                |""".stripMargin)
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+            // delete 2021-10-01 partition
+            if (urlencode) {
+              spark.sql(s"""delete from $tableName where dt="2021/10/01"""")
+            } else {
+              spark.sql(s"delete from $tableName where dt='2021/10/01'")
+            }
 
-          // delete 2021-10-01 partition
-          if (urlencode) {
-            spark.sql(s"""delete from $tableName where dt="2021/10/01"""")
-          } else {
-            spark.sql(s"delete from $tableName where dt='2021/10/01'")
+            checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
           }
-
-          checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
         }
       }
     }

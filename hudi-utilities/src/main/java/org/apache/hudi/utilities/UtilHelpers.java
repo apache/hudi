@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.SparkJdbcUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -224,8 +225,8 @@ public class UtilHelpers {
   }
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
-    if (schemaProvider != null && schemaProvider.getSourceSchema() != null && schemaProvider.getSourceSchema() != InputBatch.NULL_SCHEMA) {
-      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema());
+    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != InputBatch.NULL_SCHEMA) {
+      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     }
     return null;
   }
@@ -503,7 +504,7 @@ public class UtilHelpers {
    * @return
    * @throws Exception
    */
-  public static Schema getJDBCSchema(Map<String, String> options) {
+  public static HoodieSchema getJDBCSchema(Map<String, String> options) {
     Connection conn;
     String url;
     String table;
@@ -528,11 +529,13 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = SparkJdbcUtils.getSchema(rs, dialect, true);
+            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+                .getSchema(conn, rs, dialect, true, false);
           } else {
-            structType = SparkJdbcUtils.getSchema(rs, dialect, false);
+            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+                .getSchema(conn, rs, dialect, false, false);
           }
-          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
+          return HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table));
         }
       }
     } catch (HoodieException e) {

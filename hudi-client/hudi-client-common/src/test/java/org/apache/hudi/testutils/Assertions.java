@@ -26,10 +26,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.testutils.CheckedFunction;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -38,9 +41,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -105,7 +110,7 @@ public class Assertions {
    *
    * @param records List of Hoodie records
    */
-  public static void assertNoDupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
+  public static void assertNoDupesWithinPartition(List<HoodieRecord<IndexedRecord>> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
     for (HoodieRecord r : records) {
       String key = r.getRecordKey();
@@ -147,5 +152,10 @@ public class Assertions {
     for (Pair<String, String> entry : expectedPartitionPathRecKeyPairs) {
       assertTrue(actualPartitionPathRecKeyPairs.contains(entry));
     }
+  }
+
+  public static void assertComplexKeyGeneratorValidationThrows(Executable writeOperation, String operation) {
+    HoodieException exception = assertThrows(HoodieException.class, writeOperation);
+    assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage());
   }
 }

@@ -37,8 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -53,9 +52,8 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 /**
  * Performs rollback using marker files generated during the writes.
  */
+@Slf4j
 public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackStrategy.class);
 
   protected final HoodieTable<?, ?, ?, ?> table;
   protected final transient HoodieEngineContext context;
@@ -143,7 +141,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       Map<String, Long> logBlocksToBeDeleted = new HashMap<>();
       // Old marker files may be generated from base file name before HUDI-1517. keep compatible with them.
       if (FSUtils.isBaseFile(fullFilePath)) {
-        LOG.warn("Find old marker type for log file: {}", filePathToRollback);
+        log.info("Found old marker type for log file: {}", filePathToRollback);
         baseCommitTime = FSUtils.getCommitTime(fullFilePath.getName());
         StoragePath partitionPath = FSUtils.constructAbsolutePath(config.getBasePath(), relativePartitionPath);
 
@@ -189,13 +187,13 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
             logBlocksToBeDeleted = Collections.singletonMap(
                 logFileToRollback.getPath().getName(), pathInfo.getLength());
           } else {
-            LOG.debug(
+            log.debug(
                 "File info of {} is null indicating the file does not exist;"
                     + " there is no need to include it in the rollback.",
                 fullFilePath);
           }
         } catch (FileNotFoundException e) {
-          LOG.debug(
+          log.debug(
               "Log file {} is not found so there is no need to include it in the rollback.",
               fullFilePath);
         } catch (IOException e) {

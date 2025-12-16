@@ -36,6 +36,8 @@ public abstract class AppendWriteFunctions {
   public static <I> AppendWriteFunction<I> create(Configuration conf, RowType rowType) {
     if (conf.get(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
       return new AppendWriteFunctionWithRateLimit<>(rowType, conf);
+    } else if (conf.get(FlinkOptions.WRITE_BUFFER_SORT_ENABLED)) {
+      return new AppendWriteFunctionWithBufferSort<>(conf, rowType);
     } else {
       return new AppendWriteFunction<>(conf, rowType);
     }

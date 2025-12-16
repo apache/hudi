@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -27,9 +28,6 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * The only difference with {@link DefaultHoodieRecordPayload} is that is does not
@@ -42,19 +40,12 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
   }
 
   public EventTimeAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, OrderingValues.getDefault()); // natural order
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
-    /*
-     * Check if the incoming record is a delete record.
-     */
-    if (recordBytes.length == 0 || isDeletedRecord) {
-      return Option.empty();
-    }
-
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    Option<IndexedRecord> incomingRecord = isEmptyRecord() || isDeletedRecord ? Option.empty() : getRecord(schema);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -62,16 +53,16 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
       return Option.of(currentValue);
     }
 
-    return Option.of(incomingRecord);
+    return incomingRecord;
   }
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0 || isDeletedRecord) {
+    if (isEmptyRecord() || isDeletedRecord) {
       return Option.empty();
     }
 
-    return Option.of(bytesToAvro(recordBytes, schema));
+    return getRecord(schema);
   }
 
   @Override

@@ -32,7 +32,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
-import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
+import org.apache.spark.sql.HoodieSparkCatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog._
@@ -43,9 +43,10 @@ import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChan
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
-import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.HoodieV1OrV2Table
+import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.net.URI
@@ -232,7 +233,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
                 val fieldOpt = table.schema.findNestedField(dataType.fieldNames(), includeCollections = true,
                   spark.sessionState.conf.resolver).map(_._2)
                 val field = fieldOpt.getOrElse {
-                  throw new AnalysisException(
+                  throw new HoodieAnalysisException(
                     s"Couldn't find column $colName in:\n${table.schema.treeString}")
                 }
                 AlterHoodieTableChangeColumnCommand(tableIdent, colName, field.withComment(newComment)).run(spark)
@@ -328,6 +329,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
       new CreateHoodieTableCommand(tableDesc, false).run(spark)
     }
 
+    // Check if Polaris catalog is enabled
+    if (HoodieSqlCommonUtils.isUsingPolarisCatalog(spark)) {
+      // if so then invoke the delegate catalog by calling super, in this case it should be PolarisSparkCatalog
+      // this should handle creation of table entry in catalog
+      super.createTable(ident, schema, partitions, allTableProperties)
+    }
     loadTable(ident)
   }
 

@@ -20,8 +20,11 @@
 package org.apache.spark.sql.hudi.feature
 
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{ENABLE_MERGE_INTO_PARTIAL_UPDATES, SPARK_SQL_INSERT_INTO_OPERATION}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, DATA_BEFORE_AFTER, OP_KEY_ONLY}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.DataFrame
@@ -31,13 +34,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
-  def cdcDataFrame(basePath: String, startingTs: Long, endingTs: Option[Long] = None): DataFrame = {
+  def cdcDataFrame(basePath: String, startingTs: String, endingTs: Option[String] = None): DataFrame = {
     val reader = spark.read.format("hudi")
       .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(INCREMENTAL_FORMAT.key, INCREMENTAL_FORMAT_CDC_VAL)
-      .option(START_COMMIT.key, startingTs.toString)
+      .option(START_COMMIT.key, startingTs)
     endingTs.foreach { ts =>
-      reader.option(END_COMMIT.key, ts.toString)
+      reader.option(END_COMMIT.key, ts)
     }
     reader.load(basePath)
   }
@@ -68,7 +71,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
              | partitioned by (name)
              | tblproperties (
              |   'primaryKey' = 'id',
-             |   'preCombineField' = 'ts',
+             |   'orderingFields' = 'ts',
              |   'hoodie.table.cdc.enabled' = 'true',
              |   'hoodie.table.cdc.supplemental.logging.mode' = '$DATA_BEFORE_AFTER',
              |   type = '$tableType'
@@ -80,12 +83,12 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
         val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
         val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-        val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
+        val cdcDataOnly1 = cdcDataFrame(basePath, "000")
         cdcDataOnly1.show(false)
         assertCDCOpCnt(cdcDataOnly1, 2, 0, 0)
 
         spark.sql(s"delete from $tableName where id = 1")
-        val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
+        val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1)
         assertCDCOpCnt(cdcDataOnly2, 0, 0, 1)
         assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 1)
         assert(!spark.sql(s"select _hoodie_file_name from $tableName").head().get(0).equals(fgForID1))
@@ -122,7 +125,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | ) using hudi
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   $otherTableProperties
@@ -135,7 +138,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
+          val cdcDataOnly1 = cdcDataFrame(basePath, "000")
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
 
@@ -143,7 +146,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
           val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
           // here we use `commitTime1` to query the change data in commit 2.
           // because `commitTime2` is maybe the ts of the compaction operation, not the write operation.
-          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
+          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1)
           cdcDataOnly2.show(false)
           assertCDCOpCnt(cdcDataOnly2, 0, 1, 0)
 
@@ -165,13 +168,13 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
           val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime2.toLong)
+          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime2)
           cdcDataOnly3.show(false)
           assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
 
           spark.sql(s"delete from $tableName where id = 3")
           val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime3.toLong)
+          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime3)
           cdcDataOnly4.show(false)
           assertCDCOpCnt(cdcDataOnly4, 0, 0, 1)
 
@@ -189,8 +192,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | when matched then update set id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
                | when not matched then insert *
         """.stripMargin)
-          val commitTime5 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly5 = cdcDataFrame(basePath, commitTime4.toLong)
+          val cdcDataOnly5 = cdcDataFrame(basePath, commitTime4)
           cdcDataOnly5.show(false)
           assertCDCOpCnt(cdcDataOnly5, 1, 1, 0)
 
@@ -212,7 +214,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             Seq("i", 4, null, null, "a4", 14)
           )
 
-          val totalCdcData = cdcDataFrame(basePath, commitTime1.toLong - 1)
+          val totalCdcData = cdcDataFrame(basePath, "000")
           assertCDCOpCnt(totalCdcData, 4, 3, 1)
         }
       }
@@ -245,7 +247,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | partitioned by (pt)
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   'type' = '$tableType'
@@ -263,19 +265,19 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | (3, 'a3', 13, 1000, '2022')
         """.stripMargin)
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
+          val cdcDataOnly1 = cdcDataFrame(basePath, "000")
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
 
           spark.sql(s"insert overwrite table $tableName partition (pt = '2021') values (1, 'a1_v2', 11, 1100)")
           val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime2.toLong - 1)
+          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1)
           cdcDataOnly2.show(false)
           assertCDCOpCnt(cdcDataOnly2, 1, 0, 1)
 
           spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
           val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime3.toLong - 1)
+          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime2)
           cdcDataOnly3.show(false)
           assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
 
@@ -293,13 +295,92 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | when matched then update set id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, pt = s0.pt
                | when not matched then insert *
         """.stripMargin)
-          val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime4.toLong - 1)
+          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime3)
           cdcDataOnly4.show(false)
           assertCDCOpCnt(cdcDataOnly4, 1, 1, 0)
 
-          val totalCdcData = cdcDataFrame(basePath, commitTime1.toLong - 1)
+          val totalCdcData = cdcDataFrame(basePath, "000")
           assertCDCOpCnt(totalCdcData, 5, 2, 1)
+        }
+      }
+    }
+  }
+
+  test("Test Partial Updates With Spark CDC") {
+    val databaseName = "hudi_database"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+    withSQLConf(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+      DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true") {
+      Seq(OP_KEY_ONLY, DATA_BEFORE, DATA_BEFORE_AFTER).foreach { loggingMode =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  pt string
+               | ) using hudi
+               | partitioned by (pt)
+               | tblproperties (
+               |   'primaryKey' = 'id',
+               |   'orderingFields' = 'ts',
+               |   'hoodie.table.cdc.enabled' = 'true',
+               |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
+               |   '${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}' = 'true',
+               |   'type' = 'mor'
+               | )
+               | location '$basePath'
+      """.stripMargin)
+
+          val metaClient = createMetaClient(spark, basePath)
+
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1', 11, 1000, '2021'),
+               | (2, 'a2', 12, 1000, '2022'),
+               | (3, 'a3', 13, 1000, '2022')
+      """.stripMargin)
+          val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly1 = cdcDataFrame(basePath, "000")
+          cdcDataOnly1.show(false)
+          assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
+
+          spark.sql(s"insert overwrite table $tableName partition (pt = '2021') values (1, 'a1_v2', 11, 1100)")
+          val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1)
+          cdcDataOnly2.show(false)
+          assertCDCOpCnt(cdcDataOnly2, 1, 0, 1)
+
+          spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
+          val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime2)
+          cdcDataOnly3.show(false)
+          assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
+
+          spark.sql(
+            s"""
+               | merge into $tableName
+               | using (
+               |  select * from (
+               |  select 1 as id, 'a1_v3' as name, cast(1300 as long) as ts, "2021" as pt
+               |  )
+               | ) s0
+               | on s0.id = $tableName.id
+               | when matched then update set id = s0.id, name = s0.name, ts = s0.ts, pt = s0.pt
+      """.stripMargin)
+          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime3)
+          cdcDataOnly4.show(false)
+          assertCDCOpCnt(cdcDataOnly4, 0, 1, 0)
+
+          val totalCdcData = cdcDataFrame(basePath, "000")
+          assertCDCOpCnt(totalCdcData, 4, 2, 1)
         }
       }
     }

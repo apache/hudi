@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -76,7 +77,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
-import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
+import static org.apache.hudi.configuration.FlinkOptions.ORDERING_FIELDS;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createStorageConf;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -93,7 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link HoodieHiveCatalog}.
  */
-public class TestHoodieHiveCatalog {
+public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
   Schema schema =
       Schema.newBuilder()
           .column("uuid", DataTypes.INT().notNull())
@@ -127,7 +128,7 @@ public class TestHoodieHiveCatalog {
   List<String> multiPartitions = Lists.newArrayList("par1", "par2");
 
   private static HoodieHiveCatalog hoodieCatalog;
-  private final ObjectPath tablePath = new ObjectPath("default", "test");
+  private final ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "test");
 
   @BeforeAll
   public static void createCatalog() {
@@ -208,7 +209,7 @@ public class TestHoodieHiveCatalog {
     assertEquals("hudi", table1.getOptions().get(CONNECTOR.key()));
     assertEquals(tableType.toString(), table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()));
     assertEquals("uuid", table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
-    assertNull(table1.getOptions().get(PRECOMBINE_FIELD.key()), "preCombine key is not declared");
+    assertNull(table1.getOptions().get(ORDERING_FIELDS.key()), "preCombine key is not declared");
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
@@ -322,7 +323,7 @@ public class TestHoodieHiveCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
+  void testCreateTableWithoutOrderingFields() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
     String db = "default";
     hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog();
     hoodieCatalog.open();
@@ -331,12 +332,12 @@ public class TestHoodieHiveCatalog {
     options.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
     TypedProperties props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
-    assertFalse(props.containsKey("hoodie.table.precombine.field"));
+    assertFalse(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
 
-    options.put(PRECOMBINE_FIELD.key(), "ts_3");
+    options.put(ORDERING_FIELDS.key(), "ts_3");
     props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
-    assertTrue(props.containsKey("hoodie.table.precombine.field"));
-    assertEquals("ts_3", props.get("hoodie.table.precombine.field"));
+    assertTrue(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals("ts_3", props.get(HoodieTableConfig.ORDERING_FIELDS.key()));
   }
 
   private TypedProperties createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)
@@ -532,5 +533,10 @@ public class TestHoodieHiveCatalog {
         tablePath.getObjectName(),
         HoodieCatalogUtil.getOrderedPartitionValues(
             hoodieCatalog.getName(), hoodieCatalog.getHiveConf(), partitionSpec, partitions, tablePath));
+  }
+
+  @Override
+  AbstractCatalog getCatalog() {
+    return hoodieCatalog;
   }
 }

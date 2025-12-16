@@ -38,6 +38,6 @@ public class ProtoSchemaToAvroSchemaConverter implements SchemaRegistryProvider.
 
   public String convert(ParsedSchema schema) throws IOException {
     ProtobufSchema protobufSchema = (ProtobufSchema) schema;
-    return ProtoConversionUtil.getAvroSchemaForMessageDescriptor(protobufSchema.toDescriptor(), schemaConfig).toString();
+    return ProtoConversionUtil.getSchemaForMessageDescriptor(protobufSchema.toDescriptor(), schemaConfig).toString();
   }
 }

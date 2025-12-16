@@ -29,18 +29,16 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@Slf4j
 public class PartitionBucketIndexUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexUtils.class);
 
   public static boolean isPartitionSimpleBucketIndex(Configuration conf, String basePath) {
     return isPartitionSimpleBucketIndex(HadoopFSUtils.getStorageConf(conf), basePath);
