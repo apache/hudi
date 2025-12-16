@@ -80,6 +80,24 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Creates a write schema for Hudi operations, adding necessary metadata fields.
+   * This is equivalent to HoodieAvroUtils.createHoodieWriteSchema() but operates on HoodieSchema.
+   *
+   * @param schema             the base HoodieSchema
+   * @param withOperationField whether to include operation metadata field
+   * @return HoodieSchema configured for write operations with metadata fields added
+   * @throws IllegalArgumentException if schema is null
+   * @since 1.2.0
+   */
+  public static HoodieSchema createHoodieWriteSchema(HoodieSchema schema, boolean withOperationField) {
+    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+
+    // Convert to Avro, delegate to existing utility, convert back
+    Schema avroSchema = HoodieAvroUtils.addMetadataFields(schema.toAvroSchema(), withOperationField);
+    return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
+  /**
    * Adds Hudi metadata fields to the given schema with the withOperationField flag set as false.
    * This is equivalent to HoodieAvroUtils#.addMetadataFields() but operates on HoodieSchema.
    *
@@ -304,6 +322,31 @@ public final class HoodieSchemaUtils {
     // Delegate to HoodieAvroUtils
     Schema.Field avroField = HoodieAvroUtils.createNewSchemaField(
         name, schema.toAvroSchema(), doc, defaultValue);
+    return HoodieSchemaField.fromAvroField(avroField);
+  }
+
+  /**
+   * Creates a new schema field with the specified properties, including field order.
+   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   *
+   * @param name         field name
+   * @param schema       field schema
+   * @param doc          field documentation (can be null)
+   * @param defaultValue default value (can be null)
+   * @param order        field order for sorting
+   * @return new HoodieSchemaField instance
+   * @throws IllegalArgumentException if name, schema, or order is null/empty
+   * @since 1.2.0
+   */
+  public static HoodieSchemaField createNewSchemaField(String name, HoodieSchema schema,
+                                                       String doc, Object defaultValue, HoodieFieldOrder order) {
+    ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
+    ValidationUtils.checkArgument(schema != null, "Field schema cannot be null");
+    ValidationUtils.checkArgument(order != null, "Field order cannot be null");
+
+    // Delegate to HoodieAvroUtils
+    Schema.Field avroField = HoodieAvroUtils.createNewSchemaField(
+        name, schema.toAvroSchema(), doc, defaultValue, order.toAvroOrder());
     return HoodieSchemaField.fromAvroField(avroField);
   }
 

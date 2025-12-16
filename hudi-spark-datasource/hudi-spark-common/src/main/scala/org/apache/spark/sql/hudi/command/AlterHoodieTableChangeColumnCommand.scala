@@ -87,7 +87,7 @@ case class AlterHoodieTableChangeColumnCommand(
 
   private def validateSchema(newSchema: HoodieSchema, metaClient: HoodieTableMetaClient): Unit = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = HoodieSchemaUtils.createHoodieWriteSchema(schemaUtil.getTableSchema(false).toString, false)
+    val tableSchema = HoodieSchemaUtils.createHoodieWriteSchema(schemaUtil.getTableSchema(false), false)
     if (!HoodieSchemaCompatibility.isSchemaCompatible(tableSchema, newSchema)) {
       throw new HoodieException("Failed schema compatibility check for newSchema :" + newSchema +
         ", origin table schema :" + tableSchema + ", base path :" + metaClient.getBasePath)

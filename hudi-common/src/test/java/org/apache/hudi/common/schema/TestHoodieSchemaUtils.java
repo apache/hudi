@@ -133,7 +133,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testCreateHoodieWriteSchemaValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema(null, true));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema((String) null, true));
 
     // Should throw on empty schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema("", true));

@@ -187,7 +187,7 @@ object HoodieSparkSchemaConverters {
         val newRecordNames = existingRecordNames + fullName
         val fields = hoodieSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          val metadata = if (f.doc().isPresent) {
+          val metadata = if (f.doc().isPresent && !f.doc().get().isEmpty) {
             new MetadataBuilder().putString("comment", f.doc().get()).build()
           } else {
             Metadata.empty
