@@ -20,7 +20,7 @@
 # maven
 # java8
 FROM apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_v2
-CMD ["export", "JAVA_HOME=/usr/lib/jvm/java-11-openjdk"]
+
 CMD ["java", "-version"]
 
 # Set the working directory to /app
