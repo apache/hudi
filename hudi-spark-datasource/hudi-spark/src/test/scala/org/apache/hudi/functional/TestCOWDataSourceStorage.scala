@@ -173,8 +173,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+    val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
+    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
 
     // Snapshot Query
     val snapshotDF3 = spark.read.format("org.apache.hudi")
@@ -184,7 +184,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     // Read Incremental Query
     // we have 2 commits, try pulling the first commit (which is not the latest)
-    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
+    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").get(0)
     // Setting HoodieROTablePathFilter here to test whether pathFilter can filter out correctly for IncrementalRelation
     spark.sparkContext.hadoopConfiguration.set("mapreduce.input.pathFilter.class", "org.apache.hudi.hadoop.HoodieROTablePathFilter")
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
@@ -326,7 +326,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     }
 
     val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
     val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
 
     // First commit, new partition, no existing table schema
@@ -338,7 +338,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+    assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
 
     // Second commit, new partition, has existing table schema
     // Validation should succeed
@@ -353,7 +353,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+    assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
 
     // Third commit, new or existing partition, overwrite "driver" column to null for validation
     // Validation should succeed or fail, based on the query
@@ -371,7 +371,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
         .options(options)
         .mode(SaveMode.Append)
         .save(basePath)
-      assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+      assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
     } else {
       assertThrowsWithPreCommitValidator(new Executable() {
         override def execute(): Unit = {
