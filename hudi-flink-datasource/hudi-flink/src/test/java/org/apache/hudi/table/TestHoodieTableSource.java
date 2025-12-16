@@ -550,15 +550,6 @@ public class TestHoodieTableSource {
         conf);
   }
 
-  private HoodieTableSource createHoodieTableSource(Configuration conf, ResolvedSchema resolvedSchema) {
-    return new HoodieTableSource(
-        SerializableSchema.create(resolvedSchema),
-        new StoragePath(conf.get(FlinkOptions.PATH)),
-        Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-        "default-par",
-        conf);
-  }
-
   private ResolvedExpression createLitEquivalenceExpr(String fieldName, int fieldIdx, DataType dataType, Object val) {
     FieldReferenceExpression ref = new FieldReferenceExpression(fieldName, dataType, fieldIdx, fieldIdx);
     ValueLiteralExpression literal = new ValueLiteralExpression(val, dataType);
