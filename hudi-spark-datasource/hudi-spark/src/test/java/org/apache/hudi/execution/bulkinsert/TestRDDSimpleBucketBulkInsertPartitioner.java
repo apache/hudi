@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getRootCause;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.exception;
 
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
