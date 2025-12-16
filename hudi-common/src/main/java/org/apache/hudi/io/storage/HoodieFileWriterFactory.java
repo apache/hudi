@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -105,6 +106,13 @@ public class HoodieFileWriterFactory {
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
+  }
+
+  public static Option<BloomFilter> createBloomFilterForHFile(HoodieConfig config) {
+    if (config.getBooleanOrDefault(HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED)) {
+      return Option.of(createBloomFilter(config));
+    }
+    return Option.empty();
   }
 
   public static BloomFilter createBloomFilter(HoodieConfig config) {

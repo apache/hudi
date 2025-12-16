@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -28,7 +29,7 @@ public class HoodieHFileConfig {
   private final int blockSize;
   private final long maxFileSize;
   private final StorageConfiguration storageConf;
-  private final BloomFilter bloomFilter;
+  private final Option<BloomFilter> bloomFilter;
   private final String keyFieldName;
 
   public HoodieHFileConfig(StorageConfiguration storageConf,
@@ -36,7 +37,7 @@ public class HoodieHFileConfig {
                            int blockSize,
                            long maxFileSize,
                            String keyFieldName,
-                           BloomFilter bloomFilter) {
+                           Option<BloomFilter> bloomFilter) {
     this.storageConf = storageConf;
     this.compressionCodec = compressionCodec;
     this.blockSize = blockSize;
@@ -62,11 +63,11 @@ public class HoodieHFileConfig {
   }
 
   public boolean useBloomFilter() {
-    return bloomFilter != null;
+    return bloomFilter.isPresent();
   }
 
   public BloomFilter getBloomFilter() {
-    return bloomFilter;
+    return bloomFilter.get();
   }
 
   public String getKeyFieldName() {

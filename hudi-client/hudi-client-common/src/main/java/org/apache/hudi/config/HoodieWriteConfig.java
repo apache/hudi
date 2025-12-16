@@ -2342,6 +2342,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION);
   }
 
+  public boolean hfileBloomFilterEnabled() {
+    return getBooleanOrDefault(HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED);
+  }
+
   public long getHFileMaxFileSize() {
     return getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE);
   }
