@@ -22,7 +22,7 @@ package org.apache.hudi.hadoop.utils.shims;
  * Factory clazz for {@link HiveShim}.
  */
 public class HiveShims {
-  public static HiveShim getInstance(boolean hive3) {
-    return hive3 ? Hive3Shim.getInstance() : Hive2Shim.getInstance();
+  public static HiveShim getInstance(boolean hive3OrLater) {
+    return hive3OrLater ? Hive3Shim.getInstance() : Hive2Shim.getInstance();
   }
 }

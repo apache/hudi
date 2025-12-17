@@ -79,9 +79,9 @@ public class HoodieHiveUtils {
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
 
-  private static final boolean IS_HIVE3 = isHive3();
+  private static final boolean IS_HIVE3_OR_LATER = isHive3orLater();
 
-  private static final HiveShim HIVE_SHIM = HiveShims.getInstance(IS_HIVE3);
+  private static final HiveShim HIVE_SHIM = HiveShims.getInstance(IS_HIVE3_OR_LATER);
 
   public static boolean shouldIncludePendingCommits(JobConf job, String tableName) {
     return job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
@@ -156,8 +156,9 @@ public class HoodieHiveUtils {
     return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
   }
 
-  public static boolean isHive3() {
-    return HiveVersionInfo.getShortVersion().startsWith("3");
+  public static boolean isHive3orLater() {
+    int hiveMajorVersion = Integer.parseInt(HiveVersionInfo.getShortVersion().split("\\.")[0]);
+    return hiveMajorVersion >= 3;
   }
 
   public static boolean isHive2() {
