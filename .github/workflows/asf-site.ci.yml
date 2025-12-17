@@ -66,9 +66,9 @@ jobs:
 
           # Variables to track issues
           FOUND_ABSOLUTE_PATH_ISSUES=false
-          FOUND_MISSING_MD_ISSUES=false
+          FOUND_INVALID_RELATIVE_LINK_ISSUES=false
           ABSOLUTE_PATH_FILES=""
-          MISSING_MD_FILES=""
+          INVALID_RELATIVE_LINK_FILES=""
 
           while IFS= read -r file; do
             if [ -f "$file" ]; then
@@ -85,15 +85,17 @@ jobs:
                 echo ""
               fi
 
-              # Check 2: Look for relative doc links without .md extension
-              # Match: ](word#anchor) or ](word) where word starts with lowercase letter
-              MATCHES=$(grep -En '\]\([a-z][a-z0-9_-]*(#|\))' "$file" 2>/dev/null | grep -v '\.md[#)]' || true)
-              if [ -n "$MATCHES" ]; then
-                FOUND_MISSING_MD_ISSUES=true
-                MISSING_MD_FILES="${MISSING_MD_FILES}${file}\n"
-                echo "❌ Found doc links missing .md extension in: $file"
+              # Check 2: Look for invalid relative doc links
+              # - Missing .md extension: ](word#anchor) or ](word) where word starts with lowercase letter
+              # - Using ../ or ./ prefixes: ](../ or ](./
+              MISSING_MD=$(grep -En '\]\([a-z][a-z0-9_-]*(#|\))' "$file" 2>/dev/null | grep -v '\.md[#)]' || true)
+              RELATIVE_PREFIX=$(grep -En '\]\(\.\.?/' "$file" 2>/dev/null || true)
+              if [ -n "$MISSING_MD" ] || [ -n "$RELATIVE_PREFIX" ]; then
+                FOUND_INVALID_RELATIVE_LINK_ISSUES=true
+                INVALID_RELATIVE_LINK_FILES="${INVALID_RELATIVE_LINK_FILES}${file}\n"
+                echo "❌ Found invalid relative doc links in: $file"
                 echo "   Lines with issues:"
-                echo "$MATCHES" | while IFS= read -r line; do
+                { echo "$MISSING_MD"; echo "$RELATIVE_PREFIX"; } | grep -v '^$' | sort -t: -k1,1n -u | while IFS= read -r line; do
                   echo "     $line"
                 done
                 echo ""
@@ -119,17 +121,19 @@ jobs:
             echo ""
           fi
 
-          if [ "$FOUND_MISSING_MD_ISSUES" = true ]; then
+          if [ "$FOUND_INVALID_RELATIVE_LINK_ISSUES" = true ]; then
             HAS_ERRORS=true
             echo ""
             echo "========================================="
-            echo "❌ ERROR: Found doc links missing .md extension!"
+            echo "❌ ERROR: Found invalid relative doc links!"
             echo "========================================="
             echo ""
-            echo "📋 Files with missing .md extension:"
-            echo -e "$MISSING_MD_FILES"
-            echo "💡 Add .md extension to relative doc links."
-            echo "   ❌ Bad:  [link text](configurations#anchor)"
+            echo "📋 Files with invalid relative links:"
+            echo -e "$INVALID_RELATIVE_LINK_FILES"
+            echo "💡 Use just the filename with .md extension."
+            echo "   ❌ Bad:  [link text](configurations#anchor)  (missing .md)"
+            echo "   ❌ Bad:  [link text](../configurations.md)   (using ../)"
+            echo "   ❌ Bad:  [link text](./configurations.md)    (using ./)"
             echo "   ✅ Good: [link text](configurations.md#anchor)"
             echo ""
           fi
