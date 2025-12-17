@@ -118,7 +118,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   // Max number of seconds before compaction occurs
   public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
-      .key(METADATA_PREFIX + ".compact.inline.max.delta.seconds")
+      .key(METADATA_PREFIX + ".compact.max.delta.seconds")
       .defaultValue(String.valueOf(24 * 60 * 60))
       .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a "
       + "new one (for metadata table). "
