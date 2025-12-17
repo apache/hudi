@@ -182,17 +182,6 @@
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
       <scope>test</scope>
-      <classifier>${hive.exec.classifier}</classifier>
-      <exclusions>
-        <exclusion>
-          <groupId>org.pentaho</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>junit</groupId>
-          <artifactId>junit</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>

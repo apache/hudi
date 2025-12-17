@@ -337,7 +337,6 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
-      <classifier>${hive.exec.classifier}</classifier>
       <exclusions>
         <exclusion>
           <groupId>javax.servlet</groupId>
