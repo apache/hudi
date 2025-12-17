@@ -43,7 +43,7 @@ By merging records at query time, Hudi ensures that queries reflect the most rec
 ## Implementation
 In common scenarios, the input data contains a field that can be used to identify the latest record. Typically, tables have fields like updated_at or other ordering columns. If no such column is present in the input, we are limited to relying on the incoming order.
 
-After the release of Hudi 1.0.0, a new configuration, [hoodie.record.merge.mode](https://hudi.apache.org/docs/configurations/#hoodierecordmergemode) was introduced to define the merge modes responsible for handling record updates. These merge modes dictate how records with the same key are processed at different stages of the pipeline, from data ingestion to query results.
+After the release of Hudi 1.0.0, a new configuration, [hoodie.record.merge.mode](https://hudi.apache.org/docs/configurations#hoodierecordmergemode) was introduced to define the merge modes responsible for handling record updates. These merge modes dictate how records with the same key are processed at different stages of the pipeline, from data ingestion to query results.
 It can have the following three values:
 
 #### 1. COMMIT_TIME_ORDERING
@@ -121,10 +121,10 @@ In the second insert, a new record with the same record key is inserted. As expe
 
 #### 3. CUSTOM
 For more complex use-case sometimes prior discussed merging modes won’t work. We may need to implement a use-case specific merging logic.
-The details for the implementation is provided here  - https://hudi.apache.org/docs/record_merger/#custom
+The details for the implementation is provided here  - https://hudi.apache.org/docs/record_merger#custom
 
 ## Record Payloads
-Pre 1.0.0, Hudi uses the legacy Record Payload API, Please refer to the [Record Payloads](https://hudi.apache.org/docs/record_merger/#record-payloads) section to know about the implementation and some of the existing record payloads.
+Pre 1.0.0, Hudi uses the legacy Record Payload API, Please refer to the [Record Payloads](https://hudi.apache.org/docs/record_merger#record-payloads) section to know about the implementation and some of the existing record payloads.
 
 Along with the existing payloads, Hudi provides flexibility to implement the custom record payload by implementing the [HoodieRecordPayload](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java) interface
 

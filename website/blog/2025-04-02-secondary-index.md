@@ -18,7 +18,7 @@ Apache Hudi 1.0 introduces Secondary Indexes, enabling faster queries on non-pri
 
 Indexes are a fundamental data structure that enables efficient data retrieval by eliminating the need to scan the entire dataset for every query. In the context of a Lakehouse, where records are written as immutable data files (such as Parquet) at scale, indexing becomes crucial in reducing lookup times. Otherwise, a lot of time will be spent by the compute engine on finding out where exactly a particular record exists amongst thousands of files in the data lake storage, which is computationally expensive at scale. Indexing is not only important for *reads* in a lakehouse architecture, but also for *writes*, such as upserts and deletes, as you need to know where the record is to update it.
 
-One of the standout design choices in Apache Hudi that separates it from other lakehouse formats is its [indexing](https://hudi.apache.org/docs/next/indexes/) capability, which has been central to its architecture from the beginning. Hudi is heavily optimized to handle mutable change streams with varying write patterns, and indexing plays a pivotal role in making upserts and deletes efficient.  
+One of the standout design choices in Apache Hudi that separates it from other lakehouse formats is its [indexing](https://hudi.apache.org/docs/next/indexes) capability, which has been central to its architecture from the beginning. Hudi is heavily optimized to handle mutable change streams with varying write patterns, and indexing plays a pivotal role in making upserts and deletes efficient.  
 
 Hudi's indexing mechanism is designed to efficiently manage record lookups and updates by maintaining a structured mapping between records and file groups. Here's how it works:
 

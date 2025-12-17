@@ -57,7 +57,7 @@ Databases maintain transaction logs, a file that records all transactions and da
 * Supports all kinds of database transactions i.e. INSERTs, UPDATEs, DELETEs
 * Minimal performance impact on the source/operational databases
 * No schema changes required in source databases
-* With a table format support, i.e. Apache Hudi, schema evolution [can be supported](https://hudi.apache.org/docs/schema_evolution/)
+* With a table format support, i.e. Apache Hudi, schema evolution [can be supported](https://hudi.apache.org/docs/schema_evolution)
 ##### Cons:
 * No standardization in publishing the transactional logs between databases - this results in complex design and development overhead to implement support for different database vendors
 #### Data Extraction

@@ -41,7 +41,7 @@ Their original stack, shown below, used multiple systems like **Presto**, **Clic
 
 FreeWheel initially followed a traditional Lambda architecture, which separated the processing of batch and real‑time data. This approach created several problems: it required duplicate pipelines for batch and real‑time processing (leading to inefficient engineering workflows), and it struggled to scale ClickHouse for large aggregates.
 
-By consolidating on Hudi as the table format for both streaming and historical data, FreeWheel unified the storage layer and eliminated duplicate pipelines. Hudi’s [upserts](https://hudi.apache.org/docs/write_operations/#upsert) by key and [incremental processing](https://hudi.apache.org/docs/table_types/#incremental-queries) make it possible to serve near–real‑time analytics. The result is simpler operations, consistent logic, and a platform that scales with data volume and query complexity.
+By consolidating on Hudi as the table format for both streaming and historical data, FreeWheel unified the storage layer and eliminated duplicate pipelines. Hudi’s [upserts](https://hudi.apache.org/docs/write_operations#upsert) by key and [incremental processing](https://hudi.apache.org/docs/table_types#incremental-queries) make it possible to serve near–real‑time analytics. The result is simpler operations, consistent logic, and a platform that scales with data volume and query complexity.
 
 ## Use Case 2: Real-Time Inventory Management
 
@@ -57,7 +57,7 @@ By modernizing the platform with Hudi, FreeWheel updates inventory within minute
 
 FreeWheel uses Aerospike to ingest audience segments for its online services, which involves handling high‑frequency, real‑time data. However, this setup brought a few key challenges—chiefly, the need for analytical insights on top of real‑time data and the need to efficiently manage bulk loads alongside frequent updates.
 
-To address these challenges, FreeWheel introduced Hudi into the data pipeline. Hudi maintains a snapshot table for all audience data, enabling more flexible and efficient data management. It supports [bulk inserts](https://hudi.apache.org/docs/write_operations/#bulk_insert), [upserts](https://hudi.apache.org/docs/write_operations/#upsert), and change data capture (CDC), enabling smoother handling of updates and large‑scale data loads. Using CDC, large batches of audience updates are applied incrementally to the snapshot. With Hudi in place, the back‑end analytics system became much stronger, while the responsiveness of the online systems was preserved. This setup also improved the stability of the online targeting system, as heavy analytical workloads were moved off the key‑value store, reducing pressure on Aerospike and enhancing overall performance.
+To address these challenges, FreeWheel introduced Hudi into the data pipeline. Hudi maintains a snapshot table for all audience data, enabling more flexible and efficient data management. It supports [bulk inserts](https://hudi.apache.org/docs/write_operations#bulk_insert), [upserts](https://hudi.apache.org/docs/write_operations#upsert), and change data capture (CDC), enabling smoother handling of updates and large‑scale data loads. Using CDC, large batches of audience updates are applied incrementally to the snapshot. With Hudi in place, the back‑end analytics system became much stronger, while the responsiveness of the online systems was preserved. This setup also improved the stability of the online targeting system, as heavy analytical workloads were moved off the key‑value store, reducing pressure on Aerospike and enhancing overall performance.
 
 ## Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion
 
@@ -78,7 +78,7 @@ A central scheduler allocates work based on input size, priority, and write conc
 
 #### **Decoupled ingestion pipeline**
 
-- Scheduler: allocates resources based on input size and supports job priority, [multi-writer concurrency control](https://hudi.apache.org/docs/concurrency_control/), and concurrency planning.
+- Scheduler: allocates resources based on input size and supports job priority, [multi-writer concurrency control](https://hudi.apache.org/docs/concurrency_control), and concurrency planning.
 - Ingestion job: Spark jobs process data and write it to the Hudi segment table in the lakehouse.
 
 ### Challenges of input data at scale
@@ -105,7 +105,7 @@ A central scheduler allocates work based on input size, priority, and write conc
 
 ### Pipeline overview
 
-This implementation showcases an efficient pipeline where Spark Streaming ingests aggregated data into a Hudi lakehouse using the [bulk_insert](https://hudi.apache.org/docs/write_operations/#bulk_insert) operation, followed by [asynchronous clustering](https://hudi.apache.org/blog/2021/08/23/async-clustering/).
+This implementation showcases an efficient pipeline where Spark Streaming ingests aggregated data into a Hudi lakehouse using the [bulk_insert](https://hudi.apache.org/docs/write_operations#bulk_insert) operation, followed by [asynchronous clustering](https://hudi.apache.org/blog/2021/08/23/async-clustering/).
 
 ![Streaming ingestion and clustering flow](/assets/images/blog/2025-11-07-how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse/image8.png)
 
@@ -113,9 +113,9 @@ This implementation showcases an efficient pipeline where Spark Streaming ingest
 
 - Kafka: raw events are streamed into Kafka.
 - Spark SQL on Streaming: consumes Kafka messages and performs near‑real‑time aggregations.
-- bulk_insert into Hudi lakehouse: aggregated data is appended using [bulk_insert](https://hudi.apache.org/docs/write_operations/#bulk_insert).
+- bulk_insert into Hudi lakehouse: aggregated data is appended using [bulk_insert](https://hudi.apache.org/docs/write_operations#bulk_insert).
 - Clustering plan generation: clustering plans are created asynchronously.
-- HoodieClusteringJob: a cron job runs hourly to execute [clustering](https://hudi.apache.org/docs/clustering/) and consolidate small files.
+- HoodieClusteringJob: a cron job runs hourly to execute [clustering](https://hudi.apache.org/docs/clustering) and consolidate small files.
 
 ### Results at a glance
 

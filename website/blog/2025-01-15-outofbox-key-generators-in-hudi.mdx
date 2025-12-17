@@ -131,7 +131,7 @@ Here, you have a dataset with a date field, but you want to create partitions at
 
 In the example above, if we have an input with a date column named event_date in the format 'yyyy-MM-dd', the configurations will convert this format to a monthly level in the format 'yyyyMM' and use it as the partition column.
 
-We can refer [TimestampBasedKeyGenerator](https://hudi.apache.org/docs/0.10.0/key_generation/#timestampbasedkeygenerator) for more examples
+We can refer [TimestampBasedKeyGenerator](https://hudi.apache.org/docs/0.10.0/key_generation#timestampbasedkeygenerator) for more examples
 
 ### CustomKeyGenerator
 In typical use cases, using the same key generator for both the record key and the partition key often does not meet the requirements. For such scenarios, a Custom Key Generator is particularly useful, as it allows for the use of different key generators for different fields.

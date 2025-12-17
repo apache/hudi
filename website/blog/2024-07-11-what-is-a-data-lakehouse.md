@@ -122,7 +122,7 @@ Hudi also incorporates critical table services tightly integrated with its datab
 
 Below are some of the key features of Hudi’s lakehouse platform.
 
-- **Mutability Support**: Hudi enables quick updates and deletions through an efficient, pluggable [indexing](https://hudi.apache.org/docs/indexing/) mechanism supporting workloads such as streaming, out-of-order data, and data deduplication.
+- **Mutability Support**: Hudi enables quick updates and deletions through an efficient, pluggable [indexing](https://hudi.apache.org/docs/indexing) mechanism supporting workloads such as streaming, out-of-order data, and data deduplication.
 - **Incremental Processing**: Hudi optimizes for efficiency by enabling [incremental processing](https://hudi.apache.org/blog/2020/08/18/hudi-incremental-processing-on-data-lakes/) of new data. This feature allows you to replace traditional batch processing pipelines with more dynamic, incremental streaming, enhancing data ingestion and reducing processing times for analytical workloads.
 - **ACID Transactions**: Hudi brings ACID transactional guarantees to data lakes, offering consistent and atomic writes along with different [concurrency control](https://hudi.apache.org/docs/concurrency_control) techniques essential for managing longer-running transactions.
 - **Time Travel**: Hudi includes capabilities for [querying](https://hudi.apache.org/docs/sql_queries#time-travel-query) historical data, allowing users to roll back to previous versions of tables to debug or audit changes. 

@@ -73,7 +73,7 @@ When you write data to the example table, index data gets written to the record 
 
 ## Expression Index
 
-Query predicates often contain expressions that perform inline transformations on columns, such as `from_unixtime()` or `substring()`. These expressions prevent a direct match with standard column indexes like column stats or partition stats. To optimize such queries, Hudi provides the *expression index* that operates on transformed column values. A full list of supported expressions is available in the [documentation](https://hudi.apache.org/docs/sql_ddl/#create-expression-index).
+Query predicates often contain expressions that perform inline transformations on columns, such as `from_unixtime()` or `substring()`. These expressions prevent a direct match with standard column indexes like column stats or partition stats. To optimize such queries, Hudi provides the *expression index* that operates on transformed column values. A full list of supported expressions is available in the [documentation](https://hudi.apache.org/docs/sql_ddl#create-expression-index).
 
 Hudi currently supports two types of expression indexes:
 
@@ -118,13 +118,13 @@ Hudi provides flexible mechanisms for managing indexes. You can use SQL DDL comm
 
 Creating a new index can be a resource-intensive operation, particularly for large tables and for indexes with high space complexity. For instance, the space complexity of the column stats index is O(columns × files), while the record index requires O(records) space. When adding such an index to a large table via DDL or a writer configuration, the time-consuming index initialization process must not block ongoing read and write operations.
 
-To address this challenge, Hudi's index management is designed with two key goals: index creation should not block concurrent reads and writes, and once built, an index must serve consistent data up to the latest table commit. Hudi meets these requirements with its [async indexing](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing) (illustrated below), which builds indexes in the background without interrupting active writers and readers.
+To address this challenge, Hudi's index management is designed with two key goals: index creation should not block concurrent reads and writes, and once built, an index must serve consistent data up to the latest table commit. Hudi meets these requirements with its [async indexing](https://hudi.apache.org/docs/metadata_indexing#setup-async-indexing) (illustrated below), which builds indexes in the background without interrupting active writers and readers.
 
 ![Async indexing process](/assets/images/blog/2025-11-12-deep-dive-into-hudis-indexing-subsystem-part-2-of-2/fig3.png)
 
 The async indexing process consists of two phases: scheduling and execution. First, the scheduler creates an indexing plan that covers data up to the latest data table commit. Next, the executor reads the required file groups from the data table and writes the corresponding index data to the metadata table. While this process runs, concurrent writers can continue ingesting data. The async indexing executor writes index data to base files in the target index partitions in the metadata table, while the ongoing writer append new index data to log files in those partitions. Hudi uses a conflict resolution mechanism to determine if an indexing operation needs to be retried due to concurrent write conflicts.
 
-To manage this concurrency, a lock provider must be configured for both the indexer and the data writers. Upon successful completion, the operation is marked by a completed indexing commit in the Hudi table’s timeline. For future improvements, the metadata table will employ non-blocking concurrency control to gracefully absorb conflicting updates from both indexing and write operations, thus avoiding wasteful retries. You can find configuration examples in the [documentation](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing).
+To manage this concurrency, a lock provider must be configured for both the indexer and the data writers. Upon successful completion, the operation is marked by a completed indexing commit in the Hudi table’s timeline. For future improvements, the metadata table will employ non-blocking concurrency control to gracefully absorb conflicting updates from both indexing and write operations, thus avoiding wasteful retries. You can find configuration examples in the [documentation](https://hudi.apache.org/docs/metadata_indexing#setup-async-indexing).
 
 ## Summary
 

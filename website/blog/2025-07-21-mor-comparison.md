@@ -80,7 +80,7 @@ This design ensures that write operations remain lightweight and fast, regardles
 
 #### Read Path
 
-Hudi MoR tables offer flexible read semantics by supporting both [snapshot queries](https://hudi.apache.org/docs/sql_queries/#snapshot-query) and [read-optimized queries](https://hudi.apache.org/docs/table_types#query-types), depending on the user's performance and freshness requirements.
+Hudi MoR tables offer flexible read semantics by supporting both [snapshot queries](https://hudi.apache.org/docs/sql_queries#snapshot-query) and [read-optimized queries](https://hudi.apache.org/docs/table_types#query-types), depending on the user's performance and freshness requirements.
 
 * Snapshot queries provide the most current view of the dataset by dynamically merging base files with their corresponding log files at read time. The system selects between different reader types based on the nature of the query and the presence of log files:  
   * A **full-schema** reader reads the complete row data to ensure correct application of updates and deletes.  
