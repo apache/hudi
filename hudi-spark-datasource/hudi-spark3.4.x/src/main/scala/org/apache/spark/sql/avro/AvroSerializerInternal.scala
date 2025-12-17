@@ -27,7 +27,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
+import org.apache.spark.sql.avro.AvroSerializerInternal.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecializedGetters, SpecificInternalRow}
@@ -55,7 +55,7 @@ import scala.collection.JavaConverters._
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroSerializer(rootCatalystType: DataType,
+private[sql] class AvroSerializerInternal(rootCatalystType: DataType,
                                   rootType: HoodieSchema,
                                   nullable: Boolean,
                                   positionalFieldMatch: Boolean,
@@ -417,7 +417,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
   }
 }
 
-object AvroSerializer {
+object AvroSerializerInternal {
 
   // NOTE: Following methods have been renamed in Spark 3.2.1 [1] making [[AvroSerializer]] implementation
   //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].

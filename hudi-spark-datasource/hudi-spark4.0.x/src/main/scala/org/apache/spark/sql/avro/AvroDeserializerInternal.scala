@@ -25,14 +25,14 @@ import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis,
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
-import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead, RebaseSpec}
+import org.apache.spark.sql.avro.AvroDeserializerInternal.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead, RebaseSpec}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
-import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
+import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -51,7 +51,7 @@ import scala.collection.JavaConverters._
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroDeserializer(rootType: HoodieSchema,
+private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
                                     rootCatalystType: DataType,
                                     positionalFieldMatch: Boolean,
                                     datetimeRebaseSpec: RebaseSpec,
@@ -457,7 +457,7 @@ private[sql] class AvroDeserializer(rootType: HoodieSchema,
   }
 }
 
-object AvroDeserializer {
+object AvroDeserializerInternal {
 
   // NOTE: Following methods have been renamed in Spark 3.2.1 [1] making [[AvroDeserializer]] implementation
   //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].

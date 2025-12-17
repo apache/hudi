@@ -54,7 +54,7 @@ import scala.collection.JavaConverters._
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroSerializer(rootCatalystType: DataType,
+private[sql] class AvroSerializerInternal(rootCatalystType: DataType,
                                   rootType: HoodieSchema,
                                   nullable: Boolean,
                                   positionalFieldMatch: Boolean,

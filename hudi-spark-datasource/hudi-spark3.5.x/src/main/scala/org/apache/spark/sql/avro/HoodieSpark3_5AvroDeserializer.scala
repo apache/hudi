@@ -26,7 +26,7 @@ import org.apache.spark.sql.types.DataType
 class HoodieSpark3_5AvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType)
   extends HoodieAvroDeserializer {
 
-  private val avroDeserializer = new AvroDeserializer(rootType, rootCatalystType,
+  private val avroDeserializer = new AvroDeserializerInternal(rootType, rootCatalystType,
     SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_READ, LegacyBehaviorPolicy.CORRECTED.toString))
 
   def deserialize(data: Any): Option[Any] = avroDeserializer.deserialize(data)

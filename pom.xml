@@ -65,6 +65,7 @@
     <module>packaging/hudi-kafka-connect-bundle</module>
     <module>packaging/hudi-cli-bundle</module>
     <module>hudi-tests-common</module>
+    <module>hudi-integ-test</module>
   </modules>
 
   <licenses>
