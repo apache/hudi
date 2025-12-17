@@ -349,6 +349,7 @@ public class HoodieCDCExtractor {
                 try {
                   return metaClient.getActiveTimeline().readCompactionPlan(i).getOperations()
                       .stream()
+                      .filter(op -> op.getPartitionPath().equals(fgId.getPartitionPath()) && op.getFileId().equals(fgId.getFileId()))
                       .flatMap(f -> f.getDeltaFilePaths().stream().map(logFile -> new StoragePath(partitionPath, logFile)));
                 } catch (IOException e) {
                   throw new HoodieIOException("Failed to read a compaction plan on instant " + i, e);

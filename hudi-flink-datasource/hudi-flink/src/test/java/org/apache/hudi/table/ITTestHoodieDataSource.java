@@ -1586,13 +1586,13 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testReadChangelogIncremental(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testReadChangelogIncremental(HoodieTableType tableType, boolean compactionEnabled) throws Exception {
     TableEnvironment tableEnv = streamTableEnv;
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_NAME, "t1");
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, compactionEnabled);
     conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false); // calculate the changes on the fly
     conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);  // for batch upsert
     conf.set(FlinkOptions.CDC_ENABLED, true);
@@ -1607,7 +1607,7 @@ public class ITTestHoodieDataSource {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
-        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
+        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, compactionEnabled)
         .option(FlinkOptions.READ_CDC_FROM_CHANGELOG, false)
         .option(FlinkOptions.READ_START_COMMIT, latestCommit)
         .option(FlinkOptions.CDC_ENABLED, true)
@@ -1630,13 +1630,14 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
   }
 
-  @Test
-  void  testChangelogCompactionSchedule() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void  testChangelogCompactionSchedule(Boolean compactionEnabled) throws Exception {
     TableEnvironment tableEnv = streamTableEnv;
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_NAME, "t1");
     conf.set(FlinkOptions.TABLE_TYPE, MERGE_ON_READ.name());
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, compactionEnabled);
     // schedule compaction after 2 commits
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 2);
     conf.set(FlinkOptions.READ_CDC_FROM_CHANGELOG, false); // calculate the changes on the fly
@@ -1653,7 +1654,7 @@ public class ITTestHoodieDataSource {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
-        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
+        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, compactionEnabled)
         .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 2)
         .option(FlinkOptions.READ_CDC_FROM_CHANGELOG, false)
         .option(FlinkOptions.READ_START_COMMIT, latestCommit)
