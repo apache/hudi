@@ -21,9 +21,9 @@ import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedException}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
@@ -298,18 +298,58 @@ object HoodieAnalysis extends SparkAdapterSupport {
     private object ProducesHudiMetaFields {
 
       def unapply(plan: LogicalPlan): Option[Seq[Attribute]] = {
-        val resolved = if (plan.resolved) {
-          plan
-        } else {
-          val analyzer = spark.sessionState.analyzer
-          analyzer.execute(plan)
-        }
+        try {
+          val resolved = if (plan.resolved) {
+            plan
+          } else {
+            val analyzer = spark.sessionState.analyzer
+            analyzer.execute(plan)
+          }
 
-        if (resolved.output.exists(attr => isMetaField(attr.name))) {
-          Some(resolved.output)
-        } else {
-          None
+          if (resolved.output.exists(attr => isMetaField(attr.name))) {
+            Some(resolved.output)
+          } else {
+            None
+          }
+        } catch {
+          case e: UnresolvedException =>
+            val unresolvedRefs = collectUnresolvedReferences(plan)
+            val unresolvedInfo = if (unresolvedRefs.nonEmpty) {
+              s" Unresolved references: [${unresolvedRefs.mkString(", ")}]."
+            } else {
+              ""
+            }
+            throw new AnalysisException(
+              s"Failed to resolve query. The query contains unresolved columns or tables.$unresolvedInfo " +
+              s"Please check for: (1) typos in column or table names, (2) missing table definitions, " +
+              s"(3) incorrect database/schema references, (4) columns that don't exist in the source tables. " +
+              s"Original error: ${e.getMessage}")
         }
+      }
+
+      private def collectUnresolvedReferences(plan: LogicalPlan): Seq[String] = {
+        val resolver = spark.sessionState.conf.resolver
+
+        // Collect all top-level column names that are available from resolved leaf relations in the plan.
+        // NOTE: We intentionally only use top-level output attributes (not nested fields) to avoid
+        //       accidentally filtering out valid nested references like "struct_col.field".
+        val availableTopLevelCols: Seq[String] = plan.collect {
+          case p if p.resolved => p.output.map(_.name)
+        }.flatten.distinct
+
+        plan.collect {
+          case p => p.expressions.flatMap(_.collect {
+            case u: UnresolvedAttribute =>
+              val nameParts = u.nameParts
+              // Filter out attributes that appear unresolved only because analysis failed early;
+              // if a single-part name matches any known output column, do not report it as unresolved.
+              if (nameParts.length == 1 && availableTopLevelCols.exists(c => resolver(c, nameParts.head))) {
+                None
+              } else {
+                Some(nameParts.mkString("."))
+              }
+          })
+        }.flatten.flatten.distinct
       }
     }
   }
