@@ -15,7 +15,7 @@ module.exports = {
     "Hudi brings transactions, record-level updates/deletes and change streams to data lakes!",
   url: "https://hudi.apache.org",
   baseUrl: "/",
-  trailingSlash: true,
+  trailingSlash: false,
   onBrokenLinks: "throw",
   markdown: {
     hooks: {
