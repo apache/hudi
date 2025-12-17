@@ -128,7 +128,7 @@ public class HoodieCatalogUtil {
    * Check whether the hive.metastore.uris is empty
    */
   public static boolean isEmbeddedMetastore(HiveConf hiveConf) {
-    return isNullOrWhitespaceOnly(hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
+    return isNullOrWhitespaceOnly(hiveConf.getVar(HiveConf.ConfVars.METASTORE_URIS));
   }
 
   /**
@@ -189,7 +189,7 @@ public class HoodieCatalogUtil {
       } else {
         String value = spec.get(key);
         if (value == null) {
-          value = hiveConf.getVar(HiveConf.ConfVars.DEFAULTPARTITIONNAME);
+          value = hiveConf.getVar(HiveConf.ConfVars.DEFAULT_PARTITION_NAME);
         }
         values.add(value);
       }

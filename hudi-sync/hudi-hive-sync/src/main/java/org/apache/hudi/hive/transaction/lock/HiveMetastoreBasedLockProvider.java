@@ -234,7 +234,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
 
   private void setHiveLockConfs(HiveConf hiveConf) {
     if (!StringUtils.isNullOrEmpty(this.hiveMetastoreUris)) {
-      hiveConf.setVar(HiveConf.ConfVars.METASTOREURIS, this.hiveMetastoreUris);
+      hiveConf.setVar(HiveConf.ConfVars.METASTORE_URIS, this.hiveMetastoreUris);
     }
     hiveConf.set("hive.support.concurrency", "true");
     hiveConf.set("hive.lock.manager", "org.apache.hadoop.hive.ql.lockmgr.zookeeper.ZooKeeperHiveLockManager");

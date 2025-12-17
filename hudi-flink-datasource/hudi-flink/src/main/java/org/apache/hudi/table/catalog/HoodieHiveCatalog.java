@@ -147,13 +147,13 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     super(catalogName, options.get(CatalogOptions.DEFAULT_DATABASE));
     // fallback to hive.metastore.warehouse.dir if catalog path is not specified
     this.hiveConf = hiveConf;
-    this.catalogPath = options.getString(CatalogOptions.CATALOG_PATH.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREWAREHOUSE));
+    this.catalogPath = options.getString(CatalogOptions.CATALOG_PATH.key(), hiveConf.getVar(HiveConf.ConfVars.METASTORE_WAREHOUSE));
     this.external = options.get(CatalogOptions.TABLE_EXTERNAL);
     if (!allowEmbedded) {
       checkArgument(
           !HoodieCatalogUtil.isEmbeddedMetastore(this.hiveConf),
           "Embedded metastore is not allowed. Make sure you have set a valid value for "
-              + HiveConf.ConfVars.METASTOREURIS);
+              + HiveConf.ConfVars.METASTORE_URIS);
     }
     LOG.info("Created Hoodie Catalog '{}' in hms mode", catalogName);
   }
@@ -991,7 +991,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       Map<String, String> newOptions = new HashMap<>(options);
       // set up hive sync options
       newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
-      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTORE_URIS));
       newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_MODE.key(), "hms");
       newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP.key(), "true");
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_DB.key(), k -> tablePath.getDatabaseName());

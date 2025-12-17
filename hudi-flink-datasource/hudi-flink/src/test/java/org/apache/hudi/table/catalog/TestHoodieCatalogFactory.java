@@ -87,7 +87,7 @@ public class TestHoodieCatalogFactory {
     assertEquals(
         ((HoodieHiveCatalog) actualCatalog)
             .getHiveConf()
-            .getVar(HiveConf.ConfVars.METASTOREURIS), "dummy-hms");
+            .getVar(HiveConf.ConfVars.METASTORE_URIS), "dummy-hms");
     checkEquals(expectedCatalog, (HoodieHiveCatalog) actualCatalog);
   }
 

@@ -75,6 +75,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
@@ -152,9 +153,9 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Set the input format
     tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
     PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
-    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
-    LinkedHashMap<Path, ArrayList<String>> tableAlias = new LinkedHashMap<>();
-    ArrayList<String> alias = new ArrayList<>();
+    Map<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    Map<Path, List<String>> tableAlias = new LinkedHashMap<>();
+    List<String> alias = new ArrayList<>();
     // Add partition info one
     alias.add(path1.toAbsolutePath().toString());
     tableAlias.put(new Path(path1.toAbsolutePath().toString()), alias);
@@ -216,14 +217,14 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
     tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
-    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
-    LinkedHashMap<Path, ArrayList<String>> talias = new LinkedHashMap<>();
+    Map<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    Map<Path, List<String>> talias = new LinkedHashMap<>();
 
     PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
 
     pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
 
-    ArrayList<String> arrayList = new ArrayList<>();
+    List<String> arrayList = new ArrayList<>();
     arrayList.add(tempDir.toAbsolutePath().toString());
     talias.put(new Path(tempDir.toAbsolutePath().toString()), arrayList);
 
@@ -298,8 +299,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
     tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
-    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
-    LinkedHashMap<Path, ArrayList<String>> talias = new LinkedHashMap<>();
+    Map<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    Map<Path, List<String>> talias = new LinkedHashMap<>();
     LinkedHashMap<String, String> partSpec = new LinkedHashMap<>();
     // add three level partitions info
     partSpec.put("year", "2016");
@@ -309,7 +310,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
 
-    ArrayList<String> arrayList = new ArrayList<>();
+    List<String> arrayList = new ArrayList<>();
     arrayList.add(tempDir.toAbsolutePath().toString());
     talias.put(new Path(tempDir.toAbsolutePath().toString()), arrayList);
 
@@ -393,7 +394,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
     PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
     LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
-    LinkedHashMap<Path, ArrayList<String>> tableAlias = new LinkedHashMap<>();
+    Map<Path, List<String>> tableAlias = new LinkedHashMap<>();
     ArrayList<String> alias = new ArrayList<>();
     alias.add(tempDir.toAbsolutePath().toString());
     tableAlias.put(new Path(tempDir.toAbsolutePath().toString()), alias);
@@ -478,7 +479,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
     LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
     pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
-    LinkedHashMap<Path, ArrayList<String>> tableAlias = new LinkedHashMap<>();
+    Map<Path, List<String>> tableAlias = new LinkedHashMap<>();
     ArrayList<String> alias = new ArrayList<>();
     alias.add(tempDir.toAbsolutePath().toString());
     tableAlias.put(new Path(tempDir.toAbsolutePath().toString()), alias);

@@ -114,7 +114,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     if (nonEmpty(configuredMetastoreUris)) {
       // if metastore uri is configured, we can create a new configuration with the value set
       hadoopConfForSync = new Configuration(hadoopConf);
-      hadoopConfForSync.set(HiveConf.ConfVars.METASTOREURIS.varname, configuredMetastoreUris);
+      hadoopConfForSync.set(HiveConf.ConfVars.METASTORE_URIS.varname, configuredMetastoreUris);
     } else {
       // if the user did not provide any URIs, then we can use the provided configuration
       hadoopConfForSync = hadoopConf;
@@ -178,7 +178,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       if (syncClient != null) {
         LOG.info("Syncing target hoodie table with hive table("
             + tableId(databaseName, tableName) + "). Hive metastore URL from HiveConf:"
-            + config.getHiveConf().get(HiveConf.ConfVars.METASTOREURIS.varname) + "). Hive metastore URL from HiveSyncConfig:"
+            + config.getHiveConf().get(HiveConf.ConfVars.METASTORE_URIS.varname) + "). Hive metastore URL from HiveSyncConfig:"
             + config.getString(METASTORE_URIS) + ", basePath :"
             + config.getString(META_SYNC_BASE_PATH));
 

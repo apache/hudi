@@ -25,9 +25,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
-import org.apache.hadoop.hive.metastore.HiveMetaStore;
+import org.apache.hadoop.hive.metastore.HMSHandler;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
-import org.apache.hadoop.hive.metastore.IHMSHandler;
 import org.apache.hadoop.hive.metastore.RetryingHMSHandler;
 import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
 import org.apache.hadoop.hive.metastore.TUGIBasedProcessor;
@@ -157,24 +156,24 @@ public class HiveTestService {
     conf.setVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST, BIND_HOST);
     final int metastoreServerPort = hadoopConf.getInt(ConfVars.METASTORE_SERVER_PORT.varname, NetworkTestUtils.nextFreePort());
     conf.setIntVar(ConfVars.METASTORE_SERVER_PORT, metastoreServerPort);
-    conf.setVar(ConfVars.METASTOREURIS, "thrift://" + BIND_HOST + ":" + metastoreServerPort);
+    conf.setVar(ConfVars.METASTORE_URIS, "thrift://" + BIND_HOST + ":" + metastoreServerPort);
     File localHiveDir = new File(localHiveLocation);
     localHiveDir.mkdirs();
     File metastoreDbDir = new File(localHiveDir, "metastore_db");
-    conf.setVar(ConfVars.METASTORECONNECTURLKEY, "jdbc:derby:" + metastoreDbDir.getPath() + ";create=true");
+    conf.setVar(ConfVars.METASTORE_CONNECT_URL_KEY, "jdbc:derby:" + metastoreDbDir.getPath() + ";create=true");
     File derbyLogFile = new File(localHiveDir, "derby.log");
     derbyLogFile.createNewFile();
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
     setSystemProperty("derby.system.home", localHiveDir.getAbsolutePath());
     File metastoreWarehouseDir = new File(localHiveDir, "warehouse");
     metastoreWarehouseDir.mkdir();
-    conf.setVar(ConfVars.METASTOREWAREHOUSE, metastoreWarehouseDir.getAbsolutePath());
+    conf.setVar(ConfVars.METASTORE_WAREHOUSE, metastoreWarehouseDir.getAbsolutePath());
 
     return conf;
   }
 
   private boolean waitForServerUp(HiveConf serverConf) {
-    LOG.info("waiting for " + serverConf.getVar(ConfVars.METASTOREURIS));
+    LOG.info("waiting for " + serverConf.getVar(ConfVars.METASTORE_URIS));
     final long start = System.currentTimeMillis();
     while (true) {
       try {
@@ -243,7 +242,7 @@ public class HiveTestService {
     }
 
     @Override
-    public TTransport getTransport(TTransport trans) {
+    public TTransport getTransport(TTransport trans) throws TTransportException {
       return childTransFactory.getTransport(parentTransFactory.getTransport(trans));
     }
   }
@@ -259,8 +258,8 @@ public class HiveTestService {
     }
 
     @Override
-    protected TSocket acceptImpl() throws TTransportException {
-      TSocket ts = super.acceptImpl();
+    public TSocket accept() throws TTransportException {
+      TSocket ts = super.accept();
       try {
         ts.getSocket().setKeepAlive(true);
       } catch (SocketException e) {
@@ -277,8 +276,8 @@ public class HiveTestService {
       // pool to min.
       String host = conf.getVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST);
       int port = conf.getIntVar(ConfVars.METASTORE_SERVER_PORT);
-      int minWorkerThreads = conf.getIntVar(ConfVars.METASTORESERVERMINTHREADS);
-      int maxWorkerThreads = conf.getIntVar(ConfVars.METASTORESERVERMAXTHREADS);
+      int minWorkerThreads = conf.getIntVar(ConfVars.METASTORE_SERVER_MIN_THREADS);
+      int maxWorkerThreads = conf.getIntVar(ConfVars.METASTORE_SERVER_MAX_THREADS);
       boolean tcpKeepAlive = conf.getBoolVar(ConfVars.METASTORE_TCP_KEEP_ALIVE);
       boolean useFramedTransport = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
 
@@ -288,19 +287,19 @@ public class HiveTestService {
       TProcessor processor;
       TTransportFactory transFactory;
 
-      HiveMetaStore.HMSHandler baseHandler = new HiveMetaStore.HMSHandler("new db based metaserver", conf, false);
-      IHMSHandler handler = RetryingHMSHandler.getProxy(conf, baseHandler, true);
+      HMSHandler baseHandler = new HMSHandler("new db based metaserver", conf);
+      RetryingHMSHandler handler = new RetryingHMSHandler(conf, baseHandler, true);
 
       if (conf.getBoolVar(ConfVars.METASTORE_EXECUTE_SET_UGI)) {
         transFactory = useFramedTransport
             ? new ChainedTTransportFactory(new TFramedTransport.Factory(), new TUGIContainingTransport.Factory())
             : new TUGIContainingTransport.Factory();
 
-        processor = new TUGIBasedProcessor<>(handler);
+        processor = new TUGIBasedProcessor<>(baseHandler);
         LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
       } else {
         transFactory = useFramedTransport ? new TFramedTransport.Factory() : new TTransportFactory();
-        processor = new TSetIpAddressProcessor<>(handler);
+        processor = new TSetIpAddressProcessor<>(baseHandler);
         LOG.info("Starting DB backed MetaStore Server");
       }
 

@@ -76,9 +76,9 @@ public class HoodieCatalogTestUtils {
       HiveConf.setHiveSiteLocation(classLoader.getResource(CatalogOptions.HIVE_SITE_FILE));
       HiveConf hiveConf = new HiveConf();
       hiveConf.setVar(
-          HiveConf.ConfVars.METASTOREWAREHOUSE,
+          HiveConf.ConfVars.METASTORE_WAREHOUSE,
           TEMPORARY_FOLDER.newFolder("hive_warehouse").getAbsolutePath());
-      hiveConf.setVar(HiveConf.ConfVars.METASTORECONNECTURLKEY, warehouseUri);
+      hiveConf.setVar(HiveConf.ConfVars.METASTORE_CONNECT_URL_KEY, warehouseUri);
       return hiveConf;
     } catch (IOException e) {
       throw new CatalogException("Failed to create test HiveConf to HiveCatalog.", e);

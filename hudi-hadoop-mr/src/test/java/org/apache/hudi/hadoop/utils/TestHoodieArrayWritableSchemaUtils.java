@@ -343,9 +343,9 @@ public class TestHoodieArrayWritableSchemaUtils {
       BigDecimal expectedDecimal = getDecimalValue(javaExpected, (HoodieSchema.Decimal) newSchema);
       assertEquals(0, outputDecimal.compareTo(expectedDecimal));
     } else if (newSchema.getType() == HoodieSchemaType.DATE) {
-      assertEquals(HoodieAvroUtils.toJavaDate((int) javaOutput), javaExpected);
+      assertEquals(javaOutput, ((org.apache.hadoop.hive.common.type.Date) javaExpected).toEpochDay());
     } else {
-      assertEquals(javaOutput, javaExpected);
+      assertEquals(javaExpected, javaOutput);
     }
   }
 

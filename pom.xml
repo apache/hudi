@@ -121,7 +121,7 @@
     <joda.version>2.9.9</joda.version>
     <hadoop.version>3.3.6</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>3.1.3</hive.version>
+    <hive.version>4.0.1</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
@@ -1306,6 +1306,10 @@
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
@@ -1354,6 +1358,10 @@
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
@@ -1371,6 +1379,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
@@ -1415,6 +1427,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
@@ -1483,6 +1499,10 @@
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
@@ -1528,6 +1548,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
