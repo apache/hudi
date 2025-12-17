@@ -127,7 +127,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   // Compaction trigger strategy
   public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY = ConfigProperty
-      .key(METADATA_PREFIX +  ".compact.inline.trigger.strategy")
+      .key(METADATA_PREFIX +  ".compact.trigger.strategy")
       .defaultValue("NUM_COMMITS")
       .withDocumentation("Controls how compaction scheduling is triggered for metadata table,"
       + "by time or num delta commits or combination of both. ");
