@@ -7,7 +7,7 @@ toc_max_heading_level: 4
 last_modified_at: 2025-11-23T14:20:00
 ---
 
-Concurrency control defines how different writers, readers, and table services coordinate access to a Hudi table. Hudi ensures atomic writes by publishing commits atomically to the timeline, stamped with an instant time that denotes when the action is deemed to have occurred. Unlike general-purpose file version control, Hudi draws a clear distinction between writer processes that issue [write operations](write_operations), table services that (re)write data/metadata to optimize or perform bookkeeping, and readers (that execute queries and read data).
+Concurrency control defines how different writers, readers, and table services coordinate access to a Hudi table. Hudi ensures atomic writes by publishing commits atomically to the timeline, stamped with an instant time that denotes when the action is deemed to have occurred. Unlike general-purpose file version control, Hudi draws a clear distinction between writer processes that issue [write operations](write_operations.md), table services that (re)write data/metadata to optimize or perform bookkeeping, and readers (that execute queries and read data).
 
 Hudi provides:
 
@@ -29,13 +29,13 @@ hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLock
 
 ## Distributed Locking
 
-A prerequisite for distributed coordination in Hudi, like many other distributed systems, is a distributed lock provider that processes can use to plan, schedule, and execute actions on the Hudi timeline concurrently. Locks are also used to [generate TrueTime](timeline#truetime-generation).
+A prerequisite for distributed coordination in Hudi, like many other distributed systems, is a distributed lock provider that processes can use to plan, schedule, and execute actions on the Hudi timeline concurrently. Locks are also used to [generate TrueTime](timeline.md#truetime-generation).
 
 External locking is typically used with optimistic concurrency control because it prevents conflicts that occur when two or more commits attempt to modify the same resource concurrently. When a transaction attempts to modify a locked resource, it must wait until the lock is released.
 
 In multi-writing scenarios, locks are acquired on the Hudi table for very short periods during specific phases (such as just before committing writes or before scheduling table services) instead of for the entire job duration. This approach allows multiple writers to work on the same table simultaneously, increasing concurrency and avoiding conflicts.
 
-Hudi provides multiple lock providers requiring different configurations. Refer to the [locking configs](configurations#LOCK) for the complete list.
+Hudi provides multiple lock providers requiring different configurations. Refer to the [locking configs](configurations.md#LOCK) for the complete list.
 
 ### Storage-Based Lock Provider
 
@@ -115,13 +115,13 @@ hive.zookeeper.client.port
 hoodie.write.lock.provider=org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider
 ```
 
-The Amazon DynamoDB–based lock provider supports multi-writing across clusters. See [DynamoDB-Based Locks Configurations](configurations#DynamoDB-based-Locks-Configurations) for all options. Basic configuration:
+The Amazon DynamoDB–based lock provider supports multi-writing across clusters. See [DynamoDB-Based Locks Configurations](configurations.md#DynamoDB-based-Locks-Configurations) for all options. Basic configuration:
 
 | Config Name                             | Default            | Description                                                                                                                         |
 |-----------------------------------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.write.lock.dynamodb.endpoint_url | N/A **(Required)** | Endpoint URL for DynamoDB (useful for local testing).<br /><br />`Config Param: DYNAMODB_ENDPOINT_URL`<br />`Since Version: 0.10.1` |
 
-Further configurations: [DynamoDB-Based Locks Configurations](configurations#DynamoDB-based-Locks-Configurations)
+Further configurations: [DynamoDB-Based Locks Configurations](configurations.md#DynamoDB-based-Locks-Configurations)
 
 Table creation: Hudi auto-creates the DynamoDB table specified by `hoodie.write.lock.dynamodb.table`. If using an existing table, ensure a `key` attribute (as partition key) exists. `hoodie.write.lock.dynamodb.partition_key` is the value written for the partition key (default: table name), ensuring multiple writers share the same lock.
 
@@ -199,18 +199,18 @@ A single writer with all table services such as cleaning, clustering, compaction
 
 Hudi provides the option of running the table services in an async fashion, where most of the heavy lifting (e.g actually rewriting the columnar data by compaction service) is done asynchronously. In this model, the async deployment eliminates any repeated wasteful retries and optimizes the table using clustering techniques while a single writer consumes the writes to the table without having to be blocked by such table services. This model avoids the need for taking a [lock provider](#distributed-locking) to control concurrency and avoids the need to separately orchestrate and monitor offline table services jobs.
 
-A single writer along with async table services runs in the same process. For example, you can have a  Hudi Streamer in continuous mode write to a MOR table using async compaction; you can use Spark Streaming (where [compaction](compaction) is async by default), and you can use Flink streaming or your own job setup and enable async table services inside the same writer.
+A single writer along with async table services runs in the same process. For example, you can have a  Hudi Streamer in continuous mode write to a MOR table using async compaction; you can use Spark Streaming (where [compaction](compaction.md) is async by default), and you can use Flink streaming or your own job setup and enable async table services inside the same writer.
 
 Hudi leverages **MVCC** in this model to support running any number of table service jobs concurrently, without any concurrency conflict.  This is made possible by ensuring Hudi 's ingestion writer and async table services coordinate among themselves to ensure no conflicts and avoid race conditions. The same single write guarantees described in Model A above can be achieved in this model as well.
 With this model users don't need to spin up different spark jobs and manage the orchestration among it. For larger deployments, this model can ease the operational burden significantly while getting the table services running without blocking the writers.
 
 **Single Writer Guarantees**
 
-In this model, the following are the guarantees on [write operations](write_operations) to expect:
+In this model, the following are the guarantees on [write operations](write_operations.md) to expect:
 
 * *UPSERT Guarantee*: The target table will NEVER show duplicates.
-* *INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations/#hoodiecombinebeforeinsert), is enabled.
-* *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations/#hoodiecombinebeforeinsert), is enabled.
+* *INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](configurations.md#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations.md#hoodiecombinebeforeinsert), is enabled.
+* *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](configurations.md#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations.md#hoodiecombinebeforeinsert), is enabled.
 * *INCREMENTAL QUERY Guarantee*: Data consumption and checkpoints are NEVER out of order.
 
 ## Full-on Multi-writer + Async table services
@@ -244,7 +244,11 @@ The `NON_BLOCKING_CONCURRENCY_CONTROL` offers the same set of guarantees as ment
 explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
 completion time for the commits reflects the serialization order and file slicing is done based on completion time.
 Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
-file group with the conflicts resolved automatically by the query reader and the compactor. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml#non-blocking-concurrency-control-experimental).
+file group with the conflicts resolved automatically by the query reader and the compactor. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml.md#non-blocking-concurrency-control-experimental).
+
+:::note
+`NON_BLOCKING_CONCURRENCY_CONTROL` currently works only for MOR tables using simple bucket index and partition-level bucket index.
+:::
 
 :::note
 `NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering. Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
@@ -256,7 +260,7 @@ Multi writing using OCC allows multiple writers to concurrently write and atomic
 
 To improve the concurrency control, the [0.13.0 release](https://hudi.apache.org/releases/release-0.13.0#early-conflict-detection-for-multi-writer) introduced a new feature, early conflict detection in OCC, to detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using Hudi's marker mechanism. Hudi can now stop a conflicting writer much earlier because of the early conflict detection and release computing resources necessary to cluster, improving resource utilization.
 
-By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](configurations#Write-Configurations-advanced-configs) page for all relevant configs).
+By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](configurations.md#Write-Configurations-advanced-configs) page for all relevant configs).
 :::note
 Early conflict Detection in OCC is an **EXPERIMENTAL** feature
 :::

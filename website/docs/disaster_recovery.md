@@ -25,7 +25,7 @@ will be hitting latest files which has high possibility of getting deleted with 
 
 ## Runbook
 
-Savepoint and restore can be triggered via [Hudi CLI](cli) and [SQL Procedures](procedures). Let's walk through an example of how 
+Savepoint and restore can be triggered via [Hudi CLI](cli.md) and [SQL Procedures](procedures.md). Let's walk through an example of how 
 one can take savepoint and later restore the state of the table.
 
 **Note:** When using the Hudi CLI, we need to specify the *table path*, whereas when using SQL procedures, we need to provide the *table name*.
@@ -113,7 +113,7 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 
 ### Savepoint Example
 
-Savepoints can be created via [Hudi CLI](cli) or [SQL Procedures](procedures).
+Savepoints can be created via [Hudi CLI](cli.md) or [SQL Procedures](procedures.md).
 
 Let's trigger a savepoint as of the latest commit.
 
@@ -231,7 +231,7 @@ spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot").show()
 
 ### Restore Example
 
-Let's say something bad happened, and you want to restore your table to an older snapshot. We can perform a restore operation via [Hudi CLI](cli) or [SQL Procedures](procedures). And do remember to bring down all of your writer processes while doing a restore.
+Let's say something bad happened, and you want to restore your table to an older snapshot. We can perform a restore operation via [Hudi CLI](cli.md) or [SQL Procedures](procedures.md). And do remember to bring down all of your writer processes while doing a restore.
 
 Let's checkout timeline once, before we trigger the restore.
 ```shell

@@ -6,7 +6,7 @@ toc_min_heading_level: 2
 toc_max_heading_level: 4
 ---
 
-Hudi handles mutations to records and streaming data as briefly touched upon in the [timeline ordering](timeline#ordering-of-actions) section.
+Hudi handles mutations to records and streaming data as briefly touched upon in the [timeline ordering](timeline.md#ordering-of-actions) section.
 To provide users with full-fledged support for stream processing, Hudi goes to great lengths to make the storage engine and the underlying storage format understand how to merge changes to the same record key, which may arrive in different orders at different times. With the rise of mobile applications and IoT, these scenarios have become the norm rather than an exception. For example, a social networking application may upload user events several hours after they occur when the user reconnects to Wi‑Fi.
 
 ## Merge Modes
@@ -59,7 +59,7 @@ With event time ordering, the merging picks the record with the highest value on
 In the example above, two microservices produce change records about orders at different times that can arrive out of order. As color-coded,
 this can lead to application-level inconsistent states in the table if simply merged in commit time order like a canceled order being re-created or
 a paid order moved back to just-created state expecting payment again. Event time ordering helps by ignoring older state changes that arrive late and
-avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](concurrency_control#non-blocking-concurrency-control-mode),
+avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](concurrency_control.md#non-blocking-concurrency-control-mode),
 this provides a very powerful way to process such data streams efficiently and correctly.
 
 ### `CUSTOM`
@@ -215,7 +215,7 @@ hoodie.datasource.write.payload.class=org.apache.hudi.common.model.EventTimeAvro
 
 This is the default record payload for Flink-based writing. Some use cases require merging records by event time and
 thus event time plays the role of an ordering field. This payload is particularly useful in the case of late-arriving data.
-For such use cases, users need to set the [payload event time field](configurations#RECORD_PAYLOAD) configuration.
+For such use cases, users need to set the [payload event time field](configurations.md#RECORD_PAYLOAD) configuration.
 
 ### OverwriteNonDefaultsWithLatestAvroPayload (deprecated)
 
@@ -292,7 +292,7 @@ Payload class can be specified using the below configs. For more advanced config
 There are also quite a few other implementations. Developers may be interested in looking at the hierarchy of `HoodieRecordPayload` interface. For
 example, [`MySqlDebeziumAvroPayload`](https://github.com/apache/hudi/blob/e76dd102bcaf8aec5a932e7277ccdbfd73ce1a32/hudi-common/src/main/java/org/apache/hudi/common/model/debezium/MySqlDebeziumAvroPayload.java) and [`PostgresDebeziumAvroPayload`](https://github.com/apache/hudi/blob/e76dd102bcaf8aec5a932e7277ccdbfd73ce1a32/hudi-common/src/main/java/org/apache/hudi/common/model/debezium/PostgresDebeziumAvroPayload.java) provide support for seamlessly applying changes
 captured via Debezium for MySQL and PostgresDB. [`AWSDmsAvroPayload`](https://github.com/apache/hudi/blob/e76dd102bcaf8aec5a932e7277ccdbfd73ce1a32/hudi-common/src/main/java/org/apache/hudi/common/model/AWSDmsAvroPayload.java) provides support for applying changes captured via Amazon Database Migration Service onto S3.
-For full configurations, see [the configurations page](configurations#RECORD_PAYLOAD) and please check out [the FAQ](/faq/writing_tables/#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage) if you want to implement your own custom payloads.
+For full configurations, see [the configurations page](configurations.md#RECORD_PAYLOAD) and please check out [the FAQ](/faq/writing_tables/#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage) if you want to implement your own custom payloads.
 
 ## Related Resources
 
