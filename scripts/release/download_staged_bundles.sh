@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
+if [[ $# -ne 4 ]]; then
   echo "Usage: $0 <BASE_URL> <MODULE_NAME> <TARGET_ROOT_DIR>"
   echo "  BASE_URL      = e.g. https://repository.apache.org/service/local/repositories/orgapachehudi-1168/content/org/apache/hudi/"
   echo "  MODULE_NAME   = e.g. hudi-flink2.0-bundle"
   echo "  TARGET_ROOT   = e.g. ./target_folder"
+  echo "  RELEASE_VERSION   = e.g. 1.1.1-rc1"
   exit 1
 fi
 
 BASE_URL="${1%/}"        # strip trailing /
 MODULE_NAME="$2"
 TARGET_ROOT="${3%/}"     # strip trailing /
-VERSION="1.1.1-rc1"      # <-- change this if needed, or turn into another arg later
+VERSION="$4"      # <-- change this if needed, or turn into another arg later
 
 # --------------------------------------------------------------------
 # Directory layout
