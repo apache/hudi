@@ -268,7 +268,7 @@ and then ingest it as follows.
   --op BULK_INSERT
 ```
 
-In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](../migration_guide).
+In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](migration_guide).
 
 ### Using `hudi-utilities-slim-bundle` bundle jar
 
@@ -303,7 +303,7 @@ A Hudi Streamer job can then be triggered as follows:
   --op BULK_INSERT
 ```
 
-Read more in depth about concurrency control in the [concurrency control concepts](../concurrency_control) section
+Read more in depth about concurrency control in the [concurrency control concepts](concurrency_control) section
 
 ### Checkpointing
 
@@ -314,7 +314,7 @@ Checkpoints are saved in the .hoodie commit file as `streamer.checkpoint.key`.
 
 If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
 
-- `--checkpoint` will set `streamer.checkpoint.reset_key` in the commit file to overwrite the current checkpoint. Format of checkpoint depends on [KAFKA_CHECKPOINT_TYPE](../configurations#hoodiestreamersourcekafkacheckpointtype). By default (for type `string`), checkpoint should be provided as: `topicName,0:offset0,1:offset1,2:offset2`. For type `timestamp`, checkpoint should be provided as long value of desired timestamp. For type `single_offset`, we assume that topic consists of a single partition, so checkpoint should be provided as long value of desired offset.
+- `--checkpoint` will set `streamer.checkpoint.reset_key` in the commit file to overwrite the current checkpoint. Format of checkpoint depends on [KAFKA_CHECKPOINT_TYPE](configurations#hoodiestreamersourcekafkacheckpointtype). By default (for type `string`), checkpoint should be provided as: `topicName,0:offset0,1:offset1,2:offset2`. For type `timestamp`, checkpoint should be provided as long value of desired timestamp. For type `single_offset`, we assume that topic consists of a single partition, so checkpoint should be provided as long value of desired offset.
 - `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
 For Kafka, this is the max # of events to read.
 

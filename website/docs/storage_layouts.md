@@ -12,8 +12,8 @@ The following describes the general organization of files in storage for a Hudi 
 * Each slice contains a **_base file_** (parquet/orc/hfile) (defined by the config - [hoodie.table.base.file.format](https://hudi.apache.org/docs/next/configurations/#hoodietablebasefileformat) ) 
   written by a commit that completed at a certain instant, along with set of **_log files_** (*.log.*) written by commits that completed 
   before the next base file's requested instant.
-* Hudi employs Multiversion Concurrency Control (MVCC), where [compaction](../compaction) action merges logs and base files to produce new
-  file slices and [cleaning](../cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
+* Hudi employs Multiversion Concurrency Control (MVCC), where [compaction](compaction) action merges logs and base files to produce new
+  file slices and [cleaning](cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
 * All metadata including timeline, metadata table are stored in a special `.hoodie` directory under the base path.
 
 ![file groups in a table partition](/assets/images/MOR_new.png)

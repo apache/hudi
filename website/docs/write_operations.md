@@ -119,17 +119,17 @@ Here are the basic configs relevant to the write operations types mentioned abov
 ## Write path
 The following is an inside look on the Hudi write path and the sequence of events that occur during a write.
 
-1. [Deduping](../configurations#hoodiecombinebeforeinsert) : First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
-2. [Index Lookup](../indexes) : Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
-3. [File Sizing](../file_sizing): Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
-4. [Partitioning](../storage_layouts): We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
+1. [Deduping](configurations#hoodiecombinebeforeinsert) : First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
+2. [Index Lookup](indexes) : Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
+3. [File Sizing](file_sizing): Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
+4. [Partitioning](storage_layouts): We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
 5. Write I/O :Now we actually do the write operations which is either creating a new base file, appending to the log file,
    or versioning an existing base file.
-6. Update [Index](../indexes): Now that the write is performed, we will go back and update the index.
-7. Commit: Finally we commit all of these changes atomically. ([Post-commit callback](../platform_services_post_commit_callback) can be configured.)
-8. [Clean](../cleaning) (if needed): Following the commit, cleaning is invoked if needed.
-9. [Compaction](../compaction): If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
-10. Archive : Lastly, we perform an archival step which moves old [timeline](../timeline) items to an archive folder.
+6. Update [Index](indexes): Now that the write is performed, we will go back and update the index.
+7. Commit: Finally we commit all of these changes atomically. ([Post-commit callback](platform_services_post_commit_callback) can be configured.)
+8. [Clean](cleaning) (if needed): Following the commit, cleaning is invoked if needed.
+9. [Compaction](compaction): If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
+10. Archive : Lastly, we perform an archival step which moves old [timeline](timeline) items to an archive folder.
 
 Here is a diagramatic representation of the flow.
 

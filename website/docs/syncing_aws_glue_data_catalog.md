@@ -10,7 +10,7 @@ and send them to AWS Glue.
 ## Configurations
 
 Most of the configurations for `AwsGlueCatalogSyncTool` are shared with `HiveSyncTool`. The example showed in 
-[Sync to Hive Metastore](../syncing_metastore) can be used as is for sync with Glue Data Catalog, provided that the hive metastore
+[Sync to Hive Metastore](syncing_metastore) can be used as is for sync with Glue Data Catalog, provided that the hive metastore
 URL (either JDBC or thrift URI) can proxied to Glue Data Catalog, which is usually done within AWS EMR or Glue job environment.
 
 For Hudi streamer, users can set

@@ -62,12 +62,12 @@ Following are the different types of metadata currently supported.
   even without examining column statistics at the file level. The partition stats index is stored in *partition_stats* partition in the metadata table.
   Partition stats index can be enabled using the following configs (note it is required to specify the columns for which stats should be aggregated).
 
-To try out these features, refer to the [SQL guide](../sql_ddl#create-partition-stats-index).
+To try out these features, refer to the [SQL guide](sql_ddl#create-partition-stats-index).
 
 ## Metadata Tracking on Writers
 
 Following are based basic configs that are needed to enable metadata tracking. For advanced configs please refer 
-[here](../configurations#Metadata-Configs).
+[here](configurations#Metadata-Configs).
 
 | Config Name                                  | Default                                   | Description                                                                                                                                                                                                                                                                                       |
 |----------------------------------------------|-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -120,10 +120,10 @@ corresponding configs across Spark and Flink readers.
 To ensure that metadata table stays up to date and table metadata is tracked safely across concurrent write and 
 table operations, there are some additional considerations. If async table services are enabled for the table (i.e. running a separate compaction (`HoodieCompactor`) or 
 clustering (`HoodieClusteringJob`) job), even with just a single writer, lock providers 
-must be configured. Please refer to [concurrency control](../concurrency_control) for more details. 
+must be configured. Please refer to [concurrency control](concurrency_control) for more details. 
 
 Before enabling metadata table for the first time, all writers on the same table must and table services must be stopped.
-If your current deployment model is [multi-writer](../concurrency_control#full-on-multi-writer--async-table-services) along with a lock 
+If your current deployment model is [multi-writer](concurrency_control#full-on-multi-writer--async-table-services) along with a lock 
 provider and other required configs set for every writer as follows, there is no additional configuration required. You 
 can bring up the writers sequentially after stopping the writers for enabling metadata table. Applying the proper 
 configurations to only a subset of writers or table services is unsafe and can lead to loss of data. So, please ensure you enable 

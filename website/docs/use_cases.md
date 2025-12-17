@@ -19,7 +19,7 @@ it is unfortunately often solved in a piecemeal fashion, using a medley of inges
 ### Why Hudi? 
 
 - Unique design choices like Merge-On-Read tables, record-level indexes and asynchronous compaction, approach theoretical optimality for absorbing changes to tables quickly and efficiently.
-- Built-in ingestion tools on [Spark](../hoodie_streaming_ingestion), [Flink](../ingestion_flink) and [Kafka Connect](../ingestion_kafka_connect), that let you ingest data with a single command.
+- Built-in ingestion tools on [Spark](hoodie_streaming_ingestion), [Flink](ingestion_flink) and [Kafka Connect](ingestion_kafka_connect), that let you ingest data with a single command.
 - Support for incremental ingestion with automatic checkpoint management from streaming sources (Kafka, Pulsar, ...), Cloud storage (S3, GCS, ADLS, etc.) and even JDBC.
 - Support for widely used data formats (Protobuf, Avro, JSON), file formats (parquet, orc, avro, etc.) and change log formats like [Debezium](http://debezium.io/).
 - Even for scalable de-duplication for high-volume append-only streaming data, by employing bloom filter indexes and advanced data structures like interval trees for efficient range pruning.
@@ -65,10 +65,10 @@ together to build out the platform. Such an open platform is also essential for 
 - While open data formats help, Hudi unlocks complete freedom by also providing open compute services for ingesting, optimizing, indexing and querying data. For e.g Hudi's writers come with 
   a self-managing table service runtime that can maintain tables automatically in the background on each write. Often times, Hudi and your favorite open query engine is all 
   you need to get an open data platform up and running.
-- Examples of open services that make performance optimization or management easy include: [auto file sizing](../file_sizing) to solve the "small files" problem,
-  [clustering](../clustering) to co-locate data next to each other, [compaction](../compaction) to allow tuning of low latency ingestion + fast read queries, 
-  [indexing](../indexes) - for faster writes/queries, Multi-Dimensional Partitioning (Z-Ordering), automatic cleanup of uncommitted data with marker mechanism, 
-  [auto cleaning](../cleaning) to automatically removing old versions of files.
+- Examples of open services that make performance optimization or management easy include: [auto file sizing](file_sizing) to solve the "small files" problem,
+  [clustering](clustering) to co-locate data next to each other, [compaction](compaction) to allow tuning of low latency ingestion + fast read queries, 
+  [indexing](indexes) - for faster writes/queries, Multi-Dimensional Partitioning (Z-Ordering), automatic cleanup of uncommitted data with marker mechanism, 
+  [auto cleaning](cleaning) to automatically removing old versions of files.
 - Hudi provides rich options for pre-sorting/loading data efficiently and then follow on with rich set of data clustering techniques to manage file sizes and data distribution within a table. In each case, Hudi provides high-degree of configurability in terms of when/how often these services are scheduled, planned and executed. For e.g. Hudi ships with a handful of common planning strategies for compaction and clustering.
 - Along with compatibility with other open table formats like [Apache Iceberg](https://iceberg.apache.org/)/[Delta Lake](https://delta.io/), and catalog sync services to various data catalogs, Hudi is one of the most open choices for your data foundation.
 

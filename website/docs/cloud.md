@@ -11,25 +11,25 @@ last_modified_at: 2021-10-12T10:50:00+08:00
 Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
 to cloud stores.
 
-* [AWS S3](../s3_hoodie) <br/>
+* [AWS S3](s3_hoodie) <br/>
    Configurations required for S3 and Hudi co-operability.
-* [Google Cloud Storage](../gcs_hoodie) <br/>
+* [Google Cloud Storage](gcs_hoodie) <br/>
    Configurations required for GCS and Hudi co-operability.
-* [Alibaba Cloud OSS](../oss_hoodie) <br/>
+* [Alibaba Cloud OSS](oss_hoodie) <br/>
    Configurations required for OSS and Hudi co-operability.
-* [Microsoft Azure](../azure_hoodie) <br/>
+* [Microsoft Azure](azure_hoodie) <br/>
    Configurations required for Azure and Hudi co-operability.
-* [Tencent Cloud Object Storage](../cos_hoodie) <br/>
+* [Tencent Cloud Object Storage](cos_hoodie) <br/>
    Configurations required for COS and Hudi co-operability.
-* [IBM Cloud Object Storage](../ibm_cos_hoodie) <br/>
+* [IBM Cloud Object Storage](ibm_cos_hoodie) <br/>
    Configurations required for IBM Cloud Object Storage and Hudi co-operability.
-* [Baidu Cloud Object Storage](../bos_hoodie) <br/>
+* [Baidu Cloud Object Storage](bos_hoodie) <br/>
    Configurations required for BOS and Hudi co-operability.
-* [JuiceFS](../jfs_hoodie) <br/>
+* [JuiceFS](jfs_hoodie) <br/>
    Configurations required for JuiceFS and Hudi co-operability.
-* [Oracle Cloud Infrastructure](../oci_hoodie) <br/>
+* [Oracle Cloud Infrastructure](oci_hoodie) <br/>
    Configurations required for OCI and Hudi co-operability.
-* [KS3 File System](../ks3_hoodie) <br/>
+* [KS3 File System](ks3_hoodie) <br/>
    Configurations required for KS3 FS and Hudi co-operability.
 
 :::note 
