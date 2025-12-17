@@ -52,10 +52,10 @@ import scala.collection.JavaConverters._
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
-                                    rootCatalystType: DataType,
-                                    positionalFieldMatch: Boolean,
-                                    datetimeRebaseSpec: RebaseSpec,
-                                    filters: StructFilters) {
+                                            rootCatalystType: DataType,
+                                            positionalFieldMatch: Boolean,
+                                            datetimeRebaseSpec: RebaseSpec,
+                                            filters: StructFilters) {
 
   def this(rootType: HoodieSchema,
            rootCatalystType: DataType,

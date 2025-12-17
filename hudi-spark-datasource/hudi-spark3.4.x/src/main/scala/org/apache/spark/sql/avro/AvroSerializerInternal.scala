@@ -56,10 +56,10 @@ import scala.collection.JavaConverters._
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
 private[sql] class AvroSerializerInternal(rootCatalystType: DataType,
-                                  rootType: HoodieSchema,
-                                  nullable: Boolean,
-                                  positionalFieldMatch: Boolean,
-                                  datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
+                                          rootType: HoodieSchema,
+                                          nullable: Boolean,
+                                          positionalFieldMatch: Boolean,
+                                          datetimeRebaseMode: LegacyBehaviorPolicy.Value) extends Logging {
 
   def this(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean) = {
     this(rootCatalystType, rootType, nullable, positionalFieldMatch = false,
