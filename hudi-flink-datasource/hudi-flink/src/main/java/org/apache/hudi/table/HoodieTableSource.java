@@ -391,42 +391,45 @@ public class HoodieTableSource implements
   }
 
   private List<MergeOnReadInputSplit> buildInputSplits() {
-    FileIndex fileIndex = getOrBuildFileIndex();
-    List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
-    if (relPartitionPaths.isEmpty()) {
-      return Collections.emptyList();
-    }
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    if (pathInfoList.isEmpty()) {
-      throw new HoodieException("No files found for reading in user provided path.");
-    }
-
-    String latestCommit;
-    List<FileSlice> allFileSlices;
-    // file-slice after pending compaction-requested instant-time is also considered valid
-    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
-        metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
-      if (!fsView.getLastInstant().isPresent()) {
+    try (FileIndex fileIndex = getOrBuildFileIndex()) {
+      List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
+      if (relPartitionPaths.isEmpty()) {
         return Collections.emptyList();
       }
-      latestCommit = fsView.getLastInstant().get().requestedTime();
-      allFileSlices = relPartitionPaths.stream()
-          .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit)).collect(Collectors.toList());
-    }
-    List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
+      List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+      if (pathInfoList.isEmpty()) {
+        throw new HoodieException("No files found for reading in user provided path.");
+      }
 
-    final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
-    final AtomicInteger cnt = new AtomicInteger(0);
-    // generates one input split for each file group
-    return fileSlices.stream().map(fileSlice -> {
-      String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-      Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-          .sorted(HoodieLogFile.getLogFileComparator())
-          .map(logFile -> logFile.getPath().toString())
-          .collect(Collectors.toList()));
-      return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
-    }).collect(Collectors.toList());
+      String latestCommit;
+      List<FileSlice> allFileSlices;
+      // file-slice after pending compaction-requested instant-time is also considered valid
+      try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+          metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
+        if (!fsView.getLastInstant().isPresent()) {
+          return Collections.emptyList();
+        }
+        latestCommit = fsView.getLastInstant().get().requestedTime();
+        allFileSlices = relPartitionPaths.stream()
+            .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit)).collect(Collectors.toList());
+      }
+      List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
+
+      final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
+      final AtomicInteger cnt = new AtomicInteger(0);
+      // generates one input split for each file group
+      return fileSlices.stream().map(fileSlice -> {
+        String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+        Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+            .sorted(HoodieLogFile.getLogFileComparator())
+            .map(logFile -> logFile.getPath().toString())
+            .collect(Collectors.toList()));
+        return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
+            metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
+      }).collect(Collectors.toList());
+    } finally {
+      this.fileIndex = null;
+    }
   }
 
   public InputFormat<RowData, ?> getInputFormat() {
@@ -683,19 +686,23 @@ public class HoodieTableSource implements
    */
   @VisibleForTesting
   public List<FileSlice> getBaseFileOnlyFileSlices() {
-    List<String> relPartitionPaths = getReadPartitions();
-    if (relPartitionPaths.isEmpty()) {
-      return Collections.emptyList();
-    }
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
+    try (FileIndex fileIndex = getOrBuildFileIndex())  {
+      List<String> relPartitionPaths = getReadPartitions();
+      if (relPartitionPaths.isEmpty()) {
+        return Collections.emptyList();
+      }
+      List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+      try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+          metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
 
-      List<FileSlice> allFileSlices = relPartitionPaths.stream()
-          .flatMap(par -> fsView.getLatestBaseFiles(par)
-              .map(baseFile -> new FileSlice(new HoodieFileGroupId(par, baseFile.getFileId()), baseFile.getCommitTime(), baseFile, Collections.emptyList())))
-          .collect(Collectors.toList());
-      return fileIndex.filterFileSlices(allFileSlices);
+        List<FileSlice> allFileSlices = relPartitionPaths.stream()
+            .flatMap(par -> fsView.getLatestBaseFiles(par)
+                .map(baseFile -> new FileSlice(new HoodieFileGroupId(par, baseFile.getFileId()), baseFile.getCommitTime(), baseFile, Collections.emptyList())))
+            .collect(Collectors.toList());
+        return fileIndex.filterFileSlices(allFileSlices);
+      }
+    } finally {
+      this.fileIndex = null;
     }
   }
 

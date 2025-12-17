@@ -40,6 +40,7 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -366,8 +367,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
       // which will be used to construct partition stats then.
       conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     }
-    metaClient = HoodieTestUtils.init(basePath, tableType);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient = StreamerUtil.createMetaClient(conf);
 
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
     ColumnStatsProbe columnStatsProbe =

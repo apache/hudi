@@ -50,12 +50,16 @@ import java.util.stream.Stream;
  */
 public class PartitionPruners {
 
-  public interface PartitionPruner extends Serializable {
+  public interface PartitionPruner extends Serializable, AutoCloseable {
 
     /**
      * Applies partition pruning on the given partition list, return remained partitions.
      */
     Set<String> filter(Collection<String> partitions);
+
+    default void close() {
+      // do nothing.
+    }
   }
 
   /**
@@ -163,6 +167,11 @@ public class PartitionPruners {
       }
       return partitions.stream().filter(candidatePartitions::contains).collect(Collectors.toSet());
     }
+
+    @Override
+    public void close() {
+      this.partitionStatsIndex.close();
+    }
   }
 
   /**
@@ -182,6 +191,11 @@ public class PartitionPruners {
         partitions = pruner.filter(partitions);
       }
       return new HashSet<>(partitions);
+    }
+
+    @Override
+    public void close() {
+      pruners.forEach(PartitionPruner::close);
     }
   }
 
