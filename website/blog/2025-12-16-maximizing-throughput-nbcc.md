@@ -13,7 +13,7 @@ tags:
 
 Data lakehouses often run multiple concurrent writers—streaming ingestion, batch ETL, maintenance jobs. The default approach, Optimistic Concurrency Control (OCC), assumes conflicts are rare and handles them through retries. That assumption breaks down in increasingly common scenarios, such as running maintenance batch jobs on tables receiving streaming writes. When conflicts become the norm, retries pile up with OCC, and the write throughput tanks.
 
-Hudi introduced [Non-Blocking Concurrency Control (NBCC)](https://hudi.apache.org/docs/concurrency_control#non-blocking-concurrency-control) in release 1.0, solving this problem by allowing writers to append data files in parallel and using the write completion time to determine the serialization order for reads or merges. We'll explore why OCC struggles under real-world concurrency, how NBCC works under the hood, and how to configure NBCC in your pipelines.
+Hudi introduced [Non-Blocking Concurrency Control (NBCC)](https://hudi.apache.org/concurrency_control#non-blocking-concurrency-control) in release 1.0, solving this problem by allowing writers to append data files in parallel and using the write completion time to determine the serialization order for reads or merges. We'll explore why OCC struggles under real-world concurrency, how NBCC works under the hood, and how to configure NBCC in your pipelines.
 
 ## The Problem with Retries
 
