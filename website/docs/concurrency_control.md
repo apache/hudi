@@ -241,10 +241,14 @@ With multiple writers using OCC, these are the write guarantees to expect:
 ## Non-Blocking Concurrency Control
 
 The `NON_BLOCKING_CONCURRENCY_CONTROL` offers the same set of guarantees as mentioned in the case of OCC but without
-explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
+explicit locks for serializing the writes. Lockng is only needed for commit timestamp generation. The
 completion time for the commits reflects the serialization order and file slicing is done based on completion time.
 Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
 file group with the conflicts resolved automatically by the query reader and the compactor. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml#non-blocking-concurrency-control-experimental).
+
+:::note
+`NON_BLOCKING_CONCURRENCY_CONTROL` only works on MOR tables using simple bucket index and partition-level bucket index.
+:::
 
 :::note
 `NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering. Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
