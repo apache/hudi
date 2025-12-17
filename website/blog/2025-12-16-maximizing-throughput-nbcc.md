@@ -31,7 +31,7 @@ NBCC avoids conflicts by design: let every writer append updates to Hudi’s log
 
 ![p2-nbcc-overview](/assets/images/blog/2025-12-16-maximizing-throughput-nbcc/p2-nbcc-overview.png)
 
-Both OCC and NBCC require locking—OCC during commit validation, NBCC during timestamp generation. The key difference is how long the lock is held, and what happens after. OCC holds the lock while validating: for concurrent commits, it compares the sets of written files to detect conflicts—so validation time grows with both transaction size and concurrent writer count. If validation detects a conflict, the losing writers discard their completed work and retry. NBCC's lock duration is a negligible constant (a configurable clock skew duration, 200ms by default) regardless of transaction size: acquire lock, generate timestamp, sleep for clock skew, release. No file-level validation, no conflict detection, no retries.
+Both OCC and NBCC require locking—OCC during commit validation, NBCC during timestamp generation. The key difference is how long the lock is held, and what happens after. OCC holds the lock while validating: for concurrent commits, it compares the sets of written files to detect conflicts—so validation time grows with both transaction size. If validation detects a conflict, the losing writers discard their completed work and retry. NBCC's lock duration is a negligible constant (a configurable clock skew duration, 200ms by default) regardless of transaction size: acquire lock, generate timestamp, sleep for clock skew, release. No file-level validation, no conflict detection, no retries.
 
 |                | OCC                                             | NBCC                                        |
 |:---------------|:------------------------------------------------|:--------------------------------------------|
@@ -39,7 +39,7 @@ Both OCC and NBCC require locking—OCC during commit validation, NBCC during ti
 | Lock duration  | Scales with the number of written files to validate | Constant (brief clock skew duration)        |
 | Resource waste | High                                            | Nearly none                                 |
 
-Hudi supports both OCC and NBCC for multi-writer scenarios. Hudi also offers [early conflict detection](https://hudi.apache.org/docs/concurrency_control/#early-conflict-detection) for OCC, which can reduce wasted work by failing faster. However, OCC's validation lock duration still exceeds NBCC's timestamp generation time, and retries still occur after conflicts are detected—both impacting overall write throughput.
+Hudi supports both OCC and NBCC for multi-writer scenarios. Hudi also offers [early conflict detection](https://hudi.apache.org/docs/concurrency_control#early-conflict-detection) for OCC, which can reduce wasted work by failing faster. However, OCC's validation lock duration still exceeds NBCC's timestamp generation time, and retries still occur after conflicts are detected—both impacting overall write throughput.
 
 ## How NBCC Works Under the Hood
 
