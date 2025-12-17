@@ -26,8 +26,8 @@ import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
@@ -53,7 +53,7 @@ public class TestDFSPropertiesConfiguration {
   private static String dfsBasePath;
   private static HdfsTestService hdfsTestService;
   private static MiniDFSCluster dfsCluster;
-  private static DistributedFileSystem dfs;
+  private static FileSystem dfs;
 
   @Rule
   public static final EnvironmentVariables ENVIRONMENT_VARIABLES

@@ -65,7 +65,7 @@ import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Assumptions;
 
 import javax.annotation.Nonnull;
@@ -406,14 +406,14 @@ public class HoodieTestUtils {
     return getJavaVersion() == 11 || getJavaVersion() == 17;
   }
 
-  public static DistributedFileSystem useExternalHdfs() throws IOException {
+  public static FileSystem useExternalHdfs() throws IOException {
     // For Java 17, this unit test has to run in Docker
     // Need to set -Duse.external.hdfs=true in mvn command to run this test
     Assumptions.assumeTrue(Boolean.valueOf(System.getProperty("use.external.hdfs", "false")));
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS", "hdfs://localhost:9000");
     conf.set("dfs.replication", "3");
-    return (DistributedFileSystem) DistributedFileSystem.get(conf);
+    return FileSystem.get(conf);
   }
 
   public static List<String> getLogFileListFromFileSlice(FileSlice fileSlice) {
