@@ -349,6 +349,10 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>${hive.groupid}</groupId>

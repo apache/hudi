@@ -229,7 +229,7 @@
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
     <gcp-libraries-bom.version>26.15.0</gcp-libraries-bom.version>
-    <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
+    <gcs.connector.version>hadoop3-2.2.7</gcs.connector.version>
     <testcontainers.version>1.20.2</testcontainers.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
@@ -1445,6 +1445,10 @@
             <groupId>com.google.guava</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>io.grpc</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1479,6 +1483,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.grpc</groupId>
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
