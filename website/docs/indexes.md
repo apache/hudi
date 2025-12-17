@@ -21,8 +21,8 @@ file group at any completed instant on the timeline.
 
 ## Need for indexing
 
-For [Copy-On-Write tables](table_types#copy-on-write-table), indexing enables fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite.
-For [Merge-On-Read tables](table_types#merge-on-read-table), indexing allows Hudi to bound the amount of change records any given base file needs to be merged against. Specifically, a given base file needs to be merged
+For [Copy-On-Write tables](../table_types#copy-on-write-table), indexing enables fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite.
+For [Merge-On-Read tables](../table_types#merge-on-read-table), indexing allows Hudi to bound the amount of change records any given base file needs to be merged against. Specifically, a given base file needs to be merged
 only against updates for records that are part of that base file.
 
 ![Fact table](/assets/images/blog/hudi-indexes/with_without_index.png)
@@ -31,7 +31,7 @@ only against updates for records that are part of that base file.
 In contrast,
 
 - Designs without an indexing component (e.g: [Apache Hive/Apache Iceberg](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)) end up having to merge all the base files against all incoming updates/delete records
-  (10-100x more [read amplification](table_types#comparison)).
+  (10-100x more [read amplification](../table_types#comparison)).
 - Designs that implement heavily write-optimized OLTP data structures like LSM trees do not require an indexing component. But they perform poorly scan heavy workloads
   against cloud storage making them unsuitable for serving analytical queries.
 
@@ -46,8 +46,8 @@ implemented by enhancing the metadata table with the flexibility to extend to ne
 along with an [asynchronous index](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing) building
 
 Hudi supports a multi-modal index by augmenting the metadata table with the capability to incorporate new types of indexes, complemented by an
-asynchronous mechanism for [index construction](metadata_indexing). This enhancement supports a range of indexes within
-the [metadata table](metadata#metadata-table), significantly improving the efficiency of both writing to and reading from the table.
+asynchronous mechanism for [index construction](../metadata_indexing). This enhancement supports a range of indexes within
+the [metadata table](../metadata#metadata-table), significantly improving the efficiency of both writing to and reading from the table.
 
 ![Indexes](/assets/images/hudi-stack-indexes.png)
 <p align = "center">Figure: Indexes in Hudi</p>
@@ -105,7 +105,7 @@ Following are configurations that control enabling record index building and mai
 An [expression index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md) is an index on a function of a column. If a query has a predicate on a function of a column, the expression index can
 be used to speed up the query. Expression index is stored in *expr_index_* prefixed partitions (one for each
 expression index) under metadata table. Expression index can be created using SQL syntax. Please check out SQL DDL
-docs [SQL DDL docs](sql_ddl#create-expression-index) for more details.
+docs [SQL DDL docs](../sql_ddl#create-expression-index) for more details.
 
 Following are configurations that control enabling expression index building and maintenance on the writer.
 
@@ -212,7 +212,7 @@ for more details. All these, support the index types mentioned [above](#addition
 #### Flink based configs
 
 For Flink DataStream and Flink SQL, Bucket index and Flink state index are supported.
-Following are the basic configs that control the indexing behavior. Please refer [the Flink configurations](configurations#Flink-Options-advanced-configs) for advanced configs.
+Following are the basic configs that control the indexing behavior. Please refer [the Flink configurations](../configurations#Flink-Options-advanced-configs) for advanced configs.
 
 | Config Name                | Default                | Description                                                                                                                                                                                                                             |
 |----------------------------|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

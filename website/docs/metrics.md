@@ -6,7 +6,7 @@ toc: true
 last_modified_at: 2020-06-20T15:59:57-04:00
 ---
 
-In this section, we will introduce the `MetricsReporter` and `HoodieMetrics` in Hudi. You can view the metrics-related configurations [here](configurations#METRICS).
+In this section, we will introduce the `MetricsReporter` and `HoodieMetrics` in Hudi. You can view the metrics-related configurations [here](../configurations#METRICS).
 
 ## MetricsReporter
 
@@ -17,7 +17,7 @@ MetricsReporter provides APIs for reporting `HoodieMetrics` to user-specified ba
 JmxMetricsReporter is an implementation of JMX reporter, which used to report JMX metrics.
 
 #### Configurations
-The following is an example of `JmxMetricsReporter`. More detailed configurations can be referenced [here](configurations#Metrics-Configurations-for-Jmx).
+The following is an example of `JmxMetricsReporter`. More detailed configurations can be referenced [here](../configurations#Metrics-Configurations-for-Jmx).
 
   ```properties
   hoodie.metrics.on=true
@@ -37,7 +37,7 @@ As configured above, JmxMetricsReporter will started JMX server on port 4001. We
 MetricsGraphiteReporter is an implementation of Graphite reporter, which connects to a Graphite server, and send `HoodieMetrics` to it.
 
 #### Configurations
-The following is an example of `MetricsGraphiteReporter`. More detaile configurations can be referenced [here](configurations#Metrics-Configurations-for-Graphite).
+The following is an example of `MetricsGraphiteReporter`. More detaile configurations can be referenced [here](../configurations#Metrics-Configurations-for-Graphite).
 
   ```properties
   hoodie.metrics.on=true
@@ -58,7 +58,7 @@ DatadogMetricsReporter is an implementation of Datadog reporter.
 A reporter which publishes metric values to Datadog monitoring service via Datadog HTTP API.
 
 #### Configurations
-The following is an example of `DatadogMetricsReporter`. More detailed configurations can be referenced [here](configurations#Metrics-Configurations-for-Datadog-reporter).
+The following is an example of `DatadogMetricsReporter`. More detailed configurations can be referenced [here](../configurations#Metrics-Configurations-for-Datadog-reporter).
 
 ```properties
 hoodie.metrics.on=true
@@ -138,7 +138,7 @@ tuned are in the `HoodieMetricsCloudWatchConfig` class.
 Allows users to define a custom metrics reporter.
 
 #### Configurations
-The following is an example of `UserDefinedMetricsReporter`. More detailed configurations can be referenced [here](configurations#Metrics-Configurations).
+The following is an example of `UserDefinedMetricsReporter`. More detailed configurations can be referenced [here](../configurations#Metrics-Configurations).
 
 ```properties
 hoodie.metrics.on=true

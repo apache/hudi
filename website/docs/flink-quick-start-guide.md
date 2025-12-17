@@ -56,7 +56,7 @@ quick-start tool for SQL users.
 ### Start Flink SQL Client
 
 Hudi supports a packaged bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
-You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`(see [Build Flink Bundle Jar](syncing_metastore#install)), or download it from the
+You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`(see [Build Flink Bundle Jar](../syncing_metastore#install)), or download it from the
 [Apache Official Repository](https://repo.maven.apache.org/maven2/org/apache/hudi/).
 
 Now start the SQL CLI:
@@ -277,7 +277,7 @@ Refer Full Streaming Reader Example [here](https://github.com/ad1happy2go/hudi-e
 >
 
 This statement queries snapshot view of the dataset. 
-Refers to [Table types and queries](concepts#table-types--queries) for more info on all table types and query types supported.
+Refers to [Table types and queries](../concepts#table-types--queries) for more info on all table types and query types supported.
 
 ## Update Data
 
@@ -320,7 +320,7 @@ Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/ma
 </Tabs
 >
 
-[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](concepts)
+[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](../concepts)
 denoted by the timestamp.
 
 
@@ -445,27 +445,27 @@ feature is that it lets you author streaming pipelines on streaming or batch dat
 ## Where To Go From Here?
 
 - **Quick Start**: Read the Quick Start section above to get started quickly with the Flink SQL client to write to (and read from) Hudi.
-- **Configuration**: For [Global Configuration](flink_tuning#global-configurations), set up through `$FLINK_HOME/conf/flink-conf.yaml`. For per-job configuration, set up through [Table Option](flink_tuning#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](ingestion_flink#cdc-ingestion), [Bulk Insert](ingestion_flink#bulk-insert), [Index Bootstrap](ingestion_flink#index-bootstrap), [Changelog Mode](ingestion_flink#changelog-mode) and [Append Mode](ingestion_flink#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](sql_dml#non-blocking-concurrency-control-experimental).
-- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries#streaming-query) and [Incremental Query](sql_queries#incremental-query).
-- **Tuning**: For write/read tasks, this guide provides some tuning suggestions, such as [Memory Optimization](flink_tuning#memory-optimization) and [Write Rate Limit](flink_tuning#write-rate-limit).
-- **Optimization**: Offline compaction is supported: [Offline Compaction](compaction#flink-offline-compaction).
-- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](syncing_metastore#flink-setup), [Presto Query](sql_queries#presto).
+- **Configuration**: For [Global Configuration](../flink_tuning#global-configurations), set up through `$FLINK_HOME/conf/flink-conf.yaml`. For per-job configuration, set up through [Table Option](../flink_tuning#table-options).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](../ingestion_flink#cdc-ingestion), [Bulk Insert](../ingestion_flink#bulk-insert), [Index Bootstrap](../ingestion_flink#index-bootstrap), [Changelog Mode](../ingestion_flink#changelog-mode) and [Append Mode](../ingestion_flink#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](../sql_dml#non-blocking-concurrency-control-experimental).
+- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](../sql_queries#streaming-query) and [Incremental Query](../sql_queries#incremental-query).
+- **Tuning**: For write/read tasks, this guide provides some tuning suggestions, such as [Memory Optimization](../flink_tuning#memory-optimization) and [Write Rate Limit](../flink_tuning#write-rate-limit).
+- **Optimization**: Offline compaction is supported: [Offline Compaction](../compaction#flink-offline-compaction).
+- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](../syncing_metastore#flink-setup), [Presto Query](../sql_queries#presto).
 - **Catalog**: A Hudi‑specific catalog is supported: [Hudi Catalog](sql_ddl/#create-catalog).
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
 
-- [Hudi Timeline](timeline) – How Hudi manages transactions and other table services
-- [Hudi Storage Layout](storage_layouts) – How files are laid out on storage
-- [Hudi Table Types](table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
-- [Hudi Query Types](table_types#query-types) – Snapshot Queries, Incremental Queries, Read‑Optimized Queries
+- [Hudi Timeline](../timeline) – How Hudi manages transactions and other table services
+- [Hudi Storage Layout](../storage_layouts) – How files are laid out on storage
+- [Hudi Table Types](../table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
+- [Hudi Query Types](../table_types#query-types) – Snapshot Queries, Incremental Queries, Read‑Optimized Queries
 
-See more in the [concepts](concepts) docs page.
+See more in the [concepts](../concepts) docs page.
 
 Take a look at recent [blog posts](/blog) that go in depth on certain topics or use cases.
 
 Hudi tables can be queried from query engines like Hive, Spark, Flink, Presto, and much more. We have put together a
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a Docker‑based setup with all
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself by following
-the steps in the [docker demo](docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data
-to Hudi, refer to the [migration guide](migration_guide).
+the steps in the [docker demo](../docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data
+to Hudi, refer to the [migration guide](../migration_guide).
