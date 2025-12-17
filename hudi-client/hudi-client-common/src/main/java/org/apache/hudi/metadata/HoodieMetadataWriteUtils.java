@@ -220,7 +220,7 @@ public class HoodieMetadataWriteUtils {
             .withLogCompactionEnabled(writeConfig.isLogCompactionEnabledOnMetadata())
             // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
-            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.valueOf(writeConfig.getMetadataInlineCompactionTriggerStrategy()))
+            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.valueOf(writeConfig.getMetadataCompactionTriggerStrategy()))
             .withMaxDeltaSecondsBeforeCompaction(writeConfig.getMetadataMaxDeltaSecondsBeforeCompaction())
             .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MDT_MAX_HFILE_SIZE_BYTES)

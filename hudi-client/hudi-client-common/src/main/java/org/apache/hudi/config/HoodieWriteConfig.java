@@ -2618,12 +2618,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
   }
 
-  public String getMetadataInlineCompactionTriggerStrategy() {
-    return getString(HoodieMetadataConfig.INLINE_COMPACT_TRIGGER_STRATEGY);
+  public String getMetadataCompactionTriggerStrategy() {
+    return getString(HoodieMetadataConfig.COMPACT_TRIGGER_STRATEGY);
   }
 
   public int getMetadataMaxDeltaSecondsBeforeCompaction() {
-    return getInt(HoodieMetadataConfig.INLINE_COMPACT_TIME_DELTA_SECONDS);
+    return getInt(HoodieMetadataConfig.COMPACT_TIME_DELTA_SECONDS);
   }
 
   public boolean isMetadataAsyncIndex() {
