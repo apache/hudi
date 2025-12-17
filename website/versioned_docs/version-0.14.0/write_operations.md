@@ -6,7 +6,7 @@ last_modified_at:
 ---
 
 It may be helpful to understand the different write operations of Hudi and how best to leverage them. These operations
-can be chosen/changed across each commit/deltacommit issued against the table. See the [How To docs on Writing Data](writing_data) 
+can be chosen/changed across each commit/deltacommit issued against the table. See the [How To docs on Writing Data](writing_data.md) 
 to see more examples.
 
 ## Operation Types
@@ -86,24 +86,24 @@ Here are thh basic configs relevant to the write operations types mentioned abov
 ## Writing path
 The following is an inside look on the Hudi write path and the sequence of events that occur during a write.
 
-1. [Deduping](configurations#hoodiecombinebeforeinsert)
+1. [Deduping](configurations.md#hoodiecombinebeforeinsert)
    1. First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
-2. [Index Lookup](indexing)
+2. [Index Lookup](indexing.md)
    1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
-3. [File Sizing](file_sizing)
+3. [File Sizing](file_sizing.md)
    1. Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
-4. [Partitioning](file_layouts)
+4. [Partitioning](file_layouts.md)
    1. We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
 5. Write I/O
    1. Now we actually do the write operations which is either creating a new base file, appending to the log file,
    or versioning an existing base file.
-6. Update [Index](indexing)
+6. Update [Index](indexing.md)
    1. Now that the write is performed, we will go back and update the index.
 7. Commit
-   1. Finally we commit all of these changes atomically. (A [callback notification](writing_data#commit-notifications) is exposed)
-8. [Clean](hoodie_cleaner) (if needed)
+   1. Finally we commit all of these changes atomically. (A [callback notification](writing_data.md#commit-notifications) is exposed)
+8. [Clean](hoodie_cleaner.md) (if needed)
    1. Following the commit, cleaning is invoked if needed.
-9. [Compaction](compaction)
+9. [Compaction](compaction.md)
    1. If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
 10. Archive
-    1. Lastly, we perform an archival step which moves old [timeline](timeline) items to an archive folder.
+    1. Lastly, we perform an archival step which moves old [timeline](timeline.md) items to an archive folder.

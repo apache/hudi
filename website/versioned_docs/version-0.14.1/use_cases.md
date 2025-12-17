@@ -85,7 +85,7 @@ stream processing world to ensure pipelines don't break from non backwards compa
 
 ### ACID Transactions
 Along with a table, Apache Hudi brings ACID transactional guarantees to a data lake.
-Hudi ensures atomic writes, by way of publishing commits atomically to a [timeline](timeline), stamped with an 
+Hudi ensures atomic writes, by way of publishing commits atomically to a [timeline](timeline.md), stamped with an 
 instant time that denotes the time at which the action 
 is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between writer processes 
 (that issue user’s upserts/deletes), table services (that write data/metadata to optimize/perform bookkeeping) and readers 
@@ -127,12 +127,12 @@ cost savings for your data lake.
 
 Some examples of the Apache Hudi services that make this performance optimization easy include: 
 
-- [Auto File Sizing](file_sizing) - to solve the "small files" problem.
-- [Clustering](clustering) - to co-locate data next to each other.
-- [Compaction](compaction) - to allow tuning of low latency ingestion and fast read queries. 
-- [Indexing](indexing) - for efficient upserts and deletes.
+- [Auto File Sizing](file_sizing.md) - to solve the "small files" problem.
+- [Clustering](clustering.md) - to co-locate data next to each other.
+- [Compaction](compaction.md) - to allow tuning of low latency ingestion and fast read queries. 
+- [Indexing](indexing.md) - for efficient upserts and deletes.
 - Multi-Dimensional Partitioning (Z-Ordering) - Traditional folder style partitioning on low-cardinality, while also 
 Z-Ordering data within files based on high-cardinality
 - Metadata Table - No more slow S3 file listings or throttling.
-- [Auto Cleaning](hoodie_cleaner) - Keeps your storage costs in check by automatically removing old versions of files.
+- [Auto Cleaning](hoodie_cleaner.md) - Keeps your storage costs in check by automatically removing old versions of files.
 

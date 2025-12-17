@@ -9,7 +9,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables.
-The two main tools available are the [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) tool, as well as the [Spark Hudi datasource](#spark-datasource-writer).
+The two main tools available are the [Hudi Streamer](hoodie_streaming_ingestion.md#hudi-streamer) tool, as well as the [Spark Hudi datasource](#spark-datasource-writer).
 
 ## Spark Datasource Writer
 
@@ -31,15 +31,15 @@ Default value: `"partitionpath"`<br/>
 **PRECOMBINE_FIELD_OPT_KEY** (Required): When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
 Default value: `"ts"`<br/>
 
-**OPERATION_OPT_KEY**: The [write operations](write_operations) to use.<br/>
+**OPERATION_OPT_KEY**: The [write operations](write_operations.md) to use.<br/>
 Available values:<br/>
 `UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`
 
-**TABLE_TYPE_OPT_KEY**: The [type of table](concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
+**TABLE_TYPE_OPT_KEY**: The [type of table](concepts.md#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
 Available values:<br/>
-[`COW_TABLE_TYPE_OPT_VAL`](concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](concepts#merge-on-read-table)
+[`COW_TABLE_TYPE_OPT_VAL`](concepts.md#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](concepts.md#merge-on-read-table)
 
-**KEYGENERATOR_CLASS_OPT_KEY**: Refer to [Key Generation](key_generation) section below.
+**KEYGENERATOR_CLASS_OPT_KEY**: Refer to [Key Generation](key_generation.md) section below.
 
 **HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: If using hive, specify if the table should or should not be partitioned.<br/>
 Available values:<br/>
@@ -91,9 +91,9 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](https://hudi.apache.org/learn/faq/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](writing_data).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](writing_data.md).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](write_operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](write_operations.md)
 :::
 </TabItem>
 
@@ -127,9 +127,9 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](https://hudi.apache.org/learn/faq/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](writing_data).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](writing_data.md).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](write_operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](write_operations.md)
 :::
 </TabItem>
 

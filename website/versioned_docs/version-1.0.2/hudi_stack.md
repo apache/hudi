@@ -49,19 +49,19 @@ bring any compute engine for specific workloads.
 Drawing an analogy to file formats, a table format simply concerns with how files are distributed with the table, partitioning schemes, schema and metadata tracking changes. Hudi organizes files within a table or partition into 
 File Groups. Updates are captured in log files tied to these File Groups, ensuring efficient merges. There are three major components related to Hudi’s table format.
 
-- **Timeline** : Hudi's [timeline](timeline), stored in the `/.hoodie/timeline` folder, is a crucial event log recording all table actions in an ordered manner, 
+- **Timeline** : Hudi's [timeline](timeline.md), stored in the `/.hoodie/timeline` folder, is a crucial event log recording all table actions in an ordered manner, 
   with events kept for a specified period. Hudi uniquely designs each File Group as a self-contained log, enabling record state reconstruction through delta logs, even after archival of historical actions. This approach effectively limits metadata size based on table activity frequency, essential for managing tables with frequent updates.
 
 - **File Group and File Slice** : Within each partition the data is physically stored as base and Log Files and organized into logical concepts as [File groups](https://hudi.apache.org/tech-specs-1point0/#storage-layout) and 
 File Slices. File groups contain multiple versions of File Slices and are split into multiple File Slices. A File Slice comprises the Base and Log File. Each File Slice within 
 the file-group is uniquely identified by the write that created its base file or the first log file, which helps order the File Slices.
 
-- **Metadata Table** : Implemented as another merge-on-read Hudi table, the [metadata table](metadata) efficiently handles quick updates with low write amplification. 
+- **Metadata Table** : Implemented as another merge-on-read Hudi table, the [metadata table](metadata.md) efficiently handles quick updates with low write amplification. 
 It leverages a [SSTable](https://cassandra.apache.org/doc/stable/cassandra/architecture/storage-engine.html#sstables) based file format for quick, indexed key lookups, 
 storing vital information like file paths, column statistics and schema. This approach streamlines operations by reducing the necessity for expensive cloud file listings. 
 
 Hudi’s approach of recording updates into Log Files is more efficient and involves low merge overhead than systems like Hive ACID, where merging all delta records against 
-all Base Files is required. Read more about the various table types in Hudi [here](table_types).
+all Base Files is required. Read more about the various table types in Hudi [here](table_types.md).
 
 
 ## Storage Engine
@@ -74,8 +74,8 @@ Cassandra and Clickhouse.
 ![Indexes](/assets/images/hudi-stack-indexes.png)
 <p align = "center">Figure: Indexes in Hudi</p>
 
-[Indexes](indexes) in Hudi enhance query planning, minimizing I/O, speeding up response times and providing faster writes with low merge costs. The [metadata table](metadata/#metadata-table-indices) acts 
-as an additional [indexing system](metadata#supporting-multi-modal-index-in-hudi) and brings the benefits of indexes generally to both the readers and writers. Compute engines can leverage various indexes in the metadata
+[Indexes](indexes.md) in Hudi enhance query planning, minimizing I/O, speeding up response times and providing faster writes with low merge costs. The [metadata table](metadata/#metadata-table-indices) acts 
+as an additional [indexing system](metadata.md#supporting-multi-modal-index-in-hudi) and brings the benefits of indexes generally to both the readers and writers. Compute engines can leverage various indexes in the metadata
 table, like file listings, column statistics, bloom filters, record-level indexes, and [expression indexes](https://github.com/apache/hudi/blob/master/rfc/rfc-63/rfc-63.md) to quickly generate optimized query plans and improve read 
 performance. In addition to the metadata table indexes, Hudi supports simple join based indexing, bloom filters stored in base file footers, external key-value stores like HBase, 
 and optimized storage techniques like bucketing , to efficiently locate File Groups containing specific record keys. Hudi also provides reader indexes such as [expression](https://github.com/apache/hudi/blob/master/rfc/rfc-63/rfc-63.md) and 
@@ -91,12 +91,12 @@ running them in inline, semi-asynchronous or full-asynchronous modes. Furthermor
 asynchronously sharing the underlying executors intelligently with writers. Let’s take a look at these services.
 
 #### Clustering
-The [clustering](clustering) service, akin to features in cloud data warehouses, allows users to group frequently queried records using sort keys or merge smaller Base Files into 
+The [clustering](clustering.md) service, akin to features in cloud data warehouses, allows users to group frequently queried records using sort keys or merge smaller Base Files into 
 larger ones for optimal file size management. It's fully integrated with other timeline actions like cleaning and compaction, enabling smart optimizations such as avoiding 
 compaction for File Groups undergoing clustering, thereby saving on I/O.
 
 #### Compaction
-Hudi's [compaction](compaction) service, featuring strategies like date partitioning and I/O bounding, merges Base Files with delta logs to create updated Base Files. It allows 
+Hudi's [compaction](compaction.md) service, featuring strategies like date partitioning and I/O bounding, merges Base Files with delta logs to create updated Base Files. It allows 
 concurrent writes to the same File Froup, enabled by Hudi's file grouping and flexible log merging. This facilitates non-blocking execution of deletes even during concurrent 
 record updates.
 
@@ -107,11 +107,11 @@ while also allowing sufficient time for long running batch jobs (e.g Hive ETLs) 
 #### Indexing
 Hudi's scalable metadata table contains auxiliary data about the table. This subsystem encompasses various indices, including files, column_stats, and bloom_filters, 
 facilitating efficient record location and data skipping. Balancing write throughput with index updates presents a fundamental challenge, as traditional indexing methods, 
-like locking out writes during indexing, are impractical for large tables due to lengthy processing times. Hudi addresses this with its innovative asynchronous [metadata indexing](metadata_indexing), 
+like locking out writes during indexing, are impractical for large tables due to lengthy processing times. Hudi addresses this with its innovative asynchronous [metadata indexing](metadata_indexing.md), 
 enabling the creation of various indices without impeding writes. This approach not only improves write latency but also minimizes resource waste by reducing contention between writing and indexing activities.
 
 ### Concurrency Control
-[Concurrency control](concurrency_control) defines how different writers/readers/table services coordinate access to the table. Hudi uses monotonically increasing time to sequence and order various 
+[Concurrency control](concurrency_control.md) defines how different writers/readers/table services coordinate access to the table. Hudi uses monotonically increasing time to sequence and order various 
 changes to table state. Much like databases, Hudi take an approach of clearly differentiating between writers (responsible for upserts/deletes), table services 
 (focusing on storage optimization and bookkeeping), and readers (for query execution). Hudi provides snapshot isolation, offering a consistent view of the table across 
 these different operations. It employs lock-free, non-blocking MVCC for concurrency between writers and table-services, as well as between different table services, and 
@@ -154,12 +154,12 @@ integration with engines written in C/C++.
 <p align = "center">Figure: Various platform services in Hudi</p>
 
 Platform services offer functionality that is specific to data and workloads, and they sit directly on top of the table services, interfacing with writers and readers. 
-Services, like [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) (or its Flink counterpart), are specialized in handling data and workloads, seamlessly integrating with Kafka streams and various 
+Services, like [Hudi Streamer](hoodie_streaming_ingestion.md#hudi-streamer) (or its Flink counterpart), are specialized in handling data and workloads, seamlessly integrating with Kafka streams and various 
 formats to build data lakes. They support functionalities like automatic checkpoint management, integration with major schema registries (including Confluent), and 
 deduplication of data. Hudi Streamer also offers features for backfills, one-off runs, and continuous mode operation with Spark/Flink streaming writers. Additionally, 
-Hudi provides tools for [snapshotting](snapshot_exporter) and incrementally [exporting](snapshot_exporter#examples) Hudi tables, importing new tables, and [post-commit callback](platform_services_post_commit_callback) for analytics or 
+Hudi provides tools for [snapshotting](snapshot_exporter.md) and incrementally [exporting](snapshot_exporter.md#examples) Hudi tables, importing new tables, and [post-commit callback](platform_services_post_commit_callback.md) for analytics or 
 workflow management, enhancing the deployment of production-grade incremental pipelines. Apart from these services, Hudi also provides broad support for different 
-catalogs such as [Hive Metastore](syncing_metastore), [AWS Glue](syncing_aws_glue_data_catalog/), [Google BigQuery](gcp_bigquery), [DataHub](syncing_datahub), etc. that allows syncing of Hudi tables to be queried by 
+catalogs such as [Hive Metastore](syncing_metastore.md), [AWS Glue](syncing_aws_glue_data_catalog.md), [Google BigQuery](gcp_bigquery.md), [DataHub](syncing_datahub.md), etc. that allows syncing of Hudi tables to be queried by 
 interactive engines such as Trino and Presto.
 
 ### Metaserver*

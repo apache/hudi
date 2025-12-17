@@ -126,7 +126,7 @@ spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls 
 Note: The parallelism takes the min value of number of partitions to clean and `hoodie.cleaner.parallelism`.
 
 #### CLI
-You can also use [Hudi CLI](cli) to run Hoodie Cleaner.
+You can also use [Hudi CLI](cli.md) to run Hoodie Cleaner.
 
 CLI provides the below commands for cleaner service:
 - `cleans show`

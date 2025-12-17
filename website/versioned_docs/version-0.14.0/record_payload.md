@@ -105,7 +105,7 @@ hoodie.datasource.write.payload.class=org.apache.hudi.common.model.EventTimeAvro
 ```
 This is the default record payload for Flink based writing. Some use cases require merging records by event time and 
 thus event time plays the role of an ordering field. This payload is particularly useful in the case of late-arriving data. 
-For such use cases, users need to set the [payload event time field](configurations#RECORD_PAYLOAD) configuration.
+For such use cases, users need to set the [payload event time field](configurations.md#RECORD_PAYLOAD) configuration.
 
 #### OverwriteNonDefaultsWithLatestAvroPayload
 ```scala
@@ -171,6 +171,6 @@ provides support for seamlessly applying changes captured via Debezium for MySQL
 provides support for applying changes captured via Amazon Database Migration Service onto S3.
 
 Record payloads are tunable to suit many use cases. Please check out the configurations
-listed [here](configurations#RECORD_PAYLOAD). Moreover, if users want to implement their own custom merge logic,
+listed [here](configurations.md#RECORD_PAYLOAD). Moreover, if users want to implement their own custom merge logic,
 please check out [this FAQ](faq/#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage). In a
 separate document, we will talk about a new record merger API for optimized payload handling.

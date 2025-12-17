@@ -8,7 +8,7 @@ Data quality refers to the overall accuracy, completeness, consistency, and vali
 Hudi offers **Pre-Commit Validators** that allow you to ensure that your data meets certain data quality expectations as you are writing with Hudi Streamer or Spark Datasource writers.
 
 :::note
-Pre-commit validators are skipped when using the [BULK_INSERT](write_operations#bulk_insert) write operation type.
+Pre-commit validators are skipped when using the [BULK_INSERT](write_operations.md#bulk_insert) write operation type.
 :::
 
 Multiple class names can be separated by `,` delimiter.

@@ -264,7 +264,7 @@ and then ingest it as follows.
   --op BULK_INSERT
 ```
 
-In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](migration_guide).
+In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](migration_guide.md).
 
 ### Using `hudi-utilities` bundle jars
 
@@ -302,7 +302,7 @@ A Hudi Streamer job can then be triggered as follows:
   --op BULK_INSERT
 ```
 
-Read more in depth about concurrency control in the [concurrency control concepts](concurrency_control) section
+Read more in depth about concurrency control in the [concurrency control concepts](concurrency_control.md) section
 
 ### Checkpointing
 

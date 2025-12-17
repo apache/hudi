@@ -40,7 +40,7 @@ There are a few options when choosing this approach.
 
 #### Using Hudi Streamer
 
-Use the [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) tool. HoodieStreamer supports bootstrap with 
+Use the [Hudi Streamer](hoodie_streaming_ingestion.md#hudi-streamer) tool. HoodieStreamer supports bootstrap with 
 --run-bootstrap command line option. There are two types of bootstrap, METADATA_ONLY and FULL_RECORD. METADATA_ONLY will
 generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. FULL_RECORD will 
 perform a full copy/rewrite of the data as a Hudi table.  Additionally, once can choose selective partitions using regex
@@ -88,7 +88,7 @@ Refer to [Bootstrap procedure](https://hudi.apache.org/docs/next/procedures#boot
 #### Using Hudi CLI
 
 Write your own custom logic of how to load an existing table into a Hudi managed one. Please read about the RDD API
-[here](quick-start-guide). Using the bootstrap run CLI. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
+[here](quick-start-guide.md). Using the bootstrap run CLI. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
 fired by via `cd hudi-cli && ./hudi-cli.sh`.
 
 ```java

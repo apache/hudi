@@ -106,7 +106,7 @@ Following are the Spark based basic configs that are needed to enable metadata a
 The metadata table with synchronous updates and metadata-table-based file listing are enabled by default.
 There are prerequisite configurations and steps in [Deployment considerations](#deployment-considerations-for-metadata-table) to
 safely use this feature.  The metadata table and related file listing functionality can still be turned off by setting
-[`hoodie.metadata.enable`](configurations#hoodiemetadataenable) to `false`. The 
+[`hoodie.metadata.enable`](configurations.md#hoodiemetadataenable) to `false`. The 
 [multi-modal index](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi) are 
 disabled by default and can be enabled in write side explicitly using the above configs.
 
@@ -151,17 +151,17 @@ corresponding configs across Spark and Flink readers.
 ## Deployment considerations for metadata Table
 To ensure that metadata table stays up to date, all write operations on the same Hudi table need additional configurations
 besides the above in different deployment models.  Before enabling metadata table, all writers on the same table must
-be stopped. Please refer to the different [deployment models](concurrency_control#deployment-models-with-supported-concurrency-controls) 
+be stopped. Please refer to the different [deployment models](concurrency_control.md#deployment-models-with-supported-concurrency-controls) 
 for more details on each model. This section only highlights how to safely enable metadata table in different deployment models. 
 
 ### Deployment Model A: Single writer with inline table services
 
-In [Model A](concurrency_control#model-a-single-writer-with-inline-table-services), after setting [`hoodie.metadata.enable`](configurations#hoodiemetadataenable) to `true`, restarting
+In [Model A](concurrency_control.md#model-a-single-writer-with-inline-table-services), after setting [`hoodie.metadata.enable`](configurations.md#hoodiemetadataenable) to `true`, restarting
 the single writer is sufficient to safely enable metadata table.
 
 ### Deployment Model B: Single writer with async table services
 
-If your current deployment model is [Model B](concurrency_control#model-b-single-writer-with-async-table-services), enabling metadata
+If your current deployment model is [Model B](concurrency_control.md#model-b-single-writer-with-async-table-services), enabling metadata
 table requires adding optimistic concurrency control along with suggested lock provider like below.
 ```properties
 hoodie.write.concurrency.mode=optimistic_concurrency_control
@@ -179,7 +179,7 @@ process which cannot rely on the in-process lock provider.
 
 ### Deployment Model C: Multi-writer
 
-If your current deployment model is [multi-writer](concurrency_control#model-c-multi-writer) along with a lock 
+If your current deployment model is [multi-writer](concurrency_control.md#model-c-multi-writer) along with a lock 
 provider and other required configs set for every writer as follows, there is no additional configuration required. You 
 can bring up the writers sequentially after stopping the writers for enabling metadata table. Applying the proper 
 configurations to only partial writers leads to loss of data from the inconsistent writer. So, ensure you enable 
@@ -190,5 +190,5 @@ hoodie.write.concurrency.mode=optimistic_concurrency_control
 hoodie.write.lock.provider=<distributed-lock-provider-classname>
 ```
 
-Note that there are different external [lock providers available](concurrency_control#external-locking-and-lock-providers)
+Note that there are different external [lock providers available](concurrency_control.md#external-locking-and-lock-providers)
 to choose from.

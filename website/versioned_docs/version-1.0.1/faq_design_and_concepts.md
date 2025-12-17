@@ -6,14 +6,14 @@ keywords: [hudi, writing, reading]
 
 ### How does Hudi ensure atomicity?
 
-Hudi writers atomically move an inflight write operation to a "completed" state by writing an object/file to the [timeline](timeline) folder, identifying the write operation with an instant time that denotes the time the action is deemed to have occurred. This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
+Hudi writers atomically move an inflight write operation to a "completed" state by writing an object/file to the [timeline](timeline.md) folder, identifying the write operation with an instant time that denotes the time the action is deemed to have occurred. This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
 
 ### Does Hudi extend the Hive table layout?
 
 Hudi is very different from Hive in important aspects described below. However, based on practical considerations, it chooses to be compatible with Hive table layout by adopting partitioning, schema evolution and being queryable through Hive query engine. Here are the key aspect where Hudi differs:
 
-*   Unlike Hive, Hudi does not remove the partition columns from the data files. Hudi in fact adds record level [meta fields](/learn/tech-specs#meta-fields) including instant time, primary record key, and partition path to the data to support efficient upserts and [incremental queries/ETL](use_cases#efficient-data-lakes-with-incremental-processing).  Hudi tables can be non-partitioned and the Hudi metadata table adds rich indexes on Hudi tables which are beyond simple Hive extensions.
-*   Hive advocates partitioning as the main remedy for most performance-based issues. Features like partition evolution and hidden partitioning are primarily based on this Hive based principle of partitioning and aim to tackle the metadata problem partially.  Whereas, Hudi biases to coarse-grained partitioning and emphasizes [clustering](clustering) for more fine-grained partitioning. Further, users can strategize and evolve the clustering asynchronously which “actually” help users experiencing performance issues with too granular partitions.
+*   Unlike Hive, Hudi does not remove the partition columns from the data files. Hudi in fact adds record level [meta fields](/learn/tech-specs#meta-fields) including instant time, primary record key, and partition path to the data to support efficient upserts and [incremental queries/ETL](use_cases.md#efficient-data-lakes-with-incremental-processing).  Hudi tables can be non-partitioned and the Hudi metadata table adds rich indexes on Hudi tables which are beyond simple Hive extensions.
+*   Hive advocates partitioning as the main remedy for most performance-based issues. Features like partition evolution and hidden partitioning are primarily based on this Hive based principle of partitioning and aim to tackle the metadata problem partially.  Whereas, Hudi biases to coarse-grained partitioning and emphasizes [clustering](clustering.md) for more fine-grained partitioning. Further, users can strategize and evolve the clustering asynchronously which “actually” help users experiencing performance issues with too granular partitions.
 *   Hudi considers partition evolution as an anti-pattern and avoids such schemes due to the inconsistent performance of queries that goes to depend on which part of the table is being queried. Hudi’s design favors consistent performance and is aware of the need to redesign to partitioning/tables to achieve the same.
 
 ### What concurrency control approaches does Hudi adopt?
@@ -32,7 +32,7 @@ In these scenarios, it might be tempting to think of data inconsistencies/data l
 (examples [1](https://github.com/apache/hudi/blob/aea5bb6f0ab824247f5e3498762ad94f643a2cb6/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/IncrSourceHelper.java#L76), 
 [2](https://github.com/apache/hudi/blame/7a6543958368540d221ddc18e0c12b8d526b6859/hudi-hadoop-mr/src/main/java/org/apache/hudi/hadoop/utils/HoodieInputFormatUtils.java#L173)) in incremental queries to ensure that no data 
 is served beyond the point there is an inflight instant in its timeline, so no data loss or drop happens. This detection is made possible because Hudi writes first request a transaction on the timeline, before planning/executing
-the write, as explained in the [timeline](timeline#states) section.
+the write, as explained in the [timeline](timeline.md#states) section.
 
 In this case, on seeing C1’s inflight commit (publish to timeline is atomic), C2 data (which is > C1 in the timeline) is not served until C1 inflight transitions to a terminal state such as completed or marked as failed. 
 This [test](https://github.com/apache/hudi/blob/master/hudi-utilities/src/test/java/org/apache/hudi/utilities/sources/TestHoodieIncrSource.java#L137) demonstrates how Hudi incremental source stops proceeding until C1 completes. 
@@ -48,7 +48,7 @@ To expand more on the long term approach, Hudi has had a proposal to streamline/
 This has been delayed for a few reasons 
 
 - Large hosted query engines and users not upgrading fast enough. 
-- The issues brought up - \[[1](faq_design_and_concepts#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](faq_design_and_concepts#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\], 
+- The issues brought up - \[[1](faq_design_and_concepts.md#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](faq_design_and_concepts.md#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\], 
 relevant to this are not practically very important to users beyond good pedantic discussions, 
 - Wanting to do it alongside [non-blocking concurrency control](https://github.com/apache/hudi/pull/7907) in Hudi version 1.x.
 

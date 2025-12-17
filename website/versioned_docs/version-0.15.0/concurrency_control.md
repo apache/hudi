@@ -77,7 +77,7 @@ Multiple writers can operate on the table with non-blocking conflict resolution.
 file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
 currently available for preview in version 1.0.0-beta only with the caveat that conflict resolution is not supported yet
 between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
-writers [here](sql_dml#non-blocking-concurrency-control-experimental).
+writers [here](sql_dml.md#non-blocking-concurrency-control-experimental).
 
 ## Enabling Multi Writing
 
