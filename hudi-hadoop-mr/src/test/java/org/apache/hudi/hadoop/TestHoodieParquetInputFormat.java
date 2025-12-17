@@ -47,7 +47,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOConstants;
-import org.apache.hadoop.hive.serde2.io.TimestampWritable;
+import org.apache.hadoop.hive.serde2.io.TimestampWritableV2;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -823,7 +823,7 @@ public class TestHoodieParquetInputFormat {
           } else {
             Date date = new Date();
             date.setTime(testTimestampLong);
-            Timestamp actualTime = ((TimestampWritable) writable.get()[0]).getTimestamp();
+            Timestamp actualTime = ((TimestampWritableV2) writable.get()[0]).getTimestamp().toSqlTimestamp();
             SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
             assertEquals(dateFormat.format(date), dateFormat.format(actualTime));
           }

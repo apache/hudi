@@ -440,5 +440,17 @@
             <version>1.3</version>
             <scope>test</scope>
         </dependency>
+      <dependency>
+        <groupId>org.datanucleus</groupId>
+        <artifactId>datanucleus-api-jdo</artifactId>
+        <version>5.2.10</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.datanucleus</groupId>
+        <artifactId>datanucleus-rdbms</artifactId>
+        <version>5.2.10</version>
+        <scope>test</scope>
+      </dependency>
     </dependencies>
 </project>
