@@ -247,6 +247,10 @@ Multiple writers can operate on the table with non-blocking conflict resolution.
 file group with the conflicts resolved automatically by the query reader and the compactor. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml.md#non-blocking-concurrency-control-experimental).
 
 :::note
+`NON_BLOCKING_CONCURRENCY_CONTROL` currently works only for MOR tables using simple bucket index and partition-level bucket index.
+:::
+
+:::note
 `NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering. Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
 :::
 
