@@ -38,7 +38,7 @@ frequent file‑handle switching.
 :::note
 The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism affects the number of small files.
 In theory, the parallelism of `bulk_insert` equals the number of buckets. (In particular, when each bucket writes to the maximum file size, it
-rolls over to a new file handle.) The final number of files is greater than or equal to [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks).
+rolls over to a new file handle.) The final number of files is greater than or equal to [`write.bucket_assign.tasks`](configurations.md#writebucket_assigntasks).
 :::
 
 ### Options
@@ -46,7 +46,7 @@ rolls over to a new file handle.) The final number of files is greater than or e
 | Option Name                       | Required | Default  | Remarks                                                                                                                                                        |
 |-----------------------------------|----------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `write.operation`                 | `true`   | `upsert` | Set to `bulk_insert` to enable this function                                                                                                                   |
-| `write.tasks`                     | `false`  | `4`      | The parallelism of `bulk_insert`; the number of files ≥ [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks)                                  |
+| `write.tasks`                     | `false`  | `4`      | The parallelism of `bulk_insert`; the number of files ≥ [`write.bucket_assign.tasks`](configurations.md#writebucket_assigntasks)                                  |
 | `write.bulk_insert.shuffle_input` | `false`  | `true`   | Whether to shuffle data by the input field before writing. Enabling this option reduces the number of small files but may introduce data‑skew risk             |
 | `write.bulk_insert.sort_input`    | `false`  | `true`   | Whether to sort data by the input field before writing. Enabling this option reduces the number of small files when a write task writes to multiple partitions |
 | `write.sort.memory`               | `false`  | `128`    | Available managed memory for the sort operator; default is 128 MB                                                                                              |
