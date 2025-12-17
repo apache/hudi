@@ -68,7 +68,7 @@ public class HoodieConfigDocGenerator {
           "At a high level, you can control behaviour at few levels.";
   private static final String BASIC_CONFIGS_PAGE_SUMMARY = "This page covers the basic configurations you may use to " +
           "write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a " +
-          "full list of all configs, please visit the [All Configurations](/docs/configurations) page.";
+          "full list of all configs, please visit the [All Configurations](configurations.md) page.";
   private static final String FLINK_CONFIG_CLASS_NAME = "org.apache.hudi.configuration.FlinkOptions";
   private static final String ALL_CONFIGS_PATH = "/tmp/configurations.md";
   private static final String BASIC_CONFIGS_PATH = "/tmp/basic_configurations.md";
@@ -151,7 +151,7 @@ public class HoodieConfigDocGenerator {
       title: Basic Configurations
       summary: This page covers the basic configurations you may use to write/read Hudi tables. This page only
       features a subset of the most frequently used configurations. For a full list of all configs, please visit the
-      [All Configurations](/docs/configurations) page.
+      [All Configurations](configurations.md) page.
       last_modified_at: 2019-12-30T15:59:57-04:00
       ---
      */

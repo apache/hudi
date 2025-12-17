@@ -75,7 +75,7 @@ should be specified as `PARTITIONED BY (dt, hh)`.
 
 ### Create table with record keys and ordering fields
 
-As discussed [here](quick-start-guide#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
+As discussed [here](quick-start-guide.md#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
 key for each new record in the examples so far. If you want to use an existing field as the key, you can set the `primaryKey` option. 
 Typically, this is also accompanied by configuring a `preCombineField` option to deal with out-of-order data and potential 
 duplicate records with the same key in the incoming writes.
@@ -104,7 +104,7 @@ TBLPROPERTIES (
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [streamer tool](hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](hoodie_streaming_ingestion.md#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
@@ -378,7 +378,7 @@ Users can set table properties while creating a table. The important table prope
 
 | Parameter Name | Default | Description                                                                                                                                                                                                                                                                                 |
 |------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](table_types)                                                               |
+| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](table_types.md)                                                               |
 | primaryKey | uuid | The primary key field names of the table separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto-generate primary keys. If explicitly set, primary key generation will honor user configuration.                                  |
 | preCombineField |  | The pre-combine field of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the preCombine field value. |
 
@@ -389,7 +389,7 @@ Users can set table properties while creating a table. The important table prope
 #### Passing Lock Providers for Concurrent Writers
 
 Hudi requires a lock provider to support concurrent writers or asynchronous table services when using OCC
-and [NBCC](concurrency_control#non-blocking-concurrency-control) (Non-Blocking Concurrency Control)
+and [NBCC](concurrency_control.md#non-blocking-concurrency-control) (Non-Blocking Concurrency Control)
 concurrency mode. For NBCC mode, locking is only used to write the commit metadata file in the timeline. Writes are
 serialized by completion time. Users can pass these table properties into *TBLPROPERTIES* as well. Below is an example
 for a Zookeeper based configuration.
@@ -612,7 +612,7 @@ ALTER TABLE tableA RENAME TO tableB;
 ### Setting Hudi configs
 
 #### Using table options
-You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](configurations#FLINK_SQL)
+You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](configurations.md#FLINK_SQL)
 These configs will be applied to all the operations on that table.
 
 ```sql

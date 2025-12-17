@@ -10,7 +10,7 @@ and send them to AWS Glue.
 ### Configurations
 
 There is no additional configuration for using `AwsGlueCatalogSyncTool`; you just need to set it as one of the sync tool
-classes for `HoodieStreamer` and everything configured as shown in [Sync to Hive Metastore](syncing_metastore) will
+classes for `HoodieStreamer` and everything configured as shown in [Sync to Hive Metastore](syncing_metastore.md) will
 be passed along.
 
 ```shell

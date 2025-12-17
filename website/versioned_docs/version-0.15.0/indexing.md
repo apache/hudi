@@ -11,9 +11,9 @@ Hudi provides efficient upserts, by mapping a given hoodie key (record key + par
 This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
 mapped file group contains all versions of a group of records.
 
-For [Copy-On-Write tables](table_types#copy-on-write-table), this enables fast upsert/delete operations, by 
+For [Copy-On-Write tables](table_types.md#copy-on-write-table), this enables fast upsert/delete operations, by 
 avoiding the need to join against the entire dataset to determine which files to rewrite.
-For [Merge-On-Read tables](table_types#merge-on-read-table), this design allows Hudi to bound the amount of 
+For [Merge-On-Read tables](table_types.md#merge-on-read-table), this design allows Hudi to bound the amount of 
 records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
 designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),

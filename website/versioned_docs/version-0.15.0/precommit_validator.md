@@ -8,7 +8,7 @@ Data quality refers to the overall accuracy, completeness, consistency, and vali
 Hudi offers **Pre-Commit Validators** that allow you to ensure that your data meets certain data quality expectations as you are writing with Hudi Streamer or Spark Datasource writers.
 
 :::note
-Pre-commit validators are skipped when using the [BULK_INSERT](write_operations#bulk_insert) write operation type.
+Pre-commit validators are skipped when using the [BULK_INSERT](write_operations.md#bulk_insert) write operation type.
 :::
 
 Multiple class names can be separated by `,` delimiter.
@@ -105,7 +105,7 @@ void validateRecordsBeforeAndAfter(Dataset<Row> before,
 ```
 
 ## Additional Monitoring with Notifications
-Hudi offers a [commit notification service](platform_services_post_commit_callback) that can be configured to trigger notifications about write commits.
+Hudi offers a [commit notification service](platform_services_post_commit_callback.md) that can be configured to trigger notifications about write commits.
 
 The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
 

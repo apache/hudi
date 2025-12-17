@@ -148,7 +148,7 @@ while the clustering service runs.
 
 :::note
 Hudi always creates immutable files on storage. To be able to do auto-sizing or clustering, Hudi will always create a
-newer version of the smaller file, resulting in 2 versions of the same file. The [cleaner service](hoodie_cleaner)
+newer version of the smaller file, resulting in 2 versions of the same file. The [cleaner service](hoodie_cleaner.md)
 will later kick in and delete the older version small file and keep the latest one.
 :::
 

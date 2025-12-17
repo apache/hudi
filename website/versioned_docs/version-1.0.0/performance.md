@@ -16,12 +16,12 @@ Here are some ways to efficiently manage the storage of your Hudi tables.
 
 - The [small file handling feature](configurations/#hoodieparquetsmallfilelimit) in Hudi, profiles incoming workload
   and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.
-- Cleaner can be [configured](configurations#hoodiecleanercommitsretained) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
-- User can also tune the size of the [base/parquet file](configurations#hoodieparquetmaxfilesize), [log files](configurations#hoodielogfilemaxsize) & expected [compression ratio](configurations#hoodieparquetcompressionratio),
+- Cleaner can be [configured](configurations.md#hoodiecleanercommitsretained) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
+- User can also tune the size of the [base/parquet file](configurations.md#hoodieparquetmaxfilesize), [log files](configurations.md#hoodielogfilemaxsize) & expected [compression ratio](configurations.md#hoodieparquetcompressionratio),
   such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.
-- Intelligently tuning the [bulk insert parallelism](configurations#hoodiebulkinsertshuffleparallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
+- Intelligently tuning the [bulk insert parallelism](configurations.md#hoodiebulkinsertshuffleparallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
   once created cannot be changed without re-clustering the table. Writes will simply expand given file groups with new updates/inserts as explained before.
-- For workloads with heavy updates, the [merge-on-read table](concepts#merge-on-read-table) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
+- For workloads with heavy updates, the [merge-on-read table](concepts.md#merge-on-read-table) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
 
 ## Performance Optimizations
 
@@ -119,11 +119,11 @@ For very large tables (1Tb+, 10s of 1000s of files), Data skipping could
 
 To unlock the power of Data Skipping you will need to
 
-1. Enable Metadata Table along with Column Stats Index on the _write path_ (See [Metadata Indexing](metadata_indexing)), using `hoodie.metadata.enable=true` (to enable Metadata Table on the write path, enabled by default)
+1. Enable Metadata Table along with Column Stats Index on the _write path_ (See [Metadata Indexing](metadata_indexing.md)), using `hoodie.metadata.enable=true` (to enable Metadata Table on the write path, enabled by default)
 2. Enable Data Skipping in your queries, using `hoodie.metadata.index.column.stats.enable=true` (to enable Column Stats Index being populated on the write path, disabled by default)
 
 :::note
-If you're planning on enabling Column Stats Index for already existing table, please check out the [Metadata Indexing](metadata_indexing) guide on how to build Metadata Table Indices (such as Column Stats Index) for existing tables.
+If you're planning on enabling Column Stats Index for already existing table, please check out the [Metadata Indexing](metadata_indexing.md) guide on how to build Metadata Table Indices (such as Column Stats Index) for existing tables.
 :::
 
 To enable Data Skipping in your queries make sure to set following properties to `true` (on the read path): 

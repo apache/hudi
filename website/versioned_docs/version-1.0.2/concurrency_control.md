@@ -8,7 +8,7 @@ last_modified_at: 2021-03-19T15:59:57-04:00
 ---
 Concurrency control defines how different writers/readers/table services coordinate access to a Hudi table. Hudi ensures atomic writes, by way of publishing commits atomically to the timeline, 
 stamped with an instant time that denotes the time at which the action is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between 
-writer processes that issue [write operations](write_operations) and table services that (re)write data/metadata to optimize/perform bookkeeping and 
+writer processes that issue [write operations](write_operations.md) and table services that (re)write data/metadata to optimize/perform bookkeeping and 
 readers (that execute queries and read data). 
 
 Hudi provides
@@ -234,7 +234,7 @@ Multiple writers can operate on the table with non-blocking conflict resolution.
 file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
 currently available for preview in version 1.0.1-beta only with the caveat that conflict resolution is not supported yet
 between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
-writers [here](sql_dml#non-blocking-concurrency-control-experimental).
+writers [here](sql_dml.md#non-blocking-concurrency-control-experimental).
 
 :::note
 `NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering.

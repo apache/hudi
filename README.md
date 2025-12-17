@@ -131,43 +131,64 @@ versioned_sidebars/version-0.7.0-sidebars.json
 
 ### Linking docs
 
-Relative paths work well. - Files will be linked to correct corresponding version.
+**IMPORTANT: Always use `.md` extension when linking to other docs.**
 
-- Referring to versioned docs pages within `docs/` MUST USE relative paths.
-  - **Good Example of linking.**
-    Say we are updating a 0.12.0 version doc which is older.
+Docusaurus resolves file paths with `.md` extension at build time, converting them to absolute URLs. This ensures:
 
-    ```md
-    A [callback notification](writing_data#commit-notifications) is exposed
-    ```
+- Links work correctly regardless of trailing slashes in URLs
+- Links automatically resolve to the correct version in versioned docs
 
-    This automatically resolves to /docs/0.12.0/writing_data#commit-notifications.
-  - **Bad example of linking.**
-    Say we are updating a 0.12.0 version doc which is older.
+#### Versioned docs linking
 
-    ```md
-    A [callback notification](/docs/writing_data#commit-notifications) is exposed
-    ```
+Referring to versioned docs pages within `docs/` MUST USE relative paths with `.md` extension.
 
-    This will resolve to the most recent release, specifically /docs/writing_data#commit-notifications . We do not want a 0.12.0 doc page to point to a page from a later release.
-- DO NOT use next version when linking.
-  - Good Example of linking when you are working on unreleased version (from next version).
+**Good Example of linking:**
 
-    ```md
-    Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](compaction) action merges logs and base files to produce new
-    file slices and [cleaning](cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
-    ```
+Say we are updating a 0.12.0 version doc which is older.
 
-    This automatically resolves to /docs/next/compaction and /docs/next/cleaning pages.
-  - Bad Example of linking when you are working on unreleased version (from next version).
+```md
+A [callback notification](writing_data.md#commit-notifications) is exposed
+```
 
-    ```md
-    Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](/docs/next/compaction) action merges logs and base files to produce new
-    file slices and [cleaning](/docs/next/cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
-    ```
+This automatically resolves to /docs/0.12.0/writing_data#commit-notifications.
 
-    Even though it directly points to /docs/next which is intended target, this accumulates as tech debt when this copy of docs gets released, we will hav a older doc always pointing to /docs/next/
-- Refer to `/docs/...` or `/docs/<version>/...` (when a specific version is needed) from pages that are outside of `/docs/` dir.
+**Bad examples of linking:**
+
+```md
+A [callback notification](/docs/writing_data#commit-notifications) is exposed
+```
+
+This will resolve to the most recent release, specifically /docs/writing_data#commit-notifications. We do not want a 0.12.0 doc page to point to a page from a later release.
+
+```md
+A [callback notification](writing_data#commit-notifications) is exposed
+```
+
+Without `.md` extension, this becomes a relative URL that the browser resolves at runtime, which can break when the page URL has a trailing slash.
+
+#### DO NOT use next version when linking
+
+**Good Example** - linking when you are working on unreleased version (from next version):
+
+```md
+Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](compaction.md) action merges logs and base files to produce new
+file slices and [cleaning](cleaning.md) action gets rid of unused/older file slices to reclaim space on the file system.
+```
+
+This automatically resolves to /docs/next/compaction and /docs/next/cleaning pages.
+
+**Bad Example** - linking when you are working on unreleased version (from next version):
+
+```md
+Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](/docs/next/compaction) action merges logs and base files to produce new
+file slices and [cleaning](/docs/next/cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
+```
+
+Even though it directly points to /docs/next which is intended target, this accumulates as tech debt when this copy of docs gets released, we will have an older doc always pointing to /docs/next/.
+
+#### Linking from outside docs
+
+Refer to `/docs/...` or `/docs/<version>/...` (when a specific version is needed) from pages that are outside of `/docs/` dir.
 
 ## Versions
 

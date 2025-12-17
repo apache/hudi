@@ -262,7 +262,7 @@ CREATE TABLE hudi_table (
 PARTITIONED BY (city);
 ```
 
-For more options for creating Hudi tables or if you're running into any issues, please refer to [SQL DDL](sql_ddl) reference guide.
+For more options for creating Hudi tables or if you're running into any issues, please refer to [SQL DDL](sql_ddl.md) reference guide.
 
 </TabItem>
 
@@ -306,7 +306,7 @@ inserts.write.format("hudi").
 ```
 
 :::info Mapping to Hudi write operations
-Hudi provides a wide range of [write operations](write_operations) - both batch and incremental - to write data into Hudi tables,
+Hudi provides a wide range of [write operations](write_operations.md) - both batch and incremental - to write data into Hudi tables,
 with different semantics and performance. When record keys are not configured (see [keys](#keys) below), `bulk_insert` will be chosen as 
 the write operation, matching the out-of-behavior of Spark's Parquet Datasource. 
 :::
@@ -339,7 +339,7 @@ inserts.write.format("hudi"). \
 ```
 
 :::info Mapping to Hudi write operations
-Hudi provides a wide range of [write operations](write_operations) - both batch and incremental - to write data into Hudi tables,
+Hudi provides a wide range of [write operations](write_operations.md) - both batch and incremental - to write data into Hudi tables,
 with different semantics and performance. When record keys are not configured (see [keys](#keys) below), `bulk_insert` will be chosen as
 the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
 :::
@@ -348,7 +348,7 @@ the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
 
 <TabItem value="sparksql">
 
-Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](sql_dml#insert-into) for more advanced options.
+Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](sql_dml.md#insert-into) for more advanced options.
 
 ```sql
 INSERT INTO hudi_table
@@ -460,7 +460,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 </TabItem>
 <TabItem value="sparksql">
 
-Hudi table can be update using a regular UPDATE statement. See [Update](sql_dml#update) for more advanced options.
+Hudi table can be update using a regular UPDATE statement. See [Update](sql_dml.md#update) for more advanced options.
 
 ```sql
 UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';
@@ -490,7 +490,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 </Tabs
 >
 
-[Querying](#querying) the data again will now show updated records. Each write operation generates a new [commit](concepts).
+[Querying](#querying) the data again will now show updated records. Each write operation generates a new [commit](concepts.md).
 Look for changes in `_hoodie_commit_time`, `fare` fields for the given `_hoodie_record_key` value from a previous commit.
 
 ## Merging Data {#merge}
@@ -578,7 +578,7 @@ MERGE statement either using `SET *` or using `SET column1 = expression1 [, colu
 ## Delete data {#deletes}
 
 Delete operation removes the records specified from the table. For example, this code snippet deletes records
-for the HoodieKeys passed in. Check out the [deletion section](writing_data#deletes) for more details.
+for the HoodieKeys passed in. Check out the [deletion section](writing_data.md#deletes) for more details.
 
 <Tabs
 groupId="programming-language"
@@ -948,7 +948,7 @@ Note that CDC queries are currently only supported on Copy-on-Write tables.
 
 The examples thus far have showcased one of the two table types, that Hudi supports - Copy-on-Write (COW) tables. Hudi also supports
 a more advanced write-optimized table type called Merge-on-Read (MOR) tables, that can balance read and write performance in a more
-flexible manner. See [table types](table_types) for more details.
+flexible manner. See [table types](table_types.md) for more details.
 
 Any of these examples can be run on a Merge-on-Read table by simply changing the table type to MOR, while creating the table, as below.
 
@@ -1074,7 +1074,7 @@ PARTITIONED BY (city);
 >
 
 :::note Implications of defining record keys
-Configuring keys for a Hudi table, has a new implications on the table. If record key is set by the user, `upsert` is chosen as the [write operation](write_operations).
+Configuring keys for a Hudi table, has a new implications on the table. If record key is set by the user, `upsert` is chosen as the [write operation](write_operations.md).
 Also if a record key is configured, then it's also advisable to specify a precombine or ordering field, to correctly handle cases where the source data has 
 multiple records with the same key. See section below. 
 :::
@@ -1147,29 +1147,29 @@ PARTITIONED BY (city);
 
 ## Where to go from here?
 You can also [build hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source) and try this quickstart using `--jars <path to spark bundle jar>`(see also [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions))
-for more info. If you are looking for ways to migrate your existing data to Hudi, refer to [migration guide](migration_guide).
+for more info. If you are looking for ways to migrate your existing data to Hudi, refer to [migration guide](migration_guide.md).
 
 ### Spark SQL Reference
 
-For advanced usage of spark SQL, please refer to [Spark SQL DDL](sql_ddl) and [Spark SQL DML](sql_dml) reference guides. 
-For alter table commands, check out [this](sql_ddl#spark-alter-table). Stored procedures provide a lot of powerful capabilities using Hudi SparkSQL to assist with monitoring, managing and operating Hudi tables, please check [this](procedures) out.
+For advanced usage of spark SQL, please refer to [Spark SQL DDL](sql_ddl.md) and [Spark SQL DML](sql_dml.md) reference guides. 
+For alter table commands, check out [this](sql_ddl.md#spark-alter-table). Stored procedures provide a lot of powerful capabilities using Hudi SparkSQL to assist with monitoring, managing and operating Hudi tables, please check [this](procedures.md) out.
 
 ### Streaming workloads
 
 Hudi provides industry-leading performance and functionality for streaming data. 
 
-**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](hoodie_streaming_ingestion.md#hudi-streamer), to assist with ingesting data into Hudi 
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
-**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](hoodie_streaming_ingestion#structured-streaming) for more.
+**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](hoodie_streaming_ingestion.md#structured-streaming) for more.
 
-Check out more information on [modeling data in Hudi](faq#how-do-i-model-the-data-stored-in-hudi) and different ways to [writing Hudi Tables](writing_data).
+Check out more information on [modeling data in Hudi](faq.md#how-do-i-model-the-data-stored-in-hudi) and different ways to [writing Hudi Tables](writing_data.md).
 
 ### Dockerized Demo
 Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy
 to get your transactional data lakes up and running quickly, across a variety query engines like Hive, Flink, Spark, Presto, Trino and much more.
 We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following
-steps [here](docker_demo) to get a taste for it. 
+steps [here](docker_demo.md) to get a taste for it. 
 

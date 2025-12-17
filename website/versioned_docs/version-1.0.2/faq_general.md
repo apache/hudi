@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### When is Hudi useful for me or my organization?
 
-If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi provides you [tools](hoodie_streaming_ingestion). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data.
+If you are looking to quickly ingest data onto HDFS or cloud storage, Hudi provides you [tools](hoodie_streaming_ingestion.md). Also, if you have ETL/hive/spark jobs which are slow/taking up a lot of resources, Hudi can potentially help by providing an incremental approach to reading and writing data.
 
 As an organization, Hudi can help you build an [efficient data lake](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM/edit#slide=id.p), solving some of the most complex, low-level storage management problems, while putting data into hands of your data analysts, engineers and scientists much quicker.
 
@@ -37,7 +37,7 @@ Choose Copy-on-write storage if :
 
 *   You are looking for a simple alternative, that replaces your existing parquet tables without any need for real-time data.
 *   Your current job is rewriting entire table/partition to deal with updates, while only a few files actually change in each partition.
-*   You are happy keeping things operationally simpler (no compaction etc), with the ingestion/write performance bound by the [parquet file size](configurations#hoodieparquetmaxfilesize) and the number of such files affected/dirtied by updates
+*   You are happy keeping things operationally simpler (no compaction etc), with the ingestion/write performance bound by the [parquet file size](configurations.md#hoodieparquetmaxfilesize) and the number of such files affected/dirtied by updates
 *   Your workload is fairly well-understood and does not have sudden bursts of large amount of update or inserts to older partitions. COW absorbs all the merging cost on the writer side and thus these sudden changes can clog up your ingestion and interfere with meeting normal mode ingest latency targets.
 
 Choose merge-on-read storage if :
@@ -51,7 +51,7 @@ Immaterial of what you choose, Hudi provides
 *   Incremental pulls
 *   Ability to de-duplicate data
 
-Find more [here](concepts/).
+Find more [here](concepts.md).
 
 ### Is Hudi an analytical database?
 
@@ -61,7 +61,7 @@ Nonetheless, Hudi is designed very much like a database and provides similar fun
 
 ### How do I model the data stored in Hudi?
 
-When writing data into Hudi, you model the records like how you would on a key-value store - specify a key field (unique for a single partition/across table), a partition field (denotes partition to place key into) and preCombine/combine logic that specifies how to handle duplicates in a batch of records written. This model enables Hudi to enforce primary key constraints like you would get on a database table. See [here](writing_data) for an example.
+When writing data into Hudi, you model the records like how you would on a key-value store - specify a key field (unique for a single partition/across table), a partition field (denotes partition to place key into) and preCombine/combine logic that specifies how to handle duplicates in a batch of records written. This model enables Hudi to enforce primary key constraints like you would get on a database table. See [here](writing_data.md) for an example.
 
 When querying/reading data, Hudi just presents itself as a json-like hierarchical table, everyone is used to querying using Hive/Spark/Presto over Parquet/Json/Avro.
 
@@ -79,7 +79,7 @@ generate the key internally (much like RDBMS row_ids)
 
 ### How does Hudi actually store data inside a table?
 
-At a high level, Hudi is based on MVCC design that writes data to versioned parquet/base files and log files that contain changes to the base file. All the files are stored under a partitioning scheme for the table, which closely resembles how Apache Hive tables are laid out on DFS. Please refer [here](concepts/) for more details.
+At a high level, Hudi is based on MVCC design that writes data to versioned parquet/base files and log files that contain changes to the base file. All the files are stored under a partitioning scheme for the table, which closely resembles how Apache Hive tables are laid out on DFS. Please refer [here](concepts.md) for more details.
 
 ### How Hudi handles partition evolution requirements ?
 
