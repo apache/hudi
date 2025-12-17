@@ -46,6 +46,9 @@ import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -81,7 +84,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -258,6 +260,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   //Maintains all the existing keys schema wise
   private final Map<String, Map<Integer, KeyPartition>> existingKeysBySchema;
+  @Getter
   private final String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
@@ -1445,10 +1448,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return list;
   }
 
-  public String[] getPartitionPaths() {
-    return partitionPaths;
-  }
-
   public int getNumExistingKeys(String schemaStr) {
     return numKeysBySchema.getOrDefault(schemaStr, 0);
   }
@@ -1507,7 +1506,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * The fields identify the record with the combination of the recordKey and partitionPath and assert that the proper
    * value is present with the orderingVal and the riderValue, which is updated as part of the update utility methods.
    */
+  @Getter
+  @EqualsAndHashCode
+  @ToString
   public static class RecordIdentifier {
+
     private final String recordKey;
     private final String orderingVal;
     private final String partitionPath;
@@ -1535,45 +1538,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       String orderingValStr = orderingValue.toString();
       String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      RecordIdentifier that = (RecordIdentifier) o;
-      return Objects.equals(recordKey, that.recordKey)
-          && Objects.equals(orderingVal, that.orderingVal)
-          && Objects.equals(partitionPath, that.partitionPath)
-          && Objects.equals(riderValue, that.riderValue);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(recordKey, orderingVal, partitionPath, riderValue);
-    }
-
-    public String getRecordKey() {
-      return recordKey;
-    }
-
-    public String getOrderingVal() {
-      return orderingVal;
-    }
-
-    public String getPartitionPath() {
-      return partitionPath;
-    }
-
-    public String getRiderValue() {
-      return riderValue;
-    }
-
-    @Override
-    public String toString() {
-      return "RowKey: " + recordKey + ", PartitionPath: " + partitionPath
-          + ", OrderingVal: " + orderingVal + ", RiderValue: " + riderValue;
     }
   }
 

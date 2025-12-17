@@ -21,10 +21,11 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -49,7 +50,9 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   private static final MercifulJsonConverter JSON_CONVERTER = new MercifulJsonConverter();
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  @Getter
   private String partitionPath;
+  @Getter
   private String rowKey;
   private byte[] jsonDataCompressed;
   private int dataSize;
@@ -64,10 +67,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
     this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0).toString());
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
   }
 
   @Override
@@ -110,10 +109,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     Map<String, String> metadataMap = new HashMap<>();
     metadataMap.put("InputRecordCount_1506582000", "2");
     return Option.of(metadataMap);
-  }
-
-  public String getRowKey() {
-    return rowKey;
   }
 
   public String getJsonData() throws IOException {

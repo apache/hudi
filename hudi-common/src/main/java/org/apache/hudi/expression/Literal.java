@@ -21,12 +21,17 @@ package org.apache.hudi.expression;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import javax.xml.bind.DatatypeConverter;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
+@AllArgsConstructor
+@Getter
 public class Literal<T> extends LeafExpression {
 
   public static <V> Literal from(V value) {
@@ -80,22 +85,9 @@ public class Literal<T> extends LeafExpression {
         + value.getClass().getName() + " to Literal");
   }
 
+  @Getter
   private final T value;
-  private final Type type;
-
-  public Literal(T value, Type type) {
-    this.value = value;
-    this.type = type;
-  }
-
-  public T getValue() {
-    return value;
-  }
-
-  @Override
-  public Type getDataType() {
-    return type;
-  }
+  private final Type dataType;
 
   @Override
   public Object eval(StructLike data) {

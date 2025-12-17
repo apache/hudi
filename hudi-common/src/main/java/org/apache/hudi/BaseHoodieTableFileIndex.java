@@ -54,8 +54,10 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -66,7 +68,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -89,17 +90,21 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimest
  *   <li>Query instant/range</li>
  * </ul>
  */
+@Slf4j
 public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieTableFileIndex.class);
 
+  @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
 
+  @Getter
   protected final HoodieMetadataConfig metadataConfig;
   private final TypedProperties configProperties;
+  @Getter
   private final HoodieTableQueryType queryType;
   private final Option<String> specifiedQueryInstant;
   private final Option<String> incrementalQueryStartTime;
   private final Option<String> incrementalQueryEndTime;
+  @Getter(AccessLevel.PROTECTED)
   private final List<StoragePath> queryPaths;
 
   private final boolean shouldIncludePendingCommits;
@@ -114,6 +119,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
   private final boolean shouldListLazily;
 
+  @Getter
   private final StoragePath basePath;
 
   private final HoodieTableMetaClient metaClient;
@@ -195,13 +201,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return getActiveTimeline().filterCompletedInstants().lastInstant();
   }
 
-  /**
-   * Returns table's base-path
-   */
-  public StoragePath getBasePath() {
-    return basePath;
-  }
-
   public int getFileSlicesCount() {
     return getAllInputFileSlices().values().stream()
         .mapToInt(List::size).sum();
@@ -210,25 +209,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   @Override
   public void close() throws Exception {
     resetTableMetadata(null);
-  }
-
-  public HoodieTableQueryType getQueryType() {
-    return queryType;
-  }
-
-  /**
-   * Returns the configuration properties
-   */
-  public HoodieMetadataConfig getMetadataConfig() {
-    return metadataConfig;
-  }
-
-  protected String[] getPartitionColumns() {
-    return partitionColumns;
-  }
-
-  protected List<StoragePath> getQueryPaths() {
-    return queryPaths;
   }
 
   /**
@@ -490,7 +470,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
 
-    LOG.info("Refresh table {}, spent: {} ms", metaClient.getTableConfig().getTableName(), timer.endTimer());
+    log.info("Refresh table {}, spent: {} ms", metaClient.getTableConfig().getTableName(), timer.endTimer());
   }
 
   private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
@@ -575,31 +555,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Partition path information containing the relative partition path
    * and values of partition columns.
    */
-  public static final class PartitionPath implements Serializable {
+  @Value
+  public static class PartitionPath implements Serializable {
 
-    final String path;
-    final Object[] values;
-
-    public PartitionPath(String path, Object[] values) {
-      this.path = path;
-      this.values = values;
-    }
-
-    public String getPath() {
-      return path;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      return other instanceof PartitionPath
-          && Objects.equals(path, ((PartitionPath) other).path)
-          && Arrays.equals(values, ((PartitionPath) other).values);
-    }
-
-    @Override
-    public int hashCode() {
-      return path.hashCode() * 1103 + Arrays.hashCode(values);
-    }
+    String path;
+    Object[] values;
   }
 
   /**

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.List;
 
 /**
@@ -29,6 +32,8 @@ import java.util.List;
  * 1. One plan generates one file, either a base file, or a log file.
  * 2. One file contains one operation, e.g., insert, delete, or update.
  */
+@AllArgsConstructor
+@Getter
 public class DataGenerationPlan {
   // The values for "_row_key" field.
   private final List<String> recordKeys;
@@ -45,44 +50,6 @@ public class DataGenerationPlan {
     INSERT,
     UPDATE,
     DELETE
-  }
-
-  public DataGenerationPlan(List<String> recordKeys,
-                            String partitionPath,
-                            long timestamp,
-                            OperationType operationType,
-                            String instantTime,
-                            boolean writePositions) {
-    this.recordKeys = recordKeys;
-    this.partitionPath = partitionPath;
-    this.timestamp = timestamp;
-    this.operationType = operationType;
-    this.instantTime = instantTime;
-    this.writePositions = writePositions;
-  }
-
-  public List<String> getRecordKeys() {
-    return recordKeys;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public long getTimestamp() {
-    return timestamp;
-  }
-
-  public OperationType getOperationType() {
-    return operationType;
-  }
-
-  public String getInstantTime() {
-    return instantTime;
-  }
-
-  public boolean getWritePositions() {
-    return writePositions;
   }
 
   public static Builder newBuilder() {
