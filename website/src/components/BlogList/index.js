@@ -1,3 +1,4 @@
+import {useDateTimeFormat} from "@docusaurus/theme-common/internal";
 import React, { useState } from 'react';
 import Link from '@docusaurus/Link';
 import { useBaseUrlUtils } from '@docusaurus/core/lib/client/exports/useBaseUrl';
@@ -42,7 +43,7 @@ const POSTS_PER_PAGE = 12;
 export default function BlogList() {
   const { withBaseUrl } = useBaseUrlUtils();
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const totalPages = Math.ceil(sortedBlogPosts.length / POSTS_PER_PAGE);
   const startIndex = (currentPage - 1) * POSTS_PER_PAGE;
   const endIndex = startIndex + POSTS_PER_PAGE;
@@ -58,11 +59,11 @@ export default function BlogList() {
     const maxVisible = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    
+
     if (endPage - startPage < maxVisible - 1) {
       startPage = Math.max(1, endPage - maxVisible + 1);
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
@@ -77,17 +78,19 @@ export default function BlogList() {
           const { frontMatter, assets, metadata } = blog;
           const { date, title, authors, permalink, description } = metadata || {};
           const image = assets?.image ?? frontMatter?.image ?? "/assets/images/hudi.png";
-          
+
           if (!title || !permalink) {
             return null;
           }
-          
-          const dateObj = date ? new Date(date) : null;
-          const formattedDate = dateObj ? dateObj.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          }) : '';
+
+          const dateTimeFormat = useDateTimeFormat({
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+          });
+          const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
+          const formattedDate = date ? formatDate(date) : '';
 
           return (
             <article key={index} className={styles.card}>
@@ -115,7 +118,7 @@ export default function BlogList() {
           );
         })}
       </div>
-      
+
       {totalPages > 1 && (
         <nav className={styles.pagination} aria-label="Blog pagination">
           <button
@@ -126,7 +129,7 @@ export default function BlogList() {
           >
             Previous
           </button>
-          
+
           <div className={styles.paginationNumbers}>
             {getPageNumbers().map((pageNum) => (
               <button
@@ -140,7 +143,7 @@ export default function BlogList() {
               </button>
             ))}
           </div>
-          
+
           <button
             className={styles.paginationButton}
             onClick={() => handlePageChange(currentPage + 1)}
@@ -151,7 +154,7 @@ export default function BlogList() {
           </button>
         </nav>
       )}
-      
+
       <div className={styles.paginationInfo}>
         Showing {startIndex + 1}-{Math.min(endIndex, sortedBlogPosts.length)} of {sortedBlogPosts.length} posts
       </div>
