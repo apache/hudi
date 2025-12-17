@@ -131,12 +131,14 @@ versioned_sidebars/version-0.7.0-sidebars.json
 
 ### Linking docs
 
-**IMPORTANT: Always use `.md` extension when linking to other docs.**
+**IMPORTANT: Always use just the filename with `.md` extension when linking to other docs.**
 
 Docusaurus resolves file paths with `.md` extension at build time, converting them to absolute URLs. This ensures:
 
 - Links work correctly regardless of trailing slashes in URLs
 - Links automatically resolve to the correct version in versioned docs
+
+**DO NOT use `../` or `./` prefixes** - these break versioned docs behavior.
 
 #### Versioned docs linking
 
@@ -165,6 +167,12 @@ A [callback notification](writing_data#commit-notifications) is exposed
 ```
 
 Without `.md` extension, this becomes a relative URL that the browser resolves at runtime, which can break when the page URL has a trailing slash.
+
+```md
+A [callback notification](../writing_data.md#commit-notifications) is exposed
+```
+
+Using `../` or `./` prefixes breaks versioned docs behavior and should be avoided.
 
 #### DO NOT use next version when linking
 
