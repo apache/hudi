@@ -86,7 +86,7 @@
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
     <!-- bump to 3.5.3 to fix MSHADE-461 -->
     <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
-    <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
+    <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
@@ -94,7 +94,7 @@
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
 
-    <java.version>8</java.version>
+    <java.version>11</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
@@ -547,7 +547,12 @@
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
+            <source>${java.version}</source>
+            <target>${java.version}</target>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+            <args>
+              <arg>-nobootcp</arg>
+            </args>
           </configuration>
         </plugin>
         <plugin>
@@ -1901,7 +1906,10 @@
               </execution>
             </executions>
             <configuration>
+              <source>11</source>
               <doclint>none</doclint>
+              <failOnWarnings>false</failOnWarnings>
+              <failOnError>false</failOnError>
             </configuration>
           </plugin>
           <plugin>
