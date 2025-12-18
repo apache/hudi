@@ -69,7 +69,7 @@ cd ${CLONE_DIR}
 $CURR_DIR/release/create_source_directory.sh hudi-$RELEASE_VERSION
 
 tar czf ${RELEASE_DIR}/hudi-${RELEASE_VERSION}.src.tgz hudi-$RELEASE_VERSION
-gpg --local-user ACD52A06633DB3B2C7D0EA5642CA2D3ED5895122 --armor --detach-sig ${RELEASE_DIR}/hudi-${RELEASE_VERSION}.src.tgz
+gpg --armor --detach-sig ${RELEASE_DIR}/hudi-${RELEASE_VERSION}.src.tgz
 cd ${RELEASE_DIR}
 $SHASUM hudi-${RELEASE_VERSION}.src.tgz > hudi-${RELEASE_VERSION}.src.tgz.sha512
 

@@ -29,10 +29,6 @@
   <name>hudi-spark-client</name>
   <packaging>jar</packaging>
 
-  <properties>
-    <maven.javadoc.skip>true</maven.javadoc.skip>
-  </properties>
-
   <dependencies>
     <!-- Scala -->
     <dependency>
