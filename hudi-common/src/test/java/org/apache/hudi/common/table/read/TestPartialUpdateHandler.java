@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -39,20 +38,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestPartialUpdateHandler {
   @Test
   void testParseValidProperties() {
-      TypedProperties props = new TypedProperties();
-      props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=1,b=2,c=3");
-      Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
-
-      assertEquals(3, result.size());
-      assertEquals("1", result.get("a"));
-      assertEquals("2", result.get("b"));
-      assertEquals("3", result.get("c"));
-  }
-
-  @Test
-  void testHandlesWhitespace() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), " a = 1 , b=  2 ,c=3 ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "a", "1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "b", "2");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "c", "3");
     Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
 
     assertEquals(3, result.size());
@@ -62,21 +51,39 @@ class TestPartialUpdateHandler {
   }
 
   @Test
+  void testHandlesWhitespace() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "  a  ", "  1  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "b", "  2  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "c", "3 ");
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+
+    assertEquals(3, result.size());
+    assertEquals("1", result.get("a")); // Keys and values are trimmed
+    assertEquals("2", result.get("b"));
+    assertEquals("3", result.get("c"));
+  }
+
+  @Test
   void testIgnoresEmptyEntriesAndMissingEquals() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "a", "1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "b", ""); // Empty value
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "c", "3");
+    // Properties with empty keys after prefix are ignored by extractWithPrefix
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX, "ignored"); // This will be ignored
     Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
 
     assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
+    assertEquals("", result.get("b")); // Empty value is preserved
     assertEquals("3", result.get("c"));
-    assertEquals("", result.get("b"));
   }
 
   @Test
   void testEmptyInputReturnsEmptyMap() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "");
+    // No properties with the prefix
     Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }

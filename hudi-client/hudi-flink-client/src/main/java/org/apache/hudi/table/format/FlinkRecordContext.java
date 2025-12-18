@@ -148,7 +148,17 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   @Override
   public RowData constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
-    return GenericRowData.of(fieldValues);
+    List<HoodieSchemaField> fields = recordSchema.getFields();
+    if (fields.size() != fieldValues.length) {
+      throw new IllegalArgumentException(
+          "Value count (" + fieldValues.length + ") does not match field count (" + fields.size() + ")");
+    }
+
+    GenericRowData genericRowData = new GenericRowData(fieldValues.length);
+    for (int index = 0; index < fields.size(); index++) {
+      genericRowData.setField(index, fieldValues[index]);
+    }
+    return toBinaryRow(recordSchema, genericRowData);
   }
 
   @Override

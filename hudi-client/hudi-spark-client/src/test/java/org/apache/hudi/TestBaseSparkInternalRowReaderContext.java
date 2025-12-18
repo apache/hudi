@@ -143,8 +143,8 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithListOfValues() {
-    List<Object> values = Arrays.asList(1, UTF8String.fromString("Alice"), true);
-    InternalRow result = readerContext.createEngineRecord(SCHEMA, values);
+    Object[] values = new Object[]{1, UTF8String.fromString("Alice"), true};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertEquals(1, result.getInt(0));
     assertEquals("Alice", result.getString(1));
@@ -153,8 +153,8 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithNullValues() {
-    List<Object> values = Arrays.asList(null, UTF8String.fromString("Bob"), null);
-    InternalRow result = readerContext.createEngineRecord(SCHEMA, values);
+    Object[] values = new Object[]{null, UTF8String.fromString("Bob"), null};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertTrue(result.isNullAt(0));
     assertEquals("Bob", result.getString(1));
@@ -163,8 +163,8 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithMixedTypes() {
-    List<Object> values = Arrays.asList(42, UTF8String.fromString("Carol"), false);
-    InternalRow result = readerContext.createEngineRecord(SCHEMA, values);
+    Object[] values = new Object[]{42, UTF8String.fromString("Carol"), false};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertEquals(42, result.getInt(0));
     assertEquals("Carol", result.getString(1));
@@ -173,8 +173,8 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithEmptyValues() {
-    List<Object> values = Arrays.asList(0, UTF8String.fromString(""), false);
-    InternalRow result = readerContext.createEngineRecord(SCHEMA, values);
+    Object[] values = new Object[]{0, UTF8String.fromString(""), false};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertEquals(0, result.getInt(0));
     assertEquals("", result.getString(1));
@@ -183,10 +183,10 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithValueCountMismatch() {
-    List<Object> values = Arrays.asList(1, UTF8String.fromString("Alice")); // Missing boolean value
+    Object[] values = new Object[]{1, UTF8String.fromString("Alice")}; // Missing boolean value
 
     try {
-      readerContext.createEngineRecord(SCHEMA, values);
+      readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
       // Should not reach here
       assertTrue(false, "Expected IllegalArgumentException");
     } catch (IllegalArgumentException e) {
@@ -196,10 +196,10 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithExtraValues() {
-    List<Object> values = Arrays.asList(1, UTF8String.fromString("Alice"), true, "extra");
+    Object[] values = new Object[]{1, UTF8String.fromString("Alice"), true, "extra"};
 
     try {
-      readerContext.createEngineRecord(SCHEMA, values);
+      readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
       // Should not reach here
       assertTrue(false, "Expected IllegalArgumentException");
     } catch (IllegalArgumentException e) {
@@ -210,23 +210,24 @@ class TestBaseSparkInternalRowReaderContext {
   @Test
   void testConstructEngineRecordWithComplexSchema() {
     // Create a more complex schema with nested fields
-    Schema complexSchema = SchemaBuilder.record("ComplexRecord").fields()
-        .requiredInt("id")
-        .requiredString("name")
-        .requiredBoolean("active")
-        .requiredLong("timestamp")
-        .requiredDouble("score")
-        .endRecord();
+    HoodieSchema complexSchema = HoodieSchema.createRecord("ComplexRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
+            HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("score", HoodieSchema.create(HoodieSchemaType.DOUBLE))
+        ));
 
-    List<Object> values = Arrays.asList(
+    Object[] values = new Object[]{
         123,
         UTF8String.fromString("ComplexName"),
         true,
         1234567890L,
         95.5
-    );
+    };
 
-    InternalRow result = readerContext.createEngineRecord(complexSchema, values);
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(complexSchema, values);
 
     assertEquals(123, result.getInt(0));
     assertEquals("ComplexName", result.getString(1));
@@ -237,8 +238,8 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithAllNullValues() {
-    List<Object> values = Arrays.asList(null, null, null);
-    InternalRow result = readerContext.createEngineRecord(SCHEMA, values);
+    Object[] values = new Object[]{null, null, null};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertTrue(result.isNullAt(0));
     assertTrue(result.isNullAt(1));
@@ -247,8 +248,8 @@ class TestBaseSparkInternalRowReaderContext {
 
   @Test
   void testConstructEngineRecordWithZeroValues() {
-    List<Object> values = Arrays.asList(0, UTF8String.fromString("Zero"), false);
-    InternalRow result = readerContext.createEngineRecord(SCHEMA, values);
+    Object[] values = new Object[]{0, UTF8String.fromString("Zero"), false};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertEquals(0, result.getInt(0));
     assertEquals("Zero", result.getString(1));

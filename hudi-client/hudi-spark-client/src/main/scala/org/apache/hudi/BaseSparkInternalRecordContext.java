@@ -134,7 +134,12 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
 
   @Override
   public InternalRow constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
-    return new GenericInternalRow(fieldValues);
+      List<HoodieSchemaField> fields = recordSchema.getFields();
+      if (fields.size() != fieldValues.length) {
+          throw new IllegalArgumentException(
+                  "Value count (" + fieldValues.length + ") does not match field count (" + fields.size() + ")");
+      }
+      return toBinaryRow(recordSchema, new GenericInternalRow(fieldValues));
   }
 
   @Override

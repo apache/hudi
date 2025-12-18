@@ -30,17 +30,25 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.FloatWritable;
 import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.MapWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -147,22 +155,19 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithListValues() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    // Test with primitive types
-    Schema simpleSchema = SchemaBuilder.record("SimpleRecord").fields()
-        .requiredInt("id")
-        .requiredString("name")
-        .requiredBoolean("active")
-        .endRecord();
+    HoodieSchema simpleSchema = HoodieSchema.createRecord("SimpleRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+        ));
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(simpleSchema,
-        Arrays.asList(1, "test", true));
+    Object[] fieldVals = new Object[]{1, "test", true};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(simpleSchema, fieldVals);
     Writable[] values = result.get();
 
     assertEquals(1, ((IntWritable) values[0]).get());
@@ -172,97 +177,89 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithNullValues() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema nullableSchema = SchemaBuilder.record("NullableRecord").fields()
-        .optionalInt("id")
-        .optionalString("name")
-        .optionalBoolean("active")
-        .endRecord();
+    HoodieSchema nullableSchema = HoodieSchema.createRecord("NullableRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+        ));
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(nullableSchema,
-        Arrays.asList(null, null, null));
+    Object[] fieldVals = new Object[]{null, null, null};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(nullableSchema, fieldVals);
     Writable[] values = result.get();
 
-    assertEquals(org.apache.hadoop.io.NullWritable.get(), values[0]);
-    assertEquals(org.apache.hadoop.io.NullWritable.get(), values[1]);
-    assertEquals(org.apache.hadoop.io.NullWritable.get(), values[2]);
+    assertEquals(NullWritable.get(), values[0]);
+    assertEquals(NullWritable.get(), values[1]);
+    assertEquals(NullWritable.get(), values[2]);
   }
 
   @Test
   void testConstructEngineRecordWithMixedNullAndNonNullValues() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema mixedSchema = SchemaBuilder.record("MixedRecord").fields()
-        .optionalInt("id")
-        .optionalString("name")
-        .optionalBoolean("active")
-        .endRecord();
+    HoodieSchema mixedSchema = HoodieSchema.createRecord("MixedRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
+        ));
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(mixedSchema,
-        Arrays.asList(42, null, true));
+    Object[] fieldVals = new Object[]{42, null, true};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(mixedSchema, fieldVals);
     Writable[] values = result.get();
 
     assertEquals(42, ((IntWritable) values[0]).get());
-    assertEquals(org.apache.hadoop.io.NullWritable.get(), values[1]);
+    assertEquals(NullWritable.get(), values[1]);
     assertTrue(((BooleanWritable) values[2]).get());
   }
 
   @Test
   void testConstructEngineRecordWithNumericTypes() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema numericSchema = SchemaBuilder.record("NumericRecord").fields()
-        .requiredInt("int_val")
-        .requiredLong("long_val")
-        .requiredFloat("float_val")
-        .requiredDouble("double_val")
-        .endRecord();
+    HoodieSchema numericSchema = HoodieSchema.createRecord("NumericRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("int_val", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("long_val", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("float_val", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+            HoodieSchemaField.of("double_val", HoodieSchema.create(HoodieSchemaType.DOUBLE))
+        ));
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(numericSchema,
-        Arrays.asList(42, 123456789L, 3.14f, 2.71828));
+    Object[] fieldVals = new Object[]{42, 123456789L, 3.14f, 2.71828};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(numericSchema, fieldVals);
     Writable[] values = result.get();
 
     assertEquals(42, ((IntWritable) values[0]).get());
-    assertEquals(123456789L, ((org.apache.hadoop.io.LongWritable) values[1]).get());
-    assertEquals(3.14f, ((org.apache.hadoop.io.FloatWritable) values[2]).get(), 0.001f);
-    assertEquals(2.71828, ((org.apache.hadoop.io.DoubleWritable) values[3]).get(), 0.000001);
+    assertEquals(123456789L, ((LongWritable) values[1]).get());
+    assertEquals(3.14f, ((FloatWritable) values[2]).get(), 0.001f);
+    assertEquals(2.71828, ((DoubleWritable) values[3]).get(), 0.000001);
   }
 
   @Test
   void testConstructEngineRecordWithBytesType() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema bytesSchema = SchemaBuilder.record("BytesRecord").fields()
-        .requiredBytes("bytes_val")
-        .endRecord();
+    HoodieSchema bytesSchema = HoodieSchema.createRecord("BytesRecord", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("bytes_val", HoodieSchema.create(HoodieSchemaType.BYTES))
+        ));
 
     byte[] testBytes = "Hello World".getBytes();
-    ArrayWritable result = avroReaderContext.createEngineRecord(bytesSchema,
-        Arrays.asList(testBytes));
+    Object[] fieldVals = new Object[]{testBytes};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(bytesSchema, fieldVals);
     Writable[] values = result.get();
 
-    org.apache.hadoop.io.BytesWritable bytesWritable = (org.apache.hadoop.io.BytesWritable) values[0];
+    BytesWritable bytesWritable = (BytesWritable) values[0];
     byte[] resultBytes = new byte[bytesWritable.getLength()];
     System.arraycopy(bytesWritable.getBytes(), 0, resultBytes, 0, bytesWritable.getLength());
     assertEquals("Hello World", new String(resultBytes));
@@ -270,23 +267,21 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithByteBuffer() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema bytesSchema = SchemaBuilder.record("BytesRecord").fields()
-        .requiredBytes("bytes_val")
-        .endRecord();
+    HoodieSchema bytesSchema = HoodieSchema.createRecord("BytesRecord", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("bytes_val", HoodieSchema.create(HoodieSchemaType.BYTES))
+        ));
 
-    java.nio.ByteBuffer testBuffer = java.nio.ByteBuffer.wrap("Test Buffer".getBytes());
-    ArrayWritable result = avroReaderContext.createEngineRecord(bytesSchema,
-        Arrays.asList(testBuffer));
+    ByteBuffer testBuffer = ByteBuffer.wrap("Test Buffer".getBytes());
+    Object[] fieldVals = new Object[]{testBuffer};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(bytesSchema, fieldVals);
     Writable[] values = result.get();
 
-    org.apache.hadoop.io.BytesWritable bytesWritable = (org.apache.hadoop.io.BytesWritable) values[0];
+    BytesWritable bytesWritable = (BytesWritable) values[0];
     byte[] resultBytes = new byte[bytesWritable.getLength()];
     System.arraycopy(bytesWritable.getBytes(), 0, resultBytes, 0, bytesWritable.getLength());
     assertEquals("Test Buffer", new String(resultBytes));
@@ -294,20 +289,18 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithArrayType() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema arraySchema = SchemaBuilder.record("ArrayRecord").fields()
-        .name("string_array").type().array().items().stringType().noDefault()
-        .name("int_array").type().array().items().intType().noDefault()
-        .endRecord();
+    HoodieSchema arraySchema = HoodieSchema.createRecord("ArrayRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("string_array", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
+            HoodieSchemaField.of("int_array", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)))
+        ));
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(arraySchema,
-        Arrays.asList(Arrays.asList("a", "b", "c"), Arrays.asList(1, 2, 3)));
+    Object[] fieldVals = new Object[]{Arrays.asList("a", "b", "c"), Arrays.asList(1, 2, 3)};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(arraySchema, fieldVals);
     Writable[] values = result.get();
 
     ArrayWritable stringArray = (ArrayWritable) values[0];
@@ -323,55 +316,52 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithMapType() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema mapSchema = SchemaBuilder.record("MapRecord").fields()
-        .name("string_map").type().map().values().stringType().noDefault()
-        .endRecord();
+    HoodieSchema mapSchema = HoodieSchema.createRecord("MapRecord", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("string_map", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING)))
+        ));
 
-    java.util.Map<String, String> testMap = new java.util.HashMap<>();
+    Map<String, String> testMap = new HashMap<>();
     testMap.put("key1", "value1");
     testMap.put("key2", "value2");
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(mapSchema,
-        Arrays.asList(testMap));
+    Object[] fieldVals = new Object[]{testMap};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(mapSchema, fieldVals);
     Writable[] values = result.get();
 
-    org.apache.hadoop.io.MapWritable mapWritable = (org.apache.hadoop.io.MapWritable) values[0];
+    MapWritable mapWritable = (MapWritable) values[0];
     assertEquals("value1", mapWritable.get(new Text("key1")).toString());
     assertEquals("value2", mapWritable.get(new Text("key2")).toString());
   }
 
   @Test
   void testConstructEngineRecordWithRecordType() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema nestedSchema = SchemaBuilder.record("NestedRecord").fields()
-        .requiredString("name")
-        .requiredInt("age")
-        .endRecord();
+    HoodieSchema nestedSchema = HoodieSchema.createRecord("NestedRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        ));
 
-    Schema recordSchema = SchemaBuilder.record("RecordRecord").fields()
-        .name("nested").type(nestedSchema).noDefault()
-        .requiredString("description")
-        .endRecord();
+    HoodieSchema recordSchema = HoodieSchema.createRecord("RecordRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("nested", nestedSchema),
+            HoodieSchemaField.of("description", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
 
-    org.apache.avro.generic.GenericRecord nestedRecord = new org.apache.avro.generic.GenericData.Record(nestedSchema);
+    org.apache.avro.generic.GenericRecord nestedRecord = new org.apache.avro.generic.GenericData.Record(nestedSchema.toAvroSchema());
     nestedRecord.put("name", "John");
     nestedRecord.put("age", 30);
 
-    ArrayWritable result = avroReaderContext.createEngineRecord(recordSchema,
-        Arrays.asList(nestedRecord, "Test description"));
+    Object[] fieldVals = new Object[]{nestedRecord, "Test description"};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(recordSchema, fieldVals);
     Writable[] values = result.get();
 
     ArrayWritable nestedWritable = (ArrayWritable) values[0];
@@ -382,88 +372,71 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithUnionType() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema unionSchema = SchemaBuilder.record("UnionRecord").fields()
-        .name("union_field").type().unionOf().nullType().and().stringType().endUnion().noDefault()
-        .endRecord();
+    // Create a union schema (nullable string)
+    HoodieSchema unionSchema = HoodieSchema.createRecord("UnionRecord", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("union_field", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
 
     // Test with non-null value
-    ArrayWritable result1 = avroReaderContext.createEngineRecord(unionSchema,
-        Arrays.asList("test_value"));
+    Object[] fieldVals1 = new Object[]{"test_value"};
+    ArrayWritable result1 = avroReaderContext.getRecordContext().constructEngineRecord(unionSchema, fieldVals1);
     Writable[] values1 = result1.get();
     assertEquals("test_value", values1[0].toString());
 
     // Test with null value
-    ArrayWritable result2 = avroReaderContext.createEngineRecord(unionSchema,
-        Arrays.asList((Object) null));
+    Object[] fieldVals2 = new Object[]{null};
+    ArrayWritable result2 = avroReaderContext.getRecordContext().constructEngineRecord(unionSchema, fieldVals2);
     Writable[] values2 = result2.get();
-    assertEquals(org.apache.hadoop.io.NullWritable.get(), values2[0]);
+    assertEquals(NullWritable.get(), values2[0]);
   }
 
   @Test
   void testConstructEngineRecordWithMismatchedSchemaAndValues() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    Schema simpleSchema = SchemaBuilder.record("SimpleRecord").fields()
-        .requiredInt("id")
-        .requiredString("name")
-        .endRecord();
+    HoodieSchema simpleSchema = HoodieSchema.createRecord("SimpleRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
 
     // Test with fewer values than schema fields
-    try {
-      avroReaderContext.createEngineRecord(simpleSchema, Arrays.asList(1));
-      org.junit.jupiter.api.Assertions.fail("Expected IllegalArgumentException");
-    } catch (IllegalArgumentException e) {
-      assertEquals("Mismatch between schema fields and values", e.getMessage());
-    }
+    Object[] fieldVals1 = new Object[]{1};
+    IllegalArgumentException e1 = assertThrows(IllegalArgumentException.class,
+        () -> avroReaderContext.getRecordContext().constructEngineRecord(simpleSchema, fieldVals1));
+    assertEquals("Mismatch between schema fields and values", e1.getMessage());
 
     // Test with more values than schema fields
-    try {
-      avroReaderContext.createEngineRecord(simpleSchema, Arrays.asList(1, "test", "extra"));
-      org.junit.jupiter.api.Assertions.fail("Expected IllegalArgumentException");
-    } catch (IllegalArgumentException e) {
-      assertEquals("Mismatch between schema fields and values", e.getMessage());
-    }
+    Object[] fieldVals2 = new Object[]{1, "test", "extra"};
+    IllegalArgumentException e2 = assertThrows(IllegalArgumentException.class,
+        () -> avroReaderContext.getRecordContext().constructEngineRecord(simpleSchema, fieldVals2));
+    assertEquals("Mismatch between schema fields and values", e2.getMessage());
   }
 
   @Test
-  void testConstructEngineRecordWithUnsupportedType() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
+  void testConstructEngineRecordWithEnumType() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
-    // Create a schema with an unsupported type (like ENUM without proper setup)
-    Schema unsupportedSchema = SchemaBuilder.record("UnsupportedRecord").fields()
-        .name("enum_field").type().enumeration("TestEnum").symbols("A", "B", "C").noDefault()
-        .endRecord();
+    // Create a schema with ENUM type (converted from Avro enum to string in HoodieSchema)
+    HoodieSchema enumSchema = HoodieSchema.createRecord("EnumRecord", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("enum_field", HoodieSchema.create(HoodieSchemaType.STRING))
+        ));
 
-    try {
-      avroReaderContext.createEngineRecord(unsupportedSchema, Arrays.asList("A"));
-      // This should work as ENUM is supported and converted to Text
-    } catch (Exception e) {
-      org.junit.jupiter.api.Assertions.fail("ENUM type should be supported and converted to Text");
-    }
-  }
-
-  private JobConf getJobConf() {
-    JobConf jobConf = new JobConf(storageConfiguration.unwrapAs(Configuration.class));
-    jobConf.set("columns", "field_1,field_2,field_3,datestr");
-    jobConf.set("columns.types", "string,string,struct<nested_field:string>,string");
-    return jobConf;
+    Object[] fieldVals = new Object[]{"A"};
+    ArrayWritable result = avroReaderContext.getRecordContext().constructEngineRecord(enumSchema, fieldVals);
+    Writable[] values = result.get();
+    // ENUM is converted to Text (string)
+    assertEquals("A", values[0].toString());
   }
 
   private static HoodieSchema getBaseSchema() {

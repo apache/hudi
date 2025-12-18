@@ -69,7 +69,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final HoodieSchema readerSchema;
   protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
-  protected final Option<PartialUpdateMode> partialUpdateModeOpt;
+  protected Option<PartialUpdateMode> partialUpdateModeOpt;
   protected final Option<HoodieRecordMerger> recordMerger;
   // The pair of payload classes represents the payload class for the table and the payload class for the incoming records.
   // The two classes are only expected to be different when there is a merge-into operation that leverages the ExpressionPayload.

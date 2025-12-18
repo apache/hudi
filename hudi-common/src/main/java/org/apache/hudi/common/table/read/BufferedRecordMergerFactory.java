@@ -63,16 +63,6 @@ public class BufferedRecordMergerFactory {
                                                    Option<Pair<String, String>> payloadClasses,
                                                    TypedProperties props,
                                                    Option<PartialUpdateMode> partialUpdateModeOpt) {
-    /**
-     * This part implements KEEP_VALUES partial update mode, which merges two records that do not have all columns.
-     * Other Partial update modes, like IGNORE_DEFAULTS assume all columns exists in the record,
-     * but some columns contain specific values that should be replaced by that from older version of the record.
-     */
-    if (enablePartialMerging) {
-      BufferedRecordMerger<T> deleteRecordMerger = create(
-          readerContext, recordMergeMode, false, recordMerger, readerSchema, payloadClasses, props, Option.empty());
-      return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, readerSchema, props);
-    }
 
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
@@ -145,8 +135,7 @@ public class BufferedRecordMergerFactory {
             existingRecord,
             newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            newSchema,
-            false);
+            newSchema);
       }
       return Option.of(newRecord);
     }
@@ -160,8 +149,7 @@ public class BufferedRecordMergerFactory {
           olderRecord,
           newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          newSchema,
-          false);
+          newSchema);
       return newerRecord;
     }
   }
@@ -226,8 +214,7 @@ public class BufferedRecordMergerFactory {
             existingRecord,
             newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            newSchema,
-            false);
+            newSchema);
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
@@ -237,8 +224,7 @@ public class BufferedRecordMergerFactory {
             newRecord,
             recordContext.getSchemaFromBufferRecord(existingRecord),
             newSchema,
-            newSchema,
-            true);
+            newSchema);
         return Option.of(existingRecord);
       }
     }
@@ -260,8 +246,7 @@ public class BufferedRecordMergerFactory {
             newerRecord,
             recordContext.getSchemaFromBufferRecord(olderRecord),
             newSchema,
-            newSchema,
-            true);
+            newSchema);
         return olderRecord;
       }
 
@@ -270,8 +255,7 @@ public class BufferedRecordMergerFactory {
           olderRecord,
           newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          newSchema,
-          false);
+          newSchema);
       return newerRecord;
     }
   }

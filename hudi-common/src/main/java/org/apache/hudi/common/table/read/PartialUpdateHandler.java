@@ -21,26 +21,17 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
-
-import java.util.HashMap;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
-import static org.apache.hudi.common.util.ConfigUtils.toMap;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
@@ -55,7 +46,7 @@ public class PartialUpdateHandler<T> implements Serializable {
   private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
-  private final KeepValuesPartialMergingUtils keepValuesPartialMergingUtils;
+  private final KeepValuesPartialMergingUtils<T> keepValuesPartialMergingUtils;
 
   public PartialUpdateHandler(RecordContext<T> recordContext,
                               PartialUpdateMode partialUpdateMode,
@@ -84,8 +75,7 @@ public class PartialUpdateHandler<T> implements Serializable {
                                  BufferedRecord<T> lowOrderRecord,
                                  HoodieSchema highOrderSchema,
                                  HoodieSchema lowOrderSchema,
-                                 HoodieSchema newSchema,
-                                 boolean keepOldMetadataColumns) {
+                                 HoodieSchema newSchema) {
     // Note that: When either highOrderRecord or lowOrderRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (null == lowOrderRecord
@@ -99,7 +89,7 @@ public class PartialUpdateHandler<T> implements Serializable {
         return reconcileBasedOnKeepValues(highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
-            highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema, keepOldMetadataColumns);
+            highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
             highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
@@ -123,7 +113,13 @@ public class PartialUpdateHandler<T> implements Serializable {
                                                HoodieSchema highOrderSchema,
                                                HoodieSchema lowOrderSchema,
                                                HoodieSchema newSchema) {
-    return (BufferedRecord<T>) keepValuesPartialMergingUtils.mergePartialRecords(lowOrderRecord, lowOrderSchema, highOrderRecord, highOrderSchema, readerSchema, readerContext).getLeft();
+    return (BufferedRecord<T>) keepValuesPartialMergingUtils.mergePartialRecords(
+            lowOrderRecord,
+            lowOrderSchema,
+            highOrderRecord,
+            highOrderSchema,
+            newSchema,
+            recordContext).getLeft();
   }
 
   /**

@@ -43,8 +43,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
@@ -54,12 +52,6 @@ import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.BooleanWritable;
-import org.apache.hadoop.io.BytesWritable;
-import org.apache.hadoop.io.FloatWritable;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.FileSplit;
@@ -70,7 +62,6 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.AvroSchemaRepair;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -269,81 +260,5 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       return firstRecordReader.getProgress();
     }
     throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
-  }
-
-  Schema resolveUnion(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      // Return the first non-null type
-      return schema.getTypes().stream()
-          .filter(s -> s.getType() != Schema.Type.NULL)
-          .findFirst()
-          .orElseThrow(() -> new IllegalArgumentException("Union must contain a non-null type"));
-    }
-    return schema;
-  }
-
-  private Writable convertToWritable(Schema schema, Object value) {
-    if (value == null) {
-      return NullWritable.get();
-    }
-
-    switch (schema.getType()) {
-      case INT:
-        return new IntWritable((Integer) value);
-      case LONG:
-        return new LongWritable((Long) value);
-      case FLOAT:
-        return new FloatWritable((Float) value);
-      case DOUBLE:
-        return new DoubleWritable((Double) value);
-      case BOOLEAN:
-        return new BooleanWritable((Boolean) value);
-      case STRING:
-        return new Text(value.toString());
-      case BYTES:
-        if (value instanceof ByteBuffer) {
-          ByteBuffer buffer = (ByteBuffer) value;
-          byte[] bytes = new byte[buffer.remaining()];
-          buffer.get(bytes);
-          return new BytesWritable(bytes);
-        } else if (value instanceof byte[]) {
-          return new BytesWritable((byte[]) value);
-        }
-        throw new IllegalArgumentException("Invalid value for BYTES: " + value);
-      case FIXED:
-        return new BytesWritable(((GenericFixed) value).bytes());
-      case ENUM:
-        return new Text(value.toString());
-      case ARRAY:
-        List<?> list = (List<?>) value;
-        Schema elementSchema = resolveUnion(schema.getElementType());
-        Writable[] arrayElements = new Writable[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-          arrayElements[i] = convertToWritable(elementSchema, list.get(i));
-        }
-        return new ArrayWritable(Writable.class, arrayElements);
-      case MAP:
-        Map<?, ?> map = (Map<?, ?>) value;
-        MapWritable mapWritable = new MapWritable();
-        Schema valueSchema = resolveUnion(schema.getValueType());
-        for (Map.Entry<?, ?> entry : map.entrySet()) {
-          Writable keyWritable = new Text(entry.getKey().toString());
-          Writable valWritable = convertToWritable(valueSchema, entry.getValue());
-          mapWritable.put(keyWritable, valWritable);
-        }
-        return mapWritable;
-      case RECORD:
-        GenericRecord record = (GenericRecord) value;
-        List<Schema.Field> fields = schema.getFields();
-        Writable[] recordFields = new Writable[fields.size()];
-        for (int i = 0; i < fields.size(); i++) {
-          Schema fieldSchema = resolveUnion(fields.get(i).schema());
-          Object fieldValue = record.get(fields.get(i).name());
-          recordFields[i] = convertToWritable(fieldSchema, fieldValue);
-        }
-        return new ArrayWritable(Writable.class, recordFields);
-      default:
-        throw new UnsupportedOperationException("Unsupported Avro type: " + schema.getType());
-    }
   }
 }

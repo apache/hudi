@@ -19,8 +19,10 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -37,69 +39,69 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class KeepValuesPartialMergingUtils<T> {
   static KeepValuesPartialMergingUtils INSTANCE = new KeepValuesPartialMergingUtils();
-  private static final Map<Schema, Map<String, Integer>>
+  private static final Map<HoodieSchema, Map<String, Integer>>
       FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
-  private static final Map<Pair<Pair<Schema, Schema>, Schema>, Schema>
+  private static final Map<Pair<Pair<HoodieSchema, HoodieSchema>, HoodieSchema>, HoodieSchema>
       MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Merges records which can contain partial updates.
    *
-   * @param older         Older record of type {@BufferedRecord<T>}.
-   * @param oldSchema     Schema of the older record.
-   * @param newer         Newer record of type {@BufferedRecord<T>}.
-   * @param newSchema     Schema of the newer record.
-   * @param readerSchema  Reader schema containing all the fields to read. This is used to maintain
-   *                      the ordering of the fields of the merged record.
-   * @param readerContext ReaderContext instance.
+   * @param lowOrderRecord  record with lower commit time or lower ordering value
+   * @param lowOrderSchema  The schema of the older record
+   * @param highOrderRecord record with higher commit time or higher ordering value
+   * @param highOrderSchema The schema of highOrderRecord
+   * @param newSchema       The schema of the new incoming record
    * @return The merged record and schema.
    */
-  Pair<BufferedRecord<T>, Schema> mergePartialRecords(BufferedRecord<T> older,
-                                                             Schema oldSchema,
-                                                             BufferedRecord<T> newer,
-                                                             Schema newSchema,
-                                                             Schema readerSchema,
-                                                             HoodieReaderContext<T> readerContext) {
+  Pair<BufferedRecord<T>, HoodieSchema> mergePartialRecords(BufferedRecord<T> lowOrderRecord,
+                                                             HoodieSchema lowOrderSchema,
+                                                             BufferedRecord<T> highOrderRecord,
+                                                             HoodieSchema highOrderSchema,
+                                                             HoodieSchema newSchema,
+                                                             RecordContext<T> recordContext) {
     // The merged schema contains fields that only appear in either older and/or newer record.
-    Schema mergedSchema =
-        getCachedMergedSchema(oldSchema, newSchema, readerSchema);
-    boolean isNewerPartial = isPartial(newSchema, mergedSchema);
+    HoodieSchema mergedSchema =
+        getCachedMergedSchema(lowOrderSchema, highOrderSchema, newSchema);
+    boolean isNewerPartial = isPartial(highOrderSchema, mergedSchema);
     if (!isNewerPartial) {
-      return Pair.of(newer, newSchema);
+      return Pair.of(highOrderRecord, highOrderSchema);
     }
     Set<String> fieldNamesInNewRecord =
-        getCachedFieldNameToIdMapping(newSchema).keySet();
+        getCachedFieldNameToIdMapping(highOrderSchema).keySet();
     // Collect field values.
-    List<Object> values = new ArrayList<>();
-    List<Schema.Field> mergedSchemaFields = mergedSchema.getFields();
-    for (Schema.Field mergedSchemaField : mergedSchemaFields) {
+    List<HoodieSchemaField> fields = mergedSchema.getFields();
+    Object[] fieldVals = new Object[fields.size()];
+    int idx = 0;
+    List<HoodieSchemaField> mergedSchemaFields = mergedSchema.getFields();
+    for (HoodieSchemaField mergedSchemaField : mergedSchemaFields) {
       String fieldName = mergedSchemaField.name();
       if (fieldNamesInNewRecord.contains(fieldName)) { // field present in newer record.
-        values.add(readerContext.getValue(newer.getRecord(), newSchema, fieldName));
+        fieldVals[idx++] = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
       } else { // if not present in newer record pick from old record
-        values.add(readerContext.getValue(older.getRecord(), oldSchema, fieldName));
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
       }
     }
     // Build merged record.
-    T engineRecord = readerContext.createEngineRecord(mergedSchema, values);
+    T engineRecord = recordContext.constructEngineRecord(mergedSchema, fieldVals);
     BufferedRecord<T> mergedRecord = new BufferedRecord<>(
-        newer.getRecordKey(),
-        newer.getOrderingValue(),
+        highOrderRecord.getRecordKey(),
+        highOrderRecord.getOrderingValue(),
         engineRecord,
-        readerContext.encodeAvroSchema(mergedSchema),
-        newer.isDelete());
+        recordContext.encodeSchema(mergedSchema),
+        highOrderRecord.getHoodieOperation());
     return Pair.of(mergedRecord, mergedSchema);
   }
 
   /**
-   * @param avroSchema Avro schema.
+   * @param hoodieSchema Hoodie schema.
    * @return The field name to ID mapping.
    */
-  static Map<String, Integer> getCachedFieldNameToIdMapping(Schema avroSchema) {
-    return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
+  static Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema hoodieSchema) {
+    return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(hoodieSchema, schema -> {
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
-      for (Schema.Field field : schema.getFields()) {
+      for (HoodieSchemaField field : schema.getFields()) {
         schemaFieldIdMapping.put(field.name(), fieldId);
         fieldId++;
       }
@@ -116,35 +118,35 @@ public class KeepValuesPartialMergingUtils<T> {
    * @param readerSchema Reader schema containing all the fields to read.
    * @return             The merged Avro schema.
    */
-  static Schema getCachedMergedSchema(Schema oldSchema,
-                                             Schema newSchema,
-                                             Schema readerSchema) {
+  static HoodieSchema getCachedMergedSchema(HoodieSchema oldSchema,
+                                             HoodieSchema newSchema,
+                                             HoodieSchema readerSchema) {
     return MERGED_SCHEMA_CACHE.computeIfAbsent(
         Pair.of(Pair.of(oldSchema, newSchema), readerSchema), schemaPair -> {
-          Schema schema1 = schemaPair.getLeft().getLeft();
-          Schema schema2 = schemaPair.getLeft().getRight();
-          Schema refSchema = schemaPair.getRight();
+          HoodieSchema schema1 = schemaPair.getLeft().getLeft();
+          HoodieSchema schema2 = schemaPair.getLeft().getRight();
+          HoodieSchema refSchema = schemaPair.getRight();
           Set<String> schema1Keys =
               getCachedFieldNameToIdMapping(schema1).keySet();
           Set<String> schema2Keys =
               getCachedFieldNameToIdMapping(schema2).keySet();
-          List<Schema.Field> mergedFieldList = new ArrayList<>();
+          List<HoodieSchemaField> mergedFieldList = new ArrayList<>();
           for (int i = 0; i < refSchema.getFields().size(); i++) {
-            Schema.Field field = refSchema.getFields().get(i);
+            HoodieSchemaField field = refSchema.getFields().get(i);
             if (schema1Keys.contains(field.name()) || schema2Keys.contains(field.name())) {
-              mergedFieldList.add(new Schema.Field(
+              mergedFieldList.add(HoodieSchemaField.of(
                   field.name(),
                   field.schema(),
-                  field.doc(),
-                  field.defaultVal()));
+                  field.doc().orElse(null),
+                  field.defaultVal().orElse(null)));
             }
           }
-          Schema mergedSchema = Schema.createRecord(
-              readerSchema.getName(),
-              readerSchema.getDoc(),
-              readerSchema.getNamespace(),
-              false);
-          mergedSchema.setFields(mergedFieldList);
+          HoodieSchema mergedSchema = new HoodieSchema.Builder(HoodieSchemaType.RECORD)
+              .setName(readerSchema.getName())
+              .setDoc(readerSchema.getDoc().orElse(null))
+              .setNamespace(readerSchema.getNamespace().orElse(null))
+              .setFields(mergedFieldList)
+              .build();
           return mergedSchema;
         });
   }
@@ -155,7 +157,7 @@ public class KeepValuesPartialMergingUtils<T> {
    * @return whether the Avro schema is partial compared to the merged schema.
    */
   @VisibleForTesting
-  public static boolean isPartial(Schema schema, Schema mergedSchema) {
+  public static boolean isPartial(HoodieSchema schema, HoodieSchema mergedSchema) {
     return !schema.equals(mergedSchema);
   }
 }

@@ -349,12 +349,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String mergeEngineRecord(HoodieSchema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
-          return "";
-        }
-
-        @Override
-        public String createEngineRecord(HoodieSchema schema, List<Object> values) {
+        public String constructEngineRecord(HoodieSchema schema, Object[] values) {
           return "";
         }
 

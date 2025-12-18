@@ -32,19 +32,25 @@ import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.FloatWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.MapWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.UnaryOperator;
@@ -98,7 +104,18 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   @Override
   public ArrayWritable constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
-    return new ArrayWritable(Writable.class, (Writable[]) fieldValues);
+    Schema avroSchema = recordSchema.toAvroSchema();
+    List<Schema.Field> fields = avroSchema.getFields();
+    if (fields.size() != fieldValues.length) {
+      throw new IllegalArgumentException("Mismatch between schema fields and values");
+    }
+
+    Writable[] writables = new Writable[fields.size()];
+    for (int i = 0; i < fields.size(); i++) {
+      Schema fieldSchema = resolveUnion(fields.get(i).schema());
+      writables[i] = convertToWritable(fieldSchema, fieldValues[i]);
+    }
+    return new ArrayWritable(Writable.class, writables);
   }
 
   @Override
@@ -106,8 +123,22 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<ArrayWritable> baseRecord) {
     Writable[] engineRecord = baseRecord.getRecord().get();
+    Schema avroSchema = schema.toAvroSchema();
+    List<Schema.Field> fields = avroSchema.getFields();
     for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
-      engineRecord[value.getKey()] = (Writable) value.getValue();
+      int pos = value.getKey();
+      Object updateValue = value.getValue();
+      
+      // If value is already a Writable, use it directly
+      if (updateValue instanceof Writable) {
+        if (pos >= 0 && pos < engineRecord.length) {
+          engineRecord[pos] = (Writable) updateValue;
+        }
+      } else if (pos >= 0 && pos < fields.size() && pos < engineRecord.length) {
+        // Convert using schema if position is valid
+        Schema fieldSchema = resolveUnion(fields.get(pos).schema());
+        engineRecord[pos] = convertToWritable(fieldSchema, updateValue);
+      }
     }
     return baseRecord.getRecord();
   }
@@ -164,5 +195,101 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   @Override
   public UnaryOperator<ArrayWritable> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
     return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from.toAvroSchema(), to.toAvroSchema(), renamedColumns);
+  }
+
+  /**
+   * Resolves a union schema by returning the first non-null type.
+   * If the schema is not a union, returns the schema as-is.
+   *
+   * @param schema The schema to resolve
+   * @return The resolved schema (first non-null type for unions, or the schema itself)
+   */
+  private Schema resolveUnion(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      // Return the first non-null type
+      return schema.getTypes().stream()
+          .filter(s -> s.getType() != Schema.Type.NULL)
+          .findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("Union must contain a non-null type"));
+    }
+    return schema;
+  }
+
+  /**
+   * Converts a Java object to a Hive Writable based on the Avro schema type.
+   * Handles all Avro primitive types, complex types (arrays, maps, records), and null values.
+   *
+   * @param schema The Avro schema for the value
+   * @param value  The value to convert
+   * @return A Writable instance representing the value
+   */
+  private Writable convertToWritable(Schema schema, Object value) {
+    if (value == null) {
+      return NullWritable.get();
+    }
+
+    // If value is already a Writable, return it directly
+    if (value instanceof Writable) {
+      return (Writable) value;
+    }
+
+    switch (schema.getType()) {
+      case INT:
+        return new IntWritable((Integer) value);
+      case LONG:
+        return new LongWritable((Long) value);
+      case FLOAT:
+        return new FloatWritable((Float) value);
+      case DOUBLE:
+        return new DoubleWritable((Double) value);
+      case BOOLEAN:
+        return new BooleanWritable((Boolean) value);
+      case STRING:
+        return new Text(value.toString());
+      case BYTES:
+        if (value instanceof ByteBuffer) {
+          ByteBuffer buffer = (ByteBuffer) value;
+          byte[] bytes = new byte[buffer.remaining()];
+          buffer.get(bytes);
+          return new BytesWritable(bytes);
+        } else if (value instanceof byte[]) {
+          return new BytesWritable((byte[]) value);
+        }
+        throw new IllegalArgumentException("Invalid value for BYTES: " + value);
+      case FIXED:
+        return new BytesWritable(((GenericFixed) value).bytes());
+      case ENUM:
+        return new Text(value.toString());
+      case ARRAY:
+        List<?> list = (List<?>) value;
+        Schema elementSchema = resolveUnion(schema.getElementType());
+        Writable[] arrayElements = new Writable[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+          arrayElements[i] = convertToWritable(elementSchema, list.get(i));
+        }
+        return new ArrayWritable(Writable.class, arrayElements);
+      case MAP:
+        Map<?, ?> map = (Map<?, ?>) value;
+        MapWritable mapWritable = new MapWritable();
+        Schema valueSchema = resolveUnion(schema.getValueType());
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+          Writable keyWritable = new Text(entry.getKey().toString());
+          Writable valWritable = convertToWritable(valueSchema, entry.getValue());
+          mapWritable.put(keyWritable, valWritable);
+        }
+        return mapWritable;
+      case RECORD:
+        GenericRecord record = (GenericRecord) value;
+        List<Schema.Field> fields = schema.getFields();
+        Writable[] recordFields = new Writable[fields.size()];
+        for (int i = 0; i < fields.size(); i++) {
+          Schema fieldSchema = resolveUnion(fields.get(i).schema());
+          Object fieldValue = record.get(fields.get(i).name());
+          recordFields[i] = convertToWritable(fieldSchema, fieldValue);
+        }
+        return new ArrayWritable(Writable.class, recordFields);
+      default:
+        throw new UnsupportedOperationException("Unsupported Avro type: " + schema.getType());
+    }
   }
 }

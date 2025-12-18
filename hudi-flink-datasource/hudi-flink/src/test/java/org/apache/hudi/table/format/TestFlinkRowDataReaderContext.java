@@ -134,8 +134,8 @@ class TestFlinkRowDataReaderContext {
 
   @Test
   void testConstructEngineRecordWithValuesList() {
-    List<Object> values = Arrays.asList(100, StringData.fromString("TestUser"), false);
-    RowData result = readerContext.createEngineRecord(AVRO_SCHEMA, values);
+    Object[] values = new Object[]{100, StringData.fromString("TestUser"), false};
+    RowData result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertEquals(100, result.getInt(0));
     assertEquals("TestUser", result.getString(1).toString());
@@ -144,8 +144,8 @@ class TestFlinkRowDataReaderContext {
 
   @Test
   void testConstructEngineRecordWithValuesListWithNull() {
-    List<Object> values = Arrays.asList(200, null, true);
-    RowData result = readerContext.createEngineRecord(AVRO_SCHEMA, values);
+    Object[] values = new Object[]{200, null, true};
+    RowData result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
 
     assertEquals(200, result.getInt(0));
     assertTrue(result.isNullAt(1));
@@ -154,10 +154,10 @@ class TestFlinkRowDataReaderContext {
 
   @Test
   void testConstructEngineRecordWithValuesListMismatchSize() {
-    List<Object> values = Arrays.asList(300, "Incomplete");
+    Object[] values = new Object[]{300, "Incomplete"};
     // Should throw IllegalArgumentException when value count doesn't match field count
     try {
-      readerContext.createEngineRecord(AVRO_SCHEMA, values);
+      readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
       // If we reach here, the test should fail
       assertTrue(false, "Expected IllegalArgumentException was not thrown");
     } catch (IllegalArgumentException e) {
@@ -167,10 +167,10 @@ class TestFlinkRowDataReaderContext {
 
   @Test
   void testConstructEngineRecordWithValuesListEmpty() {
-    List<Object> values = Arrays.asList();
+    Object[] values = new Object[]{};
     // Should throw IllegalArgumentException when value count doesn't match field count
     try {
-      readerContext.createEngineRecord(AVRO_SCHEMA, values);
+      readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
       // If we reach here, the test should fail
       assertTrue(false, "Expected IllegalArgumentException was not thrown");
     } catch (IllegalArgumentException e) {
@@ -180,10 +180,10 @@ class TestFlinkRowDataReaderContext {
 
   @Test
   void testConstructEngineRecordWithValuesListExcessValues() {
-    List<Object> values = Arrays.asList(400, StringData.fromString("Excess"), true, "ExtraValue");
+    Object[] values = new Object[]{400, StringData.fromString("Excess"), true, "ExtraValue"};
     // Should throw IllegalArgumentException when value count doesn't match field count
     try {
-      readerContext.createEngineRecord(AVRO_SCHEMA, values);
+      readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
       // If we reach here, the test should fail
       assertTrue(false, "Expected IllegalArgumentException was not thrown");
     } catch (IllegalArgumentException e) {

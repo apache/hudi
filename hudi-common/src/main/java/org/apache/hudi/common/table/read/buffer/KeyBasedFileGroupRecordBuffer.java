@@ -77,8 +77,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       // When a data block contains partial updates, subsequent record merging must always use
       // partial merging.
       enablePartialMerging = true;
-      if (partialUpdateMode.isEmpty()) {
-        this.partialUpdateMode = Option.of(PartialUpdateMode.KEEP_VALUES);
+      if (partialUpdateModeOpt.isEmpty()) {
+        this.partialUpdateModeOpt = Option.of(PartialUpdateMode.KEEP_VALUES);
       }
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
           readerContext,
