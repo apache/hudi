@@ -26,13 +26,14 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Hoodie SourceSplit implementation for source V2.
+ * Hoodie SourceSplit implementation for source V2. It has the same semantic to the {@link org.apache.hudi.table.format.mor.MergeOnReadInputSplit}.
  */
 public class HoodieSourceSplit implements SourceSplit, Serializable {
+  public static AtomicInteger SPLIT_COUNTER = new AtomicInteger(0);
   private static final long serialVersionUID = 1L;
-
   private static final long NUM_NO_CONSUMPTION = 0L;
 
   // the split number

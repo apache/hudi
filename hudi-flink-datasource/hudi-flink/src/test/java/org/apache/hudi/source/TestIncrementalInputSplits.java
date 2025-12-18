@@ -77,6 +77,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -559,5 +560,140 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             .filter(i -> instants.get(i).requestedTime().equals(instant))
             .findFirst()
             .orElse(-1);
+  }
+
+  @Test
+  void testInputHoodieSourceSplits() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline commitsTimeline = metaClient.getActiveTimeline()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    // Test inputHoodieSourceSplits method
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, firstInstant.getCompletionTime(), false);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+    assertNotNull(result.getOffset(), "To instant should not be null");
+  }
+
+  @Test
+  void testInputHoodieSourceSplitsWithNullStartInstant() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    // Test with null start instant (should read from earliest)
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, null, false);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+  }
+
+  @Test
+  void testInputHoodieSourceSplitsWithNoNewInstants() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline commitsTimeline = metaClient.getActiveTimeline()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    String lastInstant = commitsTimeline.lastInstant().get().getCompletionTime();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    // Query with the last instant - should return empty since there's nothing new
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, lastInstant, false);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+  }
+
+  @Test
+  void testInputHoodieSourceSplitsConvertToHoodieSourceSplit() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, null, false);
+
+    // Verify that splits are converted to HoodieSourceSplit type
+    result.getSplits().forEach(split -> {
+      assertTrue(split instanceof org.apache.hudi.source.split.HoodieSourceSplit,
+          "Split should be of type HoodieSourceSplit");
+      assertNotNull(split.splitId(), "Split ID should not be null");
+    });
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testInputHoodieSourceSplitsWithDifferentTableTypes(HoodieTableType tableType) throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, tableType);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.inputHoodieSourceSplits(metaClient, null, false);
+
+    assertNotNull(result, "Result should not be null for table type: " + tableType);
+    assertNotNull(result.getSplits(), "Splits should not be null for table type: " + tableType);
   }
 }

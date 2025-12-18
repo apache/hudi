@@ -39,6 +39,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
@@ -245,6 +246,11 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTableMetaClient metaClient,
       @Nullable String issuedOffset,
       boolean cdcEnabled) {
+
+    if (metaClient == null) {
+      throw new IllegalArgumentException("metaClient must not be null");
+    }
+
     metaClient.reloadActiveTimeline();
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
@@ -301,6 +307,25 @@ public class IncrementalInputSplits implements Serializable {
           commitTimeline, queryContext, instantRange.get(), endInstant, cdcEnabled);
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     }
+  }
+
+  /**
+   * Returns the incremental Hoodie source split batch.
+   *
+   * @param metaClient    The meta client
+   * @param startInstant  The start Instant of the splits
+   * @param cdcEnabled    Whether cdc is enabled
+   *
+   * @return The list of incremental input splits or empty if there are no new instants
+   */
+  public HoodieContinuousSplitBatch inputHoodieSourceSplits(
+      HoodieTableMetaClient metaClient,
+      @Nullable String startInstant,
+      boolean cdcEnabled) {
+    Result result = inputSplits(metaClient, startInstant, cdcEnabled);
+
+
+    return HoodieContinuousSplitBatch.fromResult(result);
   }
 
   /**
