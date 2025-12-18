@@ -17,15 +17,14 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.common.schema.HoodieSchema
-
+import org.apache.avro.Schema
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.types.DataType
 
-class HoodieSpark4_0AvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType)
+class HoodieSpark4_0AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
   extends HoodieAvroDeserializer {
 
-  private val avroDeserializer = new AvroDeserializer(rootType.toAvroSchema, rootCatalystType,
+  private val avroDeserializer = new AvroDeserializer(rootAvroType, rootCatalystType,
     SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_READ, LegacyBehaviorPolicy.CORRECTED.toString))
 
   def deserialize(data: Any): Option[Any] = avroDeserializer.deserialize(data)

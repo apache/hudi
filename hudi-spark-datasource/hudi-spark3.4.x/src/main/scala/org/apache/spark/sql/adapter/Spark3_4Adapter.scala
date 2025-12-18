@@ -86,10 +86,10 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark34PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer =
-    new HoodieSpark3_4AvroSerializer(rootCatalystType, rootType, nullable)
+    new HoodieSpark3_4AvroSerializer(rootCatalystType, rootType.toAvroSchema, nullable)
 
   override def createAvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer =
-    new HoodieSpark3_4AvroDeserializer(rootType, rootCatalystType)
+    new HoodieSpark3_4AvroDeserializer(rootType.toAvroSchema, rootCatalystType)
 
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_4ExtendedSqlParser(spark, delegate)
