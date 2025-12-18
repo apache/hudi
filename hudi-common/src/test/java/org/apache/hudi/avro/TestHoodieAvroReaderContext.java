@@ -257,7 +257,7 @@ class TestHoodieAvroReaderContext {
     assertEquals("field1_value", output.get(0));
     assertEquals("field2_value", output.get(1));
     assertEquals(42, output.get(2));
-    assertEquals(schema, output.getSchema());
+    assertEquals(schema.toAvroSchema(), output.getSchema());
   }
 
   @Test
@@ -269,7 +269,7 @@ class TestHoodieAvroReaderContext {
     assertEquals("string_value", output.get(0));
     assertEquals("another_string", output.get(1));
     assertNull(output.get(2));
-    assertEquals(schema, output.getSchema());
+    assertEquals(schema.toAvroSchema(), output.getSchema());
   }
 
   @Test
@@ -312,7 +312,7 @@ class TestHoodieAvroReaderContext {
     assertNull(output.get(0));
     assertNull(output.get(1));
     assertNull(output.get(2));
-    assertEquals(schema, output.getSchema());
+    assertEquals(schema.toAvroSchema(), output.getSchema());
   }
 
   @Test
@@ -324,7 +324,7 @@ class TestHoodieAvroReaderContext {
     assertEquals("non_null_value", output.get(0));
     assertNull(output.get(1));
     assertEquals(123, output.get(2));
-    assertEquals(schema, output.getSchema());
+    assertEquals(schema.toAvroSchema(), output.getSchema());
   }
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {
