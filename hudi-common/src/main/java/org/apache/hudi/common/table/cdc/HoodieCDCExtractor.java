@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.AS_IS;
@@ -342,19 +343,27 @@ public class HoodieCDCExtractor {
               .map(logFile -> new StoragePath(partitionPath, logFile))
               .collect(Collectors.toList());
           // get files list from unfinished compaction commit
-          List<StoragePath> filesToCompact = metaClient.getActiveTimeline().getInstants().stream().filter(
+          List<StoragePath> filesToCompact = new ArrayList<>();
+          AtomicReference<String> lastBaseFile =  new AtomicReference<>();
+          metaClient.getActiveTimeline().getInstants().stream().filter(
                   i -> i.compareTo(instant) < 0 && !i.isCompleted() && i.getAction()
                       .equals(HoodieActiveTimeline.COMPACTION_ACTION))
-              .flatMap(i -> {
+              .forEach(i -> {
                 try {
-                  return metaClient.getActiveTimeline().readCompactionPlan(i).getOperations()
+                  metaClient.getActiveTimeline().readCompactionPlan(i).getOperations()
                       .stream()
                       .filter(op -> op.getPartitionPath().equals(fgId.getPartitionPath()) && op.getFileId().equals(fgId.getFileId()))
-                      .flatMap(f -> f.getDeltaFilePaths().stream().map(logFile -> new StoragePath(partitionPath, logFile)));
+                      .forEach(operation ->  {
+                        filesToCompact.addAll(operation.getDeltaFilePaths().stream().map(logFile -> new StoragePath(partitionPath, logFile)).collect(Collectors.toList()));
+                        lastBaseFile.set(operation.getDataFilePath());
+                      });
                 } catch (IOException e) {
                   throw new HoodieIOException("Failed to read a compaction plan on instant " + i, e);
                 }
-              }).collect(Collectors.toList());
+              });
+          if (baseFile == null && lastBaseFile.get() != null) {
+            baseFile = new HoodieBaseFile(storage.getPathInfo(new StoragePath(partitionPath, lastBaseFile.get())));
+          }
           logFilePaths.addAll(filesToCompact);
           List<HoodieLogFile> logFiles = storage.listDirectEntries(logFilePaths).stream()
               .map(HoodieLogFile::new).collect(Collectors.toList());
