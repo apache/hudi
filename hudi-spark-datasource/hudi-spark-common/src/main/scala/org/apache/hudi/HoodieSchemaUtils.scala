@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.avro.AvroSchemaUtils.{isSchemaCompatible}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -118,7 +118,7 @@ object HoodieSchemaUtils {
         //       we're stripping them to make sure we can perform proper analysis
         // add call to fix null ordering to ensure backwards compatibility
         val latestTableSchema = InternalSchemaConverter.fixNullOrdering(
-          org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
+          HoodieCommonSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
@@ -200,7 +200,7 @@ object HoodieSchemaUtils {
         val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema, setNullForMissingColumns)
         val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-        if (shouldRemoveMetaDataFromInternalSchema) org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
+        if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
 
       case None =>
         // In case schema reconciliation is enabled we will employ (legacy) reconciliation

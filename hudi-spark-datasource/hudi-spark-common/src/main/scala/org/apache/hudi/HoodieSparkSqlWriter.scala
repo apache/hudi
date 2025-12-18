@@ -36,7 +36,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
@@ -374,7 +374,7 @@ class HoodieSparkSqlWriterInternal {
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
           val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
           Some(InternalSchemaConverter.convert(
-            org.apache.hudi.common.schema.HoodieSchemaUtils.addMetadataFields(
+            HoodieCommonSchemaUtils.addMetadataFields(
               latestTableSchemaOpt.getOrElse(sourceSchema),
               allowOperationMetaDataField
             )
@@ -488,7 +488,7 @@ class HoodieSparkSqlWriterInternal {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val processedDataSchema = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema)
+              HoodieCommonSchemaUtils.removeMetadataFields(dataFileSchema)
             } else {
               dataFileSchema
             }

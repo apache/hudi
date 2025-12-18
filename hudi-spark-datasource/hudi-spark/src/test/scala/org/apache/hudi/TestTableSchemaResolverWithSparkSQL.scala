@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieMetadataRecord
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -123,7 +123,7 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     var tableSchemaResolverParsingException: Exception = null
     try {
       val schemaFromData = new TableSchemaResolver(metaClient).getTableSchemaFromDataFile
-      val structFromData = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(schemaFromData))
+      val structFromData = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieCommonSchemaUtils.removeMetadataFields(schemaFromData))
       val schemeDesign = HoodieSchema.parse(schemaString)
       val structDesign = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemeDesign)
       assertEquals(structFromData, structDesign)
