@@ -43,11 +43,11 @@
     </dependency>
 
     <!-- Docker-Java - Test-->
-    <!-- needs to be at top to force javax.ws version -->
+    <!-- Updated to 3.3.6 to be compatible with Testcontainers 1.20.2 -->
     <dependency>
       <groupId>com.github.docker-java</groupId>
       <artifactId>docker-java</artifactId>
-      <version>3.1.2</version>
+      <version>3.3.6</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
@@ -55,6 +55,12 @@
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.github.docker-java</groupId>
+      <artifactId>docker-java-transport-httpclient5</artifactId>
+      <version>3.3.6</version>
+      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -394,6 +400,21 @@
       <version>${hadoop.version}</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- Testcontainers for bundle validation -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
   <properties>
