@@ -53,7 +53,6 @@ elif [[ -n "$MAVEN_BASE_URL" ]]; then
   echo "Downloading bundle jars from maven central - $REPO_BASE_URL ..."
 fi
 
-REPO=apachehudi
 # choose versions based on build profiles
 if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
   HADOOP_VERSION=2.7.7
@@ -106,11 +105,9 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   if [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
     IMAGE_TAG=flink200hive313spark351
     FLINK_VERSION=2.0.0
-    REPO=icshuo
   elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
     IMAGE_TAG=flink211hive313spark351
     FLINK_VERSION=2.1.1
-    REPO=icshuo
   else
     IMAGE_TAG=flink1170hive313spark351
     FLINK_VERSION=1.17.0
@@ -241,7 +238,6 @@ docker build \
 --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
 --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
---build-arg REPO=$REPO \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
