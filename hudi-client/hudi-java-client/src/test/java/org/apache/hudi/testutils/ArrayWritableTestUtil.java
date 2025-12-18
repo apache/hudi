@@ -21,7 +21,7 @@ package org.apache.hudi.testutils;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.hadoop.hive.serde2.io.DateWritable;
+import org.apache.hadoop.hive.serde2.io.DateWritableV2;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.ArrayWritable;
@@ -137,8 +137,8 @@ public class ArrayWritableTestUtil {
 
       case INT:
         if (schema.getLogicalType() instanceof LogicalTypes.Date) {
-          assertInstanceOf(DateWritable.class, expected);
-          assertInstanceOf(DateWritable.class, actual);
+          assertInstanceOf(DateWritableV2.class, expected);
+          assertInstanceOf(DateWritableV2.class, actual);
         } else {
           assertInstanceOf(IntWritable.class, expected);
           assertInstanceOf(IntWritable.class, actual);
@@ -262,7 +262,7 @@ public class ArrayWritableTestUtil {
 
       case INT:
         if (schema.getLogicalType() instanceof LogicalTypes.Date) {
-          assertInstanceOf(DateWritable.class, writable);
+          assertInstanceOf(DateWritableV2.class, writable);
         } else {
           assertInstanceOf(IntWritable.class, writable);
         }

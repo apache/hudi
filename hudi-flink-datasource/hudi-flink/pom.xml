@@ -452,5 +452,10 @@
         <version>5.2.10</version>
         <scope>test</scope>
       </dependency>
+      <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-hdfs</artifactId>
+        <scope>test</scope>
+      </dependency>
     </dependencies>
 </project>

@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
+import org.apache.hadoop.hive.serde2.io.TimestampWritableV2;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.FloatWritable;
@@ -134,7 +135,7 @@ public class TestHiveTableSchemaEvolution {
     assertEquals(6, record1.size());
 
     Writable c3 = record1.get(5);
-    assertTrue(c3 instanceof TimestampWritable);
+    assertTrue(c3 instanceof TimestampWritableV2);
 
     recordReader.close();
   }
@@ -244,7 +245,7 @@ public class TestHiveTableSchemaEvolution {
     assertEquals(10, record1.size());
     assertEquals(new FloatWritable(1.1f), record1.get(6));
     assertEquals(new Text("text2"), record1.get(7));
-    assertInstanceOf(TimestampWritable.class, record1.get(8));
+    assertInstanceOf(TimestampWritableV2.class, record1.get(8));
     // field-9 is new added column without any inserts.
     assertNull(record1.get(9));
     recordReader.close();
