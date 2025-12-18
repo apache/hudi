@@ -17,15 +17,13 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.common.schema.HoodieSchema
-
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
-import org.apache.spark.sql.avro.AvroDeserializerInternal.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead, RebaseSpec}
+import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead, RebaseSpec}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
@@ -51,17 +49,17 @@ import scala.collection.JavaConverters._
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
-                                            rootCatalystType: DataType,
-                                            positionalFieldMatch: Boolean,
-                                            datetimeRebaseSpec: RebaseSpec,
-                                            filters: StructFilters) {
+private[sql] class AvroDeserializer(rootAvroType: Schema,
+                                    rootCatalystType: DataType,
+                                    positionalFieldMatch: Boolean,
+                                    datetimeRebaseSpec: RebaseSpec,
+                                    filters: StructFilters) {
 
-  def this(rootType: HoodieSchema,
+  def this(rootAvroType: Schema,
            rootCatalystType: DataType,
            datetimeRebaseMode: String) = {
     this(
-      rootType,
+      rootAvroType,
       rootCatalystType,
       positionalFieldMatch = false,
       RebaseSpec(LegacyBehaviorPolicy.withName(datetimeRebaseMode)),
@@ -84,7 +82,7 @@ private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
         val resultRow = new SpecificInternalRow(st.map(_.dataType))
         val fieldUpdater = new RowUpdater(resultRow)
         val applyFilters = filters.skipRow(resultRow, _)
-        val writer = getRecordWriter(rootType.toAvroSchema, st, Nil, Nil, applyFilters)
+        val writer = getRecordWriter(rootAvroType, st, Nil, Nil, applyFilters)
         (data: Any) => {
           val record = data.asInstanceOf[GenericRecord]
           val skipRow = writer(fieldUpdater, record)
@@ -94,7 +92,7 @@ private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
       case _ =>
         val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
         val fieldUpdater = new RowUpdater(tmpRow)
-        val writer = newWriter(rootType.toAvroSchema, rootCatalystType, Nil, Nil)
+        val writer = newWriter(rootAvroType, rootCatalystType, Nil, Nil)
         (data: Any) => {
           writer(fieldUpdater, 0, data)
           Some(tmpRow.get(0, rootCatalystType))
@@ -102,7 +100,7 @@ private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
     }
   } catch {
     case ise: IncompatibleSchemaException => throw new IncompatibleSchemaException(
-      s"Cannot convert Avro type $rootType to SQL type ${rootCatalystType.sql}.", ise)
+      s"Cannot convert Avro type $rootAvroType to SQL type ${rootCatalystType.sql}.", ise)
   }
 
   def deserialize(data: Any): Option[Any] = converter(data)
@@ -457,7 +455,7 @@ private[sql] class AvroDeserializerInternal(rootType: HoodieSchema,
   }
 }
 
-object AvroDeserializerInternal {
+object AvroDeserializer {
 
   // NOTE: Following methods have been renamed in Spark 3.2.1 [1] making [[AvroDeserializer]] implementation
   //       (which relies on it) be only compatible with the exact same version of [[DataSourceUtils]].

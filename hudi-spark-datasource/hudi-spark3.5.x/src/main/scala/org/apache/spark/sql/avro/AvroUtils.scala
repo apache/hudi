@@ -59,7 +59,7 @@ private[sql] object AvroUtils extends Logging {
   // deserializing and returning them as internal rows.
   trait RowReader {
     protected val fileReader: FileReader[GenericRecord]
-    protected val deserializer: AvroDeserializerInternal
+    protected val deserializer: AvroDeserializer
     protected val stopPosition: Long
 
     private[this] var completed = false
