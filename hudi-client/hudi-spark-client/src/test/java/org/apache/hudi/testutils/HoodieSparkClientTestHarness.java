@@ -72,6 +72,7 @@ import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.util.JFunction;
 import org.apache.hudi.utils.HoodieWriterClientTestHarness;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -85,8 +86,6 @@ import org.apache.spark.sql.SparkSessionExtensions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -119,9 +118,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * The test harness for resource initialization and cleanup.
  */
+@Slf4j
 public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkClientTestHarness.class);
 
   @AfterAll
   public static void tearDownAll() throws IOException {
@@ -250,13 +248,13 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     }
 
     if (jsc != null) {
-      LOG.info("Closing spark context used in previous test-case");
+      log.info("Closing spark context used in previous test-case");
       jsc.stop();
       jsc = null;
     }
 
     if (context != null) {
-      LOG.info("Closing spark engine context used in previous test-case");
+      log.info("Closing spark engine context used in previous test-case");
       context = null;
     }
   }
@@ -286,7 +284,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    */
   protected void cleanupFileSystem() throws IOException {
     if (storage != null) {
-      LOG.warn("Closing file-system instance used in previous test-run");
+      log.warn("Closing file-system instance used in previous test-run");
       storage.close();
       storage = null;
     }
@@ -556,7 +554,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       runFullValidation(table.getConfig().getMetadataConfig(), writeConfig, metadataTableBasePath, engineContext);
     }
 
-    LOG.info("Validation time={}", timer.endTimer());
+    log.info("Validation time={}", timer.endTimer());
   }
 
   public void syncTableMetadata(HoodieWriteConfig writeConfig) {
@@ -565,7 +563,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     }
     // Open up the metadata table again, for syncing
     try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context)) {
-      LOG.info("Successfully synced to metadata table");
+      log.info("Successfully synced to metadata table");
     } catch (Exception e) {
       throw new HoodieMetadataException("Error syncing to metadata table.", e);
     }
@@ -623,11 +621,11 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
-    fileGroups.forEach(g -> LoggerFactory.getLogger(getClass()).info(g.toString()));
+    fileGroups.forEach(g -> log.info(g.toString()));
     fileGroups.forEach(g -> g.getAllBaseFiles()
-        .forEach(b -> LoggerFactory.getLogger(getClass()).info(b.toString())));
+        .forEach(b -> log.info(b.toString())));
     fileGroups.forEach(g -> g.getAllFileSlices()
-        .forEach(s -> LoggerFactory.getLogger(getClass()).info(s.toString())));
+        .forEach(s -> log.info(s.toString())));
 
     long numFiles = fileGroups.stream()
         .mapToLong(g -> g.getAllBaseFiles().count()

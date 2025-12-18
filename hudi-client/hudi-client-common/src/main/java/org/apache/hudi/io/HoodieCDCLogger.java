@@ -22,6 +22,8 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
@@ -43,7 +45,6 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -74,14 +75,14 @@ public class HoodieCDCLogger implements Closeable {
 
   private final HoodieStorage storage;
 
-  private final Schema dataSchema;
+  private final HoodieSchema dataSchema;
 
   // writer for cdc data
   private final HoodieLogFormat.Writer cdcWriter;
 
   private final HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode;
 
-  private final Schema cdcSchema;
+  private final HoodieSchema cdcSchema;
 
   // the cdc data
   private final ExternalSpillableMap<String, HoodieAvroPayload> cdcData;
@@ -110,7 +111,7 @@ public class HoodieCDCLogger implements Closeable {
       HoodieTableConfig tableConfig,
       String partitionPath,
       HoodieStorage storage,
-      Schema schema,
+      HoodieSchema schema,
       HoodieLogFormat.Writer cdcWriter,
       long maxInMemorySizeInBytes) {
     try {
@@ -120,7 +121,7 @@ public class HoodieCDCLogger implements Closeable {
           : tableConfig.getRecordKeyFieldProp();
       this.partitionPath = partitionPath;
       this.storage = storage;
-      this.dataSchema = HoodieAvroUtils.removeMetadataFields(schema);
+      this.dataSchema = HoodieSchemaUtils.removeMetadataFields(schema);
       this.cdcWriter = cdcWriter;
       this.cdcSupplementalLoggingMode = tableConfig.cdcSupplementalLoggingMode();
       this.cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
@@ -205,7 +206,7 @@ public class HoodieCDCLogger implements Closeable {
         while (recordIter.hasNext()) {
           HoodieAvroPayload record = recordIter.next();
           try {
-            records.add(new HoodieAvroIndexedRecord(record.getInsertValue(cdcSchema).get()));
+            records.add(new HoodieAvroIndexedRecord(record.getInsertValue(cdcSchema.toAvroSchema()).get()));
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get cdc record", e);
           }
@@ -274,7 +275,7 @@ public class HoodieCDCLogger implements Closeable {
   }
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
-    return record == null ? null : HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema, Collections.emptyMap());
+    return record == null ? null : HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema.toAvroSchema(), Collections.emptyMap());
   }
 
   // -------------------------------------------------------------------------

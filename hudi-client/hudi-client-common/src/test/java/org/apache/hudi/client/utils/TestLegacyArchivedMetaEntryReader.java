@@ -40,12 +40,11 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,8 +63,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 /**
  * Test cases for {@link LegacyArchivedMetaEntryReader}.
  */
+@Slf4j
 public class TestLegacyArchivedMetaEntryReader {
-  private static final Logger LOG = LoggerFactory.getLogger(TestLegacyArchivedMetaEntryReader.class);
 
   @TempDir
   File tempFile;
@@ -114,13 +113,13 @@ public class TestLegacyArchivedMetaEntryReader {
   public void archive(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) throws HoodieCommitException {
     try (HoodieLogFormat.Writer writer = openWriter(metaClient)) {
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
-      LOG.info("Wrapper schema " + wrapperSchema.toString());
+      log.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
           records.add(convertToAvroRecord(hoodieInstant, metaClient));
         } catch (Exception e) {
-          LOG.error("Failed to archive commits, .commit file: " + INSTANT_FILE_NAME_GENERATOR.getFileName(hoodieInstant), e);
+          log.error("Failed to archive commits, .commit file: " + INSTANT_FILE_NAME_GENERATOR.getFileName(hoodieInstant), e);
           throw e;
         }
       }

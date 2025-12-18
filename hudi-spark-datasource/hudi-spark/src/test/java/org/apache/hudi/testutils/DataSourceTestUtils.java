@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -182,11 +182,6 @@ public class DataSourceTestUtils {
       }
     }
     return true;
-  }
-
-  public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
-    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
-        .getLatestCompletionTime().orElse(null);
   }
 
   public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {

@@ -60,6 +60,11 @@
             <artifactId>hudi-hadoop-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>${hudi.flink.module}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Flink -->
         <dependency>
@@ -124,6 +129,12 @@
         <dependency>
             <groupId>com.esotericsoftware</groupId>
             <artifactId>kryo-shaded</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
         </dependency>
 
         <!-- Hoodie - Test -->

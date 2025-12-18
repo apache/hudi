@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

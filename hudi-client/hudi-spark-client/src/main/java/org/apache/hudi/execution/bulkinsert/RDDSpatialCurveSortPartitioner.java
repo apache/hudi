@@ -22,17 +22,16 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkConversionUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -51,18 +50,18 @@ public class RDDSpatialCurveSortPartitioner<T>
     extends SpatialCurveSortPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final transient HoodieSparkEngineContext sparkEngineContext;
-  private final SerializableSchema schema;
+  private final HoodieSchema schema;
   private final HoodieRecordType recordType;
 
   public RDDSpatialCurveSortPartitioner(HoodieSparkEngineContext sparkEngineContext,
                                         String[] orderByColumns,
                                         HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
                                         HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType,
-                                        Schema schema,
+                                        HoodieSchema schema,
                                         HoodieRecordType recordType) {
     super(orderByColumns, layoutOptStrategy, curveCompositionStrategyType);
     this.sparkEngineContext = sparkEngineContext;
-    this.schema = new SerializableSchema(schema);
+    this.schema = schema;
     this.recordType = recordType;
   }
 
@@ -70,7 +69,7 @@ public class RDDSpatialCurveSortPartitioner<T>
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     if (recordType == HoodieRecordType.AVRO) {
       JavaRDD<GenericRecord> genericRecordsRDD =
-          records.map(f -> (GenericRecord) f.toIndexedRecord(schema.get(), new Properties()).get().getData());
+          records.map(f -> (GenericRecord) f.toIndexedRecord(schema.toAvroSchema(), new Properties()).get().getData());
 
       Dataset<Row> sourceDataset =
           AvroConversionUtils.createDataFrame(
@@ -80,7 +79,7 @@ public class RDDSpatialCurveSortPartitioner<T>
           );
       Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
 
-      return HoodieSparkUtils.createRdd(sortedDataset, schema.get().getName(), schema.get().getNamespace(), false, Option.empty())
+      return HoodieSparkUtils.createRdd(sortedDataset, schema.getName(), schema.getNamespace().orElse(null), false, Option.empty())
           .toJavaRDD()
           .map(record -> {
             String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
@@ -90,7 +89,7 @@ public class RDDSpatialCurveSortPartitioner<T>
             return hoodieRecord;
           });
     } else if (recordType == HoodieRecordType.SPARK) {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.get());
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
       Dataset<Row> sourceDataset = SparkConversionUtils.createDataFrame(records.rdd(),
           sparkEngineContext.getSqlContext().sparkSession(), structType);
       Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);

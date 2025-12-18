@@ -74,7 +74,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   public void testCow() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, false, false, null);
-    Schema requestedSchema = DATA_SCHEMA;
+    HoodieSchema requestedSchema = DATA_SCHEMA;
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
 
@@ -89,12 +89,12 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   public void testCowBootstrap() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
-    Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
+    HoodieSchema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
 
     //meta cols must go first in the required schema
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
     assertTrue(readerContext.getNeedsBootstrapMerge());
-    Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
+    HoodieSchema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Collections.singletonList(getField("_hoodie_record_key")), bootstrapFields.getLeft());
@@ -105,9 +105,9 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   void testGetRequiredSchemaForFileAndRenameColumns() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
-    Schema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
+    HoodieSchema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
 
-    InternalSchema internalSchema = InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(DATA_SCHEMA));
+    InternalSchema internalSchema = InternalSchemaConverter.convert(DATA_SCHEMA);
     InternalSchema originalSchema = new InternalSchema(Types.RecordType.get(internalSchema.columns().stream().map(field -> {
       if (field.name().equals("timestamp")) {
         // rename timestamp to ts in file schema and change type to int, output schema names and types must match the requested schema
@@ -123,7 +123,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       mockedStatic.when(() -> InternalSchemaCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
           .thenReturn(originalSchema);
       StoragePath filePath = new StoragePath("/2023-01-01/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension()));
-      Pair<Schema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
+      Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
       assertEquals(Collections.singletonMap("timestamp", "ts"), requiredSchemaAndRenamedFields.getRight());
       assertEquals(requestedSchema, requiredSchemaAndRenamedFields.getLeft());
     }
@@ -156,7 +156,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   }
 
   @Override
-  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema,
+  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, HoodieSchema dataSchema, HoodieSchema requestedSchema,
                                                    boolean supportsParquetRowIndex) {
     return new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), new TypedProperties(), metaClient);
@@ -224,8 +224,8 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       dataSchemaFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
 
-    Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
-    Schema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    HoodieSchema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
+    HoodieSchema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
 
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
@@ -263,7 +263,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     if (addHoodieIsDeleted) {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
-    Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
+    HoodieSchema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema, hoodieTableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
     DeleteContext deleteContext = new DeleteContext(props, dataSchema);
@@ -273,7 +273,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
         deleteContext.getCustomDeleteMarkerKeyValue());
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
         dataSchema, requestedSchema, Option.empty(), props, metaClient);
-    Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
+    HoodieSchema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
     assertEquals(expectedSchema, actualSchema);
   }
 }

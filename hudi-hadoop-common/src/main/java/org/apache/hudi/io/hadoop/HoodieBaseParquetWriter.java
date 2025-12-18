@@ -19,10 +19,10 @@
 
 package org.apache.hudi.io.hadoop;
 
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;

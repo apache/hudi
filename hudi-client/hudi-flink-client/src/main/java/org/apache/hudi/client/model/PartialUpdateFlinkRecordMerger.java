@@ -21,11 +21,11 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 
@@ -95,16 +95,16 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       if (older.isDelete() || newer.isDelete()) {
         return older;
       } else {
-        Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+        HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
         return mergeRecord(newer, newSchema, older, oldSchema, newSchema, recordContext, props);
       }
     } else {
       if (newer.isDelete() || older.isDelete()) {
         return newer;
       } else {
-        Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+        HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
         return mergeRecord(older, oldSchema, newer, newSchema, newSchema, recordContext, props);
       }
     }
@@ -112,10 +112,10 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
   private <T> BufferedRecord<T> mergeRecord(
       BufferedRecord<T> lowOrderRecord,
-      Schema lowOrderSchema,
+      HoodieSchema lowOrderSchema,
       BufferedRecord<T> highOrderRecord,
-      Schema highOrderSchema,
-      Schema newSchema,
+      HoodieSchema highOrderSchema,
+      HoodieSchema newSchema,
       RecordContext<T> recordContext,
       TypedProperties props) {
     // Assumptions: there is no schema evolution, will solve it in HUDI-9253
@@ -129,7 +129,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     // later in the file writer.
     int mergedArity = newSchema.getFields().size();
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
-    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(newSchema, utcTimezone).fieldGetters();
+    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(newSchema.toAvroSchema(), utcTimezone).fieldGetters();
 
     int lowOrderIdx = 0;
     int highOrderIdx = 0;
@@ -138,10 +138,10 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     // shift start index for merging if there is schema discrepancy
     if (lowOrderArity != mergedArity) {
       lowOrderIdx += lowOrderArity - mergedArity;
-      lowOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(lowOrderSchema, utcTimezone).fieldGetters();
+      lowOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(lowOrderSchema.toAvroSchema(), utcTimezone).fieldGetters();
     } else if (highOrderArity != mergedArity) {
       highOrderIdx += highOrderArity - mergedArity;
-      highOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(highOrderSchema, utcTimezone).fieldGetters();
+      highOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(highOrderSchema.toAvroSchema(), utcTimezone).fieldGetters();
     }
 
     RowData lowOrderRow = (RowData) lowOrderRecord.getRecord();

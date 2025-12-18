@@ -67,6 +67,11 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   private long numOfFilesWritten;
 
   /**
+   * Number of record write failure during a checkpoint window.
+   */
+  private long numOfRecordWriteFailures;
+
+  /**
    * Number of records written per seconds.
    */
   protected final Meter recordWrittenPerSecond;
@@ -104,6 +109,8 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     metricGroup.gauge("fileFlushTotalCosts", () -> fileFlushTotalCosts);
     metricGroup.gauge("numOfFilesWritten", () -> numOfFilesWritten);
     metricGroup.gauge("numOfOpenHandle", () -> numOfOpenHandle);
+    metricGroup.gauge("numOfRecordWriteFailures", () -> numOfRecordWriteFailures);
+
 
     metricGroup.meter("handleSwitchPerSecond", handleSwitchPerSecond);
 
@@ -130,6 +137,14 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
 
   public void increaseNumOfFilesWritten() {
     numOfFilesWritten += 1;
+  }
+
+  public void increaseNumOfRecordWriteFailure(long recordWriteFailures) {
+    numOfRecordWriteFailures += recordWriteFailures;
+  }
+
+  public long getNumOfRecordWriteFailures() {
+    return numOfRecordWriteFailures;
   }
 
   public void increaseNumOfOpenHandle() {
@@ -165,6 +180,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     this.numOfOpenHandle = 0;
     this.writeBufferedSize = 0;
     this.fileFlushTotalCosts = 0;
+    this.numOfRecordWriteFailures = 0;
   }
 
 }

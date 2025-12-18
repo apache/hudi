@@ -53,6 +53,7 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -68,8 +69,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.Serializable;
@@ -96,9 +95,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@Slf4j
 public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestCopyOnWriteActionExecutor.class);
   private static final Stream<Arguments> indexType() {
     HoodieIndex.IndexType[] data = new HoodieIndex.IndexType[] {
         HoodieIndex.IndexType.BLOOM,
@@ -408,7 +406,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     int counts = 0;
     for (File file : Paths.get(basePath, "2016/01/31").toFile().listFiles()) {
       if (file.getName().endsWith(table.getBaseFileExtension()) && FSUtils.getCommitTime(file.getName()).equals(instantTime)) {
-        LOG.info("{}-{}", file.getName(), file.length());
+        log.info("{}-{}", file.getName(), file.length());
         counts++;
       }
     }

@@ -19,13 +19,13 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey, getAppliedRequiredSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -33,8 +33,6 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
-import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -75,14 +73,14 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
-                                     dataSchema: Schema, // dataSchema refers to table schema in most cases(non log file reads).
-                                     requiredSchema: Schema,
+                                     dataSchema: HoodieSchema, // dataSchema refers to table schema in most cases(non log file reads).
+                                     requiredSchema: HoodieSchema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
-    val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+    val hasRowIndexField = requiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
-    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema.toAvroSchema)
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
@@ -97,7 +95,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
       val tableSchemaOpt = if (dataSchema != null) {
         val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema)
+        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema.toAvroSchema)
         org.apache.hudi.common.util.Option.of(parquetSchema)
       } else {
         org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
@@ -130,34 +128,34 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
-                                     skeletonRequiredSchema: Schema,
+                                     skeletonRequiredSchema: HoodieSchema,
                                      dataFileIterator: ClosableIterator[InternalRow],
-                                     dataRequiredSchema: Schema,
+                                     dataRequiredSchema: HoodieSchema,
                                      partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]], skeletonRequiredSchema,
       dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema, partitionFieldAndValues)
   }
 
   private def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
-                               skeletonRequiredSchema: Schema,
+                               skeletonRequiredSchema: HoodieSchema,
                                dataFileIterator: ClosableIterator[Any],
-                               dataRequiredSchema: Schema,
+                               dataRequiredSchema: HoodieSchema,
                                partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     if (getRecordContext.supportsParquetRowIndex()) {
-      assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
-      assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
+      assert(skeletonRequiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent)
+      assert(dataRequiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent)
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
       val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema,
-        HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
+        HoodieSchemaUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getShouldMergeUseRecordPosition) {
         getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
         getBootstrapProjection(dataRequiredSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
+          HoodieSchemaUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
       }
 
       //row index will always be the last column

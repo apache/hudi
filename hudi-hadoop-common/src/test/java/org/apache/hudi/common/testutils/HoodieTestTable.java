@@ -61,7 +61,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;

@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -424,6 +425,14 @@ public class TestData {
       deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
+
+  public static List<RowData> DATA_SET_WITH_ATOMIC_TYPES = Arrays.asList(
+      insertRow(TestConfigurations.ROW_TYPE_WITH_ATOMIC_TYPES, true, (byte) 1, (short) 11, 111, 1111L, 10.11f, 11.111, TimestampData.fromEpochMillis(1),
+          1000, 1, DecimalData.fromBigDecimal(new BigDecimal("1.11"), 38, 18), StringData.fromString("str1"), StringData.fromString("par1")),
+      insertRow(TestConfigurations.ROW_TYPE_WITH_ATOMIC_TYPES, true, (byte) 2, (short) 22, 222, 2222L, 20.22f, 22.222, TimestampData.fromEpochMillis(2),
+          2000, 2, DecimalData.fromBigDecimal(new BigDecimal("2.22"), 38, 18), StringData.fromString("str2"), StringData.fromString("par2")),
+      insertRow(TestConfigurations.ROW_TYPE_WITH_ATOMIC_TYPES, true, (byte) 3, (short) 33, 333, 3333L, 30.33f, 33.333, TimestampData.fromEpochMillis(3),
+          3000, 3, DecimalData.fromBigDecimal(new BigDecimal("3.33"), 38, 18), StringData.fromString("str3"), StringData.fromString("par3")));
 
   // data types handled specifically for Hoodie Key
   public static List<RowData> DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE = new ArrayList<>();
@@ -969,6 +978,7 @@ public class TestData {
     HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
 
     String latestInstant = metaClient.getActiveTimeline().filterCompletedInstants()
         .lastInstant().map(HoodieInstant::requestedTime).orElse(null);
@@ -983,7 +993,7 @@ public class TestData {
       List<String> readBuffer = new ArrayList<>();
       List<FileSlice> fileSlices = table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionDir.getName(), latestInstant).collect(Collectors.toList());
       for (FileSlice fileSlice : fileSlices) {
-        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, schema, metaClient, config)) {
+        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, hoodieSchema, metaClient, config)) {
           while (rowIterator.hasNext()) {
             RowData rowData = rowIterator.next();
             readBuffer.add(filterOutVariables(schema, rowData));
@@ -1014,7 +1024,7 @@ public class TestData {
 
   private static ClosableIterator<RowData> getRecordIterator(
       FileSlice fileSlice,
-      Schema tableSchema,
+      HoodieSchema tableSchema,
       HoodieTableMetaClient metaClient,
       HoodieWriteConfig writeConfig) throws IOException {
     HoodieFileGroupReader<RowData> fileGroupReader =

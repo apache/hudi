@@ -128,7 +128,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
           hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key, databaseName)
           hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key, tableName)
           hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key, basePath)
-          hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key, "false")
           hiveSyncProps.setProperty(META_SYNC_NO_PARTITION_METADATA.key, "true")
           HiveTestUtil.setUp(Option.of(hiveSyncProps), false)
           val tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf)

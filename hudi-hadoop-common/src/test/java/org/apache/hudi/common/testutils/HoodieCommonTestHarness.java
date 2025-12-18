@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -327,7 +328,7 @@ public class HoodieCommonTestHarness {
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
                                                      Schema recordSchema,
-                                                     Schema writerSchema,
+                                                     HoodieSchema writerSchema,
                                                      List<HoodieRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,
@@ -336,13 +337,13 @@ public class HoodieCommonTestHarness {
                                                      String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
-        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema).getData())
+        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema.toAvroSchema()).getData())
         .collect(Collectors.toList());
     return writeLogFiles(partitionPath, writerSchema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     HoodieSchema schema,
                                                      List<IndexedRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage)
@@ -351,7 +352,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     HoodieSchema schema,
                                                      List<IndexedRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,

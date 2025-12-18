@@ -34,8 +34,7 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,10 +46,10 @@ import java.util.List;
  *
  * <p>Note: the compaction logic is invoked through the flink pipeline.
  */
+@Slf4j
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkMergeOnReadTableCompactor.class);
 
   @Override
   public void preCompact(
@@ -74,7 +73,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
                                    HoodieReaderContext<?> readerContext,
                                    HoodieTable table) throws IOException {
     String maxInstantTime = getMaxInstantTime(table.getMetaClient());
-    LOG.info("Compact using file group reader based compaction, operation: {}.", operation);
+    log.info("Compact using file group reader based compaction, operation: {}.", operation);
     return compact(
         writeConfig,
         operation,

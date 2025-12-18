@@ -19,13 +19,15 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -38,6 +40,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -48,9 +51,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,10 +66,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -141,6 +138,20 @@ public class TableSchemaResolver {
   public HoodieSchema getTableSchema(boolean includeMetadataFields) throws Exception {
     Schema avroSchema = getTableAvroSchema(includeMetadataFields);
     return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
+  /**
+   * Fetches tables schema in Avro format as of the given instant as HoodieSchema.
+   *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public HoodieSchema getTableSchema(String timestamp) throws Exception {
+    Schema avroSchema = getTableAvroSchema(timestamp);
+    return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
+  public Option<HoodieSchema> getTableSchemaIfPresent(boolean includeMetadataFields) {
+    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).map(HoodieSchema::fromAvroSchema);
   }
 
   /**
@@ -225,8 +236,10 @@ public class TableSchemaResolver {
 
     // TODO partition columns have to be appended in all read-paths
     if (metaClient.getTableConfig().shouldDropPartitionColumns() && schema.isPresent()) {
+      HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema.get());
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema.get(), Option.ofNullable(partitionFields)))
+          .map(partitionFields -> appendPartitionColumns(hoodieSchema, Option.ofNullable(partitionFields)))
+          .map(HoodieSchema::toAvroSchema)
           .or(() -> schema);
     }
 
@@ -358,7 +371,7 @@ public class TableSchemaResolver {
           lastBlock = (HoodieDataBlock) block;
         }
       }
-      return lastBlock != null ? lastBlock.getSchema() : null;
+      return lastBlock != null ? lastBlock.getSchema().toAvroSchema() : null;
     }
   }
 
@@ -526,7 +539,7 @@ public class TableSchemaResolver {
     }).filter(Objects::nonNull).findFirst().orElse(null);
   }
 
-  public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {
+  public static HoodieSchema appendPartitionColumns(HoodieSchema dataSchema, Option<String[]> partitionFields) {
     // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
     // won't be persisted w/in the data files, and therefore we need to append such columns
     // when schema is parsed from data files
@@ -536,8 +549,8 @@ public class TableSchemaResolver {
       return dataSchema;
     }
 
-    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
-    boolean hasPartitionColInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
+    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> dataSchema.getField(pf).isEmpty());
+    boolean hasPartitionColInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> dataSchema.getField(pf).isPresent());
     if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
       throw new HoodieSchemaException("Partition columns could not be partially contained w/in the data schema");
     }
@@ -545,12 +558,12 @@ public class TableSchemaResolver {
     if (hasPartitionColNotInSchema) {
       // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
       // are not in originSchema. So we create and add them.
-      List<Field> newFields = new ArrayList<>();
+      List<HoodieSchemaField> newFields = new ArrayList<>();
       for (String partitionField: partitionFields.get()) {
-        newFields.add(new Schema.Field(
-            partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
+        newFields.add(HoodieSchemaField.of(
+            partitionField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE));
       }
-      return appendFieldsToSchema(dataSchema, newFields);
+      return HoodieSchemaUtils.appendFieldsToSchema(dataSchema, newFields);
     }
 
     return dataSchema;

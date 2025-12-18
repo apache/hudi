@@ -27,8 +27,7 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -40,11 +39,11 @@ import java.util.stream.IntStream;
  * Async clustering service that runs in a separate thread.
  * Currently, only one clustering thread is allowed to run at any time.
  */
+@Slf4j
 public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
   public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(AsyncClusteringService.class);
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
   private transient BaseClusterer clusteringClient;
@@ -72,27 +71,27 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentClustering).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
-        LOG.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
+        log.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
         context.setProperty(EngineProperty.CLUSTERING_POOL_NAME, CLUSTERING_POOL_NAME);
         while (!isShutdownRequested()) {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
-            LOG.info("Starting clustering for instant {}", instant);
+            log.info("Starting clustering for instant {}", instant);
             clusteringClient.cluster(instant);
-            LOG.info("Finished clustering for instant {}", instant);
+            log.info("Finished clustering for instant {}", instant);
           }
         }
-        LOG.info("Clustering executor shutting down properly");
+        log.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {
         hasError = true;
-        LOG.warn("Clustering executor got interrupted exception! Stopping", ie);
+        log.warn("Clustering executor got interrupted exception! Stopping", ie);
       } catch (IOException e) {
         hasError = true;
-        LOG.error("Clustering executor failed due to IOException", e);
+        log.error("Clustering executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
       } catch (Exception e) {
         hasError = true;
-        LOG.error("Clustering executor failed", e);
+        log.error("Clustering executor failed", e);
         throw e;
       }
       return true;

@@ -73,6 +73,10 @@ public class ColumnStatsProbe implements Serializable {
     return referencedCols;
   }
 
+  public List<ExpressionEvaluators.Evaluator> getEvaluators() {
+    return evaluators;
+  }
+
   @Nullable
   public static ColumnStatsProbe newInstance(List<ResolvedExpression> filters) {
     if (filters.isEmpty()) {

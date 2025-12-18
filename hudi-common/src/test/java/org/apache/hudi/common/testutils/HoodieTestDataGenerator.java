@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -29,6 +28,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -91,7 +93,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -243,9 +244,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6 = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_V6);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6 = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA_V6);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6);
+  public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6 = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
@@ -256,7 +261,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   private final String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
-  private Option<Schema> extendedSchema = Option.empty();
+  private Option<HoodieSchema> extendedSchema = Option.empty();
 
   public HoodieTestDataGenerator(long seed) {
     this(seed, DEFAULT_PARTITION_PATHS, new HashMap<>());
@@ -513,6 +518,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
+   * Get the Avro schema to use, considering extendedSchema if present.
+   */
+  private Schema getEffectiveAvroSchema() {
+    return extendedSchema.map(HoodieSchema::toAvroSchema).orElse(AVRO_SCHEMA);
+  }
+
+  /**
    * Populate rec with values for TRIP_SCHEMA_PREFIX
    */
   private void generateTripPrefixValues(GenericRecord rec, String rowKey, String partitionPath, String riderName, String driverName, long timestamp) {
@@ -553,7 +565,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("current_ts", randomMillis);
 
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
-    Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
+    Schema decimalSchema = getEffectiveAvroSchema().getField("height").schema();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
     GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
     rec.put("height", genericFixed);
@@ -570,7 +582,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Populate rec with values for FARE_NESTED_SCHEMA
    */
   private void generateFareNestedValues(GenericRecord rec) {
-    GenericRecord fareRecord = new GenericData.Record(extendedSchema.orElse(AVRO_SCHEMA).getField("fare").schema());
+    GenericRecord fareRecord = new GenericData.Record(getEffectiveAvroSchema().getField("fare").schema());
     fareRecord.put("amount", rand.nextDouble() * 100);
     fareRecord.put("currency", "USD");
     if (extendedSchema.isPresent()) {
@@ -599,14 +611,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Populate rec with values for TIP_NESTED_SCHEMA
    */
   private void generateTipNestedValues(GenericRecord rec) {
+    Schema schemaToUse = getEffectiveAvroSchema();
     // TODO [HUDI-9603] remove this check
-    if (extendedSchema.isPresent()) {
-      if (extendedSchema.get().getField("tip_history") == null) {
-        return;
-      }
+    if (schemaToUse.getField("tip_history") == null) {
+      return;
     }
-    GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, AVRO_SCHEMA.getField("tip_history").schema());
-    Schema tipSchema = new Schema.Parser().parse(AVRO_SCHEMA.getField("tip_history").schema().toString()).getElementType();
+    GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, schemaToUse.getField("tip_history").schema());
+    Schema tipSchema = new Schema.Parser().parse(schemaToUse.getField("tip_history").schema().toString()).getElementType();
     GenericRecord tipRecord = new GenericData.Record(tipSchema);
     tipRecord.put("amount", rand.nextDouble() * 100);
     tipRecord.put("currency", "USD");
@@ -631,7 +642,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                              long timestamp, boolean isDeleteRecord,
                                              boolean isFlattened) {
-    GenericRecord rec = new GenericData.Record(extendedSchema.orElseGet(() -> isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA));
+    Schema schemaToUse = extendedSchema.isPresent() ? getEffectiveAvroSchema() : (isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
+    GenericRecord rec = new GenericData.Record(schemaToUse);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
       generateFareFlattenedValues(rec);
@@ -936,7 +948,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
+  public static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     OutputStream os = storage.create(new StoragePath(filePath.toUri()), true);
     os.close();
@@ -1566,7 +1578,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public static class SchemaEvolutionConfigs {
-    public Schema schema = AVRO_SCHEMA;
+    public HoodieSchema schema = HOODIE_SCHEMA;
     public boolean nestedSupport = true;
     public boolean mapSupport = true;
     public boolean arraySupport = true;
@@ -1600,30 +1612,30 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   private enum SchemaEvolutionTypePromotionCase {
-    INT_TO_INT(Schema.Type.INT, Schema.Type.INT, config -> true),
-    INT_TO_LONG(Schema.Type.INT, Schema.Type.LONG, config -> config.intToLongSupport),
-    INT_TO_FLOAT(Schema.Type.INT, Schema.Type.FLOAT, config -> config.intToFloatSupport),
-    INT_TO_DOUBLE(Schema.Type.INT, Schema.Type.DOUBLE, config -> config.intToDoubleSupport),
-    INT_TO_STRING(Schema.Type.INT, Schema.Type.STRING, config -> config.intToStringSupport),
-    LONG_TO_LONG(Schema.Type.LONG, Schema.Type.LONG, config -> true),
-    LONG_TO_FLOAT(Schema.Type.LONG, Schema.Type.FLOAT, config -> config.longToFloatSupport),
-    LONG_TO_DOUBLE(Schema.Type.LONG, Schema.Type.DOUBLE, config -> config.longToDoubleSupport),
-    LONG_TO_STRING(Schema.Type.LONG, Schema.Type.STRING, config -> config.longToStringSupport),
-    FLOAT_TO_FLOAT(Schema.Type.FLOAT, Schema.Type.FLOAT, config -> true),
-    FLOAT_TO_DOUBLE(Schema.Type.FLOAT, Schema.Type.DOUBLE, config -> config.floatToDoubleSupport),
-    FLOAT_TO_STRING(Schema.Type.FLOAT, Schema.Type.STRING, config -> config.floatToStringSupport),
-    DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, Schema.Type.DOUBLE, config -> true),
-    DOUBLE_TO_STRING(Schema.Type.DOUBLE, Schema.Type.STRING, config -> config.doubleToStringSupport),
-    STRING_TO_STRING(Schema.Type.STRING, Schema.Type.STRING, config -> true),
-    STRING_TO_BYTES(Schema.Type.STRING, Schema.Type.BYTES, config -> config.stringToBytesSupport),
-    BYTES_TO_BYTES(Schema.Type.BYTES, Schema.Type.BYTES, config -> true),
-    BYTES_TO_STRING(Schema.Type.BYTES, Schema.Type.STRING, config -> config.bytesToStringSupport);
+    INT_TO_INT(HoodieSchemaType.INT, HoodieSchemaType.INT, config -> true),
+    INT_TO_LONG(HoodieSchemaType.INT, HoodieSchemaType.LONG, config -> config.intToLongSupport),
+    INT_TO_FLOAT(HoodieSchemaType.INT, HoodieSchemaType.FLOAT, config -> config.intToFloatSupport),
+    INT_TO_DOUBLE(HoodieSchemaType.INT, HoodieSchemaType.DOUBLE, config -> config.intToDoubleSupport),
+    INT_TO_STRING(HoodieSchemaType.INT, HoodieSchemaType.STRING, config -> config.intToStringSupport),
+    LONG_TO_LONG(HoodieSchemaType.LONG, HoodieSchemaType.LONG, config -> true),
+    LONG_TO_FLOAT(HoodieSchemaType.LONG, HoodieSchemaType.FLOAT, config -> config.longToFloatSupport),
+    LONG_TO_DOUBLE(HoodieSchemaType.LONG, HoodieSchemaType.DOUBLE, config -> config.longToDoubleSupport),
+    LONG_TO_STRING(HoodieSchemaType.LONG, HoodieSchemaType.STRING, config -> config.longToStringSupport),
+    FLOAT_TO_FLOAT(HoodieSchemaType.FLOAT, HoodieSchemaType.FLOAT, config -> true),
+    FLOAT_TO_DOUBLE(HoodieSchemaType.FLOAT, HoodieSchemaType.DOUBLE, config -> config.floatToDoubleSupport),
+    FLOAT_TO_STRING(HoodieSchemaType.FLOAT, HoodieSchemaType.STRING, config -> config.floatToStringSupport),
+    DOUBLE_TO_DOUBLE(HoodieSchemaType.DOUBLE, HoodieSchemaType.DOUBLE, config -> true),
+    DOUBLE_TO_STRING(HoodieSchemaType.DOUBLE, HoodieSchemaType.STRING, config -> config.doubleToStringSupport),
+    STRING_TO_STRING(HoodieSchemaType.STRING, HoodieSchemaType.STRING, config -> true),
+    STRING_TO_BYTES(HoodieSchemaType.STRING, HoodieSchemaType.BYTES, config -> config.stringToBytesSupport),
+    BYTES_TO_BYTES(HoodieSchemaType.BYTES, HoodieSchemaType.BYTES, config -> true),
+    BYTES_TO_STRING(HoodieSchemaType.BYTES, HoodieSchemaType.STRING, config -> config.bytesToStringSupport);
 
-    public final Schema.Type before;
-    public final Schema.Type after;
+    public final HoodieSchemaType before;
+    public final HoodieSchemaType after;
     public final Predicate<SchemaEvolutionConfigs> isEnabled;
 
-    SchemaEvolutionTypePromotionCase(Schema.Type before, Schema.Type after, Predicate<SchemaEvolutionConfigs> isEnabled) {
+    SchemaEvolutionTypePromotionCase(HoodieSchemaType before, HoodieSchemaType after, Predicate<SchemaEvolutionConfigs> isEnabled) {
       this.before = before;
       this.after = after;
       this.isEnabled = isEnabled;
@@ -1631,7 +1643,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public void extendSchema(SchemaEvolutionConfigs configs, boolean isBefore) {
-    List<Schema.Type> baseFields = new ArrayList<>();
+    List<HoodieSchemaType> baseFields = new ArrayList<>();
     for (SchemaEvolutionTypePromotionCase evolution : SchemaEvolutionTypePromotionCase.values()) {
       if (evolution.isEnabled.test(configs)) {
         baseFields.add(isBefore ? evolution.before : evolution.after);
@@ -1640,7 +1652,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
     // Add new field if we are testing adding new fields
     if (!isBefore && configs.addNewFieldSupport) {
-      baseFields.add(Schema.Type.BOOLEAN);
+      baseFields.add(HoodieSchemaType.BOOLEAN);
     }
 
     this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields)));
@@ -1654,69 +1666,72 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     extendSchema(configs, false);
   }
 
-  public Schema getExtendedSchema() {
+  public HoodieSchema getExtendedSchema() {
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {
+  private static HoodieSchema generateExtendedSchema(SchemaEvolutionConfigs configs, List<HoodieSchemaType> baseFields) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
-    List<Schema.Field> fields =  baseSchema.getFields();
-    List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
+  private static HoodieSchema generateExtendedSchema(HoodieSchema baseSchema, SchemaEvolutionConfigs configs, List<HoodieSchemaType> baseFields, String fieldPrefix, boolean toplevel) {
+    List<HoodieSchemaField> fields =  baseSchema.getFields();
+    List<HoodieSchemaField> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
-    for (Schema.Field field : fields) {
-      if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
-        finalFields.add(createNewSchemaField(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
+    for (HoodieSchemaField field : fields) {
+      if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == HoodieSchemaType.RECORD) {
+        finalFields.add(HoodieSchemaUtils.createNewSchemaField(field.name(),
+            generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc().orElse(null), field.defaultVal().orElse(null)));
       } else if (configs.anyArraySupport || !field.name().equals("tip_history")) {
         //TODO: [HUDI-9603] remove the if condition when the issue is fixed
         if (field.name().equals("_hoodie_is_deleted")) {
           addedFields = true;
-          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace().orElse(null), toplevel);
         }
-        finalFields.add(createNewSchemaField(field));
+        finalFields.add(HoodieSchemaUtils.createNewSchemaField(field));
       }
     }
     if (!addedFields) {
-      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace().orElse(null), toplevel);
     }
-    Schema finalSchema = Schema.createRecord(baseSchema.getName(), baseSchema.getDoc(),
-        baseSchema.getNamespace(), baseSchema.isError());
-    finalSchema.setFields(finalFields);
+    HoodieSchema finalSchema = HoodieSchema.createRecord(baseSchema.getName(), baseSchema.getDoc().orElse(null),
+        baseSchema.getNamespace().orElse(null), baseSchema.isError(), finalFields);
     return finalSchema;
   }
 
-  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+  private static void addFields(SchemaEvolutionConfigs configs, List<HoodieSchemaField> finalFields, List<HoodieSchemaType> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
     if (toplevel) {
       if (configs.mapSupport) {
-        List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
+        List<HoodieSchemaField> mapFields = new ArrayList<>(baseFields.size());
         addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map");
-        finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + "Map",
+            HoodieSchema.createMap(HoodieSchema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
       }
 
       if (configs.arraySupport) {
-        List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
+        List<HoodieSchemaField> arrayFields = new ArrayList<>(baseFields.size());
         addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array");
-        finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + "Array",
+            HoodieSchema.createArray(HoodieSchema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
       }
     }
     addFieldsHelper(finalFields, baseFields, fieldPrefix);
   }
 
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix) {
+  private static void addFieldsHelper(List<HoodieSchemaField> finalFields, List<HoodieSchemaType> baseFields, String fieldPrefix) {
     for (int i = 0; i < baseFields.size(); i++) {
-      if (baseFields.get(i) == Schema.Type.BOOLEAN) {
+      if (baseFields.get(i) == HoodieSchemaType.BOOLEAN) {
         // boolean fields are added fields
-        finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + i, HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN), "", null));
       } else {
-        finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
+        finalFields.add(HoodieSchemaField.of(fieldPrefix + i, HoodieSchema.create(baseFields.get(i)), "", null));
       }
     }
   }
 
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
-    for (Schema.Field field : rec.getSchema().getFields()) {
+    HoodieSchema recordSchema = HoodieSchema.fromAvroSchema(rec.getSchema());
+    for (HoodieSchemaField field : recordSchema.getFields()) {
       if (field.name().startsWith(customPrefix)) {
         switch (field.schema().getType()) {
           case INT:
@@ -1738,7 +1753,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
             rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
             break;
           case UNION:
-            if (!AvroSchemaUtils.getNonNullTypeFromUnion(field.schema()).getType().equals(Schema.Type.BOOLEAN)) {
+            if (field.schema().getNonNullType().getType() != HoodieSchemaType.BOOLEAN) {
               throw new IllegalStateException("Union should only be boolean");
             }
             rec.put(field.name(), rand.nextBoolean());
@@ -1759,18 +1774,18 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  private GenericArray<GenericRecord> genArray(Schema arraySchema, String customPrefix) {
-    GenericArray<GenericRecord> customArray = new GenericData.Array<>(1, arraySchema);
-    Schema arrayElementSchema = arraySchema.getElementType();
-    GenericRecord customRecord = new GenericData.Record(arrayElementSchema);
+  private GenericArray<GenericRecord> genArray(HoodieSchema arraySchema, String customPrefix) {
+    GenericArray<GenericRecord> customArray = new GenericData.Array<>(1, arraySchema.toAvroSchema());
+    HoodieSchema arrayElementSchema = arraySchema.getElementType();
+    GenericRecord customRecord = new GenericData.Record(arrayElementSchema.toAvroSchema());
     generateCustomValues(customRecord, customPrefix);
     customArray.add(customRecord);
     return customArray;
   }
 
-  private Map<String,GenericRecord> genMap(Schema mapSchema, String customPrefix) {
-    Schema mapElementSchema = mapSchema.getValueType();
-    GenericRecord customRecord = new GenericData.Record(mapElementSchema);
+  private Map<String,GenericRecord> genMap(HoodieSchema mapSchema, String customPrefix) {
+    HoodieSchema mapElementSchema = mapSchema.getValueType();
+    GenericRecord customRecord = new GenericData.Record(mapElementSchema.toAvroSchema());
     generateCustomValues(customRecord, customPrefix);
     return Collections.singletonMap("customMapKey", customRecord);
   }

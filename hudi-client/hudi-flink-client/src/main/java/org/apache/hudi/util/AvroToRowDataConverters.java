@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -297,6 +299,7 @@ public class AvroToRowDataConverters {
    * Encapsulates joda optional dependency. Instantiates this class only if joda is available on the
    * classpath.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   static class JodaConverter {
 
     private static JodaConverter instance;
@@ -331,9 +334,6 @@ public class AvroToRowDataConverters {
     public long convertTimestamp(Object object) {
       final DateTime value = (DateTime) object;
       return value.toDate().getTime();
-    }
-
-    private JodaConverter() {
     }
   }
 }

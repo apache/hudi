@@ -19,6 +19,8 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
+
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
@@ -40,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -144,8 +147,8 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
 
+    recordWriteFailure(writeMetrics, writeStatus);
     StreamerUtil.validateWriteStatus(config, currentInstant, writeStatus);
-
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .checkpointId(this.checkpointId)
@@ -166,5 +169,27 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     writeMetrics = new FlinkStreamWriteMetrics(metrics);
     writeMetrics.registerMetrics();
+  }
+
+  /**
+   * Update metrics and log for errors in write status.
+   *
+   * @param writeMetrics FlinkStreamWriteMetrics
+   * @param writeStatus write status from write handler
+   */
+  @VisibleForTesting
+  static void recordWriteFailure(FlinkStreamWriteMetrics writeMetrics, List<WriteStatus> writeStatus) {
+    Map.Entry<HoodieKey, Throwable> firstFailure = null;
+    for (WriteStatus status : writeStatus) {
+      writeMetrics.increaseNumOfRecordWriteFailure(status.getTotalErrorRecords());
+      if (firstFailure == null && status.getErrors().size() > 0) {
+        firstFailure = status.getErrors().entrySet().stream().findFirst().get();
+      }
+    }
+
+    // Only print the first record failure to prevent logs occupy too much disk in worst case.
+    if (firstFailure != null) {
+      LOG.error("The first record with written failure {}", firstFailure.getKey().getRecordKey(), firstFailure.getValue());
+    }
   }
 }

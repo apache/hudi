@@ -23,12 +23,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.stats.FileStatsIndex;
+import org.apache.hudi.source.stats.RecordLevelIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
@@ -57,7 +59,7 @@ import java.util.stream.Collectors;
  *
  * <p>It caches the partition paths to avoid redundant look up.
  */
-public class FileIndex implements Serializable {
+public class FileIndex implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(FileIndex.class);
@@ -66,11 +68,12 @@ public class FileIndex implements Serializable {
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
   private final org.apache.hadoop.conf.Configuration hadoopConf;
-  private final PartitionPruners.PartitionPruner partitionPruner;  // for partition pruning
+  private final Option<PartitionPruners.PartitionPruner> partitionPruner;  // for partition pruning
   private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
+  private final Option<RecordLevelIndex> recordLevelIndex;
   private final HoodieTableMetaClient metaClient;
 
   private FileIndex(
@@ -86,9 +89,11 @@ public class FileIndex implements Serializable {
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
-    this.partitionPruner = partitionPruner;
+    this.partitionPruner = Option.ofNullable(partitionPruner);
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
+    List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
+    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
     this.metaClient = metaClient;
   }
 
@@ -184,8 +189,15 @@ public class FileIndex implements Serializable {
       return Collections.emptyList();
     }
 
+    // data skipping based on record index
+    if (recordLevelIndex.isPresent()) {
+      int prevSize = filteredFileSlices.size();
+      filteredFileSlices = recordLevelIndex.get().computeCandidateFileSlices(filteredFileSlices);
+      logPruningMsg(prevSize, filteredFileSlices.size(), "record level index pruning");
+    }
+
     // data skipping based on column stats
-    List<String> allFiles = fileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
+    List<String> allFiles = filteredFileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
     Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
@@ -237,12 +249,7 @@ public class FileIndex implements Serializable {
     }
     List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig)
         : Collections.emptyList();
-    if (this.partitionPruner == null) {
-      this.partitionPaths = allPartitionPaths;
-    } else {
-      Set<String> prunedPartitionPaths = this.partitionPruner.filter(allPartitionPaths);
-      this.partitionPaths = new ArrayList<>(prunedPartitionPaths);
-    }
+    this.partitionPaths = partitionPruner.map(pruner -> pruner.filter(allPartitionPaths).stream().collect(Collectors.toList())).orElse(allPartitionPaths);
     return this.partitionPaths;
   }
 
@@ -276,6 +283,13 @@ public class FileIndex implements Serializable {
 
   private static double percentage(double total, double left) {
     return (total - left) / total;
+  }
+
+  @Override
+  public void close() {
+    this.fileStatsIndex.close();
+    this.recordLevelIndex.ifPresent(RecordLevelIndex::close);
+    this.partitionPruner.ifPresent(PartitionPruners.PartitionPruner::close);
   }
 
   // -------------------------------------------------------------------------

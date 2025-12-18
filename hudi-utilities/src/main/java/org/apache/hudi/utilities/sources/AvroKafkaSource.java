@@ -113,7 +113,7 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
       }
 
       //Don't want kafka offsets here so we use originalSchemaProvider
-      AvroConvertor convertor = new AvroConvertor(originalSchemaProvider.getSourceSchema());
+      AvroConvertor convertor = new AvroConvertor(originalSchemaProvider.getSourceHoodieSchema());
       JavaRDD<ConsumerRecord<String, byte[]>> kafkaRDDByteArray = createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges);
       kafkaRDD = kafkaRDDByteArray.filter(obj -> obj.value() != null)
           .map(obj -> new ConsumerRecord<>(obj.topic(), obj.partition(), obj.offset(), obj.key(), convertor.fromAvroBinary(obj.value())));
@@ -126,7 +126,7 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
 
   protected JavaRDD<GenericRecord> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {
     if (this.shouldAddOffsets) {
-      AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
+      AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceHoodieSchema());
       return kafkaRDD.map(convertor::withKafkaFieldsAppended);
     } else {
       return kafkaRDD.map(consumerRecord -> (GenericRecord) consumerRecord.value());

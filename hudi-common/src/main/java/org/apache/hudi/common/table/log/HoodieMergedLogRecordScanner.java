@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -46,7 +47,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,7 +100,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   private final DeleteContext deleteContext;
 
   @SuppressWarnings("unchecked")
-  protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+  protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, HoodieSchema readerSchema,
                                          String latestInstantTime, Long maxMemorySizeInBytes,
                                          boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                          Option<InstantRange> instantRange,
@@ -120,7 +120,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
+          new HoodieRecordSizeEstimator(readerSchema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
       this.scannedPrefixes = new HashSet<>();
       this.allowInflightInstants = allowInflightInstants;
       this.orderingFields = ConfigUtils.getOrderingFields(this.hoodieTableMetaClient.getTableConfig().getProps());
@@ -258,8 +258,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     if (prevRecord != null) {
       // Merge and store the combined record
       RecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
-      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
-      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema,
+          recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema,
+          recordContext, this.getPayloadProps(), orderingFields, deleteContext);
       BufferedRecord<T> combinedRecord = recordMerger.merge(prevBufferedRecord, newBufferedRecord, recordContext, this.getPayloadProps());
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getRecord() != prevRecord.getData()) {
@@ -289,7 +291,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
 
-      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps(), orderingFields);
+      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema.toAvroSchema(), this.hoodieTableMetaClient.getTableConfig().getProps(), orderingFields);
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
@@ -339,7 +341,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
-    private Schema readerSchema;
+    private HoodieSchema readerSchema;
     private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     private String latestInstantTime;
     private boolean reverseReader;
@@ -389,7 +391,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
 
     @Override
-    public Builder withReaderSchema(Schema schema) {
+    public Builder withReaderSchema(HoodieSchema schema) {
       this.readerSchema = schema;
       return this;
     }

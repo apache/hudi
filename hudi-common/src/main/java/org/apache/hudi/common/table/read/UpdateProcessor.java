@@ -23,13 +23,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
@@ -134,16 +134,16 @@ public interface UpdateProcessor<T> {
     protected BufferedRecord<T> handleNonDeletes(BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
       if (previousRecord == null) {
         // special case for payloads when there is no previous record
-        Schema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
+        HoodieSchema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
         GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
         HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
         try {
-          if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
+          if (hoodieRecord.shouldIgnore(recordSchema.toAvroSchema(), properties)) {
             return null;
           } else {
-            Schema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
+            HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
             // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
+            hoodieRecord.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), properties, readerSchema.toAvroSchema()).toIndexedRecord(readerSchema.toAvroSchema(), properties)
                 .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
           }
         } catch (IOException e) {

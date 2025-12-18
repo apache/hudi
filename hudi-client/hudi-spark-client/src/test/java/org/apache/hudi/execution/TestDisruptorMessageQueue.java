@@ -57,7 +57,7 @@ import java.util.stream.IntStream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getRootCause;
 import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformerInternal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

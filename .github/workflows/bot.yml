@@ -33,7 +33,7 @@ env:
   JAVA_UT_FILTER1: -Dtest=!TestCOWDataSource,!TestMORDataSource,!TestHoodieFileSystemViews
   JAVA_UT_FILTER2: -Dtest=TestCOWDataSource,TestMORDataSource,TestHoodieFileSystemViews
   SCALA_TEST_DML_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.dml
-  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
+  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
 
@@ -847,6 +847,9 @@ jobs:
           - flinkProfile: "flink2.0"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.14.4'
+          - flinkProfile: "flink2.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.15.2'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 11
@@ -1078,7 +1081,7 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-  # flink 2.0 only support Java 11 and above version
+  # flink 2.0/2.1 only support Java 11 and above version
   validate-bundles-java11:
     runs-on: ubuntu-latest
     strategy:
@@ -1088,6 +1091,12 @@ jobs:
             flinkProfile: 'flink2.0'
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.14.4'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.15.2'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
 
@@ -1199,6 +1208,15 @@ jobs:
           architecture: x64
       - name: Check disk space
         run: df -h
+      - name: 'Free space'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          docker system prune --all --force --volumes
+      - name: Check disk space after cleanup
+        run: df -h
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1212,13 +1230,6 @@ jobs:
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
-      - name: 'Free space'
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          docker system prune --all --force --volumes
       - name: 'IT'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}

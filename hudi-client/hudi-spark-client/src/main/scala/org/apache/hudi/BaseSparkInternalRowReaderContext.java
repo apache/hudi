@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -30,7 +31,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
@@ -86,10 +86,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
    * @param partitionFieldAndValues the partition fields and their values, if any are required by the reader
    * @return a function for transforming the row
    */
-  protected UnaryOperator<InternalRow> getBootstrapProjection(Schema from, Schema to, List<Pair<String, Object>> partitionFieldAndValues) {
-    Map<Integer, Object> partitionValuesByIndex = partitionFieldAndValues.stream().collect(Collectors.toMap(pair -> to.getField(pair.getKey()).pos(), Pair::getRight));
+  protected UnaryOperator<InternalRow> getBootstrapProjection(HoodieSchema from, HoodieSchema to, List<Pair<String, Object>> partitionFieldAndValues) {
+    Map<Integer, Object> partitionValuesByIndex = partitionFieldAndValues.stream()
+        .collect(Collectors.toMap(pair -> to.getField(pair.getKey()).orElseThrow(() -> new IllegalArgumentException("Missing field: " + pair.getKey())).pos(), Pair::getRight));
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), Collections.emptyMap(), partitionValuesByIndex);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from.toAvroSchema()), getCachedSchema(to.toAvroSchema()), Collections.emptyMap(), partitionValuesByIndex);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
@@ -98,7 +99,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     super.setSchemaHandler(schemaHandler);
     // init ordering value converter: java -> engine type
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
-    Schema schema = schemaHandler.getRequiredSchema();
+    HoodieSchema schema = schemaHandler.getRequiredSchema();
     ((BaseSparkInternalRecordContext) recordContext).initOrderingValueConverter(schema, orderingFieldNames);
   }
 }

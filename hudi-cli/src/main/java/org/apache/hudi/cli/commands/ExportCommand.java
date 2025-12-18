@@ -27,6 +27,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
@@ -42,11 +43,10 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -56,6 +56,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -69,9 +70,8 @@ import java.util.stream.Collectors;
  * The instants are exported in the json format.
  */
 @ShellComponent
+@Slf4j
 public class ExportCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ExportCommand.class);
 
   @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
@@ -101,7 +101,7 @@ public class ExportCommand {
     List<StoragePathInfo> pathInfoList =
         HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<StoragePathInfo> archivedPathInfoList = pathInfoList.stream()
-        .sorted((f1, f2) -> (int) (f1.getModificationTime() - f2.getModificationTime()))
+        .sorted(Comparator.comparingLong(StoragePathInfo::getModificationTime))
         .collect(Collectors.toList());
 
     if (descending) {
@@ -131,7 +131,7 @@ public class ExportCommand {
 
     for (StoragePathInfo pathInfo : pathInfoList) {
       // read the archived file
-      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(pathInfo.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(pathInfo.getPath()), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
         // read the avro blocks
         while (reader.hasNext() && copyCount++ < limit) {
@@ -172,7 +172,7 @@ public class ExportCommand {
 
               final String instantTime = archiveEntryRecord.get("commitTime").toString();
               if (metadata == null) {
-                LOG.error("Could not load metadata for action " + action + " at instant time " + instantTime);
+                log.error("Could not load metadata for action " + action + " at instant time " + instantTime);
                 continue;
               }
               final String outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action;

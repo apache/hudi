@@ -18,9 +18,11 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
@@ -30,28 +32,19 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.JsonProperties;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -61,9 +54,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Helper class to read table schema. ONLY USE IT FOR SimpleConcurrentFileWritesConflictResolutionStrategy.
  */
+@Slf4j
 class ConcurrentSchemaEvolutionTableSchemaGetter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConcurrentSchemaEvolutionTableSchemaGetter.class);
 
   protected final HoodieTableMetaClient metaClient;
 
@@ -88,25 +80,27 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
    * @param schema the input schema to process
    * @return the processed schema with partition columns handled appropriately
    */
-  private Schema handlePartitionColumnsIfNeeded(Schema schema) {
+  private HoodieSchema handlePartitionColumnsIfNeeded(HoodieSchema schema) {
     if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
-          .or(() -> Option.of(schema))
-          .get();
+          .map(partitionFields -> TableSchemaResolver.appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
+          .orElseGet(() -> schema);
     }
     return schema;
   }
 
   public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
     return getTableAvroSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
+        .map(HoodieSchema::fromAvroSchema)
         .or(this::getTableCreateSchemaWithoutMetaField) // Fall back: read create schema from table config.
-        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, false) : HoodieAvroUtils.removeMetadataFields(tableSchema))
-        .map(this::handlePartitionColumnsIfNeeded);
+        .map(tableSchema -> includeMetadataFields ? HoodieSchemaUtils.addMetadataFields(tableSchema, false) : HoodieSchemaUtils.removeMetadataFields(tableSchema))
+        .map(this::handlePartitionColumnsIfNeeded)
+        .map(HoodieSchema::toAvroSchema);
   }
 
-  private Option<Schema> getTableCreateSchemaWithoutMetaField() {
-    return metaClient.getTableConfig().getTableCreateSchema();
+  private Option<HoodieSchema> getTableCreateSchemaWithoutMetaField() {
+    return metaClient.getTableConfig().getTableCreateSchema()
+        .map(HoodieSchema::fromAvroSchema);
   }
 
   private void setCachedLatestCommitWithValidSchema(Option<HoodieInstant> instantOption) {
@@ -189,7 +183,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
             }
             return isValidSchemaStr;
           } catch (IOException e) {
-            LOG.warn("Failed to parse commit metadata for instant {} ", s, e);
+            log.warn("Failed to parse commit metadata for instant {} ", s, e);
           }
           return false;
         })
@@ -199,36 +193,6 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
       return Option.empty();
     }
     return Option.of(Pair.of(instantWithTableSchema.get(), tableSchemaAtInstant.get(instantWithTableSchema.get())));
-  }
-
-  public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {
-    // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
-    // won't be persisted w/in the data files, and therefore we need to append such columns
-    // when schema is parsed from data files
-    //
-    // Here we append partition columns with {@code StringType} as the data type
-    if (!partitionFields.isPresent() || partitionFields.get().length == 0) {
-      return dataSchema;
-    }
-
-    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
-    boolean hasPartitionColInSchema = Arrays.stream(partitionFields.get()).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
-    if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
-      throw new HoodieSchemaException("Partition columns could not be partially contained w/in the data schema");
-    }
-
-    if (hasPartitionColNotInSchema) {
-      // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
-      // are not in originSchema. So we create and add them.
-      List<Field> newFields = new ArrayList<>();
-      for (String partitionField : partitionFields.get()) {
-        newFields.add(new Schema.Field(
-            partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
-      }
-      return appendFieldsToSchema(dataSchema, newFields);
-    }
-
-    return dataSchema;
   }
 
   /**

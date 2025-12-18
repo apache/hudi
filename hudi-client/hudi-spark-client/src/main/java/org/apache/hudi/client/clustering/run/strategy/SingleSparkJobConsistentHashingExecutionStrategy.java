@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -48,9 +49,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.util.ExecutorFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,9 +68,8 @@ import java.util.function.Supplier;
  * <li> <b>Split</b>: Split a bucket into multiple buckets
  * <li> <b>Merge</b>: Merge multiple buckets into a single bucket
  */
+@Slf4j
 public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SingleSparkJobConsistentHashingExecutionStrategy.class);
 
   private final String indexKeyFields;
   private final Schema readerSchema;
@@ -110,7 +109,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
   private List<WriteStatus> performBucketMergeForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, writeConfig);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+    log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
     String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
@@ -177,7 +176,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
         handle = writeHandleFactory.create(config, instantTime, hoodieTable, record.getPartitionPath(), fileIdPrefix, taskContextSupplier);
         writeHandles.put(fileIdPrefix, handle);
       }
-      handle.write(record, schema, config.getProps());
+      handle.write(record, HoodieSchema.fromAvroSchema(schema), config.getProps());
     }
 
     @Override

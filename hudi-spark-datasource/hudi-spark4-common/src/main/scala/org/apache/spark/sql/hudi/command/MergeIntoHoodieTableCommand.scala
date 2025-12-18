@@ -24,6 +24,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
@@ -497,7 +498,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
     val schema = convertStructTypeToAvroSchema(hoodieCatalogTable.tableSchema, structName, namespace)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF,
-      schemaFromCatalog = Option.apply(schema))
+      schemaFromCatalog = Option.apply(HoodieSchema.fromAvroSchema(schema)))
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }

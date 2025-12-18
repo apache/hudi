@@ -18,9 +18,9 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 
 import org.apache.flink.table.data.RowData;

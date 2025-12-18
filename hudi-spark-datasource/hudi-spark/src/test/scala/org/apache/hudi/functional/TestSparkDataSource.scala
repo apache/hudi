@@ -27,12 +27,13 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.CustomPayloadForTesting
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.CommonOptionUtils.getWriterReaderOpts
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
@@ -86,7 +87,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // order of cols in inputDf and hudiDf differs slightly. so had to choose columns specifically to compare df directly.
     val colsToSelect = "_row_key, begin_lat,  begin_lon, city_to_state.LA, current_date, current_ts, distance_in_meters, driver, end_lat, end_lon, fare.amount, fare.currency, partition, partition_path, rider, timestamp, weight, _hoodie_is_deleted"
     val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
@@ -95,8 +96,8 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
     // Snapshot query
     val snapshotDf1 = spark.read.format("org.apache.hudi")
@@ -113,8 +114,8 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
+    val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
+    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     val snapshotDf2 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
@@ -132,9 +133,9 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val commitCompletionTime3 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
-    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+    val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
+    val commitCompletionTime3 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
 
     // Snapshot Query
     val snapshotDf3 = spark.read.format("org.apache.hudi")
@@ -146,7 +147,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
     // Read Incremental Query
     // we have 2 commits, try pulling the first commit (which is not the latest)
-    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
+    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").get(0)
     val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, "000")
@@ -249,7 +250,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // order of cols in inputDf and hudiDf differs slightly. so had to choose columns specifically to compare df directly.
     val colsToSelect = "_row_key, begin_lat,  begin_lon, city_to_state.LA, current_date, current_ts, distance_in_meters, driver, end_lat, end_lon, fare.amount, fare.currency, partition, partition_path, rider, timestamp, weight, _hoodie_is_deleted"
     val dataGen = new HoodieTestDataGenerator(0xDEED)
-    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
@@ -259,7 +260,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
     // Snapshot query
     val snapshotDf1 = spark.read.format("org.apache.hudi")
@@ -290,7 +291,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
+    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
 
     // Snapshot Query
     val snapshotDf3 = spark.read.format("org.apache.hudi")

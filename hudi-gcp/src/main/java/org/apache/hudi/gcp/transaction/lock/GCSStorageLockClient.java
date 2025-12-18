@@ -35,9 +35,9 @@ import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageException;
 import com.google.cloud.storage.StorageOptions;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -53,9 +53,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * A GCS-based implementation of a distributed lock provider using conditional writes
  * with generationMatch, plus local concurrency safety, heartbeat/renew, and pruning old locks.
  */
+@Slf4j
 @ThreadSafe
 public class GCSStorageLockClient implements StorageLockClient {
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(GCSStorageLockClient.class);
+
   private static final long PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final long NOT_FOUND_ERROR_CODE = 404;
   private static final long RATE_LIMIT_ERROR_CODE = 429;
@@ -77,7 +78,7 @@ public class GCSStorageLockClient implements StorageLockClient {
       String ownerId,
       String lockFileUri,
       Properties props) {
-    this(ownerId, lockFileUri, props, createDefaultGcsClient(), DEFAULT_LOGGER);
+    this(ownerId, lockFileUri, props, createDefaultGcsClient(), log);
   }
 
   @VisibleForTesting

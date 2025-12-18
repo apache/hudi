@@ -306,7 +306,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     String newGroupId = avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "");
     assertNotEquals(groupId, newGroupId);
-    String schemaHash = Base64.encode(HashID.hash(schemaProvider.getSourceSchema().toString(), HashID.Size.BITS_128));
+    String schemaHash = Base64.encode(HashID.hash(schemaProvider.getSourceHoodieSchema().toString(), HashID.Size.BITS_128));
     assertEquals(StringUtils.concatenateWithThreshold(String.format("%s_", groupId), schemaHash, GROUP_ID_MAX_BYTES_LENGTH), newGroupId);
   }
 }

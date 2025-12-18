@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCache}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.DeleteContext
 import org.apache.hudi.common.util.{ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues}
@@ -33,7 +34,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.util.JFunction
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
@@ -55,8 +55,8 @@ object HoodieCreateRecordUtils {
                                        parameters: Map[String, String],
                                        recordName: String,
                                        recordNameSpace: String,
-                                       writerSchema: Schema,
-                                       dataFileSchema: Schema,
+                                       writerSchema: HoodieSchema,
+                                       dataFileSchema: HoodieSchema,
                                        operation: WriteOperationType,
                                        instantTime: String,
                                        preppedSparkSqlWrites: Boolean,
@@ -116,7 +116,7 @@ object HoodieCreateRecordUtils {
       case HoodieRecord.HoodieRecordType.AVRO =>
         // avroRecords will contain meta fields when isPrepped is true.
         val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace,
-          Some(writerSchema))
+          Some(writerSchema.getAvroSchema))
 
         avroRecords.mapPartitions(it => {
           val sparkPartitionId = TaskContext.getPartitionId()
@@ -126,7 +126,7 @@ object HoodieCreateRecordUtils {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
           }
           val keyGenerator : Option[BaseKeyGenerator] = if (usePreppedInsteadOfKeyGen) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
-          val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
+          val dataFileSchema = HoodieSchema.parse(dataFileSchemaStr)
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
@@ -140,13 +140,13 @@ object HoodieCreateRecordUtils {
             val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
+              HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema.getAvroSchema))
             } else {
               avroRec
             }
 
             val processedRecord = if (shouldDropPartitionColumns) {
-              HoodieAvroUtils.rewriteRecord(avroRecWithoutMeta, dataFileSchema)
+              HoodieAvroUtils.rewriteRecord(avroRecWithoutMeta, dataFileSchema.getAvroSchema)
             } else {
               avroRecWithoutMeta
             }
@@ -167,9 +167,9 @@ object HoodieCreateRecordUtils {
         }).toJavaRDD()
 
       case HoodieRecord.HoodieRecordType.SPARK =>
-        val dataFileSchema = AvroSchemaCache.intern(new Schema.Parser().parse(dataFileSchemaStr))
-        val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)
-        val writerStructType = HoodieInternalRowUtils.getCachedSchema(AvroSchemaCache.intern(writerSchema))
+        val dataFileSchema = HoodieSchemaCache.intern(HoodieSchema.parse(dataFileSchemaStr))
+        val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema.getAvroSchema)
+        val writerStructType = HoodieInternalRowUtils.getCachedSchema(AvroSchemaCache.intern(writerSchema.getAvroSchema))
         val sourceStructType = df.schema
 
         df.queryExecution.toRdd.mapPartitions { it =>

@@ -25,8 +25,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -41,8 +40,8 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
 
+@Slf4j
 public class IOUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(IOUtils.class);
 
   /**
    * Dynamic calculation of max memory to use for spillable map. There is always more than one task
@@ -123,7 +122,7 @@ public class IOUtils {
 
     // TODO(vc): This needs to be revisited
     if (mergeHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", " + mergeHandle.getWriteStatuses());
+      log.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", " + mergeHandle.getWriteStatuses());
     }
 
     return Collections.singletonList(mergeHandle.close()).iterator();

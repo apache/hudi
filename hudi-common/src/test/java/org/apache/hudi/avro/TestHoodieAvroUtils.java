@@ -62,6 +62,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.collection.Pair;
@@ -577,8 +578,8 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testGetNestedFieldSchema() throws IOException {
-    Schema schema = SchemaTestUtil.getEvolvedSchema();
-    GenericRecord rec = new GenericData.Record(schema);
+    HoodieSchema schema = SchemaTestUtil.getEvolvedSchema();
+    GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
     rec.put("field1", "key1");
     rec.put("field2", "val1");
     rec.put("name", "val2");
@@ -586,7 +587,7 @@ public class TestHoodieAvroUtils {
     // test simple field schema
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "field1"));
 
-    GenericRecord rec2 = new GenericData.Record(schema);
+    GenericRecord rec2 = new GenericData.Record(schema.toAvroSchema());
     rec2.put("field1", "key1");
     rec2.put("field2", "val1");
     rec2.put("name", "val2");

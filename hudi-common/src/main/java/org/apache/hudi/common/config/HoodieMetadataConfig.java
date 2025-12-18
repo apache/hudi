@@ -322,9 +322,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("Maximum number of file groups to use for Partitioned Record Index.");
 
-  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
+  public static final ConfigProperty<Long> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.size")
-      .defaultValue(1024 * 1024 * 1024)
+      .defaultValue(1024 * 1024 * 1024L)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum size in bytes of a single file group. Large file group takes longer to compact.");
@@ -708,8 +708,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getFloat(RECORD_INDEX_GROWTH_FACTOR_PROP);
   }
 
-  public int getRecordIndexMaxFileGroupSizeBytes() {
-    return getInt(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP);
+  public long getRecordIndexMaxFileGroupSizeBytes() {
+    return getLong(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP);
   }
 
   public String getSplliableMapDir() {

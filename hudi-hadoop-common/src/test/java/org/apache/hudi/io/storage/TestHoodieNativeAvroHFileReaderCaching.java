@@ -31,7 +31,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.io.hadoop.HoodieAvroHFileWriter;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.io.hadoop.TestHoodieOrcReaderWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -74,8 +74,8 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   @BeforeAll
   public static void setup() throws Exception {
     storage = HoodieTestUtils.getStorage(getFilePath());
-    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieAvroHFileWriter writer = createWriter(avroSchema, true);
+    HoodieSchema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroHFileWriter writer = createWriter(avroSchema.toAvroSchema(), true);
 
     // Write records with for realistic testing
     final int numRecords = 50_000;
@@ -85,7 +85,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
       String key = String.format("key_%08d", i);
       EXISTING_KEYS.add(key);
 
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(avroSchema.toAvroSchema());
       record.put("_row_key", key);
       record.put("time", Integer.toString(RANDOM.nextInt()));
       record.put("number", i);

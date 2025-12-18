@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -43,6 +43,7 @@ import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -199,12 +200,12 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsAndTestAvroWithMeta")
   public void testWriteReadHFileWithMetaFields(boolean populateMetaFields, boolean testAvroWithMeta) throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieAvroHFileWriter writer = createWriter(avroSchema, populateMetaFields);
+    HoodieSchema schema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroHFileWriter writer = createWriter(schema.toAvroSchema(), populateMetaFields);
     List<String> keys = new ArrayList<>();
     Map<String, GenericRecord> recordMap = new TreeMap<>();
     for (int i = 0; i < 100; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String key = String.format("%s%04d", "key", i);
       record.put("_row_key", key);
       keys.add(key);

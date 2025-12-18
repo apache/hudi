@@ -739,6 +739,17 @@ public class FSUtils {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
+  public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
+    if (null == fileStatus) {
+      return null;
+    }
+
+    return new StoragePathInfo(
+        new StoragePath(fileStatus.getPath().getUri()), fileStatus.getLength(),
+        fileStatus.getIsDir() != null && fileStatus.getIsDir(),
+        fileStatus.getBlockReplication().shortValue(), fileStatus.getBlockSize(), fileStatus.getModificationTime());
+  }
+
   /**
    * Serializable function interface.
    *

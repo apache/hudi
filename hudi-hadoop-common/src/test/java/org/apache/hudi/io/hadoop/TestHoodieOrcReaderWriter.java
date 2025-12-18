@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;

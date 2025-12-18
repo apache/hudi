@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter, BaseFileReader}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -47,8 +46,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathInfo}
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
@@ -60,6 +58,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession, SQLContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
+import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
@@ -757,8 +756,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
   def convertToAvroSchema(structSchema: StructType, tableName: String ): Schema = {
     val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-    val avroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
-    getAvroSchemaWithDefaults(avroSchema, structSchema)
+    HoodieSparkAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
   }
 
   def getPartitionPath(fileStatus: FileStatus): Path =
@@ -836,7 +834,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val hoodieConfig = ConfigUtils.getHFileCacheConfigs(options.asJava)
 
       val reader = new HoodieSparkIOFactory(
-        new HoodieHadoopStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
+        HoodieStorageUtils.getStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, filePath, HFILE)
 

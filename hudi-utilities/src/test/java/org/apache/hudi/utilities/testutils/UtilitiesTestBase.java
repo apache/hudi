@@ -97,7 +97,6 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordToS
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -294,7 +293,6 @@ public class UtilitiesTestBase {
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
     props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     return new HiveSyncConfig(props);
   }
