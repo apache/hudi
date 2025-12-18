@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.flink.table.api.DataTypes;
@@ -39,13 +40,11 @@ import static org.apache.flink.table.api.DataTypes.ROW;
 /**
  * A serializable substitute for {@code ResolvedSchema}.
  */
+@AllArgsConstructor
 public class SerializableSchema implements Serializable {
+
   private static final long serialVersionUID = 1L;
   private final List<Column> columns;
-
-  private SerializableSchema(List<Column> columns) {
-    this.columns = columns;
-  }
 
   public static SerializableSchema create(ResolvedSchema resolvedSchema) {
     Stream<Column> physicalColumns = resolvedSchema.getColumns().stream()
@@ -90,7 +89,7 @@ public class SerializableSchema implements Serializable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  @AllArgsConstructor
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
   public static class Column implements Serializable {
     private static final long serialVersionUID = 1L;

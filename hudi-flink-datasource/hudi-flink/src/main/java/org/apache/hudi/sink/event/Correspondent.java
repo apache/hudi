@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -33,7 +34,8 @@ import org.apache.flink.util.SerializedValue;
 /**
  * Correspondent between a write task with the coordinator.
  */
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Getter
 public class Correspondent {
 
   private final OperatorID operatorID;
@@ -73,7 +75,7 @@ public class Correspondent {
   /**
    * A request for instant time with a given checkpoint id.
    */
-  @AllArgsConstructor
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
   public static class InstantTimeRequest implements CoordinationRequest {
 
@@ -87,7 +89,7 @@ public class Correspondent {
   /**
    * A response with instant time.
    */
-  @AllArgsConstructor
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
   public static class InstantTimeResponse implements CoordinationResponse {
 

@@ -18,21 +18,19 @@
 
 package org.apache.hudi.source.stats;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Value;
 
 import javax.annotation.Nullable;
 
 /**
  * Column statistics.
  */
-@AllArgsConstructor
-@Data
+@Value
 public class ColumnStats {
 
   @Nullable
-  private final Object minVal;
+  Object minVal;
   @Nullable
-  private final Object maxVal;
-  private final long nullCnt;
+  Object maxVal;
+  long nullCnt;
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.flink.table.data.RowData;
@@ -43,7 +44,7 @@ import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 /**
  * Utility for filtering the column stats metadata payloads.
  */
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Getter
 public class ColumnStatsProbe implements Serializable {
   private static final long serialVersionUID = 1L;

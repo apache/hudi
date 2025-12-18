@@ -21,7 +21,7 @@ package org.apache.hudi.source.enumerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 
-import org.immutables.value.Value;
+import lombok.Value;
 
 import java.io.Serializable;
 import java.util.Collection;
