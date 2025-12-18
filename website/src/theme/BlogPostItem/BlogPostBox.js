@@ -1,3 +1,4 @@
+import {useDateTimeFormat} from "@docusaurus/theme-common/internal";
 import React from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
@@ -38,9 +39,14 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
         );
     }
     const AuthorsList = () => {
-        const dateObj = new Date(date);
-        const options = { year: 'numeric', month: 'long', day: 'numeric' };
-        const formattedDate = dateObj.toLocaleDateString('en-US', options);
+        const dateTimeFormat = useDateTimeFormat({
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+        });
+        const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
+        const formattedDate = date ? formatDate(date) : '';
 
         const authorsCount = authors.length;
         if (authorsCount === 0) {

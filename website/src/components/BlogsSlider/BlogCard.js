@@ -1,3 +1,4 @@
+import {useDateTimeFormat} from "@docusaurus/theme-common/internal";
 import React from "react";
 import { useBaseUrlUtils } from "@docusaurus/core/lib/client/exports/useBaseUrl";
 import Link from "@docusaurus/Link";
@@ -12,9 +13,14 @@ const BlogCard = ({ blog }) => {
   const { date, title, authors, permalink } = metadata;
   const image = assets.image ?? frontMatter.image ?? "/assets/images/hudi.png";
 
-  const dateObj = new Date(date);
-  const options = { year: 'numeric', month: 'long', day: 'numeric' };
-  const formattedDate = dateObj.toLocaleDateString('en-US', options);
+  const dateTimeFormat = useDateTimeFormat({
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
+  const formattedDate = date ? formatDate(date) : '';
 
 
   return (
