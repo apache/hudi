@@ -132,7 +132,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val recordMerger: HoodieRecordMerger = readerContext.getRecordMerger().get()
 
-  protected override val schema: HoodieSchema = HoodieSchema.parse(originTableSchema.avroSchemaStr)
+  protected override val schema: HoodieSchema = originTableSchema.tableSchema
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 

@@ -73,7 +73,7 @@ import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
 
-case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
+case class HoodieTableSchema(structTypeSchema: StructType, tableSchema: HoodieSchema, internalSchema: Option[InternalSchema] = None)
 
 case class HoodieTableState(tablePath: String,
                             latestCommitTimestamp: Option[String],
@@ -359,7 +359,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       could have an effect on subsequent de-/serializing records in some exotic scenarios (when Avro unions
     //       w/ more than 2 types are involved)
     val sourceSchema = prunedDataSchema.map(s => convertToHoodieSchema(s, tableName)).getOrElse(tableSchema)
-    val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
+    val (requiredProjectedSchema, requiredStructSchema, requiredInternalSchema) =
       projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, sourceSchema), targetColumns)
 
     val filterExpressions = convertToExpressions(filters)
@@ -367,10 +367,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val tableSchemaStr = tableSchema.toString
-
-    val schema = HoodieTableSchema(tableStructSchema, tableSchemaStr, internalSchemaOpt)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredAvroSchema.toString, Some(requiredInternalSchema))
+    val schema = HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt)
+    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredProjectedSchema, Some(requiredInternalSchema))
 
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
@@ -571,7 +569,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         StructType(requiredDataSchema.structTypeSchema.fields
           .filterNot(f => unusedMandatoryColumnNames.contains(f.name)))
 
-      HoodieTableSchema(prunedStructSchema, convertToHoodieSchema(prunedStructSchema, tableName).toString)
+      HoodieTableSchema(prunedStructSchema, convertToHoodieSchema(prunedStructSchema, tableName))
     }
 
     val requiredSchemaReaderSkipMerging = createBaseFileReader(
@@ -706,9 +704,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
       (partitionSchema,
         HoodieTableSchema(prunedDataStructSchema,
-          convertToHoodieSchema(prunedDataStructSchema, tableName).toString, prunedDataInternalSchema),
+          convertToHoodieSchema(prunedDataStructSchema, tableName), prunedDataInternalSchema),
         HoodieTableSchema(prunedRequiredStructSchema,
-          convertToHoodieSchema(prunedRequiredStructSchema, tableName).toString, prunedRequiredInternalSchema))
+          convertToHoodieSchema(prunedRequiredStructSchema, tableName), prunedRequiredInternalSchema))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)
     }
@@ -838,9 +836,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
         .getFileReader(hoodieConfig, filePath, HFILE)
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
-      // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
-      //       to be passed from driver to executor
-      val requiredSchema = HoodieSchema.parse(requiredDataSchema.avroSchemaStr)
+      val requiredSchema = requiredDataSchema.tableSchema
       val hoodieSchemaToRowConverter = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(requiredSchema, requiredRowSchema)
 
       reader.getRecordIterator(requiredSchema).asScala

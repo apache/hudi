@@ -88,7 +88,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            hoodieFileFormat: HoodieFileFormat)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
-  private lazy val schema = HoodieSchema.parse(tableSchema.avroSchemaStr)
+  private lazy val schema = tableSchema.tableSchema
 
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     HOption.ofNullable(
