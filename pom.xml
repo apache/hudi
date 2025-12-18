@@ -1504,6 +1504,10 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.janino</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1558,6 +1562,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.janino</groupId>
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
