@@ -847,6 +847,9 @@ jobs:
           - flinkProfile: "flink2.0"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.14.4'
+          - flinkProfile: "flink2.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.15.2'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 11
@@ -1078,7 +1081,7 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-  # flink 2.0 only support Java 11 and above version
+  # flink 2.0/2.1 only support Java 11 and above version
   validate-bundles-java11:
     runs-on: ubuntu-latest
     strategy:
@@ -1088,6 +1091,12 @@ jobs:
             flinkProfile: 'flink2.0'
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.14.4'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.15.2'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
 
