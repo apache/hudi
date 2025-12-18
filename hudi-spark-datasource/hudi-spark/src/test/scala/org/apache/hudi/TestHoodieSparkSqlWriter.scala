@@ -83,7 +83,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     }
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
 
@@ -349,7 +349,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true")
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
     val df = spark.createDataFrame(sc.parallelize(inserts.asScala.toSeq), structType)
@@ -376,7 +376,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "true")
 
       // generate the inserts
-      val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
       val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
       val records = DataSourceTestUtils.generateRandomRows(100)
       val recordsSeq = convertRowListToSeq(records)
@@ -399,7 +399,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(100)
     val recordsSeq = convertRowListToSeq(records)
@@ -433,7 +433,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(1)
     val recordsSeq = convertRowListToSeq(records)
@@ -460,7 +460,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     for (i <- 0 to 2) {
       fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
     }
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     var totalExpectedDf = spark.createDataFrame(sc.emptyRDD[Row], structType)
     for (_ <- 0 to 2) {
@@ -505,7 +505,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName)
     val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val modifiedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, "trip", "example.schema")
     val records = DataSourceTestUtils.generateRandomRows(100)
@@ -660,7 +660,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val noReconciliationOpts = opts.updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "false")
 
     // Generate 1st batch
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     var records = DataSourceTestUtils.generateRandomRows(10)
     var recordsSeq = convertRowListToSeq(records)
@@ -685,7 +685,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assertEquals(df2.intersect(dropMetaFields(snapshotDF2)).except(df2).count(), 0)
 
     // Generate 3d batch (w/ evolved schema w/ added column)
-    val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedHoodieSchema
+    val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
     val evolStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(evolSchema)
     records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
     recordsSeq = convertRowListToSeq(records)
@@ -832,7 +832,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
  */
   def deletePartitionSetup(): (DataFrame, Map[String,String]) = {
     val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
     val recordsSeq = convertRowListToSeq(records)

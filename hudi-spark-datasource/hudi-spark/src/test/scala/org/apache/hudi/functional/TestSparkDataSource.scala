@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSchemaConversionUtils}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecord, HoodieRecordMerger, HoodieTableType, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -334,7 +334,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(400)
     val df = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(inserts)), structType)
 
@@ -414,7 +414,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(400)
     val df = spark.createDataFrame(spark.sparkContext.parallelize(
       convertRowListToSeq(inserts)), structType)

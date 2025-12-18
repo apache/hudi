@@ -41,6 +41,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
@@ -1100,8 +1101,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testDeserialize(description: String, expected: JBigDecimal, wrapperCreator: WrapperCreator): Unit = {
     val dt = DecimalType(10, 2)
     // Get the schema from the DecimalWrapper's Avro definition.
-    val schema: HoodieSchema = HoodieSchema.fromAvroSchema(DecimalWrapper.SCHEMA$.getField("value").schema())
-    val wrapper = wrapperCreator.create(expected, schema.toAvroSchema)
+    val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
+    val wrapper = wrapperCreator.create(expected, schema)
     // Extract the underlying value.
     val unwrapped = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
     // Optionally, for the "ByteBuffer Test" case, verify that the unwrapped value is a ByteBuffer.

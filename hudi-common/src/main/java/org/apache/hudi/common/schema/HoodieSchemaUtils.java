@@ -80,24 +80,6 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Creates a write schema for Hudi operations, adding necessary metadata fields.
-   * This is equivalent to HoodieAvroUtils.createHoodieWriteSchema() but operates on HoodieSchema.
-   *
-   * @param schema             the base HoodieSchema
-   * @param withOperationField whether to include operation metadata field
-   * @return HoodieSchema configured for write operations with metadata fields added
-   * @throws IllegalArgumentException if schema is null
-   * @since 1.2.0
-   */
-  public static HoodieSchema createHoodieWriteSchema(HoodieSchema schema, boolean withOperationField) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-
-    // Convert to Avro, delegate to existing utility, convert back
-    Schema avroSchema = HoodieAvroUtils.addMetadataFields(schema.toAvroSchema(), withOperationField);
-    return HoodieSchema.fromAvroSchema(avroSchema);
-  }
-
-  /**
    * Adds Hudi metadata fields to the given schema with the withOperationField flag set as false.
    * This is equivalent to HoodieAvroUtils#.addMetadataFields() but operates on HoodieSchema.
    *

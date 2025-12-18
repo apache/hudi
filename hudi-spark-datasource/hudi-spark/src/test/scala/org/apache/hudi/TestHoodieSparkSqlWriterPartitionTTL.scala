@@ -71,7 +71,7 @@ class TestHoodieSparkSqlWriterPartitionTTL extends HoodieSparkWriterTestBase {
       HoodieTTLConfig.PARTITION_TTL_STRATEGY_CLASS_NAME.key() -> "org.apache.hudi.HoodieSparkSqlWriterTestStrategy"
     )
 
-    val schema = HoodieSchema.fromAvroSchema(DataSourceTestUtils.getStructTypeExampleSchema)
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val recordsForPart1 = DataSourceTestUtils.generateRandomRowsByPartition(100, "part1")
     val recordsSeqForPart1 = convertRowListToSeq(recordsForPart1)

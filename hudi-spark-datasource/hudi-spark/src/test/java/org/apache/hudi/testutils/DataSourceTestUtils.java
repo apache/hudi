@@ -31,7 +31,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -63,19 +62,11 @@ public class DataSourceTestUtils {
 
   private static final Random RANDOM = new Random(0xDAADDEED);
 
-  public static Schema getStructTypeExampleSchema() throws IOException {
-    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
-  }
-
-  public static Schema getStructTypeExampleEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
-  }
-
-  public static HoodieSchema getStructTypeExampleHoodieSchema() throws IOException {
+  public static HoodieSchema getStructTypeExampleSchema() throws IOException {
     return HoodieSchema.parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
   }
 
-  public static HoodieSchema getStructTypeExampleEvolvedHoodieSchema() throws IOException {
+  public static HoodieSchema getStructTypeExampleEvolvedSchema() throws IOException {
     return HoodieSchema.parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
   }
 

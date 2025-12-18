@@ -91,7 +91,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
   private void init() throws IOException {
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema();
+    schema = DataSourceTestUtils.getStructTypeExampleSchema();
     structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
   }
 

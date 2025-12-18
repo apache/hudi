@@ -82,7 +82,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     }
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
 
@@ -216,7 +216,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val inserts = DataSourceTestUtils.generateRandomRows(1000)
     val df = spark.createDataFrame(sc.parallelize(inserts.asScala.toSeq), structType)
@@ -244,7 +244,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
         .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
 
       // generate the inserts
-      val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
       val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
       val records = DataSourceTestUtils.generateRandomRows(100)
       val recordsSeq = convertRowListToSeq(records)
@@ -268,7 +268,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(100)
     val recordsSeq = convertRowListToSeq(records)
@@ -303,7 +303,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
         .updated(HoodieTableConfig.TABLE_FORMAT.key, "test-format")
 
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(1)
     val recordsSeq = convertRowListToSeq(records)
@@ -331,7 +331,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     for (i <- 0 to 2) {
       fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
     }
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     var totalExpectedDf = spark.createDataFrame(sc.emptyRDD[Row], structType)
     for (_ <- 0 to 2) {
@@ -376,7 +376,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName)
     val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
     // generate the inserts
-    val schema = DataSourceTestUtils.getStructTypeExampleHoodieSchema
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val modifiedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, "trip", "example.schema")
     val records = DataSourceTestUtils.generateRandomRows(100)

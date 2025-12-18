@@ -111,6 +111,18 @@ public class TableSchemaResolver {
     return getTableAvroSchemaFromDataFileInternal().orElseThrow(schemaNotFoundError());
   }
 
+  /**
+   * Gets full schema (user + metadata) for a hoodie table from data file as HoodieSchema.
+   * Delegates to getTableAvroSchemaFromDataFile and wraps the result in a HoodieSchema.
+   *
+   * @return HoodieSchema for this table from data file
+   * @throws Exception
+   */
+  public HoodieSchema getTableSchemaFromDataFile() throws Exception {
+    Schema avroSchema = getTableAvroSchemaFromDataFile();
+    return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
   private Option<Schema> getTableAvroSchemaFromDataFileInternal() {
     return getTableParquetSchemaFromDataFile();
   }
