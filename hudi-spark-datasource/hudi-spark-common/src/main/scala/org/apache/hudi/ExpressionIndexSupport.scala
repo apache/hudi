@@ -594,7 +594,7 @@ class ExpressionIndexSupport(spark: SparkSession,
             }.toSet
 
             // Update the map with the new partition and its file names
-            partitionToFileMap.updated(partitionPath.path, partitionToFileMap.getOrElse(partitionPath.path, Set.empty) ++ fileNames)
+            partitionToFileMap.updated(partitionPath.getPath, partitionToFileMap.getOrElse(partitionPath.getPath, Set.empty) ++ fileNames)
           case None =>
             partitionToFileMap // Skip if no partition path
         }

@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.http.NoHttpResponseException;
@@ -181,7 +182,7 @@ class TestTimelineServiceClient {
     private final int maxInducedFailures;
 
     @Getter
-    @AllArgsConstructor
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public enum ExceptionType {
       NO_HTTP_RESPONSE_EXCEPTION(NoHttpResponseException.class),
       PARSE_EXCEPTION(ParseException.class);

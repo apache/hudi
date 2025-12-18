@@ -28,6 +28,7 @@ import lombok.Getter;
  * Check https://avro.apache.org/docs/1.10.0/spec.html#Logical+Types for more details.
  */
 @AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 public enum AvroLogicalTypeEnum {
   DECIMAL("decimal"),
   UUID("uuid"),
@@ -40,6 +41,5 @@ public enum AvroLogicalTypeEnum {
   LOCAL_TIMESTAMP_MICROS("local-timestamp-micros"),
   DURATION("duration");
 
-  @Getter
   private final String value;
 }

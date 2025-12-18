@@ -198,7 +198,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     // Prune the partition path by the partition filters
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     getInputFileSlices(prunedPartitions: _*).asScala.map {
-      case (partition, fileSlices) => (partition.path, fileSlices.asScala.toSeq)
+      case (partition, fileSlices) => (partition.getPath, fileSlices.asScala.toSeq)
     }.toMap
   }
 
@@ -272,7 +272,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
               .asInstanceOf[BasePredicate]
         }
         val prunedPartitionPaths = partitionPaths.filter {
-          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
+          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.getValues))
         }.toSeq
 
         logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
@@ -281,7 +281,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         prunedPartitionPaths
       } else {
         logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
-          s" following path(s): ${partitionPaths.find(_.values.length == 0).map(e => e.getPath)}")
+          s" following path(s): ${partitionPaths.find(_.getValues.length == 0).map(e => e.getPath)}")
 
         partitionPaths.toSeq
       }
@@ -444,7 +444,7 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   private val PUT_LEAF_FILES_METHOD_NAME = "putLeafFiles"
 
   private def haveProperPartitionValues(partitionPaths: Seq[PartitionPath]) = {
-    partitionPaths.forall(_.values.length > 0)
+    partitionPaths.forall(_.getValues.length > 0)
   }
 
   private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression], zoneId: String): Map[String, (String, Option[Any])] = {

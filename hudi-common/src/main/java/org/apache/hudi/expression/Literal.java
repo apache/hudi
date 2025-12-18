@@ -85,7 +85,6 @@ public class Literal<T> extends LeafExpression {
         + value.getClass().getName() + " to Literal");
   }
 
-  @Getter
   private final T value;
   private final Type dataType;
 

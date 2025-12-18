@@ -18,6 +18,7 @@
 
 package org.apache.hudi.expression;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -27,7 +28,7 @@ import java.util.List;
 /**
  * The expression that accept two child expressions.
  */
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 @Getter
 public abstract class BinaryExpression implements Expression {
 
