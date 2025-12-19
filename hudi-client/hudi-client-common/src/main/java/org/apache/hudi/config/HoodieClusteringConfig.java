@@ -104,6 +104,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Files smaller than the size in bytes specified here are candidates for clustering");
 
+  public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_FLOOR_LIMIT = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.floor.limit")
+      .defaultValue(String.valueOf(0L))
+      .sinceVersion("0.14.2")
+      .withDocumentation("Files smaller than the size in bytes specified here are excluded from clustering. "
+          + "Use this as a floor bound together with " + PLAN_STRATEGY_SMALL_FILE_LIMIT.key() + ".");
+
   public static final ConfigProperty<String> PARTITION_REGEX_PATTERN = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.regex.pattern")
       .noDefaultValue()
@@ -563,7 +570,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       clusteringConfig.setValue(PLAN_STRATEGY_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
     }
-    
+
+    public Builder withClusteringPlanSmallFileFloorLimit(long clusteringFloorFileLimit) {
+      clusteringConfig.setValue(PLAN_STRATEGY_SMALL_FILE_FLOOR_LIMIT, String.valueOf(clusteringFloorFileLimit));
+      return this;
+    }
+
     public Builder withClusteringSortColumns(String sortColumns) {
       clusteringConfig.setValue(PLAN_STRATEGY_SORT_COLUMNS, sortColumns);
       return this;
