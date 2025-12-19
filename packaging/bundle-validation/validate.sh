@@ -408,7 +408,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
+if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then
