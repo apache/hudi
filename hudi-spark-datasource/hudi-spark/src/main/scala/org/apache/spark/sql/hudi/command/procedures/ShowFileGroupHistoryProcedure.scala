@@ -38,14 +38,13 @@ import scala.collection.JavaConverters._
  * == Parameters ==
  * - `table`: Optional. The name of the Hudi table to query (mutually exclusive with `path`)
  * - `path`: Optional. The base path of the Hudi table (mutually exclusive with `table`)
- * - `fileGroupId`: Required. The unique identifier of the file group to track
+ * - `file_group_id`: Required. The unique identifier of the file group to track
  * - `partition`: Optional. Specific partition to filter results (default: all partitions)
- * - `showArchived`: Optional. Whether to include archived timeline data (default: false)
+ * - `show_archived`: Optional. Whether to include archived timeline data (default: false)
  * - `limit`: Optional. Maximum number of history entries to return (default: 20)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
- * - `startTime`: Optional. Start timestamp for filtering results (supported formats: yyyyMMddHHMMssmm, yyyyMMddHHmmss, yyyy-MM-dd, yyyy/MM/dd, yyyyMMdd)
- * - `endTime`: Optional. End timestamp for filtering results (supported formats: yyyyMMddHHMMssmm, yyyyMMddHHmmss, yyyy-MM-dd, yyyy/MM/dd, yyyyMMdd)
- * - `verbose` : Optional. Whether to include detailed statistics (default: false)
+ * - `start_time`: Optional. Start timestamp for filtering results (supported formats: yyyyMMddHHMMssmm, yyyyMMddHHmmss, yyyy-MM-dd, yyyy/MM/dd, yyyyMMdd)
+ * - `end_time`: Optional. End timestamp for filtering results (supported formats: yyyyMMddHHMMssmm, yyyyMMddHHmmss, yyyy-MM-dd, yyyy/MM/dd, yyyyMMdd)
  *
  * == Output Schema ==
  * - `instant_time`: Timestamp when the operation was performed
@@ -78,7 +77,7 @@ import scala.collection.JavaConverters._
  * - `column_stats_available`: Whether column statistics are available for this file
  *
  * == Error Handling ==
- * - Throws `IllegalArgumentException` for invalid filter expressions or missing fileGroupId
+ * - Throws `IllegalArgumentException` for invalid filter expressions or missing file_group_id
  * - Throws `HoodieException` for table access issues or invalid file group identifiers
  * - Returns empty result set if no file group history matches the criteria
  * - Gracefully handles archived timeline access failures with warning logs
@@ -92,59 +91,59 @@ import scala.collection.JavaConverters._
  * -- Basic usage: Show file group history
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123'
+ *   file_group_id => 'abc123'
  * )
  *
  * -- Show history with custom limit
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
+ *   file_group_id => 'abc123',
  *   limit => 50
  * )
  *
  * -- Show history for specific partition (partitioned to datetime column here)
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
+ *   file_group_id => 'abc123',
  *   partition => '2025/08/28'
  * )
  *
  * -- Include archived timeline data
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
- *   showArchived => true
+ *   file_group_id => 'abc123',
+ *   show_archived => true
  * )
  *
  * -- Filter for specific operation types
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
+ *   file_group_id => 'abc123',
  *   filter => "operation_type = 'INSERT'"
  * )
  *
  * -- Filter by date range using yyyy-MM-dd format
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
- *   startTime => '2024-01-01',
- *   endTime => '2024-12-31'
+ *   file_group_id => 'abc123',
+ *   start_time => '2024-01-01',
+ *   end_time => '2024-12-31'
  * )
  *
  * -- Filter by date range using yyyy/MM/dd format
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
- *   startTime => '2024/01/01',
- *   endTime => '2024/12/31'
+ *   file_group_id => 'abc123',
+ *   start_time => '2024/01/01',
+ *   end_time => '2024/12/31'
  * )
  *
  * -- Filter by date range using yyyyMMdd format
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   fileGroupId => 'abc123',
- *   startTime => '20240101',
- *   endTime => '20241231'
+ *   file_group_id => 'abc123',
+ *   start_time => '20240101',
+ *   end_time => '20241231'
  * )
  * }}}
  *
@@ -156,13 +155,13 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.required(2, "fileGroupId", DataTypes.StringType),
+    ProcedureParameter.required(2, "file_group_id", DataTypes.StringType),
     ProcedureParameter.optional(3, "partition", DataTypes.StringType),
-    ProcedureParameter.optional(4, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "show_archived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 20),
     ProcedureParameter.optional(6, "filter", DataTypes.StringType, ""),
-    ProcedureParameter.optional(7, "startTime", DataTypes.StringType, ""),
-    ProcedureParameter.optional(8, "endTime", DataTypes.StringType, "")
+    ProcedureParameter.optional(7, "start_time", DataTypes.StringType, ""),
+    ProcedureParameter.optional(8, "end_time", DataTypes.StringType, "")
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -217,7 +216,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
 
     val activeEntries = new util.ArrayList[HistoryEntry]()
     val activeTimeline = metaClient.getActiveTimeline
-    ShowFileHistoryProcedureUtils.processWriteTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit, startTime, endTime)
+    ShowFileHistoryProcedureUtils.processWriteTimeline(activeTimeline, fileGroupId, partition, HoodieProcedureUtils.TIMELINE_TYPE_ACTIVE, activeEntries, limit, startTime, endTime)
 
     val archivedEntries = new util.ArrayList[HistoryEntry]()
     if (showArchived) {
@@ -230,7 +229,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
           archivedTimeline.loadCompletedInstantDetailsInMemory(limit)
           archivedTimeline.loadCompactionDetailsInMemory(limit)
         }
-        ShowFileHistoryProcedureUtils.processWriteTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, startTime, endTime)
+        ShowFileHistoryProcedureUtils.processWriteTimeline(archivedTimeline, fileGroupId, partition, HoodieProcedureUtils.TIMELINE_TYPE_ARCHIVED, archivedEntries, limit, startTime, endTime)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to process archived timeline: ${e.getMessage}")

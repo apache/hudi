@@ -19,7 +19,10 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
 
+import org.apache.spark.sql.hudi.command.procedures.HoodieProcedureUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+
+import java.time.format.DateTimeParseException
 
 class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
@@ -60,7 +63,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyResultDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId'
+           |  file_group_id => '$fileGroupId'
            |)""".stripMargin)
       historyResultDf.show(false)
       val historyResult = historyResultDf.collect()
@@ -114,7 +117,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyWithPartition = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  partition => 'category=electronics'
            |)""".stripMargin).collect()
 
@@ -129,7 +132,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyWithoutPartition = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId'
+           |  file_group_id => '$fileGroupId'
            |)""".stripMargin).collect()
 
       assert(historyWithoutPartition.length >= historyWithPartition.length,
@@ -174,7 +177,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val limitedHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  limit => 3
            |)""".stripMargin)
       limitedHistoryDf.show(false)
@@ -185,7 +188,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val higherLimitedHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  limit => 20
            |)""".stripMargin)
       higherLimitedHistoryDf.show(false)
@@ -245,7 +248,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyBeforeCleanDf = spark.sql(
           s"""call show_file_group_history(
              |  table => '$tableName',
-             |  fileGroupId => '$fileGroupId',
+             |  file_group_id => '$fileGroupId',
              |  limit => 25
              |)""".stripMargin)
 
@@ -256,7 +259,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyAfterCleanDf = spark.sql(
           s"""call show_file_group_history(
              |  table => '$tableName',
-             |  fileGroupId => '$fileGroupId',
+             |  file_group_id => '$fileGroupId',
              |  limit => 25
              |)""".stripMargin)
 
@@ -308,7 +311,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val noHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => 'non-existent-file-group-id'
+           |  file_group_id => 'non-existent-file-group-id'
            |)""".stripMargin).collect()
 
       assert(noHistory.length == 0, "Should return empty results for non-existent file group")
@@ -342,7 +345,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val emptyResult = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '',
+           |  file_group_id => '',
            |  limit => 0
            |)""".stripMargin).collect()
 
@@ -384,7 +387,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val commitOnlyHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  filter => "action = 'commit'"
            |)""".stripMargin).collect()
 
@@ -396,7 +399,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val insertOnlyHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  filter => "operation_type = 'INSERT'"
            |)""".stripMargin).collect()
 
@@ -408,7 +411,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val allHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId'
+           |  file_group_id => '$fileGroupId'
            |)""".stripMargin).collect()
 
       assert(allHistory.length >= commitOnlyHistory.length, "Unfiltered results should have >= filtered results")
@@ -456,7 +459,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyBeforeCompactionDf = spark.sql(
           s"""call show_file_group_history(
              | table => '$tableName',
-             | fileGroupId => '$fileGroupId',
+             | file_group_id => '$fileGroupId',
              | limit => 25
              |)""".stripMargin)
 
@@ -475,7 +478,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyAfterCompactionDf = spark.sql(
           s"""call show_file_group_history(
              | table => '$tableName',
-             | fileGroupId => '$fileGroupId',
+             | file_group_id => '$fileGroupId',
              | limit => 25
              |)""".stripMargin)
 
@@ -550,9 +553,9 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val yyyyMMddHHMMssmmHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
-           |  startTime => '$firstCommit',
-           |  endTime => '$lastCommit'
+           |  file_group_id => '$fileGroupId',
+           |  start_time => '$firstCommit',
+           |  end_time => '$lastCommit'
            |)""".stripMargin)
       yyyyMMddHHMMssmmHistoryDf.show(false)
       val yyyyMMddHHMMssmmHistory = yyyyMMddHHMMssmmHistoryDf.collect()
@@ -562,9 +565,9 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val yyyyMMddHHmmssHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
-           |  startTime => '$firstCommit14',
-           |  endTime => '$lastCommit14'
+           |  file_group_id => '$fileGroupId',
+           |  start_time => '$firstCommit14',
+           |  end_time => '$lastCommit14'
            |)""".stripMargin)
       yyyyMMddHHmmssHistoryDf.show(false)
       val yyyyMMddHHmmssHistory = yyyyMMddHHmmssHistoryDf.collect()
@@ -572,9 +575,9 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val yyyyMMddHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
-           |  startTime => '$firstCommitDate',
-           |  endTime => '$lastCommitDate'
+           |  file_group_id => '$fileGroupId',
+           |  start_time => '$firstCommitDate',
+           |  end_time => '$lastCommitDate'
            |)""".stripMargin)
       yyyyMMddHistoryDf.show(false)
       val yyyyMMddHistory = yyyyMMddHistoryDf.collect()
@@ -582,9 +585,9 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val yyyyMMddDashHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
-           |  startTime => '$formattedStartDate',
-           |  endTime => '$formattedEndDate'
+           |  file_group_id => '$fileGroupId',
+           |  start_time => '$formattedStartDate',
+           |  end_time => '$formattedEndDate'
            |)""".stripMargin)
       yyyyMMddDashHistoryDf.show(false)
       val yyyyMMddDashHistory = yyyyMMddDashHistoryDf.collect()
@@ -594,9 +597,9 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val yyyyMMddSlashHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
-           |  startTime => '$slashFormattedStartDate',
-           |  endTime => '$slashFormattedEndDate'
+           |  file_group_id => '$fileGroupId',
+           |  start_time => '$slashFormattedStartDate',
+           |  end_time => '$slashFormattedEndDate'
            |)""".stripMargin)
       yyyyMMddSlashHistoryDf.show(false)
       val yyyyMMddSlashHistory = yyyyMMddSlashHistoryDf.collect()
@@ -650,9 +653,9 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""call show_file_group_history(
              |  table => '$tableName',
-             |  fileGroupId => '$fileGroupId',
-             |  startTime => 'invalid-date',
-             |  endTime => 'another-invalid-date'
+             |  file_group_id => '$fileGroupId',
+             |  start_time => 'invalid-date',
+             |  end_time => 'another-invalid-date'
              |)""".stripMargin).collect()
       }
 
@@ -735,7 +738,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyBeforeDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  partition => '$partitionPath'
            |)""".stripMargin)
       historyBeforeDf.show(false)
@@ -750,7 +753,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyAfterRunDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  partition => '$partitionPath'
            |)""".stripMargin)
       historyAfterRunDf.show(false)
@@ -800,7 +803,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val writesFilterHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  filter => "num_writes > 0"
            |)""".stripMargin).collect()
 
@@ -812,7 +815,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val complexFilterHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  filter => "action = 'commit' AND num_writes > 0 AND state = 'COMPLETED'"
            |)""".stripMargin).collect()
 
@@ -826,7 +829,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val fileSizeFilterHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  fileGroupId => '$fileGroupId',
+           |  file_group_id => '$fileGroupId',
            |  filter => "file_size_bytes > 0 AND total_write_bytes > 0"
            |)""".stripMargin).collect()
 
@@ -882,7 +885,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyBeforeClusteringDf = spark.sql(
         s"""call show_file_group_history(
            | table => '$tableName',
-           | fileGroupId => '$fileGroupId',
+           | file_group_id => '$fileGroupId',
            | limit => 25
            |)""".stripMargin)
 
@@ -899,7 +902,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val originalHistoryAfterClusteringDf = spark.sql(
         s"""call show_file_group_history(
            | table => '$tableName',
-           | fileGroupId => '$fileGroupId',
+           | file_group_id => '$fileGroupId',
            | limit => 25
            |)""".stripMargin)
       originalHistoryAfterClusteringDf.show(false)
@@ -914,7 +917,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val currentHistoryDf = spark.sql(
           s"""call show_file_group_history(
              | table => '$tableName',
-             | fileGroupId => '$currentFileGroupId',
+             | file_group_id => '$currentFileGroupId',
              | limit => 25
              |)""".stripMargin)
 
@@ -924,4 +927,129 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(originalHistoryAfterClustering.head.getString(20).equals("clustering"), s"replace_action should be clustering, got: ${originalHistoryAfterClustering.head.getString(20)}")
     }
   }
+
+  // ============================================================================
+  // Tests for HoodieProcedureUtils.normalizeTimeFormat
+  // ============================================================================
+
+  test("Test normalizeTimeFormat - empty string") {
+    assert(HoodieProcedureUtils.normalizeTimeFormat("") == "", "Empty string should return empty string")
+    assert(HoodieProcedureUtils.normalizeTimeFormat("", isEndTime = true) == "", "Empty string should return empty string for end time")
+  }
+
+  test("Test normalizeTimeFormat - 17 digit format (already normalized)") {
+    val input = "20240101123456789"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input) == input, "17 digit format should return as is")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == input, "17 digit format should return as is for end time")
+  }
+
+  test("Test normalizeTimeFormat - 14 digit format (yyyyMMddHHmmss)") {
+    val input = "20240101123456"
+    val expected = "20240101123456000"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input) == expected, "14 digit format should append 000")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == expected, "14 digit format should append 000 for end time")
+  }
+
+  test("Test normalizeTimeFormat - yyyy-MM-dd format") {
+    val input = "2024-01-01"
+    val expectedStart = "20240101000000000"
+    val expectedEnd = "20240101235959999"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input) == expectedStart, "yyyy-MM-dd format should convert to yyyyMMdd000000000 for start time")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == expectedEnd, "yyyy-MM-dd format should convert to yyyyMMdd235959999 for end time")
+  }
+
+  test("Test normalizeTimeFormat - yyyy/MM/dd format") {
+    val input = "2024/01/01"
+    val expectedStart = "20240101000000000"
+    val expectedEnd = "20240101235959999"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input) == expectedStart, "yyyy/MM/dd format should convert to yyyyMMdd000000000 for start time")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == expectedEnd, "yyyy/MM/dd format should convert to yyyyMMdd235959999 for end time")
+  }
+
+  test("Test normalizeTimeFormat - 8 digit format (yyyyMMdd)") {
+    val input = "20240101"
+    val expectedStart = "20240101000000000"
+    val expectedEnd = "20240101235959999"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input) == expectedStart, "8 digit format should append 000000000 for start time")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == expectedEnd, "8 digit format should append 235959999 for end time")
+  }
+
+  test("Test normalizeTimeFormat - invalid formats") {
+    val invalidFormats = Seq(
+      "invalid-date",
+      "2024-1-1",  // Invalid month/day format
+      "24-01-01",  // Invalid year format
+      "2024/1/1", // Invalid month/day format
+      "202401",    // Too short
+      "202401011234567890", // Too long
+      "2024-01-01 12:34:56", // With time but wrong format
+      "abc123"
+    )
+
+    invalidFormats.foreach { invalidFormat =>
+      val exception = intercept[DateTimeParseException] {
+        HoodieProcedureUtils.normalizeTimeFormat(invalidFormat)
+      }
+      assert(exception.getMessage.contains("Unsupported time format"),
+        s"Should throw DateTimeParseException for invalid format: $invalidFormat")
+    }
+  }
+
+  test("Test normalizeTimeFormat - edge cases with different dates") {
+    // Test leap year date
+    val leapYear = "2024-02-29"
+    val expectedStart = "20240229000000000"
+    val expectedEnd = "20240229235959999"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(leapYear) == expectedStart, "Leap year date should work correctly")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(leapYear, isEndTime = true) == expectedEnd, "Leap year date should work correctly for end time")
+
+    // Test year-end date
+    val yearEnd = "2024-12-31"
+    val expectedStartYearEnd = "20241231000000000"
+    val expectedEndYearEnd = "20241231235959999"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(yearEnd) == expectedStartYearEnd, "Year-end date should work correctly")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(yearEnd, isEndTime = true) == expectedEndYearEnd, "Year-end date should work correctly for end time")
+
+    // Test year-start date
+    val yearStart = "2024-01-01"
+    val expectedStartYearStart = "20240101000000000"
+    val expectedEndYearStart = "20240101235959999"
+    assert(HoodieProcedureUtils.normalizeTimeFormat(yearStart) == expectedStartYearStart, "Year-start date should work correctly")
+    assert(HoodieProcedureUtils.normalizeTimeFormat(yearStart, isEndTime = true) == expectedEndYearStart, "Year-start date should work correctly for end time")
+  }
+
+  test("Test normalizeTimeFormat - 8 digit format with different dates") {
+    val dates = Seq(
+      ("20240101", "20240101000000000", "20240101235959999"),
+      ("20240229", "20240229000000000", "20240229235959999"), // Leap year
+      ("20241231", "20241231000000000", "20241231235959999"), // Year end
+      ("20230101", "20230101000000000", "20230101235959999")  // Different year
+    )
+
+    dates.foreach { case (input, expectedStart, expectedEnd) =>
+      assert(HoodieProcedureUtils.normalizeTimeFormat(input) == expectedStart,
+        s"8 digit format $input should convert to $expectedStart for start time")
+      assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == expectedEnd,
+        s"8 digit format $input should convert to $expectedEnd for end time")
+    }
+  }
+
+  test("Test normalizeTimeFormat - 14 digit format with different times") {
+    val times = Seq(
+      ("20240101000000", "20240101000000000"), // Midnight
+      ("20240101123456", "20240101123456000"), // Noon
+      ("20240101235959", "20240101235959000")  // End of day
+    )
+
+    times.foreach { case (input, expected) =>
+      assert(HoodieProcedureUtils.normalizeTimeFormat(input) == expected,
+        s"14 digit format $input should convert to $expected")
+      assert(HoodieProcedureUtils.normalizeTimeFormat(input, isEndTime = true) == expected,
+        s"14 digit format $input should convert to $expected for end time")
+    }
+  }
+
+  // ============================================================================
+  // End of tests for HoodieProcedureUtils.normalizeTimeFormat
+  // ============================================================================
 }

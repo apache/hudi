@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import org.apache.spark.sql.hudi.command.procedures.ShowFileHistoryProcedureUtils.log
 
 import java.time.LocalDate
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
@@ -32,6 +31,14 @@ import java.util
 import scala.collection.JavaConverters._
 
 object HoodieProcedureUtils {
+
+  // Timeline type constants
+  val TIMELINE_TYPE_ACTIVE: String = "ACTIVE"
+  val TIMELINE_TYPE_ARCHIVED: String = "ARCHIVED"
+
+  // Status constants
+  val STATUS_SUCCESS: String = "SUCCESS"
+  val STATUS_FAILED: String = "FAILED"
 
   /**
    * Build named procedure arguments from given args' map
