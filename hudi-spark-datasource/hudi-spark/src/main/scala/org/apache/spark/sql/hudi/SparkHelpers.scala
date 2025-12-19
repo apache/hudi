@@ -23,12 +23,12 @@ import org.apache.hudi.common.bloom.{BloomFilter, BloomFilterFactory}
 import org.apache.hudi.common.config.{HoodieParquetConfig, HoodieStorageConfig}
 import org.apache.hudi.common.config.HoodieStorageConfig.{BLOOM_FILTER_DYNAMIC_MAX_ENTRIES, BLOOM_FILTER_FPP_VALUE, BLOOM_FILTER_NUM_ENTRIES_VALUE, BLOOM_FILTER_TYPE}
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.io.storage.HoodieIOFactory
 import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
@@ -51,7 +51,7 @@ object SparkHelpers {
     val sourceRecords = HoodieIOFactory.getIOFactory(storage)
       .getFileFormatUtils(HoodieFileFormat.PARQUET)
       .readAvroRecords(storage, sourceFile).asScala
-    val schema: Schema = sourceRecords.head.getSchema
+    val schema: HoodieSchema = HoodieSchema.fromAvroSchema(sourceRecords.head.getSchema)
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(
       BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue.toInt, BLOOM_FILTER_FPP_VALUE.defaultValue.toDouble,
       BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue.toInt, BLOOM_FILTER_TYPE.defaultValue);

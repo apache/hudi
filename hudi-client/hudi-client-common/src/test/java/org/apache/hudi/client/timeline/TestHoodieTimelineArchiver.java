@@ -70,7 +70,7 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
         .build();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, metaClient.getStorageConf());
-    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());

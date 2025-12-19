@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.orc.TypeDescription;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,8 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Tests {@link AvroOrcUtils}.
  */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
-  public static final TypeDescription ORC_SCHEMA = AvroOrcUtils.createOrcSchema(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
-  public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(new Schema.Parser().parse(TRIP_SCHEMA));
+  public static final TypeDescription ORC_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA));
+  public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_SCHEMA));
 
   public static List<Arguments> testCreateOrcSchemaArgs() {
     // the ORC schema is constructed in the order as AVRO_SCHEMA:
@@ -60,7 +60,7 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
     // Tests the types FIXED, UNION
     String structField = "{\"type\":\"record\", \"name\":\"fare\",\"fields\": "
         + "[{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}";
-    Schema avroSchemaWithMoreTypes = new Schema.Parser().parse(
+    HoodieSchema schemaWithMoreTypes = HoodieSchema.parse(
         "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
             + "{\"name\" : \"age\", \"type\":{\"type\": \"fixed\", \"size\": 16, \"name\": \"fixedField\" }},"
             + "{\"name\" : \"height\", \"type\": [\"int\", \"null\"] },"
@@ -70,14 +70,14 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
         "struct<age:binary,height:int,id:uniontype<int,string>,fare:struct<amount:double,currency:string>>");
 
     return Arrays.asList(
-        Arguments.of(AVRO_SCHEMA, orcSchema),
-        Arguments.of(avroSchemaWithMoreTypes, orcSchemaWithMoreTypes)
+        Arguments.of(HOODIE_SCHEMA, orcSchema),
+        Arguments.of(schemaWithMoreTypes, orcSchemaWithMoreTypes)
     );
   }
 
   @ParameterizedTest
   @MethodSource("testCreateOrcSchemaArgs")
-  public void testCreateOrcSchema(Schema avroSchema, TypeDescription orcSchema) {
+  public void testCreateOrcSchema(HoodieSchema avroSchema, TypeDescription orcSchema) {
     TypeDescription convertedSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     assertEquals(orcSchema, convertedSchema);
   }

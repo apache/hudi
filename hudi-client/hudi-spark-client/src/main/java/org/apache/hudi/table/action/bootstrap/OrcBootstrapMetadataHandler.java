@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +36,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -57,17 +57,17 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+  HoodieSchema getSchema(StoragePath sourceFilePath) throws IOException {
     Reader orcReader = OrcFile.createReader(
         new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = orcReader.getSchema();
-    return AvroOrcUtils.createAvroSchema(orcSchema);
+    return AvroOrcUtils.createSchema(orcSchema);
   }
 
   @Override
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
                         StoragePath sourceFilePath, KeyGeneratorInterface keyGenerator,
-                        String partitionPath, Schema avroSchema) throws Exception {
+                        String partitionPath, HoodieSchema avroSchema) throws Exception {
     // TODO support spark orc reader
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
