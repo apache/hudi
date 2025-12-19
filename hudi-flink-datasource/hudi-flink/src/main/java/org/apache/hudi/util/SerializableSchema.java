@@ -40,7 +40,7 @@ import static org.apache.flink.table.api.DataTypes.ROW;
 /**
  * A serializable substitute for {@code ResolvedSchema}.
  */
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class SerializableSchema implements Serializable {
 
   private static final long serialVersionUID = 1L;
