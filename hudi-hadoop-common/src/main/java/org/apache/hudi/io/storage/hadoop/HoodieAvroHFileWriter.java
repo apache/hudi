@@ -23,6 +23,8 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -38,7 +40,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -70,13 +71,13 @@ public class HoodieAvroHFileWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final Option<Schema.Field> keyFieldSchema;
+  private final Option<HoodieSchemaField> keyFieldSchema;
   private HFileWriter writer;
   private String minRecordKey;
   private String maxRecordKey;
   private String prevRecordKey;
 
-  public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, Schema schema,
+  public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -84,7 +85,7 @@ public class HoodieAvroHFileWriter
     this.isWrapperFileSystem = fs instanceof HoodieWrapperFileSystem;
     this.wrapperFs = this.isWrapperFileSystem ? Option.of((HoodieWrapperFileSystem) fs) : Option.empty();
     this.hfileConfig = hfileConfig;
-    this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
+    this.keyFieldSchema = schema.getField(hfileConfig.getKeyFieldName());
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS

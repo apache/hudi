@@ -71,8 +71,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-    Schema schema = getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
-    return HoodieSchema.fromAvroSchema(schema);
+    return getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
   }
 
   @Override
