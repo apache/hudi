@@ -34,7 +34,7 @@ public class LanceTestUtils {
 
   /**
    * Create InternalRow with placeholder Hudi metadata fields + user data.
-   * The 5 Hudi metadata fields are populated with empty strings as placeholders.
+   * The 5 Hudi metadata fields are populated with null as placeholders.
    *
    * @param userValues User data values to append after the 5 metadata fields
    * @return InternalRow with 5 metadata fields + user values
@@ -42,12 +42,12 @@ public class LanceTestUtils {
   public static InternalRow createRowWithMetaFields(Object... userValues) {
     Object[] allValues = new Object[5 + userValues.length];
 
-    // Meta fields - use empty strings as placeholders (will be populated by writer)
-    allValues[0] = UTF8String.fromString(""); // commit_time
-    allValues[1] = UTF8String.fromString(""); // commit_seqno
-    allValues[2] = UTF8String.fromString(""); // record_key
-    allValues[3] = UTF8String.fromString(""); // partition_path
-    allValues[4] = UTF8String.fromString(""); // file_name
+    // Meta fields - use null as placeholders (will be populated by writer)
+    allValues[0] = null; // commit_time
+    allValues[1] = null; // commit_seqno
+    allValues[2] = null; // record_key
+    allValues[3] = null; // partition_path
+    allValues[4] = null; // file_name
 
     // Copy user values starting at index 5
     for (int i = 0; i < userValues.length; i++) {

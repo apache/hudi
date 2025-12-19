@@ -23,12 +23,12 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
-import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -45,8 +45,6 @@ import org.apache.spark.sql.util.LanceArrowUtils;
 import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.apache.spark.sql.vectorized.LanceArrowColumnVector;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -105,12 +103,12 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     return getRecordIterator(requestedSchema);
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema schema) throws IOException {
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator();
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
@@ -120,7 +118,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     //TODO to revisit adding support for when metadata fields are not persisted.
 
     // Get schema with only the record key field for efficient column pruning
-    Schema recordKeySchema = HoodieAvroUtils.getRecordKeySchema();
+    HoodieSchema recordKeySchema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(recordKeySchema);
 
     // Map each UnsafeRow to extract the record key string directly from index 0
@@ -161,9 +159,9 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) {
-    // Convert Avro schema to Spark StructType
-    StructType requestedSparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(requestedSchema);
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
+    // Convert HoodieSchema to Spark StructType
+    StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 
     BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
 
@@ -187,15 +185,13 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public Schema getSchema() {
+  public HoodieSchema getSchema() {
     // Read Arrow schema from Lance file and convert to Avro
     try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       org.apache.arrow.vector.types.pojo.Schema arrowSchema = reader.schema();
       StructType structType = LanceArrowUtils.fromArrowSchema(arrowSchema);
-      return SparkAdapterSupport$.MODULE$.sparkAdapter()
-              .getAvroSchemaConverters()
-              .toAvroType(structType, true, "record", "");
+      return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", true);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from Lance file: " + path, e);
     }

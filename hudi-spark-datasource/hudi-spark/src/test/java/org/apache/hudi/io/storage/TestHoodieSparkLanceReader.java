@@ -501,14 +501,14 @@ public class TestHoodieSparkLanceReader {
   }
     
   private HoodieSparkLanceReader writeAndCreateReader(StoragePath path, StructType schema, List<InternalRow> rows, boolean populateMetaFields) throws IOException {
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields);
-    for (InternalRow row : rows) {
-      HoodieKey key = new HoodieKey("key" + rows.indexOf(row), "default_partition");
-      // Note writeRowWithMetadata implicitly handles case where populateMetaFields=false
-      writer.writeRowWithMetadata(key, row);
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields)) {
+      for (InternalRow row : rows) {
+        HoodieKey key = new HoodieKey("key" + rows.indexOf(row), "default_partition");
+        // Note writeRowWithMetadata implicitly handles case where populateMetaFields=false
+        writer.writeRowWithMetadata(key, row);
+      }
     }
-    writer.close();
     return new HoodieSparkLanceReader(storage, path);
   }
 }
