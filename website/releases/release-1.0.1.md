@@ -7,8 +7,6 @@ last_modified_at: 2024-02-10T13:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.1](https://github.com/apache/hudi/releases/tag/release-1.0.1)
-
 ## Migration Guide
 
 * This release (1.0.1) does not introduce any new table version, thus no migration is needed if you are on 1.0.0.
@@ -31,7 +29,7 @@ import TabItem from '@theme/TabItem';
 * Unit, functional, integration tests and CI
 
 ## Known Regressions
-We have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and multiple partition fields.
+We have a ComplexKeyGenerator related regression reported [here](release-0.14.1.md#known-regressions). Please refrain from migrating, if you have single field as record key and multiple partition fields.
 
 :::tip
 Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key configured.

@@ -7,8 +7,6 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0)
-
 Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features 
 as we will see below.
 
@@ -172,7 +170,7 @@ experience the new features and enhancements.
 ## Known Regressions
 - We discovered a regression in Hudi 1.0.0 release for backwards compatible writer for MOR table.
 It can silently deletes committed data after upgrade when new data is ingested to the table.
-- We also have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and multiple fields as partition fields.
+- We also have a ComplexKeyGenerator related regression reported [here](release-0.14.1.md#known-regressions). Please refrain from migrating, if you have single field as record key and multiple fields as partition fields.
 
 :::tip
 Avoid upgrading any existing table to 1.0.0 if any of the above scenario matches your workload. Incase of backwards compatible writer for MOR table, you are good to upgrade to 1.0.2 release. 

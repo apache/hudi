@@ -7,8 +7,6 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.15.0](https://github.com/apache/hudi/releases/tag/release-0.15.0)
-
 Apache Hudi 0.15.0 release brings enhanced engine integration, new features, and improvements in several areas. These
 include Spark 3.5 and Scala 2.13 support, Flink 1.18 support, better Trino Hudi native connector support with newly
 introduced Hadoop-agnostic storage and I/O abstractions. We encourage users to review

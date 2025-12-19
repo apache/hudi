@@ -6,8 +6,6 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0-beta1](https://github.com/apache/hudi/releases/tag/release-1.0.0-beta1)
-
 Apache Hudi 1.0.0-beta1 is the first beta release of Apache Hudi. This release is meant for early adopters to try
 out the new features and provide feedback. The release is not meant for production use.
 

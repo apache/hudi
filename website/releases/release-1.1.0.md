@@ -4,8 +4,6 @@ layout: releases
 toc: true
 ---
 
-## [Release 1.1.0](https://github.com/apache/hudi/releases/tag/release-1.1.0)
-
 Apache Hudi 1.1.0 is a major release that brings significant performance improvements, new features, and important changes to the platform. This release focuses on enhanced table format support, improved indexing capabilities, expanded engine support, and modernized record merging APIs.
 
 ## Highlights
