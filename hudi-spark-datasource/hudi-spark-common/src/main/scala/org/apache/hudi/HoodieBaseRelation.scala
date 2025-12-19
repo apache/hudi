@@ -73,7 +73,7 @@ import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
 
-case class HoodieTableSchema(structTypeSchema: StructType, tableSchema: HoodieSchema, internalSchema: Option[InternalSchema] = None)
+case class HoodieTableSchema(structTypeSchema: StructType, schema: HoodieSchema, internalSchema: Option[InternalSchema] = None)
 
 case class HoodieTableState(tablePath: String,
                             latestCommitTimestamp: Option[String],
@@ -836,7 +836,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
         .getFileReader(hoodieConfig, filePath, HFILE)
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
-      val requiredSchema = requiredDataSchema.tableSchema
+      val requiredSchema = requiredDataSchema.schema
       val hoodieSchemaToRowConverter = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(requiredSchema, requiredRowSchema)
 
       reader.getRecordIterator(requiredSchema).asScala

@@ -88,7 +88,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            hoodieFileFormat: HoodieFileFormat)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
-  private lazy val schema = tableSchema.tableSchema
+  private lazy val schema = tableSchema.schema
 
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     HOption.ofNullable(
@@ -210,9 +210,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val exclusionFields = new java.util.HashSet[String]()
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
-    val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    val requestedHoodieSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedSchema, sanitizedTableName), exclusionFields)
-    val dataHoodieSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataSchema, sanitizedTableName), exclusionFields)
+    val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedSchema, sanitizedTableName), exclusionFields)
+    val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataSchema, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
 

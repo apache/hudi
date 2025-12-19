@@ -36,7 +36,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 
-import org.apache.avro.{Schema}
+import org.apache.avro.Schema
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._

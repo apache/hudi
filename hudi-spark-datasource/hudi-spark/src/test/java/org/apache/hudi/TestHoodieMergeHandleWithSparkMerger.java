@@ -182,8 +182,8 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     return writeConfig;
   }
 
-  public HoodieWriteConfig buildCustomWriteConfig(HoodieSchema hoodieSchema) {
-    HoodieWriteConfig writeConfig = getWriteConfig(hoodieSchema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
+  public HoodieWriteConfig buildCustomWriteConfig(HoodieSchema schema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(schema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
     return writeConfig;
   }

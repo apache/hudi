@@ -165,7 +165,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, fullPartitionPath)
 
         if (metaClient.isMetadataTable) {
-          val requestedSchema = requiredSchema.tableSchema
+          val requestedSchema = requiredSchema.schema
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
           val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
           val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.newBuilder()
@@ -176,7 +176,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
             .withProps(properties)
-            .withDataSchema(tableSchema.tableSchema)
+            .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
@@ -192,8 +192,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
             .withProps(properties)
-            .withDataSchema(tableSchema.tableSchema)
-            .withRequestedSchema(requiredSchema.tableSchema)
+            .withDataSchema(tableSchema.schema)
+            .withRequestedSchema(requiredSchema.schema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)

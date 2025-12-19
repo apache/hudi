@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.common.schema.HoodieSchema
-
 import org.apache.avro.Schema
 import org.apache.spark.sql.types.DataType
 
