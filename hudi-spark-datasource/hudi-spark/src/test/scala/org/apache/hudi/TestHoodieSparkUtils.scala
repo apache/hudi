@@ -112,7 +112,7 @@ class TestHoodieSparkUtils {
     // pass in evolved schema but with records serialized with old schema. should be able to convert with out any exception.
     // Before https://github.com/apache/hudi/pull/2927, this will throw exception.
     genRecRDD = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
-      org.apache.hudi.common.util.Option.of(evolSchema.toAvroSchema))
+      org.apache.hudi.common.util.Option.of(evolSchema))
     val genRecs = genRecRDD.collect()
     // if this succeeds w/o throwing any exception, test succeeded.
     assertEquals(genRecs.size, 5)
