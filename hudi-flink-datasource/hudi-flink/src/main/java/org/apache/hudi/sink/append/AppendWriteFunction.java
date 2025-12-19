@@ -181,14 +181,14 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     Map.Entry<HoodieKey, Throwable> firstFailure = null;
     for (WriteStatus status : writeStatus) {
       writeMetrics.increaseNumOfRecordWriteFailure(status.getTotalErrorRecords());
-      if (firstFailure == null && status.getErrors().size() > 0) {
+      if (firstFailure == null && !status.getErrors().isEmpty()) {
         firstFailure = status.getErrors().entrySet().stream().findFirst().get();
       }
     }
 
     // Only print the first record failure to prevent logs occupy too much disk in worst case.
     if (firstFailure != null) {
-      LOG.error("The first record with written failure {}", firstFailure.getKey().getRecordKey(), firstFailure.getValue());
+      log.error("The first record with written failure {}", firstFailure.getKey().getRecordKey(), firstFailure.getValue());
     }
   }
 }
