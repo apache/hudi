@@ -98,7 +98,7 @@ class TestHoodieSparkUtils {
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(recordsSeq), structType)
 
     var genRecRDD = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
-      org.apache.hudi.common.util.Option.of(HoodieSchema.fromAvroSchema(schema.toAvroSchema)))
+      org.apache.hudi.common.util.Option.of(schema))
     genRecRDD.collect()
 
     val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
@@ -106,13 +106,13 @@ class TestHoodieSparkUtils {
     recordsSeq = convertRowListToSeq(records)
 
     genRecRDD = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
-      org.apache.hudi.common.util.Option.of(HoodieSchema.fromAvroSchema(evolSchema.toAvroSchema)))
+      org.apache.hudi.common.util.Option.of(evolSchema))
     genRecRDD.collect()
 
     // pass in evolved schema but with records serialized with old schema. should be able to convert with out any exception.
     // Before https://github.com/apache/hudi/pull/2927, this will throw exception.
     genRecRDD = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
-      org.apache.hudi.common.util.Option.of(HoodieSchema.fromAvroSchema(evolSchema.toAvroSchema)))
+      org.apache.hudi.common.util.Option.of(evolSchema.toAvroSchema))
     val genRecs = genRecRDD.collect()
     // if this succeeds w/o throwing any exception, test succeeded.
     assertEquals(genRecs.size, 5)
