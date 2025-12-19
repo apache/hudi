@@ -29,6 +29,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -40,6 +44,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -128,7 +133,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testCreateHoodieWriteSchemaValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema(null, true));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema((String) null, true));
 
     // Should throw on empty schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema("", true));
@@ -1424,5 +1429,114 @@ public class TestHoodieSchemaUtils {
     HoodieSchema projectedSchema = HoodieSchemaUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
     assertEquals(expectedSchema, projectedSchema);
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(projectedSchema, expectedSchema, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullSchema() {
+    // Test with null schema - should return value unchanged
+    String testValue = "test_value";
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(null, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NullableSchema() {
+    // Test with null value and nullable schema - should return null
+    HoodieSchema nullableIntSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableIntSchema, null, false);
+    assertNull(result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NonNullableSchema() {
+    // Test with null value and non-nullable schema - should throw exception
+    HoodieSchema nonNullableSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertThrows(IllegalStateException.class, () ->
+        HoodieSchemaUtils.convertValueForSpecificDataTypes(nonNullableSchema, null, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DateLogicalType() {
+    // Create date schema
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+
+    // Test value: epoch days for 2023-01-01
+    int epochDays = 19358;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(dateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Enabled() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+
+    // Test value: milliseconds for 2023-01-01 00:00:00
+    long millis = 1672560000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(millis), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Disabled() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+    long millis = 1672560000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, false);
+    assertEquals(millis, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMicros_Enabled() {
+    // Create timestamp-micros schema
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
+
+    // Test value: microseconds for 2023-01-01 00:00:00
+    long micros = 1672560000000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMicrosSchema, micros, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(micros / 1000), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DecimalBytes() {
+    // Create decimal schema with precision=10, scale=2
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+
+    // Create test value: 1234.56
+    BigDecimal expectedDecimal = new BigDecimal("1234.56");
+    ByteBuffer byteBuffer = ByteBuffer.wrap(expectedDecimal.unscaledValue().toByteArray());
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(decimalSchema, byteBuffer, false);
+    assertNotNull(result);
+    assertTrue(result instanceof BigDecimal);
+    assertEquals(expectedDecimal, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NonLogicalType() {
+    // Test with non-logical type (plain string) - should return unchanged
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    String testValue = "test_string";
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(stringSchema, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_UnionWithNull() {
+    // Test with union type containing null
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+    HoodieSchema nullableDateSchema = HoodieSchema.createNullable(dateSchema);
+
+    // Test with non-null value
+    int epochDays = 19358; // 2023-01-01
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableDateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
   }
 }

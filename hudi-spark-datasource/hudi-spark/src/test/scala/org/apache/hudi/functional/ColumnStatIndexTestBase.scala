@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSparkUtils, PartitionStatsIndexSupport}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
@@ -69,7 +69,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .add("c7", StringType) // HUDI-8909. To support Byte w/ partition stats index.
       .add("c8", ByteType)
 
-  val sourceTableHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "record", ""))
+  val sourceTableHoodieSchema: HoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sourceTableSchema, "record", "")
 
   @BeforeEach
   override def setUp() {
@@ -299,7 +299,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
+    val localSourceTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -341,7 +341,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
+    val localSourceTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
 
     val pStatsIndex = new PartitionStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet

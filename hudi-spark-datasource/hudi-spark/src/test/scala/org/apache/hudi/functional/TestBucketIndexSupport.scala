@@ -21,6 +21,7 @@ import org.apache.hudi.BucketIndexSupport
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
@@ -33,7 +34,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.timeline.service.TimelineService
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{BucketPartitionUtils, HoodieCatalystExpressionUtils, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, PredicateHelper}
@@ -66,7 +66,7 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
       )
     )
 
-  val avroSchema = new Schema.Parser().parse(avroSchemaStr)
+  val schema = HoodieSchema.parse(avroSchemaStr)
 
   @BeforeEach
   override def setUp() {
@@ -148,19 +148,19 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
 
     // init
     val testKeyGenerator = new NonpartitionedKeyGenerator(configProperties)
-    var record = new GenericData.Record(avroSchema)
+    var record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "1")
     val bucket1Id4 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "2")
     val bucket2Id5 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "3")
     val bucket3Id6 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "4")
     val bucket4Id7 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "5")
     val bucket5Id8 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A", bucketNumber)
     assert(bucket1Id4 == 4 && bucket2Id5 == 5 && bucket3Id6 == 6 && bucket4Id7 == 7 && bucket5Id8 == 8)
@@ -263,23 +263,23 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
 
     // init
     val testKeyGenerator = new NonpartitionedKeyGenerator(configProperties)
-    var record = new GenericData.Record(avroSchema)
+    var record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "1")
     record.put("B", "2")
     val bucket1Id4 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "2")
     record.put("B", "3")
     val bucket2Id5 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "3")
     record.put("B", "4")
     val bucket3Id6 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "4")
     record.put("B", "5")
     val bucket4Id7 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "5")
     record.put("B", "6")
     val bucket5Id8 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
@@ -330,23 +330,23 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
 
     // init
     val testKeyGenerator = new ComplexKeyGenerator(configProperties)
-    var record = new GenericData.Record(avroSchema)
+    var record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "1")
     record.put("B", "2")
     val bucket1Id4 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "2")
     record.put("B", "3")
     val bucket2Id5 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "3")
     record.put("B", "4")
     val bucket3Id6 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "4")
     record.put("B", "5")
     val bucket4Id7 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)
-    record = new GenericData.Record(avroSchema)
+    record = new GenericData.Record(schema.toAvroSchema)
     record.put("A", "5")
     record.put("B", "6")
     val bucket5Id8 = BucketIdentifier.getBucketId(testKeyGenerator.getKey(record).getRecordKey, "A,B", bucketNumber)

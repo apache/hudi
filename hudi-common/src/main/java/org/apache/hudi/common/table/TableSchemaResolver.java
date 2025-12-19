@@ -111,6 +111,18 @@ public class TableSchemaResolver {
     return getTableAvroSchemaFromDataFileInternal().orElseThrow(schemaNotFoundError());
   }
 
+  /**
+   * Gets full schema (user + metadata) for a hoodie table from data file as HoodieSchema.
+   * Delegates to getTableAvroSchemaFromDataFile and wraps the result in a HoodieSchema.
+   *
+   * @return HoodieSchema for this table from data file
+   * @throws Exception
+   */
+  public HoodieSchema getTableSchemaFromDataFile() throws Exception {
+    Schema avroSchema = getTableAvroSchemaFromDataFile();
+    return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
   private Option<Schema> getTableAvroSchemaFromDataFileInternal() {
     return getTableParquetSchemaFromDataFile();
   }
@@ -148,6 +160,16 @@ public class TableSchemaResolver {
   public HoodieSchema getTableSchema(String timestamp) throws Exception {
     Schema avroSchema = getTableAvroSchema(timestamp);
     return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
+  /**
+   * Fetches HoodieSchema as of the given instant
+   *
+   * @param instant as of which table's schema will be fetched
+   */
+  public HoodieSchema getTableSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
+    Schema schema = getTableAvroSchema(instant, includeMetadataFields);
+    return HoodieSchema.fromAvroSchema(schema);
   }
 
   public Option<HoodieSchema> getTableSchemaIfPresent(boolean includeMetadataFields) {

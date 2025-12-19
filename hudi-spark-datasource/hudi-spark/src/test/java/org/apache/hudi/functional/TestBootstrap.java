@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -62,7 +63,6 @@ import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -165,7 +165,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     rtInputFormat.setConf(rtJobConf);
   }
 
-  public Schema generateNewDataSetAndReturnSchema(long timestamp, int numRecords, List<String> partitionPaths,
+  public HoodieSchema generateNewDataSetAndReturnSchema(long timestamp, int numRecords, List<String> partitionPaths,
       String srcPath) throws Exception {
     boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
     Dataset<Row> df =
@@ -184,8 +184,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
                 .orElse(null).get().getPath()).toString();
     HoodieAvroParquetReader parquetReader =
         new HoodieAvroParquetReader(metaClient.getStorage(), new StoragePath(filePath));
-    //TODO boundary to revisit in later pr to use HoodieSchema directly
-    return parquetReader.getSchema().toAvroSchema();
+    return parquetReader.getSchema();
   }
 
   @Test
@@ -254,7 +253,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     }
     List<String> partitions = partitioned ? Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03") : Collections.EMPTY_LIST;
     long timestamp = Instant.now().toEpochMilli();
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
+    HoodieSchema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
     HoodieWriteConfig config = getConfigBuilder(schema.toString())
         .withSchema(schema.toString())
         .withKeyGenerator(keyGeneratorClass)
@@ -372,13 +371,13 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     testBootstrapCommon(true, true, EffectiveMode.MIXED_BOOTSTRAP_MODE);
   }
 
-  private void checkBootstrapResults(int totalRecords, Schema schema, String maxInstant, boolean checkNumRawFiles,
+  private void checkBootstrapResults(int totalRecords, HoodieSchema schema, String maxInstant, boolean checkNumRawFiles,
       int expNumInstants, long expTimestamp, long expROTimestamp, boolean isDeltaCommit, boolean validateRecordsForCommitTime) throws Exception {
     checkBootstrapResults(totalRecords, schema, maxInstant, checkNumRawFiles, expNumInstants, expNumInstants,
         expTimestamp, expROTimestamp, isDeltaCommit, Arrays.asList(maxInstant), validateRecordsForCommitTime);
   }
 
-  private void checkBootstrapResults(int totalRecords, Schema schema, String instant, boolean checkNumRawFiles,
+  private void checkBootstrapResults(int totalRecords, HoodieSchema schema, String instant, boolean checkNumRawFiles,
       int expNumInstants, int numVersions, long expTimestamp, long expROTimestamp, boolean isDeltaCommit,
       List<String> instantsWithValidRecords, boolean validateRecordsForCommitTime) throws Exception {
     metaClient.reloadActiveTimeline();
@@ -421,7 +420,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
+        basePath, roJobConf, false, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
     Set<String> seenKeys = new HashSet<>();
     for (GenericRecord r : records) {
@@ -439,7 +438,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
+        basePath, rtJobConf, true, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
       assertEquals(r.get("_row_key").toString(), r.get("_hoodie_record_key").toString(), "Realtime Record :" + r);
@@ -455,7 +454,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES,
+        basePath, roJobConf, false, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES,
         true, HoodieRecord.HOODIE_META_COLUMNS);
     assertEquals(totalRecords, records.size());
     seenKeys = new HashSet<>();
@@ -472,7 +471,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, rtJobConf, true, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, true,
         HoodieRecord.HOODIE_META_COLUMNS);
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
@@ -487,7 +486,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, roJobConf, false, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
     assertEquals(totalRecords, records.size());
     seenKeys = new HashSet<>();
@@ -504,7 +503,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, rtJobConf, true, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
@@ -539,19 +538,19 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         throw new HoodieIOException(e.getMessage(), e);
       }
       MessageType parquetSchema = reader.getFooter().getFileMetaData().getSchema();
-      Schema schema =  new AvroSchemaConverter().convert(parquetSchema);
+      HoodieSchema schema = HoodieSchema.fromAvroSchema(new AvroSchemaConverter().convert(parquetSchema));
       return generateInputBatch(jsc, partitionPaths, schema);
     }
   }
 
   private static JavaRDD<HoodieRecord> generateInputBatch(JavaSparkContext jsc,
-      List<Pair<String, List<HoodieFileStatus>>> partitionPaths, Schema writerSchema) {
+      List<Pair<String, List<HoodieFileStatus>>> partitionPaths, HoodieSchema writerSchema) {
     List<Pair<String, Path>> fullFilePathsWithPartition = partitionPaths.stream().flatMap(p -> p.getValue().stream()
         .map(x -> Pair.of(p.getKey(), HadoopFSUtils.toPath(x.getPath())))).collect(Collectors.toList());
     return jsc.parallelize(fullFilePathsWithPartition.stream().flatMap(p -> {
       try {
         Configuration conf = jsc.hadoopConfiguration();
-        AvroReadSupport.setAvroReadSchema(conf, writerSchema);
+        AvroReadSupport.setAvroReadSchema(conf, writerSchema.toAvroSchema());
         Iterator<GenericRecord> recIterator = new ParquetReaderIterator(
             AvroParquetReader.<GenericRecord>builder(p.getValue()).withConf(conf).build());
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(recIterator, 0), false).map(gr -> {

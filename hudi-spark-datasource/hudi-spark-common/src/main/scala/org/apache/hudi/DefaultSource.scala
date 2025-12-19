@@ -391,8 +391,8 @@ object DefaultSource {
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)
       try {
-        val avroSchema = schemaResolver.getTableAvroSchema
-        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+        val schema = schemaResolver.getTableSchema
+        HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
       } catch {
         case _: Exception =>
           if (schema.isEmpty || schema.get == null) {

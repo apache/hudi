@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
@@ -30,7 +30,6 @@ import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.SparkDatasetTestUtils
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
@@ -48,7 +47,7 @@ import org.junit.jupiter.params.provider.MethodSource
 class TestDataSourceDefaults extends ScalaAssertionSupport {
 
   val schema: HoodieSchema = SchemaTestUtil.getComplexEvolvedSchema
-  val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema)
+  val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
   var baseRecord: GenericRecord = _
   var baseRow: Row = _
   var internalRow: InternalRow = _
@@ -625,14 +624,14 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val props = new TypedProperties()
     OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "favoriteIntNumber")
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
-    val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
+    val fieldSchema: HoodieSchema = HoodieSchema.fromAvroSchema(baseRecord.getSchema().getField("favoriteIntNumber").schema())
 
-    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
+    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
     val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
-    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
+    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it always returns the latest payload.
     val preCombinedPayload = basePayload.preCombine(newerPayload)
@@ -641,7 +640,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue(): Unit = {
-    val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
+    val fieldSchema: HoodieSchema = HoodieSchema.fromAvroSchema(baseRecord.getSchema().getField("favoriteIntNumber").schema())
     val props = HoodiePayloadConfig.newBuilder()
       .withPayloadOrderingFields("favoriteIntNumber").build().getProps;
 
@@ -654,10 +653,10 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val earlierOrderingVal: Object = earlierRecord.get("favoriteIntNumber")
 
     val laterPayload = new DefaultHoodieRecordPayload(laterRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
+      HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     val earlierPayload = new DefaultHoodieRecordPayload(earlierRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]])
+      HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = laterPayload.preCombine(earlierPayload)

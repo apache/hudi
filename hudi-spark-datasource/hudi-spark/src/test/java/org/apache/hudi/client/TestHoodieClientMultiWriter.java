@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -70,7 +71,6 @@ import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionS
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
-import org.apache.avro.Schema;
 import org.apache.curator.test.TestingServer;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
@@ -410,8 +410,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Validate table schema in the end.
     TableSchemaResolver r = new TableSchemaResolver(metaClient);
-    Schema s = r.getTableAvroSchema(false);
-    assertEquals(s, new Schema.Parser().parse(expectedTableSchemaAfterResolution));
+    HoodieSchema s = r.getTableSchema(false);
+    assertEquals(s, HoodieSchema.parse(expectedTableSchemaAfterResolution));
 
     FileIOUtils.deleteDirectory(new File(basePath));
     client1.close();

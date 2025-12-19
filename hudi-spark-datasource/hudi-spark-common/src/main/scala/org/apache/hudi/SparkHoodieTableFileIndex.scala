@@ -113,7 +113,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
-    AvroConversionUtils.convertAvroSchemaToStructType(rawHoodieSchema.toAvroSchema)
+    HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(rawHoodieSchema)
   }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)

@@ -17,12 +17,13 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +36,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.scheduler.SparkListener;
@@ -73,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase {
 
   private String schemaStr;
-  private transient Schema schema;
+  private transient HoodieSchema schema;
   private StructType structType;
 
   public TestHoodieDatasetBulkInsertHelper() throws IOException {
@@ -92,7 +92,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   private void init() throws IOException {
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = DataSourceTestUtils.getStructTypeExampleSchema();
-    structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
   }
 
   @Test

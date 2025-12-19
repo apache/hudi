@@ -308,6 +308,31 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Creates a new schema field with the specified properties, including field order.
+   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   *
+   * @param name         field name
+   * @param schema       field schema
+   * @param doc          field documentation (can be null)
+   * @param defaultValue default value (can be null)
+   * @param order        field order for sorting
+   * @return new HoodieSchemaField instance
+   * @throws IllegalArgumentException if name, schema, or order is null/empty
+   * @since 1.2.0
+   */
+  public static HoodieSchemaField createNewSchemaField(String name, HoodieSchema schema,
+                                                       String doc, Object defaultValue, HoodieFieldOrder order) {
+    ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
+    ValidationUtils.checkArgument(schema != null, "Field schema cannot be null");
+    ValidationUtils.checkArgument(order != null, "Field order cannot be null");
+
+    // Delegate to HoodieAvroUtils
+    Schema.Field avroField = HoodieAvroUtils.createNewSchemaField(
+        name, schema.toAvroSchema(), doc, defaultValue, order.toAvroOrder());
+    return HoodieSchemaField.fromAvroField(avroField);
+  }
+
+  /**
    * Creates a new HoodieSchemaField from an existing field.
    * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
    *
@@ -587,6 +612,43 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Converts field values for specific data types with logical type handling.
+   * This is equivalent to HoodieAvroUtils.convertValueForSpecificDataTypes() but operates on HoodieSchema.
+   * <p>
+   * Handles special conversions for Avro logical types:
+   * <ul>
+   *   <li>Date type - converts epoch day integer to LocalDate</li>
+   *   <li>Timestamp types - converts epoch milliseconds/microseconds to Timestamp</li>
+   *   <li>Decimal type - converts bytes/fixed to BigDecimal</li>
+   * </ul>
+   *
+   * @param fieldSchema the field schema
+   * @param fieldValue the field value to convert
+   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp handling
+   * @return converted value for logical types, or original value
+   * @throws IllegalStateException if fieldValue is null but schema is not nullable
+   * @since 1.2.0
+   */
+  public static Object convertValueForSpecificDataTypes(HoodieSchema fieldSchema,
+                                                        Object fieldValue,
+                                                        boolean consistentLogicalTimestampEnabled) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    } else if (fieldValue == null) {
+      ValidationUtils.checkState(fieldSchema.isNullable(),
+          "Field value is null but schema is not nullable");
+      return null;
+    }
+
+    // Delegate to existing Avro utility
+    return HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema.toAvroSchema(),
+        fieldValue,
+        consistentLogicalTimestampEnabled
+    );
+  }
+
+  /**
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
    * the top level field, b is at second level and so on.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
@@ -597,5 +659,26 @@ public final class HoodieSchemaUtils {
    */
   public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
     return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
+  }
+
+  /**
+   * Gets the fully-qualified Avro record name for a Hudi table.
+   * This is equivalent to {@link AvroSchemaUtils#getAvroRecordQualifiedName(String)}
+   * but provides a HoodieSchema-context API.
+   *
+   * <p>The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
+   * where tableName is sanitized for Avro compatibility.</p>
+   *
+   * @param tableName the Hudi table name
+   * @return the fully-qualified Avro record name (e.g., "hoodie.my_table.my_table_record")
+   * @throws IllegalArgumentException if tableName is null or empty
+   * @since 1.2.0
+   */
+  public static String getRecordQualifiedName(String tableName) {
+    ValidationUtils.checkArgument(tableName != null && !tableName.trim().isEmpty(),
+        "Table name cannot be null or empty");
+
+    // Delegate to AvroSchemaUtils
+    return AvroSchemaUtils.getAvroRecordQualifiedName(tableName);
   }
 }

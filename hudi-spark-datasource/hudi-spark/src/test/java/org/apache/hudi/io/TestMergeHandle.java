@@ -89,7 +89,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -364,7 +363,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     for (Map.Entry<String, HoodieRecord> entry : inputAndExpectedDataSet.getExpectedRecordsMap().entrySet()) {
       assertTrue(actualRecordsMap.containsKey(entry.getKey()));
-      GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) entry.getValue().getData()).getInsertValue(AVRO_SCHEMA, properties).get();
+      GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) entry.getValue().getData()).getInsertValue(HOODIE_SCHEMA.getAvroSchema(), properties).get();
       assertEquals(genericRecord.get(ORDERING_FIELD).toString(), actualRecordsMap.get(entry.getKey()).get(ORDERING_FIELD).toString());
     }
 
@@ -417,7 +416,7 @@ public class TestMergeHandle extends BaseTestHandle {
             || inputAndExpectedDataSet.getValidUpdates().stream().anyMatch(rec -> rec.getRecordKey().equals(secondaryIndexStat.getRecordKey())));
       } else {
         HoodieRecord record = inputAndExpectedDataSet.expectedRecordsMap.get(secondaryIndexStat.getRecordKey());
-        assertEquals(record.getColumnValueAsJava(AVRO_SCHEMA, "rider", properties).toString(),
+        assertEquals(record.getColumnValueAsJava(HOODIE_SCHEMA.getAvroSchema(), "rider", properties).toString(),
             secondaryIndexStat.getSecondaryKeyValue().toString());
       }
     }
