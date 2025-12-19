@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -37,7 +38,6 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -119,7 +119,7 @@ public class OrcUtils extends FileFormatUtils {
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(convertToHadoopPath(filePath), OrcFile.readerOptions(conf));
 
-      Schema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
+      HoodieSchema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
 
@@ -135,28 +135,28 @@ public class OrcUtils extends FileFormatUtils {
    */
   @Override
   public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath) {
-    Schema avroSchema;
+    HoodieSchema schema;
     try (Reader reader = OrcFile.createReader(
         convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
-      avroSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
+      schema = AvroOrcUtils.createSchema(reader.getSchema());
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read Avro records from an ORC file:" + filePath, io);
     }
-    return readAvroRecords(storage, filePath, avroSchema);
+    return readAvroRecords(storage, filePath, schema);
   }
 
   /**
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   @Override
-  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema avroSchema) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema) {
     List<GenericRecord> records = new ArrayList<>();
     try (Reader reader = OrcFile.createReader(
         convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       TypeDescription orcSchema = reader.getSchema();
       try (RecordReader recordReader = reader.rows(
           new Options(storage.getConf().unwrapAs(Configuration.class)).schema(orcSchema))) {
-        OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
+        OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, schema, orcSchema);
         while (iterator.hasNext()) {
           GenericRecord record = iterator.next();
           records.add(record);
@@ -242,16 +242,16 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
+  public HoodieSchema readHoodieSchema(HoodieStorage storage, StoragePath filePath) {
     try (Reader reader = OrcFile.createReader(
         convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = toBytes(metadataValue);
-        return new Schema.Parser().parse(new String(bytes));
+        return HoodieSchema.parse(new String(bytes));
       } else {
         TypeDescription orcSchema = reader.getSchema();
-        return AvroOrcUtils.createAvroSchema(orcSchema);
+        return AvroOrcUtils.createSchema(orcSchema);
       }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get Avro schema for ORC file:" + filePath, io);
@@ -283,7 +283,7 @@ public class OrcUtils extends FileFormatUtils {
   public void writeMetaFile(HoodieStorage storage, StoragePath filePath, Properties props) throws IOException {
     // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
     // parameters are not important.
-    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     OrcFile.WriterOptions writerOptions = OrcFile.writerOptions(storage.getConf().unwrapAs(Configuration.class))
         .fileSystem((FileSystem) storage.getFileSystem())
         .setSchema(AvroOrcUtils.createOrcSchema(schema));
@@ -307,9 +307,9 @@ public class OrcUtils extends FileFormatUtils {
   @Override
   public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(HoodieStorage storage,
                                                                         Iterator<HoodieRecord> records,
-                                                                        HoodieRecord.HoodieRecordType recordType,
-                                                                        Schema writerSchema,
-                                                                        Schema readerSchema,
+                                                                        HoodieRecordType recordType,
+                                                                        HoodieSchema writerSchema,
+                                                                        HoodieSchema readerSchema,
                                                                         String keyFieldName,
                                                                         Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("Hudi log blocks do not support ORC format yet");

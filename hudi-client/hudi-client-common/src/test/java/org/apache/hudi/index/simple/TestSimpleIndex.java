@@ -100,7 +100,7 @@ class TestSimpleIndex extends HoodieCommonTestHarness {
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(HoodieRecord::isCurrentLocationKnown));
 
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, conf);
-    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
 
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();

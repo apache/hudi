@@ -108,7 +108,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
-    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA.toAvroSchema());
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
@@ -205,7 +205,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
-    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), filter);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA, filter);
     String fileId = testTable.addCommit("000").getFileIdWithInserts(partition, record1, record2);
     String filename = testTable.getBaseFileNameById(fileId);
 
@@ -266,7 +266,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     // Also create the metadata and config
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieFlinkTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
-    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA.toAvroSchema());
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
@@ -317,7 +317,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     // Also create the metadata and config
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
-    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA.toAvroSchema());
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
@@ -384,7 +384,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
-    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), filter);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA, filter);
     String fileId = testTable.addCommit("000").getFileIdWithInserts("2016/01/31", record1);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));

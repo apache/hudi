@@ -36,7 +36,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -66,7 +65,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+  HoodieSchema getSchema(StoragePath sourceFilePath) throws IOException {
     ParquetMetadata readFooter = ParquetFileReader.readFooter(
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
@@ -79,7 +78,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   StoragePath sourceFilePath,
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
-                                  Schema schema) throws Exception {
+                                  HoodieSchema schema) throws Exception {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
     HoodieFileReader reader = getHoodieSparkIOFactory(table.getStorage()).getReaderFactory(recordType)
@@ -88,7 +87,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieExecutor<Void> executor = null;
     try {
       Function<HoodieRecord, HoodieRecord> transformer = record -> {
-        String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));
+        String recordKey = record.getRecordKey(schema.toAvroSchema(), Option.of(keyGenerator));
         return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordType)
             // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
             //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
@@ -96,7 +95,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             .copy();
       };
       //TODO boundary to reivisit in later pr to use HoodieSchema directly
-      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema));
+      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
       executor = ExecutorFactory.create(config, recordIterator,
           new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
       executor.execute();
