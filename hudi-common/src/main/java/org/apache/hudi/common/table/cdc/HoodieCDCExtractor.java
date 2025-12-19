@@ -345,9 +345,7 @@ public class HoodieCDCExtractor {
           // get files list from unfinished compaction commit
           List<StoragePath> filesToCompact = new ArrayList<>();
           AtomicReference<String> lastBaseFile =  new AtomicReference<>();
-          metaClient.getActiveTimeline().getInstants().stream().filter(
-                  i -> i.compareTo(instant) < 0 && !i.isCompleted() && i.getAction()
-                      .equals(HoodieActiveTimeline.COMPACTION_ACTION))
+          metaClient.getActiveTimeline().filterPendingCompactionTimeline().filter(i -> i.compareTo(instant) < 0).getInstants()
               .forEach(i -> {
                 try {
                   metaClient.getActiveTimeline().readCompactionPlan(i).getOperations()
