@@ -29,7 +29,7 @@ import TabItem from '@theme/TabItem';
 * Unit, functional, integration tests and CI
 
 ## Known Regressions
-We have a ComplexKeyGenerator related regression reported [here](release-0.14.1.md#known-regressions). Please refrain from migrating, if you have single field as record key and multiple partition fields.
+We have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and multiple partition fields.
 
 :::tip
 Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key configured.

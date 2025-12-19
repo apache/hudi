@@ -31,7 +31,7 @@ The 1.0.2 release primarily focuses on bug fixes, stability enhancements, and cr
 * **Testing, CI, and Dependencies:** Fixes for flaky tests, improved code coverage, bundle validation, dependency cleanup (HBase removal), and extensive release testing.
 
 ## Known Regressions
-We have a ComplexKeyGenerator related regression reported [here](release-0.14.1.md#known-regressions). Please refrain from migrating, if you have single field as record key and mutiple partition fields.
+We have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and mutiple partition fields.
 
 :::tip
 Avoid upgrading any existing table to 1.0.2 if you are using ComplexKeyGenerator with single record key configured.
