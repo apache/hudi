@@ -156,7 +156,7 @@ public class HoodieStreamerUtils {
           StructType baseStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(processedSchema);
           StructType targetStructType = isDropPartitionColumns(props) ? HoodieSchemaConversionUtils
               .convertHoodieSchemaToStructType(HoodieSchemaUtils.removeFields(processedSchema, partitionColumns)) : baseStructType;
-          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedSchema.toAvroSchema(), baseStructType);
+          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedSchema, baseStructType);
 
           return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
             InternalRow row = (InternalRow) deserializer.deserialize(rec).get();
