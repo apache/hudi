@@ -95,7 +95,7 @@ object HoodieSchemaConversionUtils {
   }
 
   /**
-   * Converts StructType to HoodieSchema.
+   * Converts StructType to HoodieSchema with nullable = false.
    *
    * @param structType Catalyst's StructType or DataType
    * @param structName Schema record name
@@ -106,8 +106,25 @@ object HoodieSchemaConversionUtils {
   def convertStructTypeToHoodieSchema(structType: DataType,
                                       structName: String,
                                       recordNamespace: String): HoodieSchema = {
+    convertStructTypeToHoodieSchema(structType, structName, recordNamespace, nullable = false)
+  }
+
+  /**
+   * Converts StructType to HoodieSchema.
+   *
+   * @param structType Catalyst's StructType or DataType
+   * @param structName Schema record name
+   * @param recordNamespace Schema record namespace
+   * @param nullable Whether the top-level schema should be nullable
+   * @return HoodieSchema corresponding to the Spark DataType
+   * @throws HoodieSchemaException if conversion fails
+   */
+  def convertStructTypeToHoodieSchema(structType: DataType,
+                                      structName: String,
+                                      recordNamespace: String,
+                                      nullable: Boolean): HoodieSchema = {
     try {
-      HoodieSparkSchemaConverters.toHoodieType(structType, nullable = false, structName, recordNamespace)
+      HoodieSparkSchemaConverters.toHoodieType(structType, nullable, structName, recordNamespace)
     } catch {
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert struct type to HoodieSchema: $structType", e)
