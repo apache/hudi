@@ -97,13 +97,13 @@ public interface CompletionTimeQueryView extends AutoCloseable {
 
   /**
    *  Get Cursor Instant
-   * @return
+   * @return {@link String}
    */
   String getCursorInstant();
 
   /**
    * Return true if the table is empty.
-   * @return
+   * @return {@code true} if the table is empty, {@code false} otherwise.
    */
   boolean isEmptyTable();
 }

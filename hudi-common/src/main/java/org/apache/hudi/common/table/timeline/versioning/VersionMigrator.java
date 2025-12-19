@@ -30,7 +30,7 @@ public interface VersionMigrator<T> extends Serializable {
   /**
    * Version of Metadata that this class will handle.
    * 
-   * @return
+   * @return Version handled by this class.
    */
   Integer getManagedVersion();
 

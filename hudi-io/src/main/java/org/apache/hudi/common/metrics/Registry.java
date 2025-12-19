@@ -64,7 +64,7 @@ public interface Registry extends Serializable {
    *
    * @param flush clear all metrics after this operation.
    * @param prefixWithRegistryName prefix each metric name with the registry name.
-   * @return
+   * @return {@link Map} of metrics name and value
    */
   static Map<String, Long> getAllMetrics(boolean flush, boolean prefixWithRegistryName) {
     synchronized (Registry.class) {

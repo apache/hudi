@@ -25,19 +25,19 @@ public interface InstantComparator extends Serializable {
 
   /**
    * Returns Comparator that only uses action for ordering taking into account equivalent actions.
-   * @return
+   * @return {@link Comparator<HoodieInstant>}
    */
   Comparator<HoodieInstant> actionOnlyComparator();
 
   /**
    * Returns comparator that orders primarily based on timestamp and secondary ordering based on action and state.
-   * @return
+   * @return {@link Comparator<HoodieInstant>}
    */
   Comparator<HoodieInstant> requestedTimeOrderedComparator();
 
   /**
    * Returns comparator that orders primarily based on completion time and secondary ordering based on {@link #requestedTimeOrderedComparator()}.
-   * @return
+   * @return {@link Comparator<HoodieInstant>}
    */
   Comparator<HoodieInstant> completionTimeOrderedComparator();
 }
