@@ -647,6 +647,7 @@ public final class HoodieSchemaUtils {
         consistentLogicalTimestampEnabled
     );
   }
+
   /**
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
    * the top level field, b is at second level and so on.
