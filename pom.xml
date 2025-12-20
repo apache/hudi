@@ -122,7 +122,7 @@
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.10</hive.version>
+    <hive.version>4.0.1</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>

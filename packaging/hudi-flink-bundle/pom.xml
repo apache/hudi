@@ -37,7 +37,7 @@
     <javax.servlet.version>3.1.0</javax.servlet.version>
     <!-- override to be same with flink 1.15.x -->
     <parquet.version>${flink.format.parquet.version}</parquet.version>
-    <hive.version>2.3.4</hive.version>
+    <hive.version>4.0.1</hive.version>
     <thrift.version>0.9.3</thrift.version>
   </properties>
 
