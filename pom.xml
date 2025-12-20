@@ -184,7 +184,7 @@
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
-    <scala-maven-plugin.version>4.9.3</scala-maven-plugin.version>
+    <scala-maven-plugin.version>4.9.8</scala-maven-plugin.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <!-- TODO (HUDI-9401): Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
     <scalatest.spark4.version>3.1.4</scalatest.spark4.version>
@@ -2691,7 +2691,6 @@
         <glassfish.version>3.0.12</glassfish.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
