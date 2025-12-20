@@ -1556,26 +1556,6 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
-  void testHasListOrMapField() {
-    HoodieSchema nestedList = HoodieSchema.createRecord("nestedList", null, null, false, Arrays.asList(
-        HoodieSchemaField.of("intField", HoodieSchema.create(HoodieSchemaType.INT), null, null),
-        HoodieSchemaField.of("nested", HoodieSchema.createRecord("nestedSchema", null, null, false, Collections.singletonList(
-            HoodieSchemaField.of("listField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
-        )), null, null)
-    ));
-    HoodieSchema nestedMap = HoodieSchema.createRecord("nestedMap", null, null, false, Arrays.asList(
-        HoodieSchemaField.of("intField", HoodieSchema.create(HoodieSchemaType.INT), null, null),
-        HoodieSchemaField.of("nested", HoodieSchema.createNullable(
-            HoodieSchema.createRecord("nestedSchema", null, null, false,
-                Collections.singletonList(HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
-                ))), null, null)
-    ));
-    assertTrue(HoodieSchemaUtils.hasListOrMapField(nestedList));
-    assertTrue(HoodieSchemaUtils.hasListOrMapField(nestedMap));
-    assertFalse(HoodieSchemaUtils.hasListOrMapField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
-  }
-
-  @Test
   void testHasDecimalField() {
     assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(EVOLVED_SCHEMA)));

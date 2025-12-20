@@ -724,28 +724,4 @@ public final class HoodieSchemaUtils {
   private static boolean isSmallPrecisionDecimalField(HoodieSchema.Decimal decimal) {
     return decimal.getPrecision() <= 18;
   }
-
-  /**
-   * Checks whether the provided schema contains a list or map field.
-   * @param schema input
-   * @return true if a list or map is present, false otherwise
-   */
-  public static boolean hasListOrMapField(HoodieSchema schema) {
-    switch (schema.getType()) {
-      case RECORD:
-        for (HoodieSchemaField field : schema.getFields()) {
-          if (hasListOrMapField(field.schema())) {
-            return true;
-          }
-        }
-        return false;
-      case ARRAY:
-      case MAP:
-        return true;
-      case UNION:
-        return hasListOrMapField(schema.getNonNullType());
-      default:
-        return false;
-    }
-  }
 }
