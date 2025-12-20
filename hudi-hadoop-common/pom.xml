@@ -152,12 +152,6 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>com.github.stefanbirkner</groupId>
-      <artifactId>system-rules</artifactId>
-      <version>1.17.2</version>
-      <scope>test</scope>
-    </dependency>
     <!-- Lance Core SDK -->
     <dependency>
       <groupId>com.lancedb</groupId>
