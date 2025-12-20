@@ -29,7 +29,7 @@ public interface TimelinePathProvider {
    * Provide Active Timeline path.
    * @param tableConfig HoodieTableConfig
    * @param basePath BasePath of the Table
-   * @return {@link StoragePath}
+   * @return {@link StoragePath} containing the path to the active timeline.
    */
   StoragePath getTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
 
@@ -37,7 +37,7 @@ public interface TimelinePathProvider {
    * Provides archived timeline path.
    * @param tableConfig HoodieTableConfig
    * @param basePath BasePath of the Table
-   * @return {@link StoragePath}
+   * @return {@link StoragePath} containing the path to the archived timeline.
    */
   StoragePath getTimelineHistoryPath(HoodieTableConfig tableConfig, StoragePath basePath);
 

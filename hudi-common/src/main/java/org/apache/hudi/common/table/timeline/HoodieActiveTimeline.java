@@ -46,7 +46,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Return Valid extensions expected in active timeline.
-   * @return {@link Set<String>}
+   * @return {@link Set<String>} of extensions that are valid in active timeline.
    */
   Set<String> getValidExtensionsInActiveTimeline();
 
@@ -434,7 +434,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Valid Extensions in active timeline.
-   * @return {@link Set<String>}
+   * @return {@link Set<String>} of valid extensions.
    */
   Set<String> getValidExtensions();
 }

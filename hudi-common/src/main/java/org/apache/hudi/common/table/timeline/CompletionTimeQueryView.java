@@ -97,7 +97,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
 
   /**
    *  Get Cursor Instant
-   * @return {@link String}
+   * @return {@link String} instant time of the cursor.
    */
   String getCursorInstant();
 
