@@ -112,7 +112,7 @@
     <confluent.version>5.5.0</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.10.1</parquet.version>
+    <parquet.version>1.15.2</parquet.version>
     <junit.jupiter.version>5.13.4</junit.jupiter.version>
     <junit.vintage.version>5.13.4</junit.vintage.version>
     <junit.platform.version>1.13.4</junit.platform.version>
@@ -123,7 +123,7 @@
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.10</hive.version>
-    <hive.parquet.version>1.10.1</hive.parquet.version>
+    <hive.parquet.version>1.15.2</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
@@ -154,7 +154,7 @@
     <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.11.4</flink.avro.version>
-    <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+    <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
     <!-- check kafka version -->
     <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
@@ -215,7 +215,7 @@
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <presto.commons-lang3.version>3.18.0</presto.commons-lang3.version>
     <presto.parquet.version>1.15.2</presto.parquet.version>
-    <trino.parquet.version>1.15.1</trino.parquet.version>
+    <trino.parquet.version>1.15.2</trino.parquet.version>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <twitter.chill.version>0.10.0</twitter.chill.version>
