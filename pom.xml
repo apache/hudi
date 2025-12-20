@@ -85,7 +85,7 @@
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>3.5.4</maven-failsafe-plugin.version>
     <!-- bump to 3.5.3 to fix MSHADE-461 -->
-    <maven-shade-plugin.version>3.6.3</maven-shade-plugin.version>
+    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
