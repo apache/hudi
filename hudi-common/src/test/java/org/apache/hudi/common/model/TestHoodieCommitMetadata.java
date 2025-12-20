@@ -29,15 +29,14 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.util.FileIOUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.reflect.ReflectData;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -59,8 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
  */
+@Slf4j
 public class TestHoodieCommitMetadata {
-  private static final Logger LOGGER = LoggerFactory.getLogger(TestHoodieCommitMetadata.class);
 
   private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(
       "partitionToWriteStats", "compacted", "extraMetadata", "operationType");

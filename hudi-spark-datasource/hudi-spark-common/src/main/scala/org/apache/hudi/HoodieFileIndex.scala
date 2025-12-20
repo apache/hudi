@@ -174,7 +174,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val slices = filterFileSlices(dataFilters, partitionFilters).flatMap(
       { case (partitionOpt, fileSlices) =>
-        fileSlices.filter(!_.isEmpty).map(fs => ( InternalRow.fromSeq(partitionOpt.get.values), fs))
+        fileSlices.filter(!_.isEmpty).map(fs => ( InternalRow.fromSeq(partitionOpt.get.getValues), fs))
       }
     )
     prepareFileSlices(slices)

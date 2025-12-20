@@ -38,6 +38,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
@@ -211,6 +212,7 @@ public class HoodieAdaptablePayloadDataGenerator {
             Option.of(SCHEMA.toAvroSchema()));
   }
 
+  @Getter
   public static class RecordGen {
 
     public static final Set<Class<?>> SUPPORTED_PAYLOAD_CLASSES = new HashSet<>(Arrays.asList(
@@ -236,14 +238,6 @@ public class HoodieAdaptablePayloadDataGenerator {
       } else {
         orderingField = "ts";
       }
-    }
-
-    public Class<?> getPayloadClass() {
-      return payloadClass;
-    }
-
-    public String getOrderingField() {
-      return orderingField;
     }
 
     GenericRecord populateForInsert(GenericRecord r, long ts) {
