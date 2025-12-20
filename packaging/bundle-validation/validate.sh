@@ -300,10 +300,7 @@ test_metaserver_bundle () {
 ##
 test_cli_bundle() {
     echo "::warning::validate.sh setting up CLI bundle validation"
-
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
-        change_java_runtime_version
-    fi
+    change_java_runtime_version
 
     # Create a temporary directory for CLI commands output
     CLI_TEST_DIR="/tmp/hudi-bundles/tests/log"
@@ -411,7 +408,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk11' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then

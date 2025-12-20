@@ -107,11 +107,7 @@ stop_hdfs() {
 }
 
 build_hudi () {
-  if [ "$SPARK_PROFILE" = "spark4.0" ]; then
-    change_java_runtime_version
-  else
-    use_default_java_runtime
-  fi
+  change_java_runtime_version
 
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
     -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log \
