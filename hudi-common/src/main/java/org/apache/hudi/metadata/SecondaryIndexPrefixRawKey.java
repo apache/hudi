@@ -19,46 +19,18 @@
 
 package org.apache.hudi.metadata;
 
-import java.util.Objects;
+import lombok.Value;
 
 /**
  * Represents a secondary index key, whose raw content is the column value of the data table.
  */
+@Value
 public class SecondaryIndexPrefixRawKey implements RawKey {
-  private final String secondaryKey;
 
-  public SecondaryIndexPrefixRawKey(String secondaryKey) {
-    this.secondaryKey = secondaryKey;
-  }
+  String secondaryKey;
 
   @Override
   public String encode() {
     return SecondaryIndexKeyUtils.getEscapedSecondaryKeyPrefixFromSecondaryKey(secondaryKey);
-  }
-
-  public String getSecondaryKey() {
-    return secondaryKey;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    SecondaryIndexPrefixRawKey that = (SecondaryIndexPrefixRawKey) o;
-    return Objects.equals(secondaryKey, that.secondaryKey);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(secondaryKey);
-  }
-
-  @Override
-  public String toString() {
-    return "SecondaryIndexKey{" + "secondaryKey='" + secondaryKey + '\'' + '}';
   }
 }

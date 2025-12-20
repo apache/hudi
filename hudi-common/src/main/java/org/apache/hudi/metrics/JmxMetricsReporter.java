@@ -22,8 +22,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.management.MBeanServer;
 
@@ -35,9 +34,8 @@ import java.util.stream.IntStream;
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.
  */
+@Slf4j
 public class JmxMetricsReporter extends MetricsReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JmxMetricsReporter.class);
 
   private final MetricRegistry registry;
   private JmxReporterServer jmxReporterServer;
@@ -62,10 +60,10 @@ public class JmxMetricsReporter extends MetricsReporter {
             "Could not start JMX server on any configured port. Ports: " + portsConfig
                 + ". Maybe require port range for multiple hoodie tables");
       }
-      LOG.info("Configured JMXReporter with {port:" + portsConfig + "}");
+      log.info("Configured JMXReporter with {port:" + portsConfig + "}");
     } catch (Exception e) {
       String msg = "Jmx initialize failed: ";
-      LOG.error(msg, e);
+      log.error(msg, e);
       throw new HoodieException(msg, e);
     }
   }
@@ -78,13 +76,13 @@ public class JmxMetricsReporter extends MetricsReporter {
     for (int port : ports) {
       try {
         jmxReporterServer = createJmxReport(host, port);
-        LOG.info("Started JMX server on port " + port + ".");
+        log.info("Started JMX server on port " + port + ".");
         break;
       } catch (Exception e) {
         if (e.getCause() instanceof ExportException) {
-          LOG.info("Skip for initializing jmx port " + port + " because of already in use");
+          log.info("Skip for initializing jmx port " + port + " because of already in use");
         } else {
-          LOG.info("Failed to initialize jmx port " + port + ". " + e.getMessage());
+          log.info("Failed to initialize jmx port " + port + ". " + e.getMessage());
         }
       }
     }
@@ -95,7 +93,7 @@ public class JmxMetricsReporter extends MetricsReporter {
     if (isServerCreated()) {
       jmxReporterServer.start();
     } else {
-      LOG.error("Cannot start as the jmxReporter is null.");
+      log.error("Cannot start as the jmxReporter is null.");
     }
   }
 

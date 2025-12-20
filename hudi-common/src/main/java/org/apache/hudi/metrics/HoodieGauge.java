@@ -19,34 +19,17 @@
 package org.apache.hudi.metrics;
 
 import com.codahale.metrics.Gauge;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Similar to {@link Gauge}, but metric value can be updated by {@link #setValue(T)}.
  */
+@AllArgsConstructor
+@Getter
+@Setter
 public class HoodieGauge<T> implements Gauge<T> {
+
   private volatile T value;
-
-  /**
-   * Create an instance with a default value.
-   */
-  public HoodieGauge(T value) {
-    this.value = value;
-  }
-
-  /**
-   * Set the metric to a new value.
-   */
-  public void setValue(T value) {
-    this.value = value;
-  }
-
-  /**
-   * Returns the metric's current value.
-   *
-   * @return the metric's current value
-   */
-  @Override
-  public T getValue() {
-    return value;
-  }
 }

@@ -26,6 +26,9 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.parquet.schema.PrimitiveType;
 
@@ -40,19 +43,13 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
  * Used for wrapping and unwrapping col stat values
  * as well as for type promotion
  */
+@AllArgsConstructor(access = AccessLevel.PROTECTED)
+@Getter
 public class ValueMetadata implements Serializable {
 
   private static final ParquetAdapter PARQUET_ADAPTER = ParquetAdapter.getAdapter();
 
   private final ValueType valueType;
-
-  protected ValueMetadata(ValueType valueType) {
-    this.valueType = valueType;
-  }
-
-  public ValueType getValueType() {
-    return valueType;
-  }
 
   public HoodieValueTypeInfo getValueTypeInfo() {
     return HoodieValueTypeInfo.newBuilder()
@@ -157,23 +154,15 @@ public class ValueMetadata implements Serializable {
       return new DecimalMetadata(precision, scale);
     }
 
+    @Getter
     private final int precision;
+    @Getter
     private final int scale;
 
     private DecimalMetadata(int precision, int scale) {
       super(ValueType.DECIMAL);
       this.precision = precision;
       this.scale = scale;
-    }
-
-    @Override
-    public int getPrecision() {
-      return precision;
-    }
-
-    @Override
-    public int getScale() {
-      return scale;
     }
 
     @Override

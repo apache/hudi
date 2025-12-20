@@ -44,8 +44,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -62,14 +62,15 @@ import java.util.stream.Collectors;
 /**
  * Abstract class for implementing common table metadata operations.
  */
+@Slf4j
 public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseTableMetadata.class);
 
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
+  @Getter
   protected final HoodieMetadataConfig metadataConfig;
 
+  @Getter
   protected boolean isMetadataTableInitialized;
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
@@ -164,14 +165,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   @Override
   public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName, final String metadataPartitionName) throws HoodieMetadataException {
     if (!dataMetaClient.getTableConfig().getMetadataPartitions().contains(metadataPartitionName)) {
-      LOG.error("Metadata bloom filter index is disabled!");
+      log.error("Metadata bloom filter index is disabled!");
       return Option.empty();
     }
 
     final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
     Map<Pair<String, String>, BloomFilter> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName), metadataPartitionName);
     if (bloomFilters.isEmpty()) {
-      LOG.error("Meta index: missing bloom filter for partition: {}, file: {}", partitionName, fileName);
+      log.error("Meta index: missing bloom filter for partition: {}, file: {}", partitionName, fileName);
       return Option.empty();
     }
 
@@ -183,7 +184,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList, final String metadataPartitionName)
       throws HoodieMetadataException {
     if (!dataMetaClient.getTableConfig().getMetadataPartitions().contains(metadataPartitionName)) {
-      LOG.error("Metadata bloom filter index is disabled!");
+      log.error("Metadata bloom filter index is disabled!");
       return Collections.emptyMap();
     }
     if (partitionNameFileNameList.isEmpty()) {
@@ -228,7 +229,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getKey()), bloomFilter);
         }
       } else {
-        LOG.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey()));
+        log.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey()));
       }
     }
     return partitionFileToBloomFilterMap;
@@ -246,7 +247,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   public Map<Pair<String, String>, List<HoodieMetadataColumnStats>> getColumnStats(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames)
       throws HoodieMetadataException {
     if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS)) {
-      LOG.error("Metadata column stats index is disabled!");
+      log.error("Metadata column stats index is disabled!");
       return Collections.emptyMap();
     }
 
@@ -276,7 +277,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     })
         .orElse(Collections.emptyList());
 
-    LOG.info("Listed partitions from metadata: #partitions={}", partitions.size());
+    log.info("Listed partitions from metadata: #partitions={}", partitions.size());
     return partitions;
   }
 
@@ -305,7 +306,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         })
         .orElseGet(Collections::emptyList);
 
-    LOG.debug("Listed file in partition from metadata: partition={}, #files={}", relativePartitionPath, pathInfoList.size());
+    log.debug("Listed file in partition from metadata: partition={}, #files={}", relativePartitionPath, pathInfoList.size());
     return pathInfoList;
   }
 
@@ -350,7 +351,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
             })
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    LOG.info("Listed files in {} partitions from metadata", partitionPaths.size());
+    log.info("Listed files in {} partitions from metadata", partitionPaths.size());
 
     return partitionPathToFilesMap;
   }
@@ -409,7 +410,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
         fileToColumnStatMap.computeIfAbsent(partitionFileNamePair, k -> new ArrayList<>()).add(columnStatMetadata.get());
       } else {
-        LOG.error("Meta index column stats missing for {}", entry.getKey());
+        log.error("Meta index column stats missing for {}", entry.getKey());
       }
     }
     return fileToColumnStatMap;
@@ -421,7 +422,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   private void checkForSpuriousDeletes(HoodieMetadataPayload metadataPayload, String partitionName) {
     if (!metadataPayload.getDeletions().isEmpty()) {
       if (metadataConfig.shouldIgnoreSpuriousDeletes()) {
-        LOG.warn("Metadata record for {} encountered some files to be deleted which were not added before."
+        log.warn("Metadata record for {} encountered some files to be deleted which were not added before."
                 + " Ignoring the spurious deletes as the `{}` config is set to true",
             partitionName, HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key());
       } else {
@@ -472,10 +473,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   public abstract HoodiePairData<String, String> readSecondaryIndexDataTableRecordKeysWithKeys(HoodieData<String> keys, String partitionName);
 
-  public HoodieMetadataConfig getMetadataConfig() {
-    return metadataConfig;
-  }
-
   protected StorageConfiguration<?> getStorageConf() {
     return dataMetaClient.getStorageConf();
   }
@@ -483,9 +480,5 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected String getLatestDataInstantTime() {
     return dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
         .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-  }
-
-  public boolean isMetadataTableInitialized() {
-    return isMetadataTableInitialized;
   }
 }

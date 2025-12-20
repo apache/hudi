@@ -27,8 +27,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,12 +39,12 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * This is the main class of the metrics system.
  */
+@Slf4j
 public class Metrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
 
   private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
 
+  @Getter
   private final MetricRegistry registry;
   private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
@@ -106,14 +106,14 @@ public class Metrics {
         if (reporter.isPresent()) {
           reporterList.add(reporter.get());
         } else {
-          LOG.error(String.format("Could not create reporter using properties path %s base path %s",
+          log.error(String.format("Could not create reporter using properties path %s base path %s",
               propPath, metricConfig.getBasePath()));
         }
       }
     } catch (IOException e) {
-      LOG.error("Failed to add MetricsExporters", e);
+      log.error("Failed to add MetricsExporters", e);
     }
-    LOG.info("total additional metrics reporters added =" + reporterList.size());
+    log.info("total additional metrics reporters added =" + reporterList.size());
     return reporterList;
   }
 
@@ -125,16 +125,16 @@ public class Metrics {
     if (!fromShutdownHook) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     } else {
-      LOG.debug("Shutting down the metrics reporter from shutdown hook.");
+      log.debug("Shutting down the metrics reporter from shutdown hook.");
     }
     if (initialized) {
       try {
         registerHoodieCommonMetrics();
         reporters.forEach(MetricsReporter::report);
-        LOG.info("Stopping the metrics reporter...");
+        log.info("Stopping the metrics reporter...");
         reporters.forEach(MetricsReporter::stop);
       } catch (Exception e) {
-        LOG.warn("Error while closing reporter", e);
+        log.warn("Error while closing reporter", e);
       } finally {
         METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
         initialized = false;
@@ -144,13 +144,13 @@ public class Metrics {
 
   public synchronized void flush() {
     try {
-      LOG.info("Reporting and flushing all metrics");
+      log.info("Reporting and flushing all metrics");
       registerHoodieCommonMetrics();
       reporters.forEach(MetricsReporter::report);
       registry.getNames().forEach(this.registry::remove);
       registerHoodieCommonMetrics();
     } catch (Exception e) {
-      LOG.error("Error while reporting and flushing metrics", e);
+      log.error("Error while reporting and flushing metrics", e);
     }
   }
 
@@ -167,17 +167,13 @@ public class Metrics {
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
       // metrics system has some issues.
-      LOG.error("Failed to send metrics: ", e);
+      log.error("Failed to send metrics: ", e);
     }
     return Option.ofNullable(gauge);
   }
 
   public Option<HoodieGauge<Long>> registerGauge(String metricName) {
     return registerGauge(metricName, 0);
-  }
-
-  public MetricRegistry getRegistry() {
-    return registry;
   }
 
   public static boolean isInitialized(String basePath) {

@@ -23,53 +23,21 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@AllArgsConstructor
+@Getter
 public class HoodieHFileConfig {
+
+  private final StorageConfiguration storageConf;
   private final CompressionCodec compressionCodec;
   private final int blockSize;
   private final long maxFileSize;
-  private final StorageConfiguration storageConf;
-  private final BloomFilter bloomFilter;
   private final String keyFieldName;
-
-  public HoodieHFileConfig(StorageConfiguration storageConf,
-                           CompressionCodec compressionCodec,
-                           int blockSize,
-                           long maxFileSize,
-                           String keyFieldName,
-                           BloomFilter bloomFilter) {
-    this.storageConf = storageConf;
-    this.compressionCodec = compressionCodec;
-    this.blockSize = blockSize;
-    this.maxFileSize = maxFileSize;
-    this.bloomFilter = bloomFilter;
-    this.keyFieldName = keyFieldName;
-  }
-
-  public StorageConfiguration getStorageConf() {
-    return storageConf;
-  }
-
-  public CompressionCodec getCompressionCodec() {
-    return compressionCodec;
-  }
-
-  public int getBlockSize() {
-    return blockSize;
-  }
-
-  public long getMaxFileSize() {
-    return maxFileSize;
-  }
+  private final BloomFilter bloomFilter;
 
   public boolean useBloomFilter() {
     return bloomFilter != null;
-  }
-
-  public BloomFilter getBloomFilter() {
-    return bloomFilter;
-  }
-
-  public String getKeyFieldName() {
-    return keyFieldName;
   }
 }

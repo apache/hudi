@@ -25,6 +25,9 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Types;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -40,16 +43,14 @@ public interface TableChange {
   /**
    * The action Type of schema change.
    */
+  @Getter
   enum ColumnChangeID {
     ADD, UPDATE, DELETE, PROPERTY_CHANGE, REPLACE;
+
     private final String name;
 
     ColumnChangeID() {
       this.name = this.name().toLowerCase(Locale.ROOT);
-    }
-
-    public String getName() {
-      return name;
     }
   }
 
@@ -185,7 +186,10 @@ public interface TableChange {
    * AFTER/BEFORE means the given columns should in the same struct;
    * FIRST means this field should be the first one within the struct.
    */
+  @AllArgsConstructor
+  @Getter
   class ColumnPositionChange {
+
     public enum ColumnPositionType {
       FIRST,
       BEFORE,
@@ -240,24 +244,6 @@ public interface TableChange {
         default:
           throw new IllegalArgumentException(String.format("only support first/before/after but found: %s", type));
       }
-    }
-
-    private ColumnPositionChange(int srcId, int dsrId, ColumnPositionType type) {
-      this.srcId = srcId;
-      this.dsrId = dsrId;
-      this.type = type;
-    }
-
-    public int getSrcId() {
-      return srcId;
-    }
-
-    public int getDsrId() {
-      return dsrId;
-    }
-
-    public ColumnPositionType type() {
-      return type;
     }
   }
 }

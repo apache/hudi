@@ -42,11 +42,10 @@ import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -70,8 +69,9 @@ import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
 /**
  * An implementation of {@link HoodieAvroHFileReaderImplBase} using native {@link HFileReader}.
  */
+@Slf4j
 public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieNativeAvroHFileReader.class);
+
   // Keys of the meta info that should be preloaded on demand from the HFile
   private static final Set<String> PRELOADED_META_INFO_KEYS = new HashSet<>(
       Arrays.asList(KEY_MIN_RECORD, KEY_MAX_RECORD, SCHEMA_KEY));
@@ -140,7 +140,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             try {
               return reader.seekTo(new UTF8StringKey(k)) == HFileReader.SEEK_TO_FOUND;
             } catch (IOException e) {
-              LOG.error("Failed to check key availability: " + k);
+              log.error("Failed to check key availability: " + k);
               return false;
             }
           })
@@ -426,7 +426,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         try {
           bloomFilter = readBloomFilter(reader);
         } catch (HoodieException e) {
-          LOG.warn("Unable to read bloom filter from HFile", e);
+          log.warn("Unable to read bloom filter from HFile", e);
         }
       }
       this.bloomFilterOption = Option.ofNullable(bloomFilter);

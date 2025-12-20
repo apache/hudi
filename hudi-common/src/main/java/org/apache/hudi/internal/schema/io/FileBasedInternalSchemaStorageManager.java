@@ -22,19 +22,18 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,8 +50,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * {@link AbstractInternalSchemaStorageManager} implementation based on the schema files.
  */
+@Slf4j
 public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchemaStorageManager {
-  private static final Logger LOG = LoggerFactory.getLogger(FileBasedInternalSchemaStorageManager.class);
 
   public static final String SCHEMA_NAME = ".schema";
   private final StoragePath baseSchemaPath;
@@ -96,7 +95,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     timeline.saveAsComplete(false, metaClient.createNewInstant(
         HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.requestedTime()),
         Option.of(HoodieInstantWriter.convertByteArrayToWriter(writeContent)));
-    LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
+    log.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 
   private void cleanResidualFiles() {
@@ -167,7 +166,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
           byte[] content;
           try (InputStream is = storage.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
-            LOG.info(String.format("read history schema success from file : %s", latestFilePath));
+            log.info(String.format("read history schema success from file : %s", latestFilePath));
             return fromUTF8Bytes(content);
           } catch (IOException e) {
             throw new HoodieIOException("Could not read history schema from " + latestFilePath, e);
@@ -177,7 +176,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     } catch (IOException io) {
       throw new HoodieException(io);
     }
-    LOG.info("failed to read history schema");
+    log.info("failed to read history schema");
     return "";
   }
 

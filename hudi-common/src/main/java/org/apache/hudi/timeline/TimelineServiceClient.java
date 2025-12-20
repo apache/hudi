@@ -20,10 +20,8 @@ package org.apache.hudi.timeline;
 
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.utils.URIBuilder;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -33,9 +31,9 @@ import java.util.concurrent.TimeUnit;
  * to the Timeline Server from the executors.
  * This class uses the Fluent HTTP client part of the HTTPComponents.
  */
+@Slf4j
 public class TimelineServiceClient extends TimelineServiceClientBase {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineServiceClient.class);
   private static final String DEFAULT_SCHEME = "http";
 
   protected final String timelineServerHost;
@@ -59,7 +57,7 @@ public class TimelineServiceClient extends TimelineServiceClientBase {
     }
 
     String url = builder.toString();
-    LOG.debug("Sending request : ({})", url);
+    log.debug("Sending request : ({})", url);
     org.apache.http.client.fluent.Response response = get(request.getMethod(), url, timeoutMs);
     return new Response(response.returnContent().asStream());
   }

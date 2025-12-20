@@ -22,6 +22,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.config.RequestConfig;
@@ -33,8 +36,6 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -44,9 +45,8 @@ import java.io.IOException;
  * <p>
  * Responsible for API endpoint routing, validating API key, and sending requests with metrics payload.
  */
+@Slf4j
 public class DatadogHttpClient implements Closeable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DatadogHttpClient.class);
 
   private static final String DEFAULT_HOST = "app.us.datadoghq";
   private static final String SERIES_URL_FORMAT = "https://%s.%s/api/v1/series";
@@ -103,12 +103,12 @@ public class DatadogHttpClient implements Closeable {
     try (CloseableHttpResponse response = client.execute(request)) {
       int statusCode = response.getStatusLine().getStatusCode();
       if (statusCode >= 300) {
-        LOG.error("Failed to send to Datadog. Response was {}", response);
+        log.error("Failed to send to Datadog. Response was {}", response);
       } else {
-        LOG.debug("Sent metrics data (size: {}) to {}", payload.length(), seriesUrl);
+        log.debug("Sent metrics data (size: {}) to {}", payload.length(), seriesUrl);
       }
     } catch (IOException e) {
-      LOG.warn("Failed to send to Datadog.", e);
+      log.warn("Failed to send to Datadog.", e);
     }
   }
 
@@ -117,17 +117,11 @@ public class DatadogHttpClient implements Closeable {
     client.close();
   }
 
+  @AllArgsConstructor
+  @Getter
   public enum ApiSite {
     US("com"), EU("eu");
 
     private final String domain;
-
-    ApiSite(String domain) {
-      this.domain = domain;
-    }
-
-    public String getDomain() {
-      return domain;
-    }
   }
 }
