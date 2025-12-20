@@ -119,9 +119,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Max number of seconds before compaction occurs
   public static final ConfigProperty<String> COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.seconds")
-      .defaultValue(String.valueOf(24 * 60 * 60))
+      .defaultValue(String.valueOf(2 * 60 * 60))
       .markAdvanced()
-      .sinceVersion("1.1.0")
+      .sinceVersion("1.2.0")
       .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a "
       + "new one (for metadata table). "
       + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
@@ -132,7 +132,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX +  ".compact.trigger.strategy")
       .defaultValue("NUM_COMMITS")
       .markAdvanced()
-      .sinceVersion("1.1.0")
+      .sinceVersion("1.2.0")
       .withDocumentation("Controls how compaction scheduling is triggered for metadata table,"
       + "by time or num delta commits or combination of both. ");
 
