@@ -291,7 +291,7 @@ A Hudi Streamer job can then be triggered as follows:
 
 ```java
 [hoodie]$ spark-submit \
-  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.1.jar" \
+  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.0.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.0.jar" \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
