@@ -15,9 +15,9 @@ env:
 jobs:
   validate-release-maven-artifacts:
     runs-on: ubuntu-latest
-    if: false
+    if: true
     env:
-      HUDI_VERSION: 1.0.0
+      HUDI_VERSION: 1.1.1
       MAVEN_BASE_URL: 'https://repo1.maven.org/maven2'
     strategy:
       matrix:
