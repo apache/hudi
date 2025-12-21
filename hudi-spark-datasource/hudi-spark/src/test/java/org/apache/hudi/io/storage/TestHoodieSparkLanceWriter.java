@@ -94,21 +94,21 @@ public class TestHoodieSparkLanceWriter {
     StructType schema = createSchemaWithMetaFields();
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_with_metadata.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, true);
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, true)) {
+      // Create row with PLACEHOLDER meta fields + user data
+      InternalRow row = createRowWithMetaFields(1, "Alice", 30L);
+      HoodieKey key = new HoodieKey("key1", "partition1");
 
-    // Create row with PLACEHOLDER meta fields + user data
-    InternalRow row = createRowWithMetaFields(1, "Alice", 30L);
-    HoodieKey key = new HoodieKey("key1", "partition1");
-
-    writer.writeRowWithMetadata(key, row);
-    writer.close();
+      writer.writeRowWithMetadata(key, row);
+    }
 
     // Verify using LanceFileReader
     assertTrue(storage.exists(path), "Lance file should exist");
 
     try (BufferAllocator allocator = new RootAllocator();
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
+         ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
       assertEquals(1, reader.numRows(), "Should have 1 record");
 
@@ -116,7 +116,6 @@ public class TestHoodieSparkLanceWriter {
       assertEquals(8, reader.schema().getFields().size(), "Should have 8 fields");
 
       // Read and verify data
-      ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE);
       assertTrue(arrowReader.loadNextBatch(), "Should load batch");
       VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
@@ -147,8 +146,6 @@ public class TestHoodieSparkLanceWriter {
 
       BigIntVector ageVector = (BigIntVector) root.getVector("age");
       assertEquals(30L, ageVector.get(0), "Age should match");
-
-      arrowReader.close();
     }
   }
 

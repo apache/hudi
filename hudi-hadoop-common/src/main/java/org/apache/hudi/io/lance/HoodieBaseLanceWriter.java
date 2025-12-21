@@ -111,17 +111,6 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   }
 
   /**
-   * Check if writer can accept more records based on file size.
-   * Uses filesystem-based size checking (similar to ORC/HFile approach).
-   *
-   * @return true if writer can accept more records, false if file size limit reached
-   */
-  public boolean canWrite() {
-    //TODO will need to implement proper way to compute this
-    return true;
-  }
-
-  /**
    * Get the total number of records written so far.
    *
    * @return Number of records written
