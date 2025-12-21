@@ -35,10 +35,11 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.hive.common.StringInternUtils;
@@ -392,7 +393,9 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       Arrays.stream(paths).forEach(path -> {
         final HoodieStorage storage;
         try {
-          storage = new HoodieHadoopStorage(path.getFileSystem(job));
+          FileSystem fs = path.getFileSystem(job);
+          storage = HoodieStorageUtils.getStorage(
+              HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
           Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
           if (tablePath.isPresent()) {
             uniqTablePaths.add(tablePath.get().toUri().toString());

@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
@@ -69,7 +69,7 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
         .withProperties(advanceProperties)
         .build();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, metaClient.getStorageConf());
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, metaClient.getStorageConf());
     HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());

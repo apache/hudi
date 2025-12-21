@@ -54,8 +54,10 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.format.FlinkReaderContextFactory;
@@ -500,7 +502,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.recordBuilder = new GenericRecordBuilder(requiredSchema.getAvroSchema());
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
       StoragePath hadoopTablePath = new StoragePath(tablePath);
-      HoodieStorage storage = new HoodieHadoopStorage(tablePath, hadoopConf);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(hadoopConf));
       HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream().map(cdcFile -> {
         try {
           return new HoodieLogFile(

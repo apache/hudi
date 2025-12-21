@@ -33,8 +33,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -91,7 +93,10 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
                                     Boolean isNullTargetSchema, Boolean hasErrorTable, Boolean shouldTryWriteToErrorTable) {
     //basic deltastreamer inputs
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+            HadoopFSUtils.getStorageConf(new Configuration()),
+        new Class<?>[] {FileSystem.class}, 
+        mock(FileSystem.class));
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
@@ -285,7 +290,10 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
     // setup
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        new HadoopStorageConfiguration(new Configuration()), 
+        new Class<?>[] {FileSystem.class}, 
+        mock(FileSystem.class));
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);
     SourceFormatAdapter sourceFormatAdapter = mock(SourceFormatAdapter.class);

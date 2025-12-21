@@ -41,7 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.Assertions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -141,7 +141,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // expected all 'No'.
-    String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(new HoodieHadoopStorage(fs), tablePath)
+    String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(
+        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs), tablePath)
         .stream()
         .map(partition -> new String[] {partition, "No", "None"})
         .toArray(String[][]::new);
@@ -171,7 +172,8 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     Object result = shell.evaluate(() -> "repair addpartitionmeta --dryrun false");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(new HoodieHadoopStorage(fs), tablePath);
+    List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(
+        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs), tablePath);
     // after dry run, the action will be 'Repaired'
     String[][] rows = paths.stream()
         .map(partition -> new String[] {partition, "No", "Repaired"})
