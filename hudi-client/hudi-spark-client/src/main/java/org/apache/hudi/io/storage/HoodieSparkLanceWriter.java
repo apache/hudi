@@ -46,7 +46,7 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECO
  *
  * This writer integrates with Hudi's storage I/O layer and supports:
  * - Hudi metadata field population
- * - Record key tracking (for bloom filters - TODO)
+ * - Record key tracking (for bloom filters - TODO https://github.com/apache/hudi/issues/17664)
  * - Sequence ID generation
  */
 public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> implements HoodieSparkFileWriter {

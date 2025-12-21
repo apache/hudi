@@ -96,11 +96,12 @@ public class TestHoodieSparkLanceWriter {
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_with_metadata.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
         path, schema, instantTime, taskContextSupplier, storage, true)) {
-      // Create row with PLACEHOLDER meta fields + user data
-      InternalRow row = createRowWithMetaFields(1, "Alice", 30L);
-      HoodieKey key = new HoodieKey("key1", "partition1");
-
-      writer.writeRowWithMetadata(key, row);
+      // Write multiple records to test metadata population and sequence ID generation
+      for (int i = 0; i < 3; i++) {
+        InternalRow row = createRowWithMetaFields(i, "User" + i, 20L + i);
+        HoodieKey key = new HoodieKey("key" + i, "partition1");
+        writer.writeRowWithMetadata(key, row);
+      }
     }
 
     // Verify using LanceFileReader
@@ -110,7 +111,7 @@ public class TestHoodieSparkLanceWriter {
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
-      assertEquals(1, reader.numRows(), "Should have 1 record");
+      assertEquals(3, reader.numRows(), "Should have 3 records");
 
       // Schema should have 5 meta fields + 3 user fields = 8 fields
       assertEquals(8, reader.schema().getFields().size(), "Should have 8 fields");
@@ -119,13 +120,13 @@ public class TestHoodieSparkLanceWriter {
       assertTrue(arrowReader.loadNextBatch(), "Should load batch");
       VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
-      // Verify meta fields were populated
+      // Verify meta fields were populated for first record
       VarCharVector commitTimeVector = (VarCharVector) root.getVector(COMMIT_TIME_METADATA_FIELD.getFieldName());
       assertNotNull(commitTimeVector);
       assertEquals(instantTime, new String(commitTimeVector.get(0)), "Commit time should match");
 
       VarCharVector recordKeyVector = (VarCharVector) root.getVector(RECORD_KEY_METADATA_FIELD.getFieldName());
-      assertEquals("key1", new String(recordKeyVector.get(0)), "Record key should match");
+      assertEquals("key0", new String(recordKeyVector.get(0)), "Record key should match");
 
       VarCharVector partitionPathVector = (VarCharVector) root.getVector(PARTITION_PATH_METADATA_FIELD.getFieldName());
       assertEquals("partition1", new String(partitionPathVector.get(0)), "Partition path should match");
@@ -133,19 +134,25 @@ public class TestHoodieSparkLanceWriter {
       VarCharVector fileNameVector = (VarCharVector) root.getVector(FILENAME_METADATA_FIELD.getFieldName());
       assertEquals(path.getName(), new String(fileNameVector.get(0)), "File name should match");
 
+      // Verify sequence IDs are unique and properly formatted
       VarCharVector seqNoVector = (VarCharVector) root.getVector(COMMIT_SEQNO_METADATA_FIELD.getFieldName());
-      String seqNo = new String(seqNoVector.get(0));
-      assertTrue(seqNo.startsWith(instantTime), "Sequence number should start with instant time");
+      List<String> seqNos = new ArrayList<>();
+      for (int i = 0; i < 3; i++) {
+        String seqNo = new String(seqNoVector.get(i));
+        assertTrue(seqNo.startsWith(instantTime + "_"), "Sequence number should start with instant time");
+        seqNos.add(seqNo);
+      }
+      assertEquals(3, seqNos.stream().distinct().count(), "All sequence IDs should be unique");
 
-      // Verify user data fields
+      // Verify user data fields for first record
       IntVector idVector = (IntVector) root.getVector("id");
-      assertEquals(1, idVector.get(0), "ID should match");
+      assertEquals(0, idVector.get(0), "ID should match");
 
       VarCharVector nameVector = (VarCharVector) root.getVector("name");
-      assertEquals("Alice", new String(nameVector.get(0)), "Name should match");
+      assertEquals("User0", new String(nameVector.get(0)), "Name should match");
 
       BigIntVector ageVector = (BigIntVector) root.getVector("age");
-      assertEquals(30L, ageVector.get(0), "Age should match");
+      assertEquals(20L, ageVector.get(0), "Age should match");
     }
   }
 
@@ -155,21 +162,21 @@ public class TestHoodieSparkLanceWriter {
     StructType schema = createSchemaWithoutMetaFields();
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_without_metadata.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      // Create row with just user data (no meta fields)
+      InternalRow row = createRow(1, "Bob", 25L);
+      HoodieKey key = new HoodieKey("key2", "partition2");
 
-    // Create row with just user data (no meta fields)
-    InternalRow row = createRow(1, "Bob", 25L);
-    HoodieKey key = new HoodieKey("key2", "partition2");
-
-    writer.writeRowWithMetadata(key, row);
-    writer.close();
+      writer.writeRowWithMetadata(key, row);
+    }
 
     // Verify using LanceFileReader
     assertTrue(storage.exists(path));
 
     try (BufferAllocator allocator = new RootAllocator();
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
+         ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
       assertEquals(1, reader.numRows());
 
@@ -177,7 +184,6 @@ public class TestHoodieSparkLanceWriter {
       assertEquals(3, reader.schema().getFields().size(), "Should have only user fields");
 
       // Read and verify data
-      ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE);
       assertTrue(arrowReader.loadNextBatch());
       VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
@@ -191,8 +197,6 @@ public class TestHoodieSparkLanceWriter {
 
       VarCharVector nameVector = (VarCharVector) root.getVector("name");
       assertEquals("Bob", new String(nameVector.get(0)));
-
-      arrowReader.close();
     }
   }
 
@@ -201,12 +205,11 @@ public class TestHoodieSparkLanceWriter {
     StructType schema = createSchemaWithoutMetaFields();
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_simple_write.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
-
-    InternalRow row = createRow(1, "Charlie", 35L);
-    writer.writeRow("key3", row);
-    writer.close();
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      InternalRow row = createRow(1, "Charlie", 35L);
+      writer.writeRow("key3", row);
+    }
 
     // Verify file exists and has correct record count
     try (BufferAllocator allocator = new RootAllocator();
@@ -216,62 +219,19 @@ public class TestHoodieSparkLanceWriter {
   }
 
   @Test
-  public void testSequenceIdGeneration() throws Exception {
-    StructType schema = createSchemaWithMetaFields();
-
-    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_sequence_id.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, true);
-
-    // Write multiple records
-    for (int i = 0; i < 3; i++) {
-      InternalRow row = createRowWithMetaFields(i, "User" + i, 20L + i);
-      HoodieKey key = new HoodieKey("key" + i, "partition1");
-      writer.writeRowWithMetadata(key, row);
-    }
-    writer.close();
-
-    // Verify sequence IDs are unique and properly formatted
-    try (BufferAllocator allocator = new RootAllocator();
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
-
-      assertEquals(3, reader.numRows());
-
-      ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE);
-      arrowReader.loadNextBatch();
-      VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
-
-      VarCharVector seqNoVector = (VarCharVector) root.getVector(COMMIT_SEQNO_METADATA_FIELD.getFieldName());
-
-      List<String> seqNos = new ArrayList<>();
-      for (int i = 0; i < 3; i++) {
-        String seqNo = new String(seqNoVector.get(i));
-        assertTrue(seqNo.startsWith(instantTime + "_"), "Sequence ID should start with instantTime");
-        seqNos.add(seqNo);
-      }
-
-      // All sequence IDs should be unique
-      assertEquals(3, seqNos.stream().distinct().count(), "All sequence IDs should be unique");
-
-      arrowReader.close();
-    }
-  }
-
-  @Test
   public void testBatchFlushing() throws Exception {
     StructType schema = createSchemaWithoutMetaFields();
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_batch_flush.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
-
     // Write more than DEFAULT_BATCH_SIZE (1000) records
     int recordCount = 2500;
-    for (int i = 0; i < recordCount; i++) {
-      InternalRow row = createRow(i, "User" + i, 20L + i);
-      writer.writeRow("key" + i, row);
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      for (int i = 0; i < recordCount; i++) {
+        InternalRow row = createRow(i, "User" + i, 20L + i);
+        writer.writeRow("key" + i, row);
+      }
     }
-    writer.close();
 
     // Verify all records were written
     try (BufferAllocator allocator = new RootAllocator();
@@ -292,30 +252,29 @@ public class TestHoodieSparkLanceWriter {
         .add("binary_field", DataTypes.BinaryType, false);
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_primitives.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      GenericInternalRow row = new GenericInternalRow(new Object[]{
+          42,                                    // int
+          123456789L,                           // long
+          3.14f,                                // float
+          2.71828,                              // double
+          true,                                 // boolean
+          UTF8String.fromString("test"),        // string
+          new byte[]{1, 2, 3, 4}               // binary
+      });
 
-    GenericInternalRow row = new GenericInternalRow(new Object[]{
-        42,                                    // int
-        123456789L,                           // long
-        3.14f,                                // float
-        2.71828,                              // double
-        true,                                 // boolean
-        UTF8String.fromString("test"),        // string
-        new byte[]{1, 2, 3, 4}               // binary
-    });
-
-    writer.writeRow("key1", row);
-    writer.close();
+      writer.writeRow("key1", row);
+    }
 
     // Verify all types were written correctly
     try (BufferAllocator allocator = new RootAllocator();
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
+         ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
       assertEquals(1, reader.numRows());
       assertEquals(7, reader.schema().getFields().size());
 
-      ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE);
       arrowReader.loadNextBatch();
       VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
@@ -328,8 +287,6 @@ public class TestHoodieSparkLanceWriter {
 
       byte[] binary = ((VarBinaryVector) root.getVector("binary_field")).get(0);
       assertEquals(4, binary.length);
-
-      arrowReader.close();
     }
   }
 
@@ -341,22 +298,21 @@ public class TestHoodieSparkLanceWriter {
         .add("age", DataTypes.LongType, true);
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_nulls.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
-
-    // Write rows with null values
-    writer.writeRow("key1", createRow(1, "Alice", 30L));
-    writer.writeRow("key2", createRow(2, null, 25L));  // null name
-    writer.writeRow("key3", createRow(3, "Charlie", null));  // null age
-    writer.close();
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      // Write rows with null values
+      writer.writeRow("key1", createRow(1, "Alice", 30L));
+      writer.writeRow("key2", createRow(2, null, 25L));  // null name
+      writer.writeRow("key3", createRow(3, "Charlie", null));  // null age
+    }
 
     // Verify nulls are preserved
     try (BufferAllocator allocator = new RootAllocator();
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
+         ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
       assertEquals(3, reader.numRows());
 
-      ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE);
       arrowReader.loadNextBatch();
       VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
@@ -369,8 +325,6 @@ public class TestHoodieSparkLanceWriter {
       assertFalse(ageVector.isNull(0), "First age should not be null");
       assertFalse(ageVector.isNull(1), "Second age should not be null");
       assertTrue(ageVector.isNull(2), "Third age should be null");
-
-      arrowReader.close();
     }
   }
 
@@ -380,9 +334,10 @@ public class TestHoodieSparkLanceWriter {
         .add("id", DataTypes.IntegerType, false);
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_empty.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
-    writer.close();  // Close without writing any rows
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      // Close without writing any rows
+    }
 
     // Lance doesn't create a file if no data is written
     assertFalse(storage.exists(path), "Lance file should not exist when no data is written");
@@ -419,13 +374,12 @@ public class TestHoodieSparkLanceWriter {
     rows.add(new GenericInternalRow(new Object[]{2, UTF8String.fromString("Bob"), address2}));
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_struct.lance");
-    HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false);
-
-    for (InternalRow row : rows) {
-      writer.writeRow("key" + rows.indexOf(row), row);
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false)) {
+      for (InternalRow row : rows) {
+        writer.writeRow("key" + rows.indexOf(row), row);
+      }
     }
-    writer.close();
 
     assertTrue(storage.exists(path), "Lance file with struct type should exist");
     try (BufferAllocator allocator = new RootAllocator();
