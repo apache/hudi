@@ -216,7 +216,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     if (internalRow instanceof UnsafeRow) {
       return internalRow;
     }
-    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema.toAvroSchema());
+    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
     return unsafeProjection.apply(internalRow);
   }
 

@@ -112,7 +112,7 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newLanceFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }

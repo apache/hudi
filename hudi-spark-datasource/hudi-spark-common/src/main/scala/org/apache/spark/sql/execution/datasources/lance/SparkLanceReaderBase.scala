@@ -27,6 +27,7 @@ import org.apache.hudi.storage.StorageConfiguration
 import com.lancedb.lance.file.LanceFileReader
 import org.apache.arrow.memory.RootAllocator
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
@@ -66,7 +67,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
                     partitionSchema: StructType,
                     internalSchemaOpt: util.Option[InternalSchema],
                     filters: Seq[Filter],
-                    storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+                    storageConf: StorageConfiguration[Configuration],
+                    tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow] = {
 
     val filePath = file.filePath.toString
 
