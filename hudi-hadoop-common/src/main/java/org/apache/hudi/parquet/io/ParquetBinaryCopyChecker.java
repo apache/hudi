@@ -20,6 +20,10 @@ package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -45,11 +49,8 @@ import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLO
 import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ParquetBinaryCopyChecker {
-
-  private ParquetBinaryCopyChecker() {
-
-  }
 
   /**
    * Verify whether a set of files meet the conditions for binary stream copying
@@ -60,7 +61,7 @@ public class ParquetBinaryCopyChecker {
    * @return
    */
   public static boolean verifyFiles(List<ParquetFileInfo> files) {
-    boolean schemaSupportBinaryCopy = files.stream().allMatch(ParquetFileInfo::canBinaryCopy);
+    boolean schemaSupportBinaryCopy = files.stream().allMatch(ParquetFileInfo::isBinaryCopyEnabled);
     if (!schemaSupportBinaryCopy) {
       return false;
     }
@@ -215,37 +216,20 @@ public class ParquetBinaryCopyChecker {
     return false;
   }
 
+  @AllArgsConstructor
   public static class ParquetFileInfo implements Serializable {
-    private final boolean canBinaryCopy;
-    private final String bloomFilterTypeCode;
-    private final String schema;
-
-    public ParquetFileInfo(boolean canBinaryCopy, String hoodieBloomFilterTypeCode, String schema) {
-      this.canBinaryCopy = canBinaryCopy;
-      this.bloomFilterTypeCode = hoodieBloomFilterTypeCode;
-      this.schema = schema;
-    }
 
     /**
      * Current file can use binary copy or not
      * Following two case can not support
      *  1. two level List structure, because the result of parquet rewrite is three level List structure
      *  2. Decimal types stored via INT32/INT64/INT96, because it can not be read by parquet-avro
-     *
-     * @param parquetFields
-     * @return
      */
-    public boolean canBinaryCopy() {
-      return canBinaryCopy;
-    }
-
-    public String getBloomFilterTypeCode() {
-      return bloomFilterTypeCode;
-    }
-
-    public String getSchema() {
-      return schema;
-    }
+    @Getter
+    private final boolean binaryCopyEnabled;
+    @Getter
+    private final String bloomFilterTypeCode;
+    @Getter
+    private final String schema;
   }
-
 }

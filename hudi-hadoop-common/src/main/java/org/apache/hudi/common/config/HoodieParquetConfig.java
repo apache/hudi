@@ -20,13 +20,18 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 /**
  * Base ParquetConfig to hold config params for writing to Parquet.
  * @param <T>
  */
+@AllArgsConstructor
+@Getter
 public class HoodieParquetConfig<T> {
+
   private final T writeSupport;
   private final CompressionCodecName compressionCodecName;
   private final int blockSize;
@@ -35,48 +40,4 @@ public class HoodieParquetConfig<T> {
   private final StorageConfiguration<?> storageConf;
   private final double compressionRatio;
   private final boolean dictionaryEnabled;
-
-  public HoodieParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize, int pageSize,
-                             long maxFileSize, StorageConfiguration<?> storageConf, double compressionRatio, boolean dictionaryEnabled) {
-    this.writeSupport = writeSupport;
-    this.compressionCodecName = compressionCodecName;
-    this.blockSize = blockSize;
-    this.pageSize = pageSize;
-    this.maxFileSize = maxFileSize;
-    this.storageConf = storageConf;
-    this.compressionRatio = compressionRatio;
-    this.dictionaryEnabled = dictionaryEnabled;
-  }
-
-  public CompressionCodecName getCompressionCodecName() {
-    return compressionCodecName;
-  }
-
-  public int getBlockSize() {
-    return blockSize;
-  }
-
-  public int getPageSize() {
-    return pageSize;
-  }
-
-  public long getMaxFileSize() {
-    return maxFileSize;
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
-  }
-
-  public double getCompressionRatio() {
-    return compressionRatio;
-  }
-
-  public T getWriteSupport() {
-    return writeSupport;
-  }
-
-  public boolean dictionaryEnabled() {
-    return dictionaryEnabled;
-  }
 }
