@@ -384,7 +384,7 @@ public class UtilHelpers {
   /**
    * Build Spark Context for ingestion/compaction.
    *
-   * @return
+   * @return {@link JavaSparkContext}
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
@@ -449,13 +449,13 @@ public class UtilHelpers {
   }
 
   /**
-   * Returns a factory for creating connections to the given JDBC URL.
+   * Creates a connection to the given JDBC URL.
    *
    * @param options - JDBC options that contains url, table and other information.
-   * @return
+   * @return {@link Connection}
    * @throws SQLException if the driver could not open a JDBC connection.
    */
-  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+  private static Connection createConnection(Map<String, String> options) throws SQLException {
     String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
     DriverRegistry.register(driverClass);
     Enumeration<Driver> drivers = DriverManager.getDrivers();
@@ -510,7 +510,7 @@ public class UtilHelpers {
     String table;
     boolean tableExists;
     try {
-      conn = createConnectionFactory(options);
+      conn = createConnection(options);
       url = options.get(JDBCOptions.JDBC_URL());
       table = options.get(JDBCOptions.JDBC_TABLE_NAME());
       tableExists = tableExists(conn, options);

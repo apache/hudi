@@ -100,14 +100,14 @@ public interface HoodieLogFormat {
     /**
      * Read log file in reverse order and check if prev block is present.
      * 
-     * @return
+     * @return {@code true} if previous block is present, {@code false} otherwise.
      */
     boolean hasPrev();
 
     /**
      * Read log file in reverse order and return prev block if present.
      * 
-     * @return
+     * @return {@link HoodieLogBlock} the previous block
      * @throws IOException
      */
     HoodieLogBlock prev() throws IOException;

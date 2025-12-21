@@ -377,14 +377,14 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   /**
    * Timeline to just include completed commits or all rewrites like compaction, logcompaction and replace actions.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterCompletedInstantsOrRewriteTimeline();
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline getWriteTimeline();
 
@@ -393,35 +393,35 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * For example, if timeline is [C0.completed, C1.completed, C2.completed, C3.inflight, C4.completed].
    * Then, a timeline of [C0.completed, C1.completed, C2.completed] will be returned.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline getContiguousCompletedWriteTimeline();
 
   /**
    * Timeline to just include replace instants that have valid (commit/deltacommit) actions.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline getCompletedReplaceTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight compaction instants.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterPendingCompactionTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight log compaction instants.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterPendingLogCompactionTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight from both major and minor compaction instants.
    *
-   * @return
+   * @return {@link HoodieTimeline}
    */
   HoodieTimeline filterPendingMajorOrMinorCompactionTimeline();
 
@@ -557,7 +557,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   /**
    * Get hash of timeline.
    *
-   * @return
+   * @return {@link String} timeline hash.
    */
   String getTimelineHash();
 
@@ -596,7 +596,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * First instant that matches the action and state
    * @param action
    * @param state
-   * @return
+   * @return {@link Option<HoodieInstant>}
    */
   Option<HoodieInstant> firstInstant(String action, HoodieInstant.State state);
 
@@ -745,7 +745,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
 
   /**
    * Get layout version of this timeline
-   * @return
+   * @return {@link TimelineLayoutVersion}
    */
   TimelineLayoutVersion getTimelineLayoutVersion();
 
