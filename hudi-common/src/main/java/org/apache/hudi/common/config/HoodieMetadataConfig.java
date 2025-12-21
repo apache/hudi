@@ -604,6 +604,27 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "honor the set value for number of tasks. If not, number of write status's from data "
           + "table writes will be used for metadata table record preparation");
 
+  public static final ConfigProperty<Integer> CLEANER_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".cleaner.parallelism")
+      .defaultValue(512)
+      .markAdvanced()
+      .sinceVersion("0.14.2")
+      .withDocumentation("Cleaner parallelism to use for metadata table.");
+
+  public static final ConfigProperty<Integer> ROLLBACK_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".rollback.parallelism")
+      .defaultValue(512)
+      .markAdvanced()
+      .sinceVersion("0.14.2")
+      .withDocumentation("Rollback parallelism to use for metadata table.");
+
+  public static final ConfigProperty<Integer> FINALIZE_WRITES_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".finalize.writes.parallelism")
+      .defaultValue(512)
+      .markAdvanced()
+      .sinceVersion("0.14.2")
+      .withDocumentation("Finalize writes parallelism to use for metadata table.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -907,6 +928,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     checkArgument(indexName.startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)
         || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
     return subIndexNameToDrop.contains(indexName);
+  }
+
+  public int getCleanerParallelism() {
+    return getInt(CLEANER_PARALLELISM);
+  }
+
+  public int getRollbackParallelism() {
+    return getInt(ROLLBACK_PARALLELISM);
+  }
+
+  public int getFinalizeWritesParallelism() {
+    return getInt(FINALIZE_WRITES_PARALLELISM);
   }
 
   public static class Builder {
