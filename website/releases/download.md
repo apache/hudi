@@ -8,7 +8,7 @@ toc: true
 ## Release 1.1.0
 
 * Source Release : [Apache Hudi 1.1.0 Source Release](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.1.0](/releases/release-1.1.0))
+* Release Note : ([Release Note for Apache Hudi 1.1.0](/releases/release-1.1#release-110))
 
 <!--
 TODO: keep this commented out until 1.1.1 is released
@@ -103,42 +103,42 @@ TODO: replace repository.apache.org link with maven.org links when updating this
 ## Release 1.0.2
 
 * Source Release : [Apache Hudi 1.0.2 Source Release](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.0.2](/releases/release-1.0.2))
+* Release Note : ([Release Note for Apache Hudi 1.0.2](/releases/release-1.0#release-102))
 
 ## Release 1.0.1
 
 * Source Release : [Apache Hudi 1.0.1 Source Release](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.0.1](/releases/release-1.0.1))
+* Release Note : ([Release Note for Apache Hudi 1.0.1](/releases/release-1.0#release-101))
 
 ## Release 1.0.0
 
 * Source Release : [Apache Hudi 1.0.0 Source Release](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.0.0](/releases/release-1.0.0))
+* Release Note : ([Release Note for Apache Hudi 1.0.0](/releases/release-1.0#release-100))
 
 ## Release 1.0.0-beta2
 
 * Source Release : [Apache Hudi 1.0.0-beta2 Source Release](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.0.0-beta2](/releases/release-1.0.0-beta2))
+* Release Note : ([Release Note for Apache Hudi 1.0.0-beta2](/releases/release-1.0#release-100-beta2))
 
 ## Release 1.0.0-beta1
 
 * Source Release : [Apache Hudi 1.0.0-beta1 Source Release](https://www.apache.org/dyn/closer.lua/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.0.0-beta1](/releases/release-1.0.0-beta1))
+* Release Note : ([Release Note for Apache Hudi 1.0.0-beta1](/releases/release-1.0#release-100-beta1))
 
 ## Release 0.15.0
 
 * Source Release : [Apache Hudi 0.15.0 Source Release](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.15.0](/releases/release-0.15.0))
+* Release Note : ([Release Note for Apache Hudi 0.15.0](/releases/release-0.15#release-0150))
 
 ## Release 0.14.1
 
 * Source Release : [Apache Hudi 0.14.1 Source Release](https://downloads.apache.org/hudi/0.14.1/hudi-0.14.1.src.tgz) ([asc](https://downloads.apache.org/hudi/0.14.1/hudi-0.14.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.14.1/hudi-0.14.1.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.14.1](/releases/release-0.14.1))
+* Release Note : ([Release Note for Apache Hudi 0.14.1](/releases/release-0.14#release-0141))
 
 ## Release 0.14.0
 
 * Source Release : [Apache Hudi 0.14.0 Source Release](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.14.0](/releases/release-0.14.0))
+* Release Note : ([Release Note for Apache Hudi 0.14.0](/releases/release-0.14#release-0140))
 
 ## End-of-life Releases
 
