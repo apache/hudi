@@ -226,7 +226,7 @@ public class HiveTypeUtils {
 
   // added this from AvroSerdeUtils in hive latest
   public static int getIntFromSchema(HoodieSchema schema, String name) {
-    Object obj = schema.getProp(name);
+    Object obj = schema.getObjectProps().get(name);
     if (obj instanceof String) {
       return Integer.parseInt((String) obj);
     } else if (obj instanceof Integer) {

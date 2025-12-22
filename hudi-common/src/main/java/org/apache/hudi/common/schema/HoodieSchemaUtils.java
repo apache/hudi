@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -35,6 +36,7 @@ import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -739,7 +741,7 @@ public final class HoodieSchemaUtils {
    * @param schema the schema to resolve (may or may not be a union)
    * @param fieldSchemaFullName the full name of the schema to find within the union
    * @return the resolved schema
-   * @throws org.apache.hudi.internal.schema.HoodieSchemaException if the union cannot be resolved or no matching type is found
+   * @throws HoodieSchemaException if the union cannot be resolved or no matching type is found
    */
   public static HoodieSchema resolveUnionSchema(HoodieSchema schema, String fieldSchemaFullName) {
     if (schema.getType() != HoodieSchemaType.UNION) {
@@ -753,12 +755,12 @@ public final class HoodieSchemaUtils {
     }
 
     HoodieSchema nonNullType = innerTypes.stream()
-        .filter(it -> it.getType() != HoodieSchemaType.NULL && java.util.Objects.equals(it.getFullName(), fieldSchemaFullName))
+        .filter(it -> it.getType() != HoodieSchemaType.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
         .findFirst()
         .orElse(null);
 
     if (nonNullType == null) {
-      throw new org.apache.hudi.internal.schema.HoodieSchemaException(
+      throw new HoodieSchemaException(
           String.format("Unsupported UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
 

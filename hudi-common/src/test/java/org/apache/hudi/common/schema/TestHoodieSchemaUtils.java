@@ -24,6 +24,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -1708,8 +1709,8 @@ public class TestHoodieSchemaUtils {
     HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
 
     // Try to resolve to a type that doesn't exist in the union
-    org.apache.hudi.internal.schema.HoodieSchemaException exception = assertThrows(
-        org.apache.hudi.internal.schema.HoodieSchemaException.class,
+    HoodieSchemaException exception = assertThrows(
+        HoodieSchemaException.class,
         () -> HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "AnimalRecord")
     );
 

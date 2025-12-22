@@ -23,7 +23,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -268,22 +267,15 @@ public class HiveAvroSerializer {
   }
 
   private void setUpRecordFieldFromWritable(TypeInfo typeInfo, Object structFieldData, ObjectInspector fieldOI, GenericData.Record record, HoodieSchemaField field) {
+    // In Avro/HoodieSchema, field.defaultVal() returns:
+    // - JsonProperties.Null / HoodieSchema.NULL_VALUE = if default is explicitly null
+    // - null / isEmpty() = if field has NO default value
+    // - some value = if field has an actual default
     Object val = serialize(typeInfo, fieldOI, structFieldData, field.schema());
-    if (val == null) {
-      Option<Object> defaultValOpt = field.defaultVal();
-      // In Avro/HoodieSchema, field.defaultVal() returns:
-      // - JsonProperties.Null / HoodieSchema.NULL_VALUE = if default is explicitly null
-      // - null / isEmpty() = if field has NO default value
-      // - some value = if field has an actual default
-      if (defaultValOpt.isPresent() && defaultValOpt.get() == HoodieSchema.NULL_VALUE) {
-        record.put(field.name(), null);
-      } else {
-        // is not present or has some value
-        record.put(field.name(), defaultValOpt.orElse(null));
-      }
-    } else {
-      record.put(field.name(), val);
-    }
+    Object recordValue = val != null ? val : field.defaultVal()
+        .map(defaultVal -> defaultVal == HoodieSchema.NULL_VALUE ? null : defaultVal)
+        .orElse(null);
+    record.put(field.name(), recordValue);
   }
 
   private Object serialize(TypeInfo typeInfo, ObjectInspector fieldOI, Object structFieldData, HoodieSchema schema) throws HoodieException {
