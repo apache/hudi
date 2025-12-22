@@ -37,28 +37,30 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 
 ### Committers
 
-| Name                 | Github Username  | Apache ID                                                                           |
-|----------------------|------------------|-------------------------------------------------------------------------------------|
-| Alexey Kudinkin      | alexeykudinkin   | [akudinkin](https://people.apache.org/committer-index.html#akudinkin)               |
-| Forward Xu           | XuQianJin-Stars  | [forwardxu](https://people.apache.org/committer-index.html#forwardxu)               |
-| Hui An               | boneanxs         | [rexan](https://people.apache.org/committer-index.html#rexan)                       |
-| Jonathan Vexler      | jonvex           | [jonvex](https://people.apache.org/committer-index.html#jonvex)                     |
-| Jing Zhang           | beyond1920       | [beyond1920](https://people.apache.org/committer-index.html#beyond1920)             |
-| lamberken            | lamberken        | [lamberken](https://people.apache.org/committer-index.html#lamberken)               |
-| Lingqi Wu            | KnightChess      | [knightchess](https://people.apache.org/committer-index.html#knightchess)           |
-| Pratyaksh Sharma     | pratyakshsharma  | [pratyakshsharma](https://people.apache.org/committer-index.html#pratyakshsharma)   |
-| Qijun Fu             | stream2000       | [stream2000](https://people.apache.org/committer-index.html#stream2000)             |
-| Satish Kotha         | satishkotha      | [satishkotha](https://people.apache.org/committer-index.html#satishkotha)           |
-| Tao Meng             | xiarixiaoyao     | [mengtao](https://people.apache.org/committer-index.html#mengtao)                   |
-| Vinoth Govindarajan  | vingov           | [vino](https://people.apache.org/committer-index.html#vino)                         |
-| Voon Hous            | voonhous         | [vhs](https://people.apache.org/committer-index.html#vhs)                           |
-| Vova Kolmakov        | wombatu-kun      | [wombatukun](https://people.apache.org/committer-index.html#wombatukun)             |
-| Wei Li               | lw309637554      | [liway](https://people.apache.org/committer-index.html#liway)                       |
-| Wenning Ding         | zhedoubushishi   | [wenningd](https://people.apache.org/committer-index.html#wenningd)                 |
-| Xianghu Wang         | wangxianghu      | [wangxianghu](https://people.apache.org/committer-index.html#wangxianghu)           |
-| Yann Byron           | YannByron        | [biyan](https://people.apache.org/committer-index.html#biyan)                       |
-| Zhaojing Yu          | yuzhaojing       | [yuzhaojing](https://people.apache.org/committer-index.html#yuzhaojing)             |
-| Zhiwei Peng          | pengzhiwei2018   | [zhiwei](https://people.apache.org/committer-index.html#zhiwei)                     |
+| Name                 | Github Username     | Apache ID                                                                           |
+|----------------------|---------------------|-------------------------------------------------------------------------------------|
+| Alexey Kudinkin      | alexeykudinkin      | [akudinkin](https://people.apache.org/committer-index.html#akudinkin)               |
+| Forward Xu           | XuQianJin-Stars     | [forwardxu](https://people.apache.org/committer-index.html#forwardxu)               |
+| Hui An               | boneanxs            | [rexan](https://people.apache.org/committer-index.html#rexan)                       |
+| Jonathan Vexler      | jonvex              | [jonvex](https://people.apache.org/committer-index.html#jonvex)                     |
+| Jing Zhang           | beyond1920          | [jingzhang](https://people.apache.org/committer-index.html#jingzhang)               |
+| lamberken            | lamberken           | [lamberken](https://people.apache.org/committer-index.html#lamberken)               |
+| Lingqi Wu            | KnightChess         | [knightchess](https://people.apache.org/committer-index.html#knightchess)           |
+| Pratyaksh Sharma     | pratyakshsharma     | [pratyakshsharma](https://people.apache.org/committer-index.html#pratyakshsharma)   |
+| Qijun Fu             | stream2000          | [stream2000](https://people.apache.org/committer-index.html#stream2000)             |
+| Satish Kotha         | satishkotha         | [satish](https://people.apache.org/committer-index.html#satish)                     |
+| Shawn Chang          | CTTY                | [schang](https://people.apache.org/committer-index.html#schang)                     |
+| Tao Meng             | xiarixiaoyao        | [mengtao](https://people.apache.org/committer-index.html#mengtao)                   |
+| Tim Brown            | the-other-tim-brown | [timbrown](https://people.apache.org/committer-index.html#timbrown)                 |
+| Vinoth Govindarajan  | vingov              | [vino](https://people.apache.org/committer-index.html#vino)                         |
+| Voon Hous            | voonhous            | [vhs](https://people.apache.org/committer-index.html#vhs)                           |
+| Vova Kolmakov        | wombatu-kun         | [wombatukun](https://people.apache.org/committer-index.html#wombatukun)             |
+| Wei Li               | lw309637554         | [liway](https://people.apache.org/committer-index.html#liway)                       |
+| Wenning Ding         | zhedoubushishi      | [wenningd](https://people.apache.org/committer-index.html#wenningd)                 |
+| Xianghu Wang         | wangxianghu         | [wangxianghu](https://people.apache.org/committer-index.html#wangxianghu)           |
+| Yann Byron           | YannByron           | [biyan](https://people.apache.org/committer-index.html#biyan)                       |
+| Zhaojing Yu          | yuzhaojing          | [yuzhaojing](https://people.apache.org/committer-index.html#yuzhaojing)             |
+| Zhiwei Peng          | pengzhiwei2018      | [zhiwei](https://people.apache.org/committer-index.html#zhiwei)                     |
 
 ### Contributors
 [All contributors](https://github.com/apache/hudi/graphs/contributors)
