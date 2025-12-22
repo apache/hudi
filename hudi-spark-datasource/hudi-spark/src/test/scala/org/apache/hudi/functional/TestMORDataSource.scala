@@ -931,7 +931,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     assertEquals(expectedCount1, hudiReadPathDF.count())
 
-    if (recordType == HoodieRecordType.SPARK) {
+    if (recordType == HoodieRecordType.SPARK && HoodieSparkUtils.gteqSpark3_4) {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
       val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(inputDF1.schema, "record", "")
@@ -1417,62 +1417,64 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ParameterizedTest
   @CsvSource(value = Array("true,6", "false,6"))
   def testSnapshotQueryAfterInflightDeltaCommit(enableFileIndex: Boolean, tableVersion: Int): Unit = {
-    val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
-    val orderingFields = "col3"
-    val recordKeyField = "key"
-    val dataField = "age"
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
+      val orderingFields = "col3"
+      val recordKeyField = "key"
+      val dataField = "age"
 
-    val options = Map[String, String](
-      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
-      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      HoodieTableConfig.PRECOMBINE_FIELD.key -> orderingFields,
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-      HoodieWriteConfig.TBL_NAME.key -> tableName,
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1")
-    val pathForQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
+      val options = Map[String, String](
+        DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+        DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+        HoodieTableConfig.PRECOMBINE_FIELD.key -> orderingFields,
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+        HoodieWriteConfig.TBL_NAME.key -> tableName,
+        "hoodie.insert.shuffle.parallelism" -> "1",
+        "hoodie.upsert.shuffle.parallelism" -> "1")
+      val pathForQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
 
-    var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options, enableFileIndex)
-    writeOpts = writeOpts ++ Map(
-      HoodieTableConfig.VERSION.key() -> tableVersion.toString)
+      var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options, enableFileIndex)
+      writeOpts = writeOpts ++ Map(
+        HoodieTableConfig.VERSION.key() -> tableVersion.toString)
 
-    val firstDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(orderingFields, expr(recordKeyField))
-      .withColumn(dataField, expr(recordKeyField + " + 1000"))
-    firstDf.write.format("hudi")
-      .options(writeOpts)
-      .mode(SaveMode.Overwrite)
-      .save(tablePath)
+      val firstDf = spark.range(0, 10).toDF(recordKeyField)
+        .withColumn(orderingFields, expr(recordKeyField))
+        .withColumn(dataField, expr(recordKeyField + " + 1000"))
+      firstDf.write.format("hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
 
-    val secondDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(orderingFields, expr(recordKeyField))
-      .withColumn(dataField, expr(recordKeyField + " + 2000"))
-    secondDf.write.format("hudi")
-      .options(writeOpts)
-      .mode(SaveMode.Append).save(tablePath)
+      val secondDf = spark.range(0, 10).toDF(recordKeyField)
+        .withColumn(orderingFields, expr(recordKeyField))
+        .withColumn(dataField, expr(recordKeyField + " + 2000"))
+      secondDf.write.format("hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append).save(tablePath)
 
-    // Snapshot query on MOR
-    val snapshotDf = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(pathForQuery)
+      // Snapshot query on MOR
+      val snapshotDf = spark.read.format("org.apache.hudi")
+        .options(readOpts)
+        .load(pathForQuery)
 
-    // Delete last completed instant
-    metaClient = createMetaClient(spark, tablePath)
-    val files = storage.listDirectEntries(new StoragePath(s"$tablePath/.hoodie")).stream()
-      .filter(JavaConversions.getPredicate((f: StoragePathInfo) => f.getPath.getName.contains(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
-        && !f.getPath.getName.contains("inflight")
-        && !f.getPath.getName.contains("requested")))
-      .collect(Collectors.toList[StoragePathInfo]).asScala
-    assertEquals(1, files.size)
-    storage.deleteFile(files.head.getPath)
+      // Delete last completed instant
+      metaClient = createMetaClient(spark, tablePath)
+      val files = storage.listDirectEntries(new StoragePath(s"$tablePath/.hoodie")).stream()
+        .filter(JavaConversions.getPredicate((f: StoragePathInfo) => f.getPath.getName.contains(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+          && !f.getPath.getName.contains("inflight")
+          && !f.getPath.getName.contains("requested")))
+        .collect(Collectors.toList[StoragePathInfo]).asScala
+      assertEquals(1, files.size)
+      storage.deleteFile(files.head.getPath)
 
-    // verify snapshot query returns data written using firstDf
-    assertEquals(10, snapshotDf.count())
-    assertEquals(
-      1000L,
-      snapshotDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
+      // verify snapshot query returns data written using firstDf
+      assertEquals(10, snapshotDf.count())
+      assertEquals(
+        1000L,
+        snapshotDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
+    }
   }
 
   @ParameterizedTest

@@ -18,16 +18,16 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.FileStatus
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileStatus
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -81,6 +81,19 @@ class Spark2Adapter extends SparkAdapter {
 
   override def isTimestampNTZType(dataType: DataType): Boolean = {
     dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
+
+  override def getParquetReadSupport(messageScheme: org.apache.hudi.common.util.Option[MessageType]):
+  org.apache.parquet.hadoop.api.ReadSupport[_] = {
+    // ParquetReadSupport is package-private in Spark 2.4, so we use reflection to instantiate it
+    val clazz = Class.forName("org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport")
+    clazz.getDeclaredConstructor().newInstance().asInstanceOf[org.apache.parquet.hadoop.api.ReadSupport[_]]
+  }
+
+  override def repairSchemaIfSpecified(shouldRepair: Boolean,
+                                       fileSchema: MessageType,
+                                       tableSchemaOpt: org.apache.hudi.common.util.Option[MessageType]): MessageType = {
+    fileSchema
   }
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark2CatalystPlanUtils
@@ -153,7 +166,7 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema): Option[ParquetFileFormat] = {
     Some(new Spark24LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
@@ -215,5 +228,13 @@ class Spark2Adapter extends SparkAdapter {
     val batch = new ColumnarBatch(vectors)
     batch.setNumRows(numRows)
     batch
+  }
+
+  override def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  org.apache.hudi.common.util.collection.Pair[StructType, StructType] = {
+    org.apache.hudi.common.util.collection.Pair.of(
+      HoodieInternalRowUtils.getCachedSchema(readerSchema),
+      HoodieInternalRowUtils.getCachedSchema(requestedSchema)
+    )
   }
 }

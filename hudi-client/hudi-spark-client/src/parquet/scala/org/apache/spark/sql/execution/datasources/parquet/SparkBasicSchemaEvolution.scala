@@ -21,7 +21,6 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.spark.sql.types.StructType
 
-
 /**
  * Intended to be used just with HoodieSparkParquetReader to avoid any java/scala issues
  */
