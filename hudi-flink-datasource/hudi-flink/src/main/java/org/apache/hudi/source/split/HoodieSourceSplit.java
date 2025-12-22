@@ -20,6 +20,8 @@ package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.connector.source.SourceSplit;
 
 import javax.annotation.Nullable;
@@ -31,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Hoodie SourceSplit implementation for source V2. It has the same semantic to the {@link org.apache.hudi.table.format.mor.MergeOnReadInputSplit}.
  */
+@Getter
 public class HoodieSourceSplit implements SourceSplit, Serializable {
   public static AtomicInteger SPLIT_COUNTER = new AtomicInteger(0);
   private static final long serialVersionUID = 1L;
@@ -47,6 +50,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   // source merge type
   private final String mergeType;
   // file id of file splice
+  @Setter
   protected String fileId;
 
   // for streaming reader to record the consumed offset,
@@ -79,48 +83,12 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     return toString();
   }
 
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public Option<String> getBasePath() {
-    return basePath;
-  }
-
-  public Option<List<String>> getLogPaths() {
-    return logPaths;
-  }
-
-  public String getTablePath() {
-    return tablePath;
-  }
-
-  public String getMergeType() {
-    return mergeType;
-  }
-
   public void consume() {
     this.consumed += 1L;
   }
 
-  public long getConsumed() {
-    return consumed;
-  }
-
   public boolean isConsumed() {
     return this.consumed != NUM_NO_CONSUMPTION;
-  }
-
-  public int getFileOffset() {
-    return fileOffset;
-  }
-
-  public long getRecordOffset() {
-    return recordOffset;
   }
 
   public void updatePosition(int newFileOffset, long newRecordOffset) {

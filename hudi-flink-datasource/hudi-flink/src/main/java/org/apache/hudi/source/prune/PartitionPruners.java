@@ -27,6 +27,8 @@ import org.apache.hudi.source.stats.PartitionStatsIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.DataTypeUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -203,6 +205,7 @@ public class PartitionPruners {
     return new Builder();
   }
 
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class Builder {
     private RowType rowType;
     private String basePath;
@@ -215,9 +218,6 @@ public class PartitionPruners {
     private String defaultParName;
     private boolean hivePartition;
     private Collection<String> candidatePartitions;
-
-    private Builder() {
-    }
 
     public Builder rowType(RowType rowType) {
       this.rowType = rowType;

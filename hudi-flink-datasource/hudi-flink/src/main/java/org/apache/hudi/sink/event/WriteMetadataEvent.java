@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.util.WriteStatusMerger;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
@@ -34,6 +37,9 @@ import java.util.stream.Collectors;
 /**
  * An operator event to mark successful checkpoint batch write.
  */
+@NoArgsConstructor
+@Getter
+@Setter
 public class WriteMetadataEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
@@ -87,71 +93,11 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.bootstrap = bootstrap;
   }
 
-  // default constructor for efficient serialization
-  public WriteMetadataEvent() {
-  }
-
   /**
    * Returns the builder for {@link WriteMetadataEvent}.
    */
   public static Builder builder() {
     return new Builder();
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public int getTaskID() {
-    return taskID;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
-  }
-
-  public Long getCheckpointId() {
-    return checkpointId;
-  }
-
-  public void setCheckpointId(long checkpointId) {
-    this.checkpointId = checkpointId;
-  }
-
-  public String getInstantTime() {
-    return instantTime;
-  }
-
-  public void setInstantTime(String instantTime) {
-    this.instantTime = instantTime;
-  }
-
-  public boolean isEndInput() {
-    return endInput;
-  }
-
-  public void setEndInput(boolean endInput) {
-    this.endInput = endInput;
-  }
-
-  public boolean isBootstrap() {
-    return bootstrap;
-  }
-
-  public void setBootstrap(boolean bootstrap) {
-    this.bootstrap = bootstrap;
-  }
-
-  public boolean isLastBatch() {
-    return lastBatch;
-  }
-
-  public void setLastBatch(boolean lastBatch) {
-    this.lastBatch = lastBatch;
   }
 
   /**

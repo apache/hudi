@@ -30,9 +30,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieFlinkTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -40,9 +39,8 @@ import java.util.stream.Collectors;
 /**
  * Utilities for flink hudi clustering.
  */
+@Slf4j
 public class ClusteringUtil {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtil.class);
 
   public static void validateClusteringScheduling(Configuration conf) {
     if (!OptionsResolver.isAppendMode(conf) && OptionsResolver.isBucketIndexType(conf)) {
@@ -89,7 +87,7 @@ public class ClusteringUtil {
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
         .collect(Collectors.toList());
     inflightInstants.forEach(inflightInstant -> {
-      LOG.info("Rollback the inflight clustering instant: " + inflightInstant + " for failover");
+      log.info("Rollback the inflight clustering instant: " + inflightInstant + " for failover");
       table.rollbackInflightClustering(inflightInstant,
           commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());
@@ -108,7 +106,7 @@ public class ClusteringUtil {
     HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
     Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(instantTime, activeTimeline, table.getInstantGenerator());
     if (inflightInstantOpt.isPresent() && ClusteringUtils.isClusteringInstant(activeTimeline, inflightInstantOpt.get(), table.getInstantGenerator())) {
-      LOG.warn("Failed to rollback clustering instant: [{}]", instantTime);
+      log.warn("Failed to rollback clustering instant: [{}]", instantTime);
       table.rollbackInflightClustering(inflightInstantOpt.get(),
           commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());

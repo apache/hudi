@@ -59,6 +59,7 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
@@ -83,8 +84,6 @@ import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -97,9 +96,9 @@ import java.util.stream.Collectors;
  * Operator to execute the actual clustering task assigned by the clustering plan task.
  * In order to execute scalable, the input should shuffle by the clustering event {@link ClusteringPlanEvent}.
  */
+@Slf4j
 public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEvent> implements
     OneInputStreamOperator<ClusteringPlanEvent, ClusteringCommitEvent>, BoundedOneInput {
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringOperator.class);
 
   private final Configuration conf;
   private final RowType rowType;
@@ -178,7 +177,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
 
     if (this.asyncClustering) {
-      this.executor = NonThrownExecutor.builder(LOG).build();
+      this.executor = NonThrownExecutor.builder(log).build();
     }
 
     this.collector = new StreamRecordCollector<>(output);
@@ -199,7 +198,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
           "Execute clustering for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the clustering task synchronously for batch mode.
-      LOG.info("Execute clustering for instant {} from task {}", instantTime, taskID);
+      log.info("Execute clustering for instant {} from task {}", instantTime, taskID);
       doClustering(instantTime, clusteringOperations);
     }
   }
@@ -274,7 +273,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private Iterator<RowData> readRecordsForGroupWithLogs(List<ClusteringOperation> clusteringOps, String instantTime) {
     List<ClosableIterator<RowData>> recordIterators = new ArrayList<>();
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), writeConfig);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+    log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     for (ClusteringOperation clusteringOp : clusteringOps) {
       try {
