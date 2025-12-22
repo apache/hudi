@@ -172,4 +172,11 @@ trait HoodieCatalystPlansUtils {
    *   case class UpdateAction(condition: Option[Expression], assignments: Seq[Assignment], fromStar: Boolean)
    */
   def unapplyUpdateAction(mergeAction: Any): Option[(Option[Expression], Seq[Assignment])]
+
+  /**
+   * Extracts the JSON string from a [[SerializedOffset]] with accommodation for
+   * Spark 4.1 where [[SerializedOffset]] is moved to
+   * [[org.apache.spark.sql.execution.streaming.runtime]] package
+   */
+  def extractJsonFromSerializedOffset(offset: Any): Option[String]
 }
