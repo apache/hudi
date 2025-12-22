@@ -126,18 +126,6 @@ public class HoodieSchemaField implements Serializable {
   }
 
   /**
-   * Creates a new HoodieSchemaField with the specified name, schema, and doc.
-   *
-   * @param name   the name of the field
-   * @param schema the schema of the field
-   * @param doc    the documentation string
-   * @return new HoodieSchemaField instance
-   */
-  public static HoodieSchemaField of(String name, HoodieSchema schema, String doc) {
-    return of(name, schema, doc, null);
-  }
-
-  /**
    * Creates a metadata field for Hudi internal use.
    * This is a convenience method for creating fields that are part of Hudi's metadata.
    *

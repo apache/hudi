@@ -50,7 +50,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> HIVE_USER = HiveSyncConfigHolder.HIVE_USER;
   public static final ConfigProperty<String> HIVE_PASS = HiveSyncConfigHolder.HIVE_PASS;
   public static final ConfigProperty<String> HIVE_URL = HiveSyncConfigHolder.HIVE_URL;
-  public static final ConfigProperty<String> HIVE_USE_PRE_APACHE_INPUT_FORMAT = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
   /**
    * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
    */
@@ -188,7 +187,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_USER.key(), hiveUser);
       props.setPropertyIfNonNull(HIVE_PASS.key(), hivePass);
       props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
-      props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), usePreApacheInputFormat);
       props.setPropertyIfNonNull(HIVE_USE_JDBC.key(), useJdbc);
       props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), syncMode);
       props.setPropertyIfNonNull(METASTORE_URIS.key(), metastoreUris);

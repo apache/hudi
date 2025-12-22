@@ -118,7 +118,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
     Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), kafkaSource.getSource().getSparkSession());
+        schemaProvider.getSourceHoodieSchema().toString(), kafkaSource.getSource().getSparkSession());
     assertEquals(900, fetch1AsRows.count());
 
     // 2. Produce new data, extract new data

@@ -28,6 +28,7 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadataLegacy
@@ -464,7 +465,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       latestDf.schema,
-      AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", ""),
+      HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", "")),
       HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
@@ -475,10 +476,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .collectAsList()
     assertTrue(partitionStats.size() > 0)
     // Assert column stats after restore.
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", "")
+    val hoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", ""))
     val columnStatsIndex = new ColumnStatsIndexSupport(
       spark, latestDf.schema,
-      avroSchema,
+      hoodieSchema,
       HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
@@ -514,7 +515,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     // validate MDT compaction instant
-    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
+    val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getTableMetadata
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     try {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()

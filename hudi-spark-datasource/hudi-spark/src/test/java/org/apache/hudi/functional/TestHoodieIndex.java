@@ -416,7 +416,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
 
     // We create three parquet files, each having one record (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(SIMPLE_RECORD_SCHEMA), metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(SIMPLE_RECORD_SCHEMA.toAvroSchema()), metadataWriter);
     final String fileId1 = "fileID1";
     final String fileId2 = "fileID2";
     final String fileId3 = "fileID3";
@@ -548,6 +548,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
     Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
     String newTimestamp = WriteClientTestUtils.createNewInstantTime();
+    // Ensure newTimestamp doesn't end with DEFAULT_MILLIS_EXT to avoid collision with instant6
+    while (newTimestamp.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
+      newTimestamp = WriteClientTestUtils.createNewInstantTime();
+    }
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant5), metaClient.getActiveTimeline());

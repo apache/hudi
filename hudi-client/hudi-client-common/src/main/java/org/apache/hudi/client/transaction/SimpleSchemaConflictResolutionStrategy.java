@@ -27,9 +27,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.stream.Stream;
 
@@ -43,8 +42,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * The implementation of SchemaConflictResolutionStrategy that detects incompatible
  * schema evolution from multiple writers
  */
+@Slf4j
 public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictResolutionStrategy {
-  private static final Logger LOG = LoggerFactory.getLogger(SimpleSchemaConflictResolutionStrategy.class);
 
   @Override
   public Option<Schema> resolveConcurrentSchemaEvolution(
@@ -62,7 +61,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
 
     // Guard against unrecognized cases where writers do not come with a writer schema.
     if (StringUtils.isNullOrEmpty(config.getWriteSchema())) {
-      LOG.warn("Writer config does not come with a valid writer schema. Writer config: {}. Owner instant: {}",
+      log.warn("Writer config does not come with a valid writer schema. Writer config: {}. Owner instant: {}",
           config, currTxnOwnerInstant.get().toString());
       return Option.empty();
     }
@@ -169,7 +168,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     try {
       return schemaResolver.getTableAvroSchemaIfPresent(false, Option.of(instant));
     } catch (Exception ex) {
-      LOG.error("Cannot get table schema for instant {}", instant);
+      log.error("Cannot get table schema for instant {}", instant);
       throw new HoodieException("Unable to get table schema", ex);
     }
   }

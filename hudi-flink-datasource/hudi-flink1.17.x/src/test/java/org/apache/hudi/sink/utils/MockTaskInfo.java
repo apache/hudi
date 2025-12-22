@@ -17,6 +17,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.common.TaskInfo;
 
 /**
@@ -26,6 +28,8 @@ public class MockTaskInfo extends TaskInfo {
 
   private final int numParallelSubtasks;
   private final int subtaskIndex;
+  @Getter
+  @Setter
   private int attemptNumber;
 
   public MockTaskInfo(
@@ -35,10 +39,6 @@ public class MockTaskInfo extends TaskInfo {
     super("", numParallelSubtasks, subtaskIndex, numParallelSubtasks, 0);
     this.numParallelSubtasks = numParallelSubtasks;
     this.subtaskIndex = subtaskIndex;
-    this.attemptNumber = attemptNumber;
-  }
-
-  public void setAttemptNumber(int attemptNumber) {
     this.attemptNumber = attemptNumber;
   }
 
@@ -55,10 +55,5 @@ public class MockTaskInfo extends TaskInfo {
   @Override
   public int getNumberOfParallelSubtasks() {
     return numParallelSubtasks;
-  }
-
-  @Override
-  public int getAttemptNumber() {
-    return attemptNumber;
   }
 }

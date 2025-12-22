@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
+import org.apache.hudi.avro.AvroSchemaCache
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
@@ -30,7 +31,6 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
@@ -124,7 +124,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    s"h${tableId.incrementAndGet()}"
+    s"h${getClass.getSimpleName.toLowerCase}_${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
@@ -218,7 +218,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       runnable.run()
     } catch {
-      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(HoodieTestUtils.getRootCause(e), errorMsg) =>
         hasException = true
 
       case f: Throwable =>
@@ -232,7 +232,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(HoodieTestUtils.getRootCause(e), errorMsg) =>
         hasException = true
 
       case f: Throwable =>
@@ -246,11 +246,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if getRootCause(e).getMessage.matches(errorMsgRegex) =>
+      case e: Throwable if HoodieTestUtils.getRootCause(e).getMessage.matches(errorMsgRegex) =>
         hasException = true
 
       case f: Throwable =>
-        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
+        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + HoodieTestUtils.getRootCause(f).getMessage, f)
     }
     assertResult(true)(hasException)
   }
@@ -453,11 +453,11 @@ object HoodieSparkSqlTestBase {
     val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
     Collections.sort(logFilePathList)
     var deleteLogBlockFound = false
-    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     for (i <- 0 until logFilePathList.size()) {
       val logReader = new HoodieLogFileReader(
         metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
-        avroSchema, 1024 * 1024, false, false,
+        schema, 1024 * 1024, false, false,
         "id", null)
       assertTrue(logReader.hasNext)
       val logBlock = logReader.next()

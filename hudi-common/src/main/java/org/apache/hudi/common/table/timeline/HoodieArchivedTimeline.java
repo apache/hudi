@@ -29,9 +29,15 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
 
   void loadCompletedInstantDetailsInMemory();
 
+  void loadCompletedInstantDetailsInMemory(String startTs, String endTs);
+
+  void loadCompletedInstantDetailsInMemory(int limit);
+
   void loadCompactionDetailsInMemory(String compactionInstantTime);
 
   void loadCompactionDetailsInMemory(String startTs, String endTs);
+
+  void loadCompactionDetailsInMemory(int limit);
 
   void clearInstantDetailsFromMemory(String instantTime);
 

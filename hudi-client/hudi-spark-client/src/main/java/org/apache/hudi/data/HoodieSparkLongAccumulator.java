@@ -21,6 +21,7 @@ package org.apache.hudi.data;
 
 import org.apache.hudi.common.data.HoodieAccumulator;
 
+import lombok.Getter;
 import org.apache.spark.util.AccumulatorV2;
 import org.apache.spark.util.LongAccumulator;
 
@@ -29,6 +30,7 @@ import org.apache.spark.util.LongAccumulator;
  */
 public class HoodieSparkLongAccumulator extends HoodieAccumulator {
 
+  @Getter
   private final AccumulatorV2<Long, Long> accumulator;
 
   private HoodieSparkLongAccumulator() {
@@ -47,9 +49,5 @@ public class HoodieSparkLongAccumulator extends HoodieAccumulator {
   @Override
   public void add(long increment) {
     accumulator.add(increment);
-  }
-
-  public AccumulatorV2<Long, Long> getAccumulator() {
-    return accumulator;
   }
 }

@@ -35,8 +35,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -53,8 +52,8 @@ import static org.apache.hudi.table.action.index.RunIndexActionExecutor.TIMELINE
  * It will check if these later instants have logged updates to metadata table or not.
  * If not, then it will do the update. If a later instant is inflight, it will wait until it is completed or the task times out.
  */
+@Slf4j
 public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask {
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractIndexingCatchupTask.class);
 
   protected final HoodieTableMetadataWriter metadataWriter;
   protected final List<HoodieInstant> instantsToIndex;
@@ -108,7 +107,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         try {
           // we need take a lock here as inflight writer could also try to update the timeline
           transactionManager.beginStateChange(Option.of(instant), Option.empty());
-          LOG.info("Updating metadata table for instant: " + instant);
+          log.info("Updating metadata table for instant: " + instant);
           switch (instant.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -178,19 +177,19 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
       try {
         // if no heartbeat, then ignore this instant
         if (!HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), metaClient.getBasePath().toString(), instant.requestedTime())) {
-          LOG.info("Ignoring instant {} as no heartbeat found", instant);
+          log.info("Ignoring instant {} as no heartbeat found", instant);
           return true;
         }
         // if heartbeat exists, but expired, then ignore this instant
         if (table.getConfig().getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instant.requestedTime())) {
-          LOG.info("Ignoring instant {} as heartbeat expired", instant);
+          log.info("Ignoring instant {} as heartbeat expired", instant);
           return true;
         }
       } catch (IOException e) {
         throw new HoodieIOException("Unable to check if heartbeat expired for instant " + instant, e);
       }
       try {
-        LOG.info("instant not completed, reloading timeline {}", instant);
+        log.info("instant not completed, reloading timeline {}", instant);
         reloadTimelineWithWait(instant);
       } catch (InterruptedException e) {
         throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);

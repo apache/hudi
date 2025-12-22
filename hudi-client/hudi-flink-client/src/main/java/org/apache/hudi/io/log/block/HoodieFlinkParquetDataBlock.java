@@ -88,7 +88,7 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
                 recordIterator,
                 HoodieRecord.HoodieRecordType.FLINK,
                 writerSchema,
-                getSchema(),
+                getSchema().toAvroSchema(),
                 getKeyFieldName(),
                 paramsMap);
     ValidationUtils.checkArgument(result.getRight() instanceof ParquetMetadata,

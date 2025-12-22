@@ -18,11 +18,11 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.binary.BinaryStringData;
@@ -45,12 +45,11 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testCreateWithMultipleOrderingFields() {
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("id").type().stringType().noDefault()
-        .name("timestamp").type().longType().noDefault()
-        .name("amount").type().doubleType().noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("amount", HoodieSchema.create(HoodieSchemaType.DOUBLE), null, null)
+    ));
 
     List<String> orderingFieldNames = Arrays.asList("id", "timestamp");
     boolean utcTimezone = true;
@@ -63,10 +62,8 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testConvertWithSingleValue() {
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("name").type().stringType().noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.singletonList(
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null)));
 
     List<String> orderingFieldNames = Collections.singletonList("name");
     boolean utcTimezone = true;
@@ -83,13 +80,8 @@ public class TestOrderingValueEngineTypeConverter {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testConvertWithTimestampValue(boolean utcTimezone) {
-    Schema tsSchema = LogicalTypes.timestampMillis()
-        .addToSchema(Schema.create(Schema.Type.LONG));
-
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("timestamp").type(tsSchema).noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createTimestampMillis(), null, null)));
 
     List<String> orderingFieldNames = Collections.singletonList("timestamp");
 
@@ -105,14 +97,9 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testConvertWithArrayComparable() {
-    Schema tsSchema = LogicalTypes.timestampMillis()
-        .addToSchema(Schema.create(Schema.Type.LONG));
-
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("name").type().stringType().noDefault()
-        .name("timestamp").type(tsSchema).noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createTimestampMillis(), null, null)));
 
     List<String> orderingFieldNames = Arrays.asList("name", "timestamp");
     boolean utcTimezone = true;
@@ -135,11 +122,9 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testCreateConverters() {
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("id").type().stringType().noDefault()
-        .name("age").type().intType().noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
 
     List<String> orderingFieldNames = Arrays.asList("id", "age");
     boolean utcTimezone = true;
@@ -161,13 +146,8 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testConvertWithDecimalValue() {
-    Schema decimalSchema = LogicalTypes.decimal(10, 2)
-        .addToSchema(Schema.create(Schema.Type.BYTES));
-
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("price").type(decimalSchema).noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.singletonList(
+        HoodieSchemaField.of("price", HoodieSchema.createDecimal(10, 2), null, null)));
 
     List<String> orderingFieldNames = Collections.singletonList("price");
     boolean utcTimezone = true;
@@ -183,13 +163,8 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testConvertWithDateValue() {
-    Schema dateSchema = LogicalTypes.date()
-        .addToSchema(Schema.create(Schema.Type.INT));
-
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("birth_date").type(dateSchema).noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.singletonList(
+        HoodieSchemaField.of("birth_date", HoodieSchema.createDate())));
 
     List<String> orderingFieldNames = Collections.singletonList("birth_date");
 
@@ -205,12 +180,8 @@ public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testConvertWithNullValue() {
-    Schema schema = SchemaBuilder
-        .record("test").fields()
-        .name("optional_field").type(
-            Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))
-        ).noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.singletonList(
+        HoodieSchemaField.of("optional_field", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
 
     List<String> orderingFieldNames = Collections.singletonList("optional_field");
     boolean utcTimezone = true;

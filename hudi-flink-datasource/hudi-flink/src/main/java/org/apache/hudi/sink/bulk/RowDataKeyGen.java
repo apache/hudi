@@ -142,7 +142,7 @@ public class RowDataKeyGen implements Serializable {
     this.keyGenOpt = keyGenOpt;
   }
 
-  public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
+  static RowDataKeyGen instance(Configuration conf, RowType rowType) {
     Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
     if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.get(FlinkOptions.KEYGEN_CLASS_NAME))) {
       try {
@@ -221,7 +221,7 @@ public class RowDataKeyGen implements Serializable {
   }
 
   // reference: org.apache.hudi.keygen.KeyGenUtils.getRecordKey
-  public static String getRecordKey(Object recordKeyValue, String recordKeyField,boolean consistentLogicalTimestampEnabled) {
+  public static String getRecordKey(Object recordKeyValue, String recordKeyField, boolean consistentLogicalTimestampEnabled) {
     recordKeyValue = getTimestampValue(consistentLogicalTimestampEnabled, recordKeyValue);
     String recordKey = StringUtils.objToString(recordKeyValue);
     if (recordKey == null || recordKey.isEmpty()) {

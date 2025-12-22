@@ -30,8 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.text.ParseException;
 import java.time.Instant;
@@ -48,9 +47,8 @@ import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 /**
  * Provides utilities for timeline archival service.
  */
+@Slf4j
 public class ArchivalUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ArchivalUtils.class);
 
   /**
    *  getMinAndMaxInstantsToKeep is used by archival service to find the
@@ -79,7 +77,7 @@ public class ArchivalUtils {
         maxInstantsToKeep = minInstantsToKeepBasedOnCleaning
             + configuredMaxInstantsToKeep - configuredMinInstantsToKeep;
         minInstantsToKeep = minInstantsToKeepBasedOnCleaning;
-        LOG.warn("The configured archival configs {}={} is more aggressive than the cleaning "
+        log.warn("The configured archival configs {}={} is more aggressive than the cleaning "
                 + "configs as the earliest commit to retain is {}. Adjusted the archival configs "
                 + "to be {}={} and {}={}",
             MIN_COMMITS_TO_KEEP.key(), configuredMinInstantsToKeep, earliestCommitToRetain.get(),
@@ -87,15 +85,15 @@ public class ArchivalUtils {
             MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep);
         switch (cleanerPolicy) {
           case KEEP_LATEST_COMMITS:
-            LOG.warn("Cleaning configs: {}=KEEP_LATEST_COMMITS {}={}", CLEANER_POLICY.key(),
+            log.warn("Cleaning configs: {}=KEEP_LATEST_COMMITS {}={}", CLEANER_POLICY.key(),
                 CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained);
             break;
           case KEEP_LATEST_BY_HOURS:
-            LOG.warn("Cleaning configs: {}=KEEP_LATEST_BY_HOURS {}={}", CLEANER_POLICY.key(),
+            log.warn("Cleaning configs: {}=KEEP_LATEST_BY_HOURS {}={}", CLEANER_POLICY.key(),
                 CLEANER_HOURS_RETAINED.key(), cleanerHoursRetained);
             break;
           case KEEP_LATEST_FILE_VERSIONS:
-            LOG.warn("Cleaning configs: {}=CLEANER_FILE_VERSIONS_RETAINED {}={}", CLEANER_POLICY.key(),
+            log.warn("Cleaning configs: {}=CLEANER_FILE_VERSIONS_RETAINED {}={}", CLEANER_POLICY.key(),
                 CLEANER_FILE_VERSIONS_RETAINED.key(), config.getCleanerFileVersionsRetained());
             break;
           default:
@@ -130,7 +128,7 @@ public class ArchivalUtils {
           metaClient.getTableConfig().getTimelineTimezone());
     } catch (ParseException e) {
       if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().requestedTime().startsWith(ts))) {
-        LOG.info("Error parsing instant time: {}", latestCommit.get().requestedTime());
+        log.info("Error parsing instant time: {}", latestCommit.get().requestedTime());
       }
     }
     return earliestCommitToRetain;

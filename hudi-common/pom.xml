@@ -99,6 +99,15 @@
           </imports>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- Required to support older Hive versions that still use Java 8 -->
+          <target>8</target>
+          <release>8</release>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -113,6 +122,12 @@
     <dependency>
       <groupId>org.openjdk.jol</groupId>
       <artifactId>jol-core</artifactId>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
     </dependency>
 
     <!-- Logging -->

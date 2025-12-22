@@ -25,14 +25,13 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 
@@ -49,7 +48,7 @@ public class BufferedRecordMergerFactory {
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
                                                    Option<String> payloadClass,
-                                                   Schema readerSchema,
+                                                   HoodieSchema readerSchema,
                                                    TypedProperties props,
                                                    Option<PartialUpdateMode> partialUpdateModeOpt) {
     return create(readerContext, recordMergeMode, enablePartialMerging, recordMerger,
@@ -60,7 +59,7 @@ public class BufferedRecordMergerFactory {
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
-                                                   Schema readerSchema,
+                                                   HoodieSchema readerSchema,
                                                    Option<Pair<String, String>> payloadClasses,
                                                    TypedProperties props,
                                                    Option<PartialUpdateMode> partialUpdateModeOpt) {
@@ -140,7 +139,7 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
       if (existingRecord != null) {
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
@@ -154,7 +153,7 @@ public class BufferedRecordMergerFactory {
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord,
                                      BufferedRecord<T> newerRecord) {
-      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
+      HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
@@ -219,7 +218,7 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null) {
         return Option.of(newRecord);
       } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
@@ -229,7 +228,7 @@ public class BufferedRecordMergerFactory {
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
-        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
+        HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         existingRecord = partialUpdateHandler.partialMerge(
             existingRecord,
             newRecord,
@@ -248,7 +247,7 @@ public class BufferedRecordMergerFactory {
 
       Comparable newOrderingValue = newerRecord.getOrderingValue();
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
-      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
+      HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
@@ -279,14 +278,14 @@ public class BufferedRecordMergerFactory {
     private final RecordContext<T> recordContext;
     private final Option<HoodieRecordMerger> recordMerger;
     private final BufferedRecordMerger<T> deleteRecordMerger;
-    private final Schema readerSchema;
+    private final HoodieSchema readerSchema;
     private final TypedProperties props;
 
     public PartialUpdateBufferedRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       this.recordContext = recordContext;
       this.recordMerger = recordMerger;
@@ -339,7 +338,7 @@ public class BufferedRecordMergerFactory {
     public CustomRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
     }
@@ -365,7 +364,7 @@ public class BufferedRecordMergerFactory {
     private final HoodieRecordMerger deltaMerger;
 
     public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, String incomingPayloadClass,
-                                         Schema readerSchema, TypedProperties props) {
+                                         HoodieSchema readerSchema, TypedProperties props) {
       super(recordContext, recordMerger, incomingPayloadClass, readerSchema, props);
       this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
     }
@@ -392,7 +391,7 @@ public class BufferedRecordMergerFactory {
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         String payloadClass,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
       this.payloadClass = payloadClass;
@@ -417,13 +416,13 @@ public class BufferedRecordMergerFactory {
   private abstract static class BaseCustomMerger<T> implements BufferedRecordMerger<T> {
     protected final RecordContext<T> recordContext;
     protected final HoodieRecordMerger recordMerger;
-    protected final Schema readerSchema;
+    protected final HoodieSchema readerSchema;
     protected final TypedProperties props;
 
     public BaseCustomMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       this.recordContext = recordContext;
       this.recordMerger = recordMerger.orElseThrow(() -> new IllegalArgumentException("RecordMerger must be present for custom merging"));

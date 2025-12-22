@@ -34,9 +34,11 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -71,8 +73,6 @@ import org.apache.flink.util.CollectionUtil;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -92,8 +92,8 @@ import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 /**
  * Catalog that can set up common options for underneath table.
  */
+@Slf4j
 public class HoodieCatalog extends AbstractCatalog {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCatalog.class);
 
   private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final String catalogPathStr;
@@ -124,7 +124,7 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     if (!databaseExists(getDefaultDatabase())) {
-      LOG.info("Creating database {} automatically because it does not exist.", getDefaultDatabase());
+      log.info("Creating database {} automatically because it does not exist.", getDefaultDatabase());
       Path dbPath = new Path(catalogPath, getDefaultDatabase());
       try {
         fs.mkdirs(dbPath);
@@ -273,6 +273,10 @@ public class HoodieCatalog extends AbstractCatalog {
       } else if (!CollectionUtils.isNullOrEmpty(pkColumns)) {
         builder.primaryKey(pkColumns);
       }
+      List<String> metaCols = TableOptionProperties.getMetadataColumns(options);
+      if (!metaCols.isEmpty()) {
+        metaCols.forEach(c -> builder.columnByMetadata(c, DataTypes.STRING(), null, true));
+      }
       final org.apache.flink.table.api.Schema schema = builder.build();
       return CatalogUtils.createCatalogTable(
           schema,
@@ -351,6 +355,13 @@ public class HoodieCatalog extends AbstractCatalog {
     } else {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }
+
+    // check and persist metadata columns
+    List<String> metaCols = DataTypeUtils.getMetadataColumns(resolvedTable.getUnresolvedSchema());
+    if (!metaCols.isEmpty()) {
+      options.put(TableOptionProperties.METADATA_COLUMNS, String.join(",", metaCols));
+    }
+
     conf.set(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     try {
       HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
@@ -587,7 +598,7 @@ public class HoodieCatalog extends AbstractCatalog {
         HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
         return new TableSchemaResolver(metaClient).getTableAvroSchema(false); // change log mode is not supported now
       } catch (Throwable throwable) {
-        LOG.warn("Failed to resolve the latest table schema.", throwable);
+        log.warn("Failed to resolve the latest table schema.", throwable);
         // ignored
       }
     }
@@ -617,6 +628,10 @@ public class HoodieCatalog extends AbstractCatalog {
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
+    }
+    List<String> metaCols = DataTypeUtils.getMetadataColumns(resolvedTable.getUnresolvedSchema());
+    if (!metaCols.isEmpty()) {
+      options.put(TableOptionProperties.METADATA_COLUMNS, String.join(",", metaCols));
     }
     String tablePathStr = inferTablePath(catalogPathStr, tablePath);
     try {

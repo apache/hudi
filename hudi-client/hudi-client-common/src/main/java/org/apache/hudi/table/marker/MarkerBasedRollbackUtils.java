@@ -26,8 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,9 +45,8 @@ import static org.apache.hudi.common.util.MarkerUtils.readTimelineServerBasedMar
 /**
  * A utility class for marker-based rollback.
  */
+@Slf4j
 public class MarkerBasedRollbackUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackUtils.class);
 
   /**
    * Gets all marker paths.
@@ -73,7 +71,7 @@ public class MarkerBasedRollbackUtils {
       try {
         return new ArrayList<>(writeMarkers.allMarkerFilePaths());
       } catch (IOException | IllegalArgumentException e) {
-        LOG.warn("{} not present and {} marker failed with error: {}. Falling back to {} marker",
+        log.warn("{} not present and {} marker failed with error: {}. Falling back to {} marker",
             MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED);
         return getTimelineServerBasedMarkers(context, parallelism, markerDir, storage);
       }

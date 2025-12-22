@@ -18,15 +18,16 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -719,7 +720,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     val structSchema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structSchema, "record", "")
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structSchema, "record", "")
     val inputDF = spark.createDataFrame(
       spark.sparkContext.parallelize(Seq(Row(1, "v1"), Row(2, "v2"), Row(3, null), Row(4, "v4"))),
       structSchema)
@@ -739,7 +740,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, avroSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, schema, metadataConfig, metaClient)
     columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head
@@ -807,7 +808,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     )
     fsv.close()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableHoodieSchema, metadataConfig, metaClient)
     val requestedColumns = Seq("c1")
     // get all file names
     val stringEncoder: Encoder[String] = org.apache.spark.sql.Encoders.STRING
@@ -900,7 +901,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       // These are NOT indexed
       val requestedColumns = Seq("c4")
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableHoodieSchema, metadataConfig, metaClient)
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
         assertEquals(0, emptyTransposedColStatsDF.collect().length)
@@ -948,7 +949,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       val manualUpdatedColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema, sourceTableSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableHoodieSchema, metadataConfig, metaClient)
 
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition
@@ -1012,7 +1013,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     // We have to include "c1", since we sort the expected outputs by this column
     val requestedColumns = Seq("c4", "c1")
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableHoodieSchema, metadataConfig, metaClient)
 
     ////////////////////////////////////////////////////////////////////////
     // Query filter #1: c1 > 1 and c4 > 'c4 filed value'

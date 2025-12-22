@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -36,7 +37,6 @@ import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroK
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
-import org.apache.avro.Schema
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -107,13 +107,13 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       rawStructSchema
     }
 
-  lazy val rawAvroSchema: Schema = {
+  lazy val rawHoodieSchema: HoodieSchema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    schemaUtil.getTableAvroSchema
+    schemaUtil.getTableSchema
   }
 
   private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
-    AvroConversionUtils.convertAvroSchemaToStructType(rawAvroSchema)
+    HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(rawHoodieSchema)
   }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
@@ -198,7 +198,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     // Prune the partition path by the partition filters
     val prunedPartitions = listMatchingPartitionPaths(partitionFilters)
     getInputFileSlices(prunedPartitions: _*).asScala.map {
-      case (partition, fileSlices) => (partition.path, fileSlices.asScala.toSeq)
+      case (partition, fileSlices) => (partition.getPath, fileSlices.asScala.toSeq)
     }.toMap
   }
 
@@ -272,7 +272,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
               .asInstanceOf[BasePredicate]
         }
         val prunedPartitionPaths = partitionPaths.filter {
-          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
+          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.getValues))
         }.toSeq
 
         logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
@@ -281,7 +281,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         prunedPartitionPaths
       } else {
         logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
-          s" following path(s): ${partitionPaths.find(_.values.length == 0).map(e => e.getPath)}")
+          s" following path(s): ${partitionPaths.find(_.getValues.length == 0).map(e => e.getPath)}")
 
         partitionPaths.toSeq
       }
@@ -444,7 +444,7 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   private val PUT_LEAF_FILES_METHOD_NAME = "putLeafFiles"
 
   private def haveProperPartitionValues(partitionPaths: Seq[PartitionPath]) = {
-    partitionPaths.forall(_.values.length > 0)
+    partitionPaths.forall(_.getValues.length > 0)
   }
 
   private def extractEqualityPredicatesLiteralValues(predicates: Seq[Expression], zoneId: String): Map[String, (String, Option[Any])] = {

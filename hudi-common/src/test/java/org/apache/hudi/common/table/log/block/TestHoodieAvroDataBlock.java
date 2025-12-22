@@ -18,23 +18,23 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -69,7 +69,7 @@ public class TestHoodieAvroDataBlock {
           + "  ]\n"
           + "}";
 
-  private static final Schema SCHEMA = new Schema.Parser().parse(SCHEMA_STRING);
+  private static final HoodieSchema SCHEMA = HoodieSchema.parse(SCHEMA_STRING);
 
   // Just to avoid errors when the HoodieAvroDataBlock constructor wraps HoodieLogBlockContentLocation as an Option and encounters a null value
   private static final HoodieLogBlockContentLocation NULL_BLOCK_CONTENT_LOCATION = new HoodieLogBlockContentLocation(null, null, 0, 0, 0);
@@ -269,11 +269,11 @@ public class TestHoodieAvroDataBlock {
    * @param recordCount The number of records to generate.
    * @return A list of HoodieRecord objects.
    */
-  private static List<HoodieRecord> generateRandomHoodieRecords(Schema schema, int recordCount) {
+  private static List<HoodieRecord> generateRandomHoodieRecords(HoodieSchema schema, int recordCount) {
     List<HoodieRecord> records = new ArrayList<>();
     Random random = new Random();
     for (int i = 0; i < recordCount; i++) {
-      GenericRecord record = new GenericData.Record(schema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String recordKey = "key_" + i;
       record.put("_hoodie_record_key", "key_" + i);
       record.put("value", random.nextDouble());
@@ -290,7 +290,7 @@ public class TestHoodieAvroDataBlock {
    * @param records The list of HoodieRecord objects to be included in the data block.
    * @return A HoodieAvroDataBlock object containing the provided records and schema.
    */
-  private static HoodieAvroDataBlock createHoodieAvroDataBlock(Schema schema, List<HoodieRecord> records) {
+  private static HoodieAvroDataBlock createHoodieAvroDataBlock(HoodieSchema schema, List<HoodieRecord> records) {
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.SCHEMA, schema.toString());
 
@@ -305,7 +305,7 @@ public class TestHoodieAvroDataBlock {
    * @return A byte array representing the content of the HoodieAvroDataBlock.
    * @throws IOException If an I/O error occurs while generating the content bytes.
    */
-  private static byte[] createHoodieAvroDataBlockContent(Schema schema, List<HoodieRecord> records) throws IOException {
+  private static byte[] createHoodieAvroDataBlockContent(HoodieSchema schema, List<HoodieRecord> records) throws IOException {
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.SCHEMA, schema.toString());
 
@@ -337,14 +337,14 @@ public class TestHoodieAvroDataBlock {
     Set<String> keys = new Random()
         .ints(records.size() / 4, 0, records.size())
         .mapToObj(records::get)
-        .map(r -> r.getRecordKey(SCHEMA, RECORD_KEY_FIELD))
+        .map(r -> r.getRecordKey(SCHEMA.toAvroSchema(), RECORD_KEY_FIELD))
         .collect(Collectors.toSet());
 
     // simulate KeyFilter matching logic
     return records.stream()
         .filter(r -> fullKey
-            ? keys.contains(r.getRecordKey(SCHEMA, RECORD_KEY_FIELD))
-            : keys.stream().anyMatch(r.getRecordKey(SCHEMA, RECORD_KEY_FIELD)::startsWith))
+            ? keys.contains(r.getRecordKey(SCHEMA.toAvroSchema(), RECORD_KEY_FIELD))
+            : keys.stream().anyMatch(r.getRecordKey(SCHEMA.toAvroSchema(), RECORD_KEY_FIELD)::startsWith))
         .collect(Collectors.toList());
   }
 

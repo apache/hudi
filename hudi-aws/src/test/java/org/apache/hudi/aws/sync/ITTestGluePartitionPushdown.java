@@ -18,8 +18,6 @@
 
 package org.apache.hudi.aws.sync;
 
-import org.apache.hudi.sync.common.model.FieldSchema;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,8 +31,6 @@ import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.TableInput;
 
 import java.util.Arrays;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -45,14 +41,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ITTestGluePartitionPushdown extends AWSGlueIntegrationTestBase {
 
   private static final String TABLE_NAME = "tbl_name";
-  private Column[] partitionsColumn = {
+  private final Column[] partitionsColumn = {
       Column.builder().name("part1").type("int").build(),
       Column.builder().name("part2").type("string").build()
   };
-  private List<FieldSchema> partitionsFieldSchema = Arrays.asList(
-      new FieldSchema("part1", "int"),
-      new FieldSchema("part2", "string")
-  );
 
   @BeforeEach
   public void setUpPushdownTest() throws Exception {

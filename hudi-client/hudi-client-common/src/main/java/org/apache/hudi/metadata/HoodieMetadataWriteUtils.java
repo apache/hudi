@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -74,12 +75,12 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.util.Lazy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -117,8 +118,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.translateWriteSta
 /**
  * Metadata table write utils.
  */
+@Slf4j
 public class HoodieMetadataWriteUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataWriteUtils.class);
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
   public static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
@@ -219,6 +220,8 @@ public class HoodieMetadataWriteUtils {
             .withLogCompactionEnabled(writeConfig.isLogCompactionEnabledOnMetadata())
             // Below config is only used if isLogCompactionEnabled is set.
             .withLogCompactionBlocksThreshold(writeConfig.getMetadataLogCompactBlocksThreshold())
+            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.valueOf(writeConfig.getMetadataCompactionTriggerStrategy()))
+            .withMaxDeltaSecondsBeforeCompaction(writeConfig.getMetadataMaxDeltaSecondsBeforeCompaction())
             .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MDT_MAX_HFILE_SIZE_BYTES)
             .logFileMaxSize(maxLogFileSizeBytes)
@@ -417,13 +420,13 @@ public class HoodieMetadataWriteUtils {
                       ? Option.empty()
                       : Option.of(new Schema.Parser().parse(writerSchemaStr)));
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
-      Option<Schema> tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
+      Option<HoodieSchema> tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema).map(HoodieSchema::fromAvroSchema);
       if (tableSchema.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
       HoodieIndexVersion partitionStatsIndexVersion = existingIndexVersionOrDefault(PARTITION_NAME_PARTITION_STATS, dataMetaClient);
-      Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
-      Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, false, recordTypeOpt, partitionStatsIndexVersion);
+      Lazy<Option<HoodieSchema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
+      Map<String, HoodieSchema> columnsToIndexSchemaMap = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, false, recordTypeOpt, partitionStatsIndexVersion);
       if (columnsToIndexSchemaMap.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
@@ -456,7 +459,7 @@ public class HoodieMetadataWriteUtils {
       }
 
       List<String> colsToIndex = new ArrayList<>(columnsToIndexSchemaMap.keySet());
-      LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap.keySet());
+      log.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap.keySet());
       // Group by partitionPath and then gather write stats lists,
       // where each inner list contains HoodieWriteStat objects that have the same partitionPath.
       List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(allWriteStats.stream()

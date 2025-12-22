@@ -72,8 +72,7 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -81,10 +80,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class HoodieJavaCopyOnWriteTable<T>
     extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaCopyOnWriteTable.class);
 
   protected HoodieJavaCopyOnWriteTable(HoodieWriteConfig config,
                                        HoodieEngineContext context,

@@ -57,10 +57,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -84,8 +82,8 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
  * the records, and writes the records to a new base file.
  */
 @NotThreadSafe
+@Slf4j
 public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FileGroupReaderBasedMergeHandle.class);
 
   private final Option<CompactionOperation> compactionOperation;
   private final String maxInstantTime;
@@ -188,7 +186,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   private void init(CompactionOperation operation, String partitionPath) {
-    LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
+    log.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
     this.baseFileToMerge = operation.getBaseFile(config.getBasePath(), operation.getPartitionPath()).orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -218,7 +216,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       oldFilePath = makeNewFilePath(partitionPath, oldFileName);
       newFilePath = makeNewFilePath(partitionPath, newFileName);
 
-      LOG.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
+      log.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
@@ -233,8 +231,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
-            //TODO boundary to revisit in follow up to use HoodieSchema directly
-            config, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), taskContextSupplier, recordType);
+            config, writeSchemaWithMetaFields, taskContextSupplier, recordType);
     } catch (IOException io) {
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
@@ -259,7 +256,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema())
-        .map(internalSchema -> AvroSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields, internalSchema,
+        .map(internalSchema -> AvroSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields.toAvroSchema(), internalSchema,
             config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS)));
     long maxMemoryPerCompaction = getMaxMemoryForMerge();
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
@@ -287,12 +284,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             // For other updates, we only want to preserve the metadata if the record is not being modified by this update. If the record already exists in the base file and is not updated,
             // the operation will be null. Records that are being updated or records being added to the file group for the first time will have an operation set and must generate new metadata.
             boolean shouldPreserveRecordMetadata = preserveMetadata || record.getOperation() == null;
-            Schema recordSchema = shouldPreserveRecordMetadata ? writeSchemaWithMetaFields : writeSchema;
+            HoodieSchema recordSchema = shouldPreserveRecordMetadata ? writeSchemaWithMetaFields : writeSchema;
             writeToFile(record.getKey(), record, recordSchema, config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
             writeStatus.markSuccess(record, recordMetadata);
             recordsWritten++;
           } catch (Exception e) {
-            LOG.error("Error writing record {}", record, e);
+            log.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
             fileGroupReader.onWriteFailure(record.getRecordKey());
           }

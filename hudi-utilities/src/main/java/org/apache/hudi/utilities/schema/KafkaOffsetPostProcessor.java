@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,8 +34,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**
@@ -63,6 +62,7 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
   }
 
   @Override
+  @Deprecated
   public Schema processSchema(Schema schema) {
     // this method adds kafka offset fields namely source offset, partition, timestamp and kafka message key to the schema of the batch.
     List<Schema.Field> fieldList = schema.getFields();
@@ -85,12 +85,11 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
         newFieldList.add(new Schema.Field(KAFKA_SOURCE_TIMESTAMP_COLUMN, Schema.create(Schema.Type.LONG), "timestamp column", 0));
       }
       if (!fieldNames.contains(KAFKA_SOURCE_KEY_COLUMN)) {
-        newFieldList.add(new Schema.Field(KAFKA_SOURCE_KEY_COLUMN, createNullableSchema(Schema.Type.STRING), "kafka key column", JsonProperties.NULL_VALUE));
+        newFieldList.add(new Schema.Field(KAFKA_SOURCE_KEY_COLUMN, AvroSchemaUtils.createNullableSchema(Schema.Type.STRING), "kafka key column", JsonProperties.NULL_VALUE));
       }
       return Schema.createRecord(schema.getName() + "_processed", schema.getDoc(), schema.getNamespace(), false, newFieldList);
     } catch (Exception e) {
       throw new HoodieSchemaException("Kafka offset post processor failed with schema: " + schema, e);
     }
-
   }
 }

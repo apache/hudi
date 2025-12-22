@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -31,8 +32,6 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -43,9 +42,8 @@ import java.util.StringTokenizer;
 /**
  * Write commit callback http client.
  */
+@Slf4j
 public class HoodieWriteCommitHttpCallbackClient implements Closeable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitHttpCallbackClient.class);
 
   public static final String HEADER_KEY_API_KEY = "HUDI-CALLBACK-KEY";
   static final String HEADERS_DELIMITER = ";";
@@ -81,12 +79,12 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
     try (CloseableHttpResponse response = client.execute(request)) {
       int statusCode = response.getStatusLine().getStatusCode();
       if (statusCode >= 300) {
-        LOG.error("Failed to send callback message. Response was {}", response);
+        log.error("Failed to send callback message. Response was {}", response);
       } else {
-        LOG.info("Sent Callback data with {} custom headers to {} successfully !", customHeaders.size(), url);
+        log.info("Sent Callback data with {} custom headers to {} successfully !", customHeaders.size(), url);
       }
     } catch (IOException e) {
-      LOG.warn("Failed to send callback.", e);
+      log.warn("Failed to send callback.", e);
     }
   }
 
@@ -128,7 +126,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
               headers.put(trimKey, trimValue);
             }
           } else {
-            LOG.warn("Unable to parse some custom headers. Supported format is: Header_name1:Header value1;Header_name2:Header value2");
+            log.warn("Unable to parse some custom headers. Supported format is: Header_name1:Header value1;Header_name2:Header value2");
           }
         }
       }

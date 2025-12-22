@@ -32,10 +32,11 @@ import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
+import lombok.Getter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
@@ -74,7 +75,9 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final IOManager ioManager;
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  @Getter
   private final MockOperatorCoordinatorContext coordinatorContext;
+  @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
   private final TreeMap<Long, byte[]> coordinatorStateStore;
@@ -122,7 +125,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
-    this.rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
+    this.rowType = (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     // one function
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
@@ -297,17 +300,9 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     }
   }
 
-  public StreamWriteOperatorCoordinator getCoordinator() {
-    return coordinator;
-  }
-
   @Override
   public AbstractWriteFunction getWriteFunction() {
     return this.writeFunction;
-  }
-
-  public MockOperatorCoordinatorContext getCoordinatorContext() {
-    return coordinatorContext;
   }
 
   public boolean isKeyInState(HoodieKey hoodieKey) {

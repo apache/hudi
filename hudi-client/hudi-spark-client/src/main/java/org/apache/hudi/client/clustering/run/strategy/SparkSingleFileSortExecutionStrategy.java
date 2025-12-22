@@ -26,6 +26,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
@@ -33,11 +34,10 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -46,10 +46,9 @@ import java.util.Map;
  * This strategy is similar to {@link SparkSortAndSizeExecutionStrategy} with the difference being that
  * there should be only one large file group per clustering group.
  */
+@Slf4j
 public class SparkSingleFileSortExecutionStrategy<T>
     extends MultipleSparkJobExecutionStrategy<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkSingleFileSortExecutionStrategy.class);
 
   public SparkSingleFileSortExecutionStrategy(HoodieTable table,
                                               HoodieEngineContext engineContext,
@@ -62,14 +61,14 @@ public class SparkSingleFileSortExecutionStrategy<T>
                                                                    int numOutputGroups,
                                                                    String instantTime,
                                                                    Map<String, String> strategyParams,
-                                                                   Schema schema,
+                                                                   HoodieSchema schema,
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
-    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
+    log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
@@ -97,7 +96,7 @@ public class SparkSingleFileSortExecutionStrategy<T>
     if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
-    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
+    log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
@@ -106,6 +105,7 @@ public class SparkSingleFileSortExecutionStrategy<T>
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), shouldPreserveHoodieMetadata));
+        false, getRDDPartitioner(strategyParams, HoodieSchema.fromAvroSchema(schema)), true, numOutputGroups,
+        new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), shouldPreserveHoodieMetadata));
   }
 }

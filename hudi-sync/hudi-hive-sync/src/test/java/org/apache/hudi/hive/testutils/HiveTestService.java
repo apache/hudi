@@ -19,7 +19,7 @@
 package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -243,7 +243,7 @@ public class HiveTestService {
     }
 
     @Override
-    public TTransport getTransport(TTransport trans) {
+    public TTransport getTransport(TTransport trans) throws TTransportException {
       return childTransFactory.getTransport(parentTransFactory.getTransport(trans));
     }
   }
@@ -259,8 +259,8 @@ public class HiveTestService {
     }
 
     @Override
-    protected TSocket acceptImpl() throws TTransportException {
-      TSocket ts = super.acceptImpl();
+    public TSocket accept() throws TTransportException {
+      TSocket ts = super.accept();
       try {
         ts.getSocket().setKeepAlive(true);
       } catch (SocketException e) {

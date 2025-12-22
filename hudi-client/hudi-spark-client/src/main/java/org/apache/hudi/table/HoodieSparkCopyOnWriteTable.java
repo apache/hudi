@@ -80,9 +80,8 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -100,10 +99,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTab
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
+@Slf4j
 public class HoodieSparkCopyOnWriteTable<T>
     extends HoodieSparkTable<T> implements HoodieCompactionHandler<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkCopyOnWriteTable.class);
 
   public HoodieSparkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -203,7 +201,7 @@ public class HoodieSparkCopyOnWriteTable<T>
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
     // Delete metadata table to rollback a failed bootstrap. re-attempt of bootstrap will re-initialize the mdt.
     try {
-      LOG.info("Deleting metadata table because we are rolling back failed bootstrap. ");
+      log.info("Deleting metadata table because we are rolling back failed bootstrap. ");
       deleteMetadataTable(config.getBasePath(), context);
     } catch (HoodieMetadataException e) {
       throw new HoodieException("Failed to delete metadata table.", e);

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
+import org.apache.hudi.{DataSourceOptionsHelper, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -214,7 +214,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       val catalogDatabaseName = formatName(spark,
         table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
 
-      val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
+      val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
         SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)

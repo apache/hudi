@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -48,7 +49,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -109,7 +110,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITIO
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
@@ -163,7 +163,6 @@ public class HiveTestUtil {
       hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
       hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), TABLE_NAME);
       hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-      hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
       hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
       hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
       hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
@@ -401,8 +400,8 @@ public class HiveTestUtil {
     String fileId = UUID.randomUUID().toString();
     Path filePath = new Path(partPath.toString() + "/"
         + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
-    Schema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
-    generateParquetDataWithSchema(filePath, schema);
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
+    generateParquetDataWithSchema(filePath, schema.toAvroSchema());
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId(fileId);
     writeStat.setPath(filePath.toString());
@@ -639,11 +638,11 @@ public class HiveTestUtil {
   @SuppressWarnings({"unchecked", "deprecation"})
   private static void generateParquetData(Path filePath, boolean isParquetSchemaSimple)
       throws IOException, URISyntaxException {
-    Schema schema = getTestDataSchema(isParquetSchemaSimple);
-    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
+    HoodieSchema schema = getTestDataSchema(isParquetSchemaSimple);
+    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema.toAvroSchema(), Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -662,11 +661,11 @@ public class HiveTestUtil {
 
   private static void generateParquetData(Path filePath, String schemaPath, String dataPath)
       throws IOException, URISyntaxException {
-    Schema schema = SchemaTestUtil.getSchema(schemaPath);
-    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
+    HoodieSchema schema = SchemaTestUtil.getSchema(schemaPath);
+    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema.toAvroSchema(), Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -692,7 +691,7 @@ public class HiveTestUtil {
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
 
-    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(schema);
+    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(HoodieSchema.fromAvroSchema(schema));
     testRecords.forEach(s -> {
       try {
         writer.write(s);
@@ -706,7 +705,7 @@ public class HiveTestUtil {
   private static HoodieLogFile generateLogData(StoragePath parquetFilePath,
                                                boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
-    Schema schema = getTestDataSchema(isLogSchemaSimple);
+    HoodieSchema schema = getTestDataSchema(isLogSchemaSimple);
     HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
@@ -726,7 +725,7 @@ public class HiveTestUtil {
 
   private static HoodieLogFile generateLogData(StoragePath parquetFilePath, String logSchemaPath, String dataPath)
       throws IOException, InterruptedException, URISyntaxException {
-    Schema schema = SchemaTestUtil.getSchema(logSchemaPath);
+    HoodieSchema schema = SchemaTestUtil.getSchema(logSchemaPath);
     HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
@@ -742,14 +741,14 @@ public class HiveTestUtil {
     return logWriter.getLogFile();
   }
 
-  private static Schema getTestDataSchema(boolean isSimpleSchema) throws IOException {
+  private static HoodieSchema getTestDataSchema(boolean isSimpleSchema) throws IOException {
     return isSimpleSchema ? SchemaTestUtil.getSimpleSchema() : SchemaTestUtil.getEvolvedSchema();
   }
 
   private static void addSchemaToCommitMetadata(HoodieCommitMetadata commitMetadata, boolean isSimpleSchema,
                                                 boolean useSchemaFromCommitMetadata) throws IOException {
     if (useSchemaFromCommitMetadata) {
-      Schema dataSchema = getTestDataSchema(isSimpleSchema);
+      HoodieSchema dataSchema = getTestDataSchema(isSimpleSchema);
       commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, dataSchema.toString());
     }
   }
@@ -762,7 +761,7 @@ public class HiveTestUtil {
   }
 
   private static void addSchemaToCommitMetadata(HoodieCommitMetadata commitMetadata, String schemaPath) throws IOException {
-    Schema dataSchema = SchemaTestUtil.getSchema(schemaPath);
+    HoodieSchema dataSchema = SchemaTestUtil.getSchema(schemaPath);
     commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, dataSchema.toString());
   }
 

@@ -18,11 +18,12 @@
 
 package org.apache.hudi.table.format.mor;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -39,7 +40,7 @@ import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.DefaultInputSplitAssigner;
 import org.apache.flink.api.common.io.RichInputFormat;
@@ -116,6 +117,7 @@ public class MergeOnReadInputFormat
   /**
    * Flag saying whether the input format has been closed.
    */
+  @Getter
   private boolean closed = true;
 
   protected final InternalSchemaManager internalSchemaManager;
@@ -187,8 +189,10 @@ public class MergeOnReadInputFormat
             + "hoodie table path: " + split.getTablePath()
             + "flink partition Index: " + split.getSplitNumber()
             + "merge type: " + split.getMergeType());
-    final Schema tableSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getAvroSchema()));
-    final Schema requiredSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getRequiredAvroSchema()));
+    final HoodieSchema tableSchema = HoodieSchemaCache.intern(
+        HoodieSchema.parse(tableState.getAvroSchema()));
+    final HoodieSchema requiredSchema = HoodieSchemaCache.intern(
+        HoodieSchema.parse(tableState.getRequiredAvroSchema()));
     return getSplitRowIterator(split, tableSchema, requiredSchema, mergeType, emitDelete);
   }
 
@@ -237,10 +241,6 @@ public class MergeOnReadInputFormat
     }
     this.iterator = null;
     this.closed = true;
-  }
-
-  public boolean isClosed() {
-    return this.closed;
   }
 
   // -------------------------------------------------------------------------
@@ -301,8 +301,8 @@ public class MergeOnReadInputFormat
    */
   protected ClosableIterator<RowData> getSplitRowIterator(
       MergeOnReadInputSplit split,
-      Schema tableSchema,
-      Schema requiredSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
       String mergeType,
       boolean emitDelete) throws IOException {
     HoodieFileGroupReader<RowData> fileGroupReader = createFileGroupReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
@@ -322,8 +322,8 @@ public class MergeOnReadInputFormat
    */
   protected HoodieFileGroupReader<RowData> createFileGroupReader(
       MergeOnReadInputSplit split,
-      Schema tableSchema,
-      Schema requiredSchema,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
       String mergeType,
       boolean emitDelete) {
     FileSlice fileSlice = new FileSlice(

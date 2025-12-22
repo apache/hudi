@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -224,8 +225,8 @@ public class UtilHelpers {
   }
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
-    if (schemaProvider != null && schemaProvider.getSourceSchema() != null && schemaProvider.getSourceSchema() != InputBatch.NULL_SCHEMA) {
-      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema());
+    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != InputBatch.NULL_SCHEMA) {
+      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     }
     return null;
   }
@@ -383,7 +384,7 @@ public class UtilHelpers {
   /**
    * Build Spark Context for ingestion/compaction.
    *
-   * @return
+   * @return {@link JavaSparkContext}
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
@@ -448,13 +449,13 @@ public class UtilHelpers {
   }
 
   /**
-   * Returns a factory for creating connections to the given JDBC URL.
+   * Creates a connection to the given JDBC URL.
    *
    * @param options - JDBC options that contains url, table and other information.
-   * @return
+   * @return {@link Connection}
    * @throws SQLException if the driver could not open a JDBC connection.
    */
-  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+  private static Connection createConnection(Map<String, String> options) throws SQLException {
     String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
     DriverRegistry.register(driverClass);
     Enumeration<Driver> drivers = DriverManager.getDrivers();
@@ -503,13 +504,13 @@ public class UtilHelpers {
    * @return
    * @throws Exception
    */
-  public static Schema getJDBCSchema(Map<String, String> options) {
+  public static HoodieSchema getJDBCSchema(Map<String, String> options) {
     Connection conn;
     String url;
     String table;
     boolean tableExists;
     try {
-      conn = createConnectionFactory(options);
+      conn = createConnection(options);
       url = options.get(JDBCOptions.JDBC_URL());
       table = options.get(JDBCOptions.JDBC_TABLE_NAME());
       tableExists = tableExists(conn, options);
@@ -534,7 +535,7 @@ public class UtilHelpers {
             structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
                 .getSchema(conn, rs, dialect, false, false);
           }
-          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
+          return HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table));
         }
       }
     } catch (HoodieException e) {

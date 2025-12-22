@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -92,7 +93,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieLogRecordScanner.class);
 
   // Reader schema for the records
-  protected final Schema readerSchema;
+  protected final HoodieSchema readerSchema;
   // Latest valid instant time
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
@@ -155,7 +156,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private HoodieTimeline inflightInstantsTimeline = null;
 
   protected AbstractHoodieLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths,
-                                           Schema readerSchema, String latestInstantTime,
+                                           HoodieSchema readerSchema, String latestInstantTime,
                                            boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                            boolean withOperationField, boolean forceFullScan,
                                            Option<String> partitionNameOverride,
@@ -819,7 +820,7 @@ public abstract class AbstractHoodieLogRecordScanner {
             .orElse(Function.identity());
 
     Schema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(dataBlock::getSchema);
+        .orElseGet(() -> dataBlock.getSchema().toAvroSchema());
 
     return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, transformer), schema);
   }
@@ -847,7 +848,7 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(
-          dataBlock.getSchema(),
+          dataBlock.getSchema().toAvroSchema(),
           this.hoodieTableMetaClient.getTableConfig().getProps(),
           mergedAvroSchema,
           Collections.emptyMap());
@@ -867,7 +868,7 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     public abstract Builder withLogFilePaths(List<String> logFilePaths);
 
-    public abstract Builder withReaderSchema(Schema schema);
+    public abstract Builder withReaderSchema(HoodieSchema schema);
 
     public abstract Builder withInternalSchema(InternalSchema internalSchema);
 

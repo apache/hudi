@@ -27,8 +27,7 @@ class TestVectorizedReadWithSchemaEvolution extends HoodieSparkSqlTestBase {
           "hoodie.schema.on.read.enable" -> "true",
           "spark.sql.parquet.enableVectorizedReader" -> "true",
           "spark.sql.codegen.maxFields" -> "1",
-          "hoodie.parquet.small.file.limit" -> "0",
-          "hoodie.file.group.reader.enabled" -> "false"
+          "hoodie.parquet.small.file.limit" -> "0"
         ) {
           withTempDir { tmp =>
             val tableName = generateTableName

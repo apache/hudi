@@ -26,8 +26,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
@@ -37,8 +36,8 @@ import java.util.Set;
  * Update strategy based on following.
  * if some file groups have update record, throw exception
  */
+@Slf4j
 public class SparkRejectUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(SparkRejectUpdateStrategy.class);
 
   public SparkRejectUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     super(engineContext, table, fileGroupsInPendingClustering);
@@ -52,7 +51,7 @@ public class SparkRejectUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
         String msg = String.format("Not allowed to update the clustering file group %s. "
                 + "For pending clustering operations, we are not going to support update for now.",
             fileGroupIdWithRecordUpdate.toString());
-        LOG.error(msg);
+        log.error(msg);
         throw new HoodieClusteringUpdateException(msg);
       }
     });

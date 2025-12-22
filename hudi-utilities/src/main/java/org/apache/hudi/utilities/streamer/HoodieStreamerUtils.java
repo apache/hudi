@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -103,7 +104,7 @@ public class HoodieStreamerUtils {
     boolean requiresPayload = isChangingRecords(cfg.operation) && !HoodieWriteConfig.isFileGroupReaderBasedMergeHandle(props);
 
     return avroRDDOptional.map(avroRDD -> {
-      SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
+      SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetHoodieSchema().toAvroSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
       JavaRDD<Either<HoodieRecord,String>> records;
       if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
@@ -118,7 +119,8 @@ public class HoodieStreamerUtils {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
               }
               BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-              DeleteContext deleteContext = new DeleteContext(props, processedAvroSchema.get()).withReaderSchema(processedAvroSchema.get());
+              HoodieSchema processedHoodieSchema = HoodieSchema.fromAvroSchema(processedAvroSchema.get());
+              DeleteContext deleteContext = new DeleteContext(props, processedHoodieSchema).withReaderSchema(processedHoodieSchema);
               return new CloseableMappingIterator<>(ClosableIterator.wrap(genericRecordIterator), genRec -> {
                 try {
                   if (shouldErrorTable) {
@@ -155,7 +157,7 @@ public class HoodieStreamerUtils {
           StructType baseStructType = AvroConversionUtils.convertAvroSchemaToStructType(processedAvroSchema.get());
           StructType targetStructType = isDropPartitionColumns(props) ? AvroConversionUtils
               .convertAvroSchemaToStructType(HoodieAvroUtils.removeFields(processedAvroSchema.get(), partitionColumns)) : baseStructType;
-          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedAvroSchema.get(), baseStructType);
+          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(HoodieSchema.fromAvroSchema(processedAvroSchema.get()), baseStructType);
 
           return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
             InternalRow row = (InternalRow) deserializer.deserialize(rec).get();

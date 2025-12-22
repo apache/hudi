@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -30,9 +31,6 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
@@ -47,6 +45,7 @@ import java.util.stream.Collectors;
 /**
  * Tool to evaluate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
  */
+@Slf4j
 public class ExpressionEvaluators {
   
   /**
@@ -194,6 +193,10 @@ public class ExpressionEvaluators {
           "Can not find column " + this.name);
       return columnStats;
     }
+
+    public String getName() {
+      return this.name;
+    }
   }
 
   /**
@@ -242,6 +245,10 @@ public class ExpressionEvaluators {
         return false;
       }
       return compare(maxVal, val, type) >= 0;
+    }
+
+    public Object getVal() {
+      return this.val;
     }
   }
 
@@ -387,9 +394,9 @@ public class ExpressionEvaluators {
   /**
    * To evaluate IN expr.
    */
+  @Slf4j
   public static class In extends LeafEvaluator {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOGGER = LoggerFactory.getLogger(In.class);
 
     private static final int IN_PREDICATE_LIMIT = 200;
 
@@ -413,7 +420,7 @@ public class ExpressionEvaluators {
 
       if (vals.length > IN_PREDICATE_LIMIT) {
         // skip evaluating the predicate if the number of values is too big
-        LOGGER.warn("Skipping evaluation of `in` predicate because the number of values is too big!");
+        log.warn("Skipping evaluation of `in` predicate because the number of values is too big!");
         return true;
       }
 
@@ -423,6 +430,10 @@ public class ExpressionEvaluators {
 
     public void bindVals(Object... vals) {
       this.vals = vals;
+    }
+
+    public Object[] getVals() {
+      return this.vals;
     }
   }
 
@@ -520,6 +531,10 @@ public class ExpressionEvaluators {
     public Evaluator bindEvaluator(Evaluator... evaluators) {
       this.evaluators = evaluators;
       return this;
+    }
+
+    public Evaluator[] getEvaluators() {
+      return this.evaluators;
     }
   }
 

@@ -115,7 +115,7 @@ public class TestSqlSource extends UtilitiesTestBase {
     // Test Avro to Row format
     Dataset<Row> fetch1Rows = AvroConversionUtils
         .createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-            schemaProvider.getSourceSchema().toString(), sparkSession);
+            schemaProvider.getSourceHoodieSchema().toString(), sparkSession);
     assertEquals(10000, fetch1Rows.count());
   }
 

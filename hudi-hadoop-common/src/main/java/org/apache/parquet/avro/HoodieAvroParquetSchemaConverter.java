@@ -42,11 +42,11 @@ public abstract class HoodieAvroParquetSchemaConverter {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroParquetSchemaConverter.class);
   public static HoodieAvroParquetSchemaConverter getAvroSchemaConverter(Configuration configuration) {
     try {
-      return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.AvroSchemaConverterWithTimestampNTZ",
+      return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass(AvroSchemaConverterWithTimestampNTZ.class.getName(),
           new Class<?>[] {Configuration.class}, configuration);
     } catch (Throwable t) {
       LOG.debug("Failed to load AvroSchemaConverterWithTimestampNTZ, using NativeAvroSchemaConverter instead", t);
-      return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroSchemaConverter",
+      return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass(NativeAvroSchemaConverter.class.getName(),
           new Class<?>[] {Configuration.class}, configuration);
     }
   }

@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 
 import org.apache.avro.Schema;
@@ -59,5 +60,20 @@ public abstract class SchemaPostProcessor implements Serializable {
    * @param schema input schema.
    * @return modified schema.
    */
-  public abstract Schema processSchema(Schema schema);
+  public HoodieSchema processSchema(HoodieSchema schema) {
+    Schema modifiedSchema = processSchema(schema.getAvroSchema());
+    return HoodieSchema.fromAvroSchema(modifiedSchema);
+  }
+
+  /**
+   * Rewrites schema.
+   *
+   * @param schema input schema.
+   * @return modified schema.
+   * @deprecated since 1.2.0, use {@link #processSchema(HoodieSchema)} instead.
+   */
+  @Deprecated
+  public Schema processSchema(Schema schema) {
+    throw new UnsupportedOperationException("processSchema is deprecated and is not implemented for this SchemaPostProcessor.");
+  }
 }

@@ -26,9 +26,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -40,9 +38,9 @@ import java.util.Iterator;
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
+@Slf4j
 public class FlinkIncrementalConcatHandle<T, I, K, O>
     extends FlinkIncrementalMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkIncrementalConcatHandle.class);
 
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
@@ -59,16 +57,15 @@ public class FlinkIncrementalConcatHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
+    HoodieSchema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    String key = oldRecord.getRecordKey(oldSchema.toAvroSchema(), keyGeneratorOpt);
     try {
-      //TODO boundary to revisit in follow up to use HoodieSchema directly
-      fileWriter.write(key, oldRecord, HoodieSchema.fromAvroSchema(writeSchema));
+      fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
-      LOG.debug("Old record is {}", oldRecord);
+      log.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;
