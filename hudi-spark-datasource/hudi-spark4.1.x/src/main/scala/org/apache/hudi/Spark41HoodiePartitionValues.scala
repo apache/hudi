@@ -22,9 +22,9 @@ package org.apache.hudi
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{DataType, Decimal}
-import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String, VariantVal}
+import org.apache.spark.unsafe.types.{CalendarInterval, GeographyVal, GeometryVal, UTF8String, VariantVal}
 
-case class Spark4HoodiePartitionValues(values: InternalRow) extends HoodiePartitionValues {
+case class Spark41HoodiePartitionValues(values: InternalRow) extends HoodiePartitionValues {
   override def numFields: Int = {
     values.numFields
   }
@@ -38,7 +38,7 @@ case class Spark4HoodiePartitionValues(values: InternalRow) extends HoodiePartit
   }
 
   override def copy(): InternalRow = {
-    Spark4HoodiePartitionValues(values.copy())
+    Spark41HoodiePartitionValues(values.copy())
   }
 
   override def isNullAt(ordinal: Int): Boolean = {
@@ -83,6 +83,14 @@ case class Spark4HoodiePartitionValues(values: InternalRow) extends HoodiePartit
 
   override def getBinary(ordinal: Int): Array[Byte] = {
     values.getBinary(ordinal)
+  }
+
+  override def getGeography(ordinal: Int): GeographyVal = {
+    values.getGeography(ordinal)
+  }
+
+  override def getGeometry(ordinal: Int): GeometryVal = {
+    values.getGeometry(ordinal)
   }
 
   override def getInterval(ordinal: Int): CalendarInterval = {

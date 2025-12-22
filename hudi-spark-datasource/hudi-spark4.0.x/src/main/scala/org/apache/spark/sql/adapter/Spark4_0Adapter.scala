@@ -106,6 +106,16 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
     Some(new Spark40LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
+  override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                                  fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping = {
+    new Spark40HoodiePartitionCDCFileGroupMapping(partitionValues, fileSplits)
+  }
+
+  override def createPartitionFileSliceMapping(values: InternalRow,
+                                               slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
+    new Spark40HoodiePartitionFileSliceMapping(values, slices)
+  }
+
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
                                        readFunction: PartitionedFile => Iterator[InternalRow],
                                        filePartitions: Seq[FilePartition],

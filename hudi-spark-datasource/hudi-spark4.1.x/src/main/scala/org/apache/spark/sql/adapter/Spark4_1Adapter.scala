@@ -17,10 +17,12 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.Spark41HoodieFileScanRDD
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark41HoodieFileScanRDD, Spark41HoodiePartitionCDCFileGroupMapping, Spark41HoodiePartitionFileSliceMapping}
+import org.apache.hudi.client.model.{HoodieInternalRow, Spark41HoodieInternalRow}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
@@ -36,16 +38,16 @@ import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.orc.Spark41OrcReader
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark41LegacyHoodieParquetFileFormat, Spark41ParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
-import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_1ExtendedSqlParser}
+import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.unsafe.types.UTF8String
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 4.0.x branch
@@ -105,6 +107,22 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark41LegacyHoodieParquetFileFormat(appendPartitionValues))
+  }
+
+  override def createInternalRow(metaFields: Array[UTF8String],
+                                 sourceRow: InternalRow,
+                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark41HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
+  }
+
+  override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                                  fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping = {
+    new Spark41HoodiePartitionCDCFileGroupMapping(partitionValues, fileSplits)
+  }
+
+  override def createPartitionFileSliceMapping(values: InternalRow,
+                                               slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
+    new Spark41HoodiePartitionFileSliceMapping(values, slices)
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
