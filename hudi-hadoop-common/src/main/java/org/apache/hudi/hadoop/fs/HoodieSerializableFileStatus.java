@@ -19,6 +19,8 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -35,11 +37,13 @@ import java.util.stream.Collectors;
  * This class is needed because `hudi-hadoop-mr-bundle` relies on Avro 1.8.2,
  * and won't work well with `HoodieFileStatus`
  */
+@AllArgsConstructor
+@Getter
 public class HoodieSerializableFileStatus implements Serializable {
 
   private final Path path;
   private final long length;
-  private final Boolean isDir;
+  private final boolean dir;
   private final short blockReplication;
   private final long blockSize;
   private final long modificationTime;
@@ -48,66 +52,6 @@ public class HoodieSerializableFileStatus implements Serializable {
   private final String owner;
   private final String group;
   private final Path symlink;
-
-  HoodieSerializableFileStatus(Path path, long length, boolean isDir, short blockReplication,
-                               long blockSize, long modificationTime, long accessTime,
-                               FsPermission permission, String owner, String group, Path symlink) {
-    this.path = path;
-    this.length = length;
-    this.isDir = isDir;
-    this.blockReplication = blockReplication;
-    this.blockSize = blockSize;
-    this.modificationTime = modificationTime;
-    this.accessTime = accessTime;
-    this.permission = permission;
-    this.owner = owner;
-    this.group = group;
-    this.symlink = symlink;
-  }
-
-  public Path getPath() {
-    return path;
-  }
-
-  public long getLen() {
-    return length;
-  }
-
-  public Boolean isDirectory() {
-    return isDir;
-  }
-
-  public short getReplication() {
-    return blockReplication;
-  }
-
-  public long getBlockSize() {
-    return blockSize;
-  }
-
-  public long getModificationTime() {
-    return modificationTime;
-  }
-
-  public long getAccessTime() {
-    return accessTime;
-  }
-
-  public FsPermission getPermission() {
-    return permission;
-  }
-
-  public String getOwner() {
-    return owner;
-  }
-
-  public String getGroup() {
-    return group;
-  }
-
-  public Path getSymlink() {
-    return symlink;
-  }
 
   public static HoodieSerializableFileStatus fromFileStatus(FileStatus status) {
     Path symlink;
@@ -131,7 +75,7 @@ public class HoodieSerializableFileStatus implements Serializable {
   }
 
   public static FileStatus toFileStatus(HoodieSerializableFileStatus status) {
-    return new FileStatus(status.getLen(), status.isDirectory(), status.getReplication(),
+    return new FileStatus(status.getLength(), status.isDir(), status.getBlockReplication(),
         status.getBlockSize(), status.getModificationTime(), status.getAccessTime(), status.getPermission(),
         status.getOwner(), status.getGroup(), status.getSymlink(), status.getPath());
   }

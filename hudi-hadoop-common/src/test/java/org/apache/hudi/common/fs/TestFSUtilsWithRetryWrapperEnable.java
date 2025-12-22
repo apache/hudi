@@ -25,6 +25,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -132,6 +133,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     private FileSystem fs;
     private int count = 1;
     private int loop;
+    @Getter
     private short defaultReplication = 3;
 
     public FakeRemoteFileSystem(FileSystem fs, int retryLoop) {
@@ -255,11 +257,6 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public String getScheme() {
       return fs.getScheme();
-    }
-
-    @Override
-    public short getDefaultReplication() {
-      return  defaultReplication;
     }
 
     @Override
