@@ -28,13 +28,12 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -134,26 +133,23 @@ public class ReflectionUtils {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
     String packageName = clazz.getPackage().getName();
     String path = packageName.replace('.', '/');
-    Enumeration<URL> resources = null;
+
     try {
-      resources = classLoader.getResources(path);
+      return Collections.list(classLoader.getResources(path)).stream()
+              .map(url -> {
+                try {
+                  return new File(url.toURI());
+                } catch (URISyntaxException e) {
+                  LOG.error("Unable to resolve URI: {}", url, e);
+                  return null;
+                }
+              })
+              .filter(Objects::nonNull)
+              .flatMap(dir -> findClasses(dir, packageName).stream());
     } catch (IOException e) {
-      LOG.error("Unable to fetch Resources in package " + e.getMessage());
+      LOG.error("Unable to fetch resources for package {}", packageName, e);
+      return Stream.empty();
     }
-    List<File> directories = new ArrayList<>();
-    while (Objects.requireNonNull(resources).hasMoreElements()) {
-      URL resource = resources.nextElement();
-      try {
-        directories.add(new File(resource.toURI()));
-      } catch (URISyntaxException e) {
-        LOG.error("Unable to get " + e.getMessage());
-      }
-    }
-    List<String> classes = new ArrayList<>();
-    for (File directory : directories) {
-      classes.addAll(findClasses(directory, packageName));
-    }
-    return classes.stream();
   }
 
   /**
