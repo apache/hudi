@@ -86,6 +86,13 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
 
   override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark40PartitionedFileUtils
 
+  override def newParseException(command: Option[String],
+                                 exception: AnalysisException,
+                                 start: Origin,
+                                 stop: Origin): ParseException = {
+    new ParseException(command, start, stop, exception.getErrorClass, exception.getMessageParameters.asScala.toMap)
+  }
+
   override def createAvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark4_0AvroSerializer(rootCatalystType, rootType.toAvroSchema, nullable)
 
