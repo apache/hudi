@@ -18,13 +18,20 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.util.Utf8;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Properties;
 
@@ -45,15 +52,38 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
   }
 
   @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if ((recordBytes.length == 0 || isDeletedRecord) && orderingVal.equals(0)){
+      //use natural for delete record
+      return this;
+    }
+    Comparable oldValueOrderingVal = oldValue.orderingVal;
+    Comparable thisOrderingVal = orderingVal;
+    if (thisOrderingVal instanceof Utf8 && oldValueOrderingVal instanceof String){
+      thisOrderingVal = thisOrderingVal.toString();
+    }
+    if (thisOrderingVal instanceof GenericData.Fixed && oldValueOrderingVal instanceof BigDecimal){
+      Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
+      thisOrderingVal = conversion.fromFixed((GenericData.Fixed) thisOrderingVal,((GenericData.Fixed) thisOrderingVal).getSchema(),((GenericData.Fixed) thisOrderingVal).getSchema().getLogicalType());
+    }
+    if (oldValueOrderingVal.compareTo(thisOrderingVal)>0){
+      return oldValue;
+    }else {
+      return this;
+    }
+  }
+
+  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
     /*
      * Check if the incoming record is a delete record.
      */
-    if (recordBytes.length == 0 || isDeletedRecord) {
-      return Option.empty();
-    }
-
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+//    if (recordBytes.length == 0 || isDeletedRecord) {
+//      return Option.empty();
+//    }
+//
+//    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    Option<IndexedRecord> incomingRecord = recordBytes.length==0 || isDeletedRecord ? Option.empty() : Option.of(bytesToAvro(recordBytes,schema));
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -61,7 +91,8 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
       return Option.of(currentValue);
     }
 
-    return Option.of(incomingRecord);
+//    return Option.of(incomingRecord);
+    return incomingRecord;
   }
 
   @Override
@@ -76,5 +107,40 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
   @Override
   public Option<Map<String, String>> getMetadata() {
     return Option.empty();
+  }
+
+
+  protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
+                                                Option<IndexedRecord> incomingRecord, Properties properties) {
+    /*
+     * Combining strategy here returns currentValue on disk if incoming record is older.
+     * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
+     * or an insert/update record. In any case, if it is older than the record in disk, the currentValue
+     * in disk is returned (to be rewritten with new commit time).
+     *
+     * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
+     * and need to be dealt with separately.
+     */
+    String orderField = ConfigUtils.getOrderingField(properties);
+    if (orderField == null) {
+      return true;
+    }
+    boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
+            KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+            KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+    Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
+            orderField,
+            true, consistentLogicalTimestampEnabled);
+    Comparable incomingOrderingVal = incomingRecord.map(record-> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record,
+            orderField,
+            true, consistentLogicalTimestampEnabled)).orElse(orderingVal);
+    if (persistedOrderingVal instanceof Utf8){
+      persistedOrderingVal=persistedOrderingVal.toString();
+    }
+    if (persistedOrderingVal instanceof GenericData.Fixed){
+      Conversions.DecimalConversion conversion=new Conversions.DecimalConversion();
+      persistedOrderingVal=conversion.fromFixed((GenericData.Fixed) persistedOrderingVal,((GenericData.Fixed) persistedOrderingVal).getSchema(),((GenericData.Fixed) persistedOrderingVal).getSchema().getLogicalType());
+    }
+    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
 }

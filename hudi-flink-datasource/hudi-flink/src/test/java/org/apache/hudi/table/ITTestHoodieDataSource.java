@@ -472,7 +472,259 @@ public class ITTestHoodieDataSource {
     final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
   }
+  //scene01 compaction off
+  @Test
+  void testHardDeleteWithStringOrderingFieldScene01() throws Exception {
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts STRING,\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
 
+    // first commit
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,false,'par1', '101'),\n"
+            + "('id2','Stephen',33,false,'par1', '103')";
+    execInsertSql(batchTableEnv, insertInto);
+
+    final String expected = "["
+            + "+I[id1, Danny, 23, false, par1, 101], "
+            + "+I[id2, Stephen, 33, false, par1, 103]]";
+
+    // second commit, hard delete record with smaller order value
+    insertInto = "insert into t1 values\n"
+            + "('id2','Stephen',33, true,'par1', '102')";
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
+  }
+  @Test
+  void testHardDeleteWithDecimalOrderingFieldScene01() throws Exception {
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts DECIMAL(7,2),\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // first commit
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,false,'par1', 1.1),\n"
+            + "('id2','Stephen',33,false,'par1', 1.3)";
+    execInsertSql(batchTableEnv, insertInto);
+
+    final String expected = "["
+            + "+I[id1, Danny, 23, false, par1, 1.1], "
+            + "+I[id2, Stephen, 33, false, par1, 1.3]]";
+
+    // second commit, hard delete record with smaller order value
+    insertInto = "insert into t1 values\n"
+            + "('id2','Stephen',33, true,'par1', 1.2)";
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
+  }
+  //scene02 compaction off
+  @Test
+  void testHardDeleteWithStringOrderingFieldScene02() throws Exception {
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts STRING,\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'compaction.async.enabled' = 'false',\n"
+            + "  'compaction.schedule.enabled' = 'true',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // first commit
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,false,'par1', '101'),\n"
+            + "('id2','Stephen',33,true,'par1', '103')";
+    execInsertSql(batchTableEnv, insertInto);
+
+    final String expected = "["
+            + "+I[id1, Danny, 23, false, par1, 101], "
+            + "+I[id2, Stephen, 33, false, par1, 103]]";
+
+    // second commit, hard delete record with smaller order value
+    insertInto = "insert into t1 values\n"
+            + "('id2','Stephen',33, false,'par1', '102')";
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
+  }
+  @Test
+  void testHardDeleteWithDecimalOrderingFieldScene02() throws Exception {
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts DECIMAL(7,2),\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'compaction.async.enabled' = 'false',\n"
+            + "  'compaction.schedule.enabled' = 'true',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // first commit
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,false,'par1', 1.1),\n"
+            + "('id2','Stephen',33,true,'par1', 1.3)";
+    execInsertSql(batchTableEnv, insertInto);
+
+    final String expected = "["
+            + "+I[id1, Danny, 23, false, par1, 1.1], "
+            + "+I[id2, Stephen, 33, false, par1, 1.3]]";
+
+    // second commit, hard delete record with smaller order value
+    insertInto = "insert into t1 values\n"
+            + "('id2','Stephen',33, false,'par1', 1.2)";
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
+  }
+  //scene03 compaction on
+  @Test
+  void testHardDeleteWithStringOrderingFieldScene03() throws Exception {
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts STRING,\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'compaction.async.enabled' = 'true',\n"
+            + "  'compaction.schedule.enabled' = 'true',\n"
+            + "  'compaction.delta_commits' = '1',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // first commit
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,false,'par1', '101'),\n"
+            + "('id2','Stephen',33,false,'par1', '103')";
+    execInsertSql(batchTableEnv, insertInto);
+
+    final String expected = "["
+            + "+I[id1, Danny, 23, false, par1, 101], "
+            + "+I[id2, Stephen, 33, false, par1, 103]]";
+
+    // second commit, hard delete record with smaller order value
+    insertInto = "insert into t1 values\n"
+            + "('id2','Stephen',33, true,'par1', '102')";
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
+  }
+  @Test
+  void testHardDeleteWithDecimalOrderingFieldScene03() throws Exception {
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts DECIMAL(7,2),\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'compaction.async.enabled' = 'true',\n"
+            + "  'compaction.schedule.enabled' = 'true',\n"
+            + "  'compaction.delta_commits' = '1',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    // first commit
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,false,'par1', 1.1),\n"
+            + "('id2','Stephen',33,false,'par1', 1.3)";
+    execInsertSql(batchTableEnv, insertInto);
+
+    final String expected = "["
+            + "+I[id1, Danny, 23, false, par1, 1.1], "
+            + "+I[id2, Stephen, 33, false, par1, 1.3]]";
+
+    // second commit, hard delete record with smaller order value
+    insertInto = "insert into t1 values\n"
+            + "('id2','Stephen',33, true,'par1', 1.2)";
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
+  }
   @ParameterizedTest
   @MethodSource("tableTypeAndPartitioningParams")
   void testStreamReadFilterByPartition(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {

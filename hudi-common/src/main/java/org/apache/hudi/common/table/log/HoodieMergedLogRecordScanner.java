@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -277,6 +280,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+      if (curOrderingVal instanceof Utf8){
+        curOrderingVal=curOrderingVal.toString();
+      }
+      if (curOrderingVal instanceof GenericData.Fixed){
+        Conversions.DecimalConversion conversion=new Conversions.DecimalConversion();
+        curOrderingVal=conversion.fromFixed((GenericData.Fixed) curOrderingVal,((GenericData.Fixed) curOrderingVal).getSchema(),((GenericData.Fixed) curOrderingVal).getSchema().getLogicalType());
+      }
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
       boolean choosePrev = !deleteOrderingVal.equals(0)
