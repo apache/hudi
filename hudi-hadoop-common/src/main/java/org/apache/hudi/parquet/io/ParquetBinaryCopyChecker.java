@@ -217,6 +217,7 @@ public class ParquetBinaryCopyChecker {
   }
 
   @AllArgsConstructor
+  @Getter
   public static class ParquetFileInfo implements Serializable {
 
     /**
@@ -225,11 +226,8 @@ public class ParquetBinaryCopyChecker {
      *  1. two level List structure, because the result of parquet rewrite is three level List structure
      *  2. Decimal types stored via INT32/INT64/INT96, because it can not be read by parquet-avro
      */
-    @Getter
     private final boolean binaryCopyEnabled;
-    @Getter
     private final String bloomFilterTypeCode;
-    @Getter
     private final String schema;
   }
 }
