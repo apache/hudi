@@ -25,9 +25,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.List;
@@ -53,7 +52,8 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
-    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(), true));
+    this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(
+        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true));
   }
 
   /**
@@ -63,7 +63,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    * @throws IOException
    */
   @Override
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+  protected List<StoragePathInfo> listPartition(StoragePath partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
   }
 
@@ -71,10 +71,11 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   protected List<String> getAllPartitionPaths() throws IOException {
     return tableMetadata.getAllPartitionPaths();
   }
-  
+
   @Override
-  protected Map<Pair<String, Path>, FileStatus[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
-    Map<String, Pair<String, Path>> absoluteToPairMap = partitionPathList.stream()
+  protected Map<Pair<String, StoragePath>, List<StoragePathInfo>> listPartitions(
+      List<Pair<String, StoragePath>> partitionPathList) throws IOException {
+    Map<String, Pair<String, StoragePath>> absoluteToPairMap = partitionPathList.stream()
         .collect(Collectors.toMap(
             pair -> pair.getRight().toString(),
             Function.identity()

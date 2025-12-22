@@ -43,11 +43,11 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -85,7 +86,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
-    initFileSystem();
+    initHoodieStorage();
     dataGen = new HoodieTestDataGenerator(0x1f86);
   }
 
@@ -103,7 +104,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   @Override
   public void initTimelineService() {
     // Start a timeline server that are running across multiple commits
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(hadoopConf);
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(storageConf);
 
     try {
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
@@ -114,12 +115,12 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
       timelineService = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
+          HoodieStorageUtils.getStorage(getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(
-              context, config.getMetadataConfig(), config.getViewStorageConfig(),
+              context, config.getViewStorageConfig(),
               config.getCommonConfig(),
               metaClient -> new HoodieBackedTestDelayedTableMetadata(
-                  context, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true)));
+                  context, metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath().toString(), true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
       LOG.info("Started timeline server on port: " + timelineServicePort);
@@ -174,10 +175,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   private void runAssertionsForBasePath(boolean useExistingTimelineServer, String basePathStr, SparkRDDWriteClient writeClient) throws IOException {
     // At this point, there are three deltacommits and one compaction commit in the Hudi timeline,
     // and the file system view of timeline server is not yet synced
-    HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf)
-        .setBasePath(basePathStr)
-        .build();
+    HoodieTableMetaClient newMetaClient = createMetaClient(basePathStr);
     HoodieActiveTimeline timeline = newMetaClient.getActiveTimeline();
     HoodieInstant compactionCommit = timeline.lastInstant().get();
     assertTrue(timeline.lastInstant().get().getAction().equals(COMMIT_ACTION));
@@ -235,7 +233,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     java.nio.file.Path basePath = tempDir.resolve(dataset);
     Files.createDirectories(basePath);
     String basePathStr = basePath.toAbsolutePath().toString();
-    HoodieTestUtils.init(hadoopConf, basePathStr, HoodieTableType.MERGE_ON_READ, new Properties());
+    HoodieTestUtils.init(storageConf, basePathStr, HoodieTableType.MERGE_ON_READ, new Properties());
     return basePathStr;
   }
 

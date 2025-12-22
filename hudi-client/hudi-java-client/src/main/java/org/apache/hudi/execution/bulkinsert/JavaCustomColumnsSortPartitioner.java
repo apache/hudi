@@ -22,16 +22,14 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.table.BulkInsertPartitioner.tryPrependPartitionPathColumns;
 
 /**
  * A partitioner that does sorting based on specified column values for Java client.
@@ -46,7 +44,7 @@ public class JavaCustomColumnsSortPartitioner<T>
   private final boolean consistentLogicalTimestampEnabled;
 
   public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
-    this.sortColumnNames = tryPrependPartitionPathColumns(columnNames, config);
+    this.sortColumnNames = columnNames;
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
@@ -56,10 +54,10 @@ public class JavaCustomColumnsSortPartitioner<T>
       List<HoodieRecord<T>> records, int outputPartitions) {
     return records.stream().sorted((o1, o2) -> {
       FlatLists.ComparableList<Comparable> values1 = FlatLists.ofComparableArray(
-          HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o1, sortColumnNames, schema, consistentLogicalTimestampEnabled)
+          BulkInsertPartitioner.prependPartitionPath(o1.getPartitionPath(), HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o1, sortColumnNames, schema, consistentLogicalTimestampEnabled))
       );
       FlatLists.ComparableList<Comparable> values2 = FlatLists.ofComparableArray(
-          HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o2, sortColumnNames, schema, consistentLogicalTimestampEnabled)
+          BulkInsertPartitioner.prependPartitionPath(o2.getPartitionPath(), HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) o2, sortColumnNames, schema, consistentLogicalTimestampEnabled))
       );
       return values1.compareTo(values2);
     }).collect(Collectors.toList());

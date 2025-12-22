@@ -38,13 +38,15 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -81,21 +83,21 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   }
 
   @Override
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
     props = HoodieTableMetaClient.withPropertyBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
   }
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSource(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
@@ -103,22 +105,28 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(false).build())
         .build();
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
+    String commit2 = HoodieActiveTimeline.createNewInstantTime(10);
+    String commit3 = HoodieActiveTimeline.createNewInstantTime(100);
+    String commit4 = HoodieActiveTimeline.createNewInstantTime(200);
+    String commit5 = HoodieActiveTimeline.createNewInstantTime(300);
+    String commit6 = HoodieActiveTimeline.createNewInstantTime(400);
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
-      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
-      Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, INSERT, null, "300");
-      Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, INSERT, null, "400");
-      Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, INSERT, null, "500");
+      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, commit1);
+      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, commit2);
+      Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, INSERT, null, commit3);
+      Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, INSERT, null, commit4);
+      Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, INSERT, null,  commit5);
 
       // read everything upto latest
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, inserts5.getKey());
 
-      // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 400, inserts5.getKey());
+      // even if the begin timestamp is archived (commit1), full table scan should kick in, but should filter for records having commit time > 100
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(commit1), 400, inserts5.getKey());
 
       // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("400"), 100, inserts5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(commit4), 100, inserts5.getKey());
 
       // read just the latest
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts5.getKey());
@@ -126,7 +134,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // ensure checkpoint does not move
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 0, inserts5.getKey());
 
-      Pair<String, List<HoodieRecord>> inserts6 = writeRecords(writeClient, INSERT, null, "600");
+      Pair<String, List<HoodieRecord>> inserts6 = writeRecords(writeClient, INSERT, null, commit6);
 
       // insert new batch and ensure the checkpoint moves
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());
@@ -137,7 +145,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSourceInflightCommitBeforeCompletedCommit(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(2).build())
@@ -217,7 +225,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSourceWithPendingTableServices(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
@@ -293,7 +301,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           Option.empty(),
           100,
           dataBatches.get(0).getKey(),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()));
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties());
 
       // The pending tables services should not block the incremental pulls
       // Reads everything up to latest
@@ -326,16 +334,48 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testHoodieIncrSourceWithDataSourceOptions(HoodieTableType tableType) throws IOException {
+    this.tableType = tableType;
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
+    HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder()
+                .withScheduleInlineCompaction(true)
+                .withMaxNumDeltaCommitsBeforeCompaction(1)
+                .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("_hoodie_commit_time")
+            .build())
+        .build();
+
+    TypedProperties extraProps = new TypedProperties();
+    extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
+      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          100,
+          inserts.getKey(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps);
+    }
+  }
+
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
-                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt) {
+                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt, TypedProperties extraProps) {
 
     Properties properties = new Properties();
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
+    properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);
-    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA));
+    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), Option.empty()));
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, String> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);
@@ -350,7 +390,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull,
                              int expectedCount, String expectedCheckpoint) {
-    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty());
+    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty(), new TypedProperties());
   }
 
   private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient,

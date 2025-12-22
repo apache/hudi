@@ -242,9 +242,8 @@ public class TestStreamReadOperator {
 
   private OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> createReader() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
-    final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new Configuration());
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(
+        basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
     final List<String> partitionKeys = Collections.singletonList("partition");
 
     // This input format is used to opening the emitted split.

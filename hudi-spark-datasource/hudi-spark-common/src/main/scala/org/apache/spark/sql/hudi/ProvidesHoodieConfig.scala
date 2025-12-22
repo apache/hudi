@@ -18,34 +18,38 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
-import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
-import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
+
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog}
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.slf4j.LoggerFactory
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -82,7 +86,8 @@ trait ProvidesHoodieConfig extends Logging {
       PRECOMBINE_FIELD.key -> preCombineField,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-      PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp
+      PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
+        tableConfig.getKeyGeneratorClassName, tableConfig.getPartitionFieldProp, hoodieCatalogTable)
     )
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
@@ -313,7 +318,8 @@ trait ProvidesHoodieConfig extends Logging {
       URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
       RECORDKEY_FIELD.key -> recordKeyConfigValue,
       PRECOMBINE_FIELD.key -> preCombineField,
-      PARTITIONPATH_FIELD.key -> partitionFieldsStr
+      PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
+        keyGeneratorClassName, partitionFieldsStr, hoodieCatalogTable)
     ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
@@ -405,7 +411,8 @@ trait ProvidesHoodieConfig extends Logging {
       PARTITIONS_TO_DELETE.key -> partitionsToDrop,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
       PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
-      PARTITIONPATH_FIELD.key -> partitionFields,
+      PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
+        tableConfig.getKeyGeneratorClassName, partitionFields, hoodieCatalogTable),
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
@@ -451,7 +458,8 @@ trait ProvidesHoodieConfig extends Logging {
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
-      PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp
+      PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
+        tableConfig.getKeyGeneratorClassName, tableConfig.getPartitionFieldProp, hoodieCatalogTable)
     )
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
@@ -480,6 +488,8 @@ trait ProvidesHoodieConfig extends Logging {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
     }
     hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS, classOf[MultiPartKeysValueExtractor].getName)
+    // This is hardcoded to true to ensure consistency as Spark syncs TIMESTAMP types as TIMESTAMP by default
+    // via Spark's externalCatalog API, which is used by AlterHoodieTableCommand.
     hiveSyncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")
     if (hiveSyncConfig.useBucketSync())
       hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC,
@@ -493,6 +503,8 @@ trait ProvidesHoodieConfig extends Logging {
 }
 
 object ProvidesHoodieConfig {
+
+  private val log = LoggerFactory.getLogger(getClass)
 
   // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
   //
@@ -528,10 +540,44 @@ object ProvidesHoodieConfig {
       filterNullValues(overridingOpts)
   }
 
+  /**
+   * @param tableConfigKeyGeneratorClassName     key generator class name in the table config.
+   * @param partitionFieldNamesWithoutKeyGenType partition field names without key generator types
+   *                                             from the table config.
+   * @param catalogTable                         HoodieCatalogTable instance to fetch table properties.
+   * @return the write config value to set for "hoodie.datasource.write.partitionpath.field".
+   */
+  def getPartitionPathFieldWriteConfig(tableConfigKeyGeneratorClassName: String,
+                                       partitionFieldNamesWithoutKeyGenType: String,
+                                       catalogTable: HoodieCatalogTable): String = {
+    if (StringUtils.isNullOrEmpty(tableConfigKeyGeneratorClassName)) {
+      partitionFieldNamesWithoutKeyGenType
+    } else {
+      val writeConfigPartitionField = catalogTable.catalogProperties.get(PARTITIONPATH_FIELD.key())
+      val keyGenClass = ReflectionUtils.getClass(tableConfigKeyGeneratorClassName)
+      if (classOf[CustomKeyGenerator].equals(keyGenClass)
+        || classOf[CustomAvroKeyGenerator].equals(keyGenClass)) {
+        // For custom key generator, we have to take the write config value from
+        // "hoodie.datasource.write.partitionpath.field" which contains the key generator
+        // type, whereas the table config only contains the prtition field names without
+        // key generator types.
+        if (writeConfigPartitionField.isDefined) {
+          writeConfigPartitionField.get
+        } else {
+          log.warn("Write config \"hoodie.datasource.write.partitionpath.field\" is not set for "
+            + "custom key generator. This may fail the write operation.")
+          partitionFieldNamesWithoutKeyGenType
+        }
+      } else {
+        partitionFieldNamesWithoutKeyGenType
+      }
+    }
+  }
+
   private def filterNullValues(opts: Map[String, String]): Map[String, String] =
     opts.filter { case (_, v) => v != null }
 
   private def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
-    opts.filterKeys(isHoodieConfigKey)
+    opts.filterKeys(isHoodieConfigKey).toMap
 
 }

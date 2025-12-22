@@ -17,14 +17,15 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
+import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
@@ -37,15 +38,16 @@ class RecordLevelIndexSupport(spark: SparkSession,
 
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
+    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
 
   /**
    * Returns the list of candidate files which store the provided record keys based on Metadata Table Record Index.
-   * @param allFiles - List of all files which needs to be considered for the query
+   *
+   * @param allFiles   - List of all files which needs to be considered for the query
    * @param recordKeys - List of record keys.
    * @return Sequence of file names which need to be queried
    */
-  def getCandidateFiles(allFiles: Seq[FileStatus], recordKeys: List[String]): Set[String] = {
+  def getCandidateFiles(allFiles: Seq[StoragePathInfo], recordKeys: List[String]): Set[String] = {
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
@@ -77,16 +79,83 @@ class RecordLevelIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Matches the configured simple record key with the input attribute name.
-   * @param attributeName The attribute name provided in the query
-   * @return true if input attribute name matches the configured simple record key
+   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
+   * list of such queries and list of record key literals present in the query.
+   * If record index is not available, it returns empty list for record filters and record keys
+   * @param queryFilters The queries that need to be filtered.
+   * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
-  private def attributeMatchesRecordKey(attributeName: String): Boolean = {
-    val recordKeyOpt = getRecordKeyConfig
-    if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
-      true
+  def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+    if (!isIndexAvailable) {
+      (List.empty, List.empty)
     } else {
-      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
+      var recordKeyQueries: List[Expression] = List.empty
+      var recordKeys: List[String] = List.empty
+      for (query <- queryFilters) {
+        val recordKeyOpt = getRecordKeyConfig
+        RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeyOpt).foreach({
+          case (exp: Expression, recKeys: List[String]) =>
+            recordKeys = recordKeys ++ recKeys
+            recordKeyQueries = recordKeyQueries :+ exp
+        })
+      }
+
+      Tuple2.apply(recordKeyQueries, recordKeys)
+    }
+  }
+
+  /**
+   * Return true if metadata table is enabled and record index metadata partition is available.
+   */
+  def isIndexAvailable: Boolean = {
+    metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+  }
+}
+
+object RecordLevelIndexSupport {
+  /**
+   * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
+   * list of the query and list of record key literals present in the query otherwise returns an empty option.
+   *
+   * @param queryFilter The query that need to be filtered.
+   * @return Tuple of filtered query and list of record key literals that need to be matched
+   */
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String]): Option[(Expression, List[String])] = {
+    queryFilter match {
+      case equalToQuery: EqualTo =>
+        val attributeLiteralTuple = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
+        if (attributeLiteralTuple != null) {
+          val attribute = attributeLiteralTuple._1
+          val literal = attributeLiteralTuple._2
+          if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+            Option.apply(equalToQuery, List.apply(literal.value.toString))
+          } else {
+            Option.empty
+          }
+        } else {
+          Option.empty
+        }
+
+      case inQuery: In =>
+        var validINQuery = true
+        inQuery.value match {
+          case attribute: AttributeReference =>
+            if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+              validINQuery = false
+            }
+          case _ => validINQuery = false
+        }
+        var literals: List[String] = List.empty
+        inQuery.list.foreach {
+          case literal: Literal => literals = literals :+ literal.value.toString
+          case _ => validINQuery = false
+        }
+        if (validINQuery) {
+          Option.apply(inQuery, literals)
+        } else {
+          Option.empty
+        }
+      case _ => Option.empty
     }
   }
 
@@ -113,74 +182,18 @@ class RecordLevelIndexSupport(spark: SparkSession,
       }
       case _ => Option.empty
     }
-
   }
 
   /**
-   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
-   * list of such queries and list of record key literals present in the query.
-   * If record index is not available, it returns empty list for record filters and record keys
-   * @param queryFilters The queries that need to be filtered.
-   * @return Tuple of List of filtered queries and list of record key literals that need to be matched
+   * Matches the configured simple record key with the input attribute name.
+   * @param attributeName The attribute name provided in the query
+   * @return true if input attribute name matches the configured simple record key
    */
-  def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    if (!isIndexAvailable) {
-      (List.empty, List.empty)
+  private def attributeMatchesRecordKey(attributeName: String, recordKeyOpt: Option[String]): Boolean = {
+    if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
+      true
     } else {
-      var recordKeyQueries: List[Expression] = List.empty
-      var recordKeys: List[String] = List.empty
-      for (query <- queryFilters) {
-        filterQueryWithRecordKey(query).foreach({
-          case (exp: Expression, recKeys: List[String]) =>
-            recordKeys = recordKeys ++ recKeys
-            recordKeyQueries = recordKeyQueries :+ exp
-        })
-      }
-
-      Tuple2.apply(recordKeyQueries, recordKeys)
+      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
     }
-  }
-
-  /**
-   * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
-   * list of the query and list of record key literals present in the query otherwise returns an empty option.
-   *
-   * @param queryFilter The query that need to be filtered.
-   * @return Tuple of filtered query and list of record key literals that need to be matched
-   */
-  private def filterQueryWithRecordKey(queryFilter: Expression): Option[(Expression, List[String])] = {
-    queryFilter match {
-      case equalToQuery: EqualTo =>
-        val (attribute, literal) = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
-        if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name)) {
-          Option.apply(equalToQuery, List.apply(literal.value.toString))
-        } else {
-          Option.empty
-        }
-      case inQuery: In =>
-        var validINQuery = true
-        inQuery.value match {
-          case _: AttributeReference =>
-          case _ => validINQuery = false
-        }
-        var literals: List[String] = List.empty
-        inQuery.list.foreach {
-          case literal: Literal => literals = literals :+ literal.value.toString
-          case _ => validINQuery = false
-        }
-        if (validINQuery) {
-          Option.apply(inQuery, literals)
-        } else {
-          Option.empty
-        }
-      case _ => Option.empty
-    }
-  }
-
-  /**
-   * Return true if metadata table is enabled and record index metadata partition is available.
-   */
-  def isIndexAvailable: Boolean = {
-    metadataConfig.enabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
   }
 }

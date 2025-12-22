@@ -95,7 +95,7 @@ public class InputPathHandler {
     for (Path inputPath : inputPaths) {
       boolean basePathKnown = false;
       for (HoodieTableMetaClient metaClient : tableMetaClientMap.values()) {
-        if (inputPath.toString().contains(metaClient.getBasePath())) {
+        if (inputPath.toString().contains(metaClient.getBasePath().toString())) {
           // We already know the base path for this inputPath.
           basePathKnown = true;
           // Check if this is for a snapshot query

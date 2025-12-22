@@ -44,17 +44,16 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -65,6 +64,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public abstract class BaseJavaCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
@@ -103,7 +104,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       HoodieTableMetaClient metaClient = table.getMetaClient();
       HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
-        if (!metaClient.getFs().exists(new Path(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
+        if (!metaClient.getStorage().exists(
+            new StoragePath(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
           throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
         }
       } catch (IOException ex) {
@@ -215,7 +217,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       writeTableMetadata(metadata, HoodieListData.eager(result.getWriteStatuses()), actionType);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(metadata.toJsonString())));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
     } catch (IOException e) {
@@ -270,18 +272,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String fileId)
       throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
-      throw new HoodieUpsertException(
-          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
-    } else {
-      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
-    }
-
-    List<WriteStatus> statuses = upsertHandle.writeStatuses();
-    if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", " + statuses);
-    }
-    return Collections.singletonList(statuses).iterator();
+    table.runMerge(upsertHandle, instantTime, fileId);
+    return upsertHandle.getWriteStatusesAsIterator();
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {

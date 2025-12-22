@@ -17,7 +17,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.1</version>
+    <version>0.16.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -72,6 +72,7 @@
                   <include>commons-lang:commons-lang</include>
                   <include>commons-pool:commons-pool</include>
 
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
@@ -96,7 +97,6 @@
                   <include>org.jetbrains.kotlin:kotlin-stdlib-common</include>
                   <include>org.jetbrains:annotations</include>
                   <include>org.jetbrains.kotlin:kotlin-stdlib-jdk7</include>
-
                   <include>org.eclipse.jetty:jetty-server</include>
                   <include>org.eclipse.jetty:jetty-http</include>
                   <include>org.eclipse.jetty:jetty-util</include>
@@ -113,7 +113,7 @@
                   <include>org.eclipse.jetty.websocket:websocket-servlet</include>
                   <include>org.mortbay.jetty:jetty</include>
                   <include>org.mortbay.jetty:jetty-util</include>
-
+                  <include>org.roaringbitmap:RoaringBitmap</include>
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.beust:jcommander</include>
@@ -163,6 +163,8 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
+                  <include>com.uber.m3:tally-m3</include>
+                  <include>com.uber.m3:tally-core</include>
                   <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
@@ -270,6 +272,14 @@
                 <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
                   <shadedPattern>org.apache.hudi.org.eclipse.jetty.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.uber.m3.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.roaringbitmap.</pattern>
+                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -612,7 +622,7 @@
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>bijection-avro_${scala.binary.version}</artifactId>
-      <version>0.9.3</version>
+      <version>${bijection-avro.version}</version>
     </dependency>
 
     <dependency>

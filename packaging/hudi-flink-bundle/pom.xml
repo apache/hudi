@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.1</version>
+    <version>0.16.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -37,7 +37,7 @@
     <javax.servlet.version>3.1.0</javax.servlet.version>
     <!-- override to be same with flink 1.15.x -->
     <parquet.version>${flink.format.parquet.version}</parquet.version>
-    <hive.version>2.3.1</hive.version>
+    <hive.version>2.3.4</hive.version>
     <thrift.version>0.9.3</thrift.version>
   </properties>
 
@@ -75,6 +75,7 @@
               </transformers>
               <artifactSet>
                 <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-flink-client</include>
@@ -126,6 +127,8 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
+                  <include>com.uber.m3:tally-m3</include>
+                  <include>com.uber.m3:tally-core</include>
 
                   <!-- Used for HUDI TimelineService -->
                   <include>org.eclipse.jetty:*</include>
@@ -194,10 +197,6 @@
                   <shadedPattern>${flink.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.codahale.metrics.</pattern>
-                  <shadedPattern>${flink.bundle.shade.prefix}com.codahale.metrics.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.codec.</shadedPattern>
                 </relocation>
@@ -212,6 +211,10 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.uber.m3.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -239,9 +242,6 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>src/test/resources</directory>
       </resource>
     </resources>
   </build>

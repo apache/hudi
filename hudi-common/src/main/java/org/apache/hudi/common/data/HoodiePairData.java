@@ -124,6 +124,18 @@ public interface HoodiePairData<K, V> extends Serializable {
   <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
 
   /**
+   * Performs an inner join of this dataset against {@code other}.
+   *
+   * For each element (k, v) in this, the resulting {@link HoodiePairData} will contain all
+   * pairs {@code (k, (v, Some(w)))} for every {@code w} in the {@code other},
+   *
+   * @param other the other {@link HoodiePairData}
+   * @param <W>   value type of the other {@link HoodiePairData}
+   * @return containing the result of the left outer join
+   */
+  <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other);
+
+  /**
    * Collects results of the underlying collection into a {@link List<Pair<K, V>>}
    *
    * This is a terminal operation

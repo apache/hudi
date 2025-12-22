@@ -17,13 +17,15 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.util.JavaScalaConverters;
+
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -48,10 +50,9 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters$;
 
 import javax.annotation.Nonnull;
+
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -172,16 +173,18 @@ public class ColumnStatsIndexHelper {
       colMinMaxInfos =
           jsc.parallelize(baseFilesPaths, numParallelism)
               .mapPartitions(paths -> {
-                ParquetUtils utils = (ParquetUtils) BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+                ParquetUtils utils = new ParquetUtils();
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
-                    .flatMap(path ->
-                        utils.readRangeFromParquetMetadata(
-                                serializableConfiguration.value(),
-                                new Path(path),
-                                columnNames
-                            )
-                            .stream()
+                    .flatMap(path -> {
+                      HoodieStorage storage = new HoodieHadoopStorage(path, serializableConfiguration.value());
+                          return utils.readColumnStatsFromMetadata(
+                                  storage,
+                                  new StoragePath(path),
+                                  columnNames
+                              )
+                              .stream();
+                        }
                     )
                     .iterator();
               })
@@ -232,13 +235,13 @@ public class ColumnStatsIndexHelper {
                 indexRow.add(colMetadata.getNullCount());
               });
 
-              return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(indexRow));
+              return Row$.MODULE$.apply(JavaScalaConverters.<Object>convertJavaListToScalaSeq(indexRow));
             })
             .filter(Objects::nonNull);
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
-          JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSeq(),
-          JavaConverters$.MODULE$.collectionAsScalaIterableConverter(columnNames).asScala().toSet(),
+        JavaScalaConverters.<String>convertJavaListToScalaSeq(columnNames),
+        JavaScalaConverters.convertJavaListToScalaList(columnNames).toSet(),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;
 

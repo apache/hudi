@@ -19,18 +19,18 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.collection.JavaConversions.asScalaBuffer
+import scala.collection.JavaConverters._
 
 class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase  {
 
@@ -53,7 +53,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach
@@ -66,7 +66,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testReadingWithStateTransitionTime(tableType: HoodieTableType): Unit = {
-    val records = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -75,11 +75,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val metaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(basePath)
-      .setLoadActiveTimelineOnLoad(true)
-      .build()
+    val metaClient = createMetaClient(spark, basePath)
 
     val firstInstant = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsOrderedByStateTransitionTime
       .findFirst().get()

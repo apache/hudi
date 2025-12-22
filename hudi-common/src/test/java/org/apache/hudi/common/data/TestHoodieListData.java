@@ -27,12 +27,15 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieListData {
 
@@ -71,5 +74,24 @@ class TestHoodieListData {
     HoodieData<Integer> listData = HoodieListData.eager(
         IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()));
     assertEquals(1, listData.getNumPartitions());
+  }
+
+  @Test
+  public void testIsEmpty() {
+    // HoodieListData bearing eager execution semantic
+    HoodieData<Integer> listData = HoodieListData.eager(
+            IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()));
+    assertFalse(listData.isEmpty());
+
+    HoodieData<Integer> emptyListData = HoodieListData.eager(Collections.emptyList());
+    assertTrue(emptyListData.isEmpty());
+
+    // HoodieListData bearing lazy execution semantic
+    listData = HoodieListData.lazy(
+            IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()));
+    assertFalse(listData.isEmpty());
+
+    emptyListData = HoodieListData.lazy(Collections.emptyList());
+    assertTrue(emptyListData.isEmpty());
   }
 }

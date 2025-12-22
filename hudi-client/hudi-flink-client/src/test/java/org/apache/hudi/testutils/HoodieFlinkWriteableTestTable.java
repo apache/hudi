@@ -33,12 +33,13 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,16 +57,21 @@ import java.util.stream.Collectors;
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteableTestTable.class);
 
-  private HoodieFlinkWriteableTestTable(String basePath, org.apache.hadoop.fs.FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    super(basePath, fs, metaClient, schema, filter);
+  private HoodieFlinkWriteableTestTable(String basePath, HoodieStorage storage,
+                                        HoodieTableMetaClient metaClient, Schema schema,
+                                        BloomFilter filter) {
+    super(basePath, storage, metaClient, schema, filter);
   }
 
-  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    return new HoodieFlinkWriteableTestTable(metaClient.getBasePathV2().toString(), metaClient.getRawFs(), metaClient, schema, filter);
+  public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
+                                                 BloomFilter filter) {
+    return new HoodieFlinkWriteableTestTable(metaClient.getBasePath().toString(),
+        metaClient.getRawHoodieStorage(), metaClient, schema, filter);
   }
 
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1,
+        BloomFilterTypeCode.SIMPLE.name());
     return of(metaClient, schema, filter);
   }
 
@@ -130,15 +136,17 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private Pair<String, HoodieLogFile> appendRecordsToLogFile(List<HoodieRecord> groupedRecords) throws Exception {
     String partitionPath = groupedRecords.get(0).getPartitionPath();
     HoodieRecordLocation location = groupedRecords.get(0).getCurrentLocation();
-    try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
+    try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder()
+        .onParentPath(new StoragePath(basePath, partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-        .overBaseCommit(location.getInstantTime()).withFs(fs).build()) {
+        .overBaseCommit(location.getInstantTime()).withStorage(storage).build()) {
       Map<HeaderMetadataType, String> header = new java.util.HashMap<>();
       header.put(HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
       header.put(HeaderMetadataType.SCHEMA, schema.toString());
       logWriter.appendBlock(new HoodieAvroDataBlock(groupedRecords.stream().map(r -> {
         try {
-          GenericRecord val = (GenericRecord) ((HoodieRecordPayload) r.getData()).getInsertValue(schema).get();
+          GenericRecord val =
+              (GenericRecord) ((HoodieRecordPayload) r.getData()).getInsertValue(schema).get();
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {

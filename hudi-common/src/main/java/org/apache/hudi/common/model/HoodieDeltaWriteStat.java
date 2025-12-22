@@ -94,6 +94,20 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
     return recordsStats;
   }
 
+  /**
+   * Make a new write status and copy basic fields from current object
+   * @return copy write status
+   */
+  public HoodieDeltaWriteStat copy() {
+    HoodieDeltaWriteStat copy = new HoodieDeltaWriteStat();
+    copy.setFileId(getFileId());
+    copy.setPartitionPath(getPartitionPath());
+    copy.setPrevCommit(getPrevCommit());
+    copy.setBaseFile(getBaseFile());
+    copy.setLogFiles(new ArrayList<>(getLogFiles()));
+    return copy;
+  }
+
   private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(
       Map<String, HoodieColumnRangeMetadata<Comparable>> stats1,
       Map<String, HoodieColumnRangeMetadata<Comparable>> stats2) {

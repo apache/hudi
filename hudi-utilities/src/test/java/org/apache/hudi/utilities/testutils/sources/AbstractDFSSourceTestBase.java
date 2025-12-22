@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -60,7 +61,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(true, false, false);
+    UtilitiesTestBase.initTestServices(false, false, false);
   }
 
   @BeforeEach
@@ -74,7 +75,11 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    *
    * @return A {@link Source} using DFS as the file system.
    */
-  protected abstract Source prepareDFSSource();
+  protected final Source prepareDFSSource() {
+    return prepareDFSSource(new TypedProperties());
+  }
+
+  protected abstract Source prepareDFSSource(TypedProperties props);
 
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.

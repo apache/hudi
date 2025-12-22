@@ -4,6 +4,7 @@ on:
     types: [opened, edited, reopened, synchronize]
     branches:
       - master
+      - branch-0.x
 
 jobs:
   validate-pr:

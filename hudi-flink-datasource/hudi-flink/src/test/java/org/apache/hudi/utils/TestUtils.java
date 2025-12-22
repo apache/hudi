@@ -26,9 +26,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -37,8 +40,7 @@ import org.apache.flink.core.fs.Path;
 
 import javax.annotation.Nullable;
 
-import java.nio.charset.StandardCharsets;
-
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -46,20 +48,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestUtils {
   public static String getLastPendingInstant(String basePath) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return StreamerUtil.getLastPendingInstant(metaClient);
   }
 
   public static String getLastCompleteInstant(String basePath) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return StreamerUtil.getLastCompletedInstant(metaClient);
   }
 
   public static String getLastCompleteInstant(String basePath, String commitAction) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(instant -> commitAction.equals(instant.getAction()))
         .lastInstant()
@@ -68,8 +70,8 @@ public class TestUtils {
   }
 
   public static String getLastDeltaCompleteInstant(String basePath) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
         .lastInstant()
@@ -78,16 +80,16 @@ public class TestUtils {
   }
 
   public static String getFirstCompleteInstant(String basePath) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant()
         .map(HoodieInstant::getTimestamp).orElse(null);
   }
 
   @Nullable
-  public static String getNthCompleteInstant(String basePath, int n, String action) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+  public static String getNthCompleteInstant(StoragePath basePath, int n, String action) {
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getActiveTimeline()
         .filterCompletedInstants()
         .filter(instant -> action.equals(instant.getAction()))
@@ -97,8 +99,8 @@ public class TestUtils {
 
   @Nullable
   public static String getNthArchivedInstant(String basePath, int n) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
         .nthInstant(n).map(HoodieInstant::getTimestamp).orElse(null);
   }
@@ -106,7 +108,7 @@ public class TestUtils {
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
     assertTrue(split.getLogPaths().isPresent());
     final String logPath = split.getLogPaths().get().get(0);
-    String[] paths = logPath.split(Path.SEPARATOR);
+    String[] paths = logPath.split(StoragePath.SEPARATOR);
     return paths[paths.length - 2];
   }
 
@@ -116,8 +118,8 @@ public class TestUtils {
   }
 
   public static int getCompletedInstantCount(String basePath, String action) {
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getActiveTimeline()
         .filterCompletedInstants()
         .filter(instant -> action.equals(instant.getAction()))
@@ -127,12 +129,13 @@ public class TestUtils {
   public static HoodieCommitMetadata deleteInstantFile(HoodieTableMetaClient metaClient, HoodieInstant instant) throws Exception {
     ValidationUtils.checkArgument(instant.isCompleted());
     HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
-    HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), instant);
+    HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage(), metaClient.getMetaPath(),
+        instant);
     return metadata;
   }
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
     metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
-        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        Option.of(getUTF8Bytes(metadata.toJsonString())));
   }
 }

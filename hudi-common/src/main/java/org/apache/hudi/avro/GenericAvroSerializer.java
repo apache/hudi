@@ -22,7 +22,6 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import java.nio.ByteBuffer;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
@@ -35,8 +34,11 @@ import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 
 /**
@@ -68,7 +70,7 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
     if (encodeCache.containsKey(schema)) {
       return encodeCache.get(schema);
     } else {
-      byte[] schemaBytes = schema.toString().getBytes(StandardCharsets.UTF_8);
+      byte[] schemaBytes = getUTF8Bytes(schema.toString());
       encodeCache.put(schema, schemaBytes);
       return schemaBytes;
     }
@@ -79,7 +81,7 @@ public class GenericAvroSerializer<D extends GenericContainer> extends Serialize
     if (schemaCache.containsKey(schemaByteBuffer)) {
       return schemaCache.get(schemaByteBuffer);
     } else {
-      String schema = new String(schemaBytes, StandardCharsets.UTF_8);
+      String schema = fromUTF8Bytes(schemaBytes);
       Schema parsedSchema = new Schema.Parser().parse(schema);
       schemaCache.put(schemaByteBuffer, parsedSchema);
       return parsedSchema;

@@ -19,6 +19,8 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.SchemaUtils
 
 /**
@@ -29,5 +31,9 @@ object HoodieSpark2SchemaUtils extends HoodieSchemaUtils {
                                           colType: String,
                                           caseSensitiveAnalysis: Boolean): Unit = {
     SchemaUtils.checkColumnNameDuplication(columnNames, colType, caseSensitiveAnalysis)
+  }
+
+  override def toAttributes(struct: StructType): Seq[Attribute] = {
+    struct.toAttributes
   }
 }

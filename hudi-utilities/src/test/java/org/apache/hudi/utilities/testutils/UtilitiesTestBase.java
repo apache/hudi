@@ -31,11 +31,15 @@ import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TestAvroOrcUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -73,6 +77,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -82,7 +88,9 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import scala.Tuple2;
@@ -102,10 +110,11 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  *
  */
 public class UtilitiesTestBase {
-
+  private static final Logger LOG = LoggerFactory.getLogger(UtilitiesTestBase.class);
   @TempDir
   protected static java.nio.file.Path sharedTempDir;
   protected static FileSystem fs;
+  protected static HoodieStorage storage;
   protected static String basePath;
   protected static HdfsTestService hdfsTestService;
   protected static MiniDFSCluster dfsCluster;
@@ -132,9 +141,7 @@ public class UtilitiesTestBase {
   }
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    hadoopConf.set("hive.exec.scratchdir", System.getenv("java.io.tmpdir") + "/hive");
-
+    hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     if (needsHdfs) {
       hdfsTestService = new HdfsTestService(hadoopConf);
       dfsCluster = hdfsTestService.start(true);
@@ -145,7 +152,9 @@ public class UtilitiesTestBase {
       fs = FileSystem.getLocal(hadoopConf);
       basePath = sharedTempDir.toUri().toString();
     }
+    storage = new HoodieHadoopStorage(fs);
 
+    hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {
       hiveTestService = new HiveTestService(hadoopConf);
       hiveServer = hiveTestService.start();
@@ -157,7 +166,7 @@ public class UtilitiesTestBase {
       zookeeperTestService.start();
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]");
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -165,43 +174,110 @@ public class UtilitiesTestBase {
 
   @AfterAll
   public static void cleanUpUtilitiesTestServices() {
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-      hdfsTestService = null;
+    List<String> failedReleases = new ArrayList<>();
+    try {
+      if (fs != null) {
+        fs.delete(new Path(basePath), true);
+        fs.close();
+        fs = null;
+      }
+    } catch (IOException ie) {
+      ie.printStackTrace();
+      failedReleases.add("FileSystem");
     }
-    if (hiveServer != null) {
-      hiveServer.stop();
-      hiveServer = null;
+
+    try {
+      if (hdfsTestService != null) {
+        hdfsTestService.stop();
+        hdfsTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HdfsTestService");
     }
-    if (hiveTestService != null) {
-      hiveTestService.stop();
-      hiveTestService = null;
+
+    try {
+      if (hiveServer != null) {
+        hiveServer.stop();
+        hiveServer = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HiveServer");
     }
-    if (zookeeperTestService != null) {
-      zookeeperTestService.stop();
-      zookeeperTestService = null;
+
+    try {
+      if (hiveTestService != null) {
+        hiveTestService.stop();
+        hiveTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HiveTestService");
     }
-    if (jsc != null) {
-      jsc.stop();
-      jsc = null;
+
+    try {
+      if (zookeeperTestService != null) {
+        zookeeperTestService.stop();
+        zookeeperTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("ZooKeeperTestService");
     }
-    if (sparkSession != null) {
-      sparkSession.close();
-      sparkSession = null;
+
+    try {
+      if (jsc != null) {
+        jsc.stop();
+        jsc = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("JSC");
     }
+
+    try {
+      if (sparkSession != null) {
+        sparkSession.close();
+        sparkSession = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("SparkSession");
+    }
+
     if (context != null) {
       context = null;
+    }
+
+    if (!failedReleases.isEmpty()) {
+      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
     }
   }
 
   @BeforeEach
   public void setup() throws Exception {
     TestDataSource.initDataGen();
+    // This prevents test methods from using existing files or folders.
+    if (fs != null) {
+      fs.delete(new Path(basePath), true);
+    }
   }
 
   @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();
+  }
+
+  private static Map<String, String> sparkConf() {
+    Map<String, String> conf = new HashMap<>();
+    conf.put("spark.default.parallelism", "2");
+    conf.put("spark.sql.shuffle.partitions", "2");
+    conf.put("spark.executor.memory", "1G");
+    conf.put("spark.driver.memory", "1G");
+    conf.put("spark.hadoop.mapred.output.compress", "true");
+    conf.put("spark.ui.enable", "false");
+    return conf;
   }
 
   /**
@@ -237,7 +313,7 @@ public class UtilitiesTestBase {
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
-      .initTable(fs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+      .initTable(storage.getConf().newInstance(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
 
     QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig);
     ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.getString(META_SYNC_DATABASE_NAME));
@@ -258,7 +334,8 @@ public class UtilitiesTestBase {
       return sb.toString();
     }
 
-    public static String readFileFromAbsolutePath(String absolutePathForResource) throws IOException {
+    public static String readFileFromAbsolutePath(String absolutePathForResource)
+        throws IOException {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(new FileInputStream(absolutePathForResource)));
       StringBuffer sb = new StringBuffer();
@@ -266,14 +343,16 @@ public class UtilitiesTestBase {
       return sb.toString();
     }
 
-    public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
-      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+    public static void copyToDFS(String testResourcePath, HoodieStorage storage, String targetPath)
+        throws IOException {
+      PrintStream os = new PrintStream(storage.create(new StoragePath(targetPath), true));
       os.print(readFile(testResourcePath));
       os.flush();
       os.close();
     }
 
-    public static void copyToDFSFromAbsolutePath(String absolutePathForResource, FileSystem fs, String targetPath)
+    public static void copyToDFSFromAbsolutePath(String absolutePathForResource, FileSystem fs,
+                                                 String targetPath)
         throws IOException {
       PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
       os.print(readFileFromAbsolutePath(absolutePathForResource));
@@ -287,13 +366,13 @@ public class UtilitiesTestBase {
       }
     }
 
-    public static void savePropsToDFS(TypedProperties props, FileSystem fs, String targetPath) throws IOException {
+    public static void savePropsToDFS(TypedProperties props, HoodieStorage storage, String targetPath) throws IOException {
       String[] lines = props.keySet().stream().map(k -> String.format("%s=%s", k, props.get(k))).toArray(String[]::new);
-      saveStringsToDFS(lines, fs, targetPath);
+      saveStringsToDFS(lines, storage, targetPath);
     }
 
-    public static void saveStringsToDFS(String[] lines, FileSystem fs, String targetPath) throws IOException {
-      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+    public static void saveStringsToDFS(String[] lines, HoodieStorage storage, String targetPath) throws IOException {
+      PrintStream os = new PrintStream(storage.create(new StoragePath(targetPath), true));
       for (String l : lines) {
         os.println(l);
       }
@@ -343,7 +422,7 @@ public class UtilitiesTestBase {
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
           .withSchema(schema)
-          .withConf(HoodieTestUtils.getDefaultHadoopConf())
+          .withConf(HoodieTestUtils.getDefaultStorageConf().unwrap())
           .withWriteMode(Mode.OVERWRITE)
           .build()) {
         for (GenericRecord record : records) {
@@ -353,11 +432,12 @@ public class UtilitiesTestBase {
     }
 
     public static void saveORCToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
-      saveORCToDFS(records, targetFile, HoodieTestDataGenerator.ORC_SCHEMA);
+      saveORCToDFS(records, targetFile, TestAvroOrcUtils.ORC_SCHEMA);
     }
 
     public static void saveORCToDFS(List<GenericRecord> records, Path targetFile, TypeDescription schema) throws IOException {
-      OrcFile.WriterOptions options = OrcFile.writerOptions(HoodieTestUtils.getDefaultHadoopConf()).setSchema(schema);
+      OrcFile.WriterOptions options = OrcFile.writerOptions(
+          HoodieTestUtils.getDefaultStorageConf().unwrap()).setSchema(schema);
       try (Writer writer = OrcFile.createWriter(targetFile, options)) {
         VectorizedRowBatch batch = schema.createRowBatch();
         for (GenericRecord record : records) {
@@ -378,7 +458,7 @@ public class UtilitiesTestBase {
     }
 
     public static void saveAvroToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
-      FileSystem fs = targetFile.getFileSystem(HoodieTestUtils.getDefaultHadoopConf());
+      FileSystem fs = targetFile.getFileSystem(HoodieTestUtils.getDefaultStorageConf().unwrap());
       OutputStream output = fs.create(targetFile);
       try (DataFileWriter<IndexedRecord> dataFileWriter = new DataFileWriter<>(new GenericDatumWriter(schema)).create(schema, output)) {
         for (GenericRecord record : records) {
@@ -392,16 +472,17 @@ public class UtilitiesTestBase {
     }
 
     public static TypedProperties setupSchemaOnDFS(String scope, String filename) throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, fs, basePath + "/" + filename);
+      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, storage,
+          basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
+      props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;
     }
 
     public static TypedProperties setupSchemaOnDFSWithAbsoluteScope(String scope, String filename) throws IOException {
       UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(scope + "/" + filename, fs, basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
+      props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;
     }
 

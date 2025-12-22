@@ -19,8 +19,8 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.WriteBuilder;
@@ -38,19 +38,19 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
   private final SparkSession jss;
-  private final Configuration hadoopConfiguration;
+  private final StorageConfiguration<?> storageConf;
   private final Map<String, String> properties;
   private final boolean populateMetaFields;
   private final boolean arePartitionRecordsSorted;
 
   public HoodieDataSourceInternalBatchWriteBuilder(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties, boolean populateMetaFields,
+                                                   SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields,
                                                    boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.jss = jss;
-    this.hadoopConfiguration = hadoopConfiguration;
+    this.storageConf = storageConf;
     this.properties = properties;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
@@ -59,6 +59,6 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
   @Override
   public BatchWrite buildForBatch() {
     return new HoodieDataSourceInternalBatchWrite(instantTime, writeConfig, structType, jss,
-        hadoopConfiguration, properties, populateMetaFields, arePartitionRecordsSorted);
+        storageConf, properties, populateMetaFields, arePartitionRecordsSorted);
   }
 }

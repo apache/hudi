@@ -19,10 +19,15 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
+import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.catalyst.expressions.{AnsiCast, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, PredicateHelper, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
-import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.{DataType, StructType}
 
 object HoodieSpark30CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils {
+
+  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
+    RowEncoder.apply(schema).resolveAndBind()
+  }
 
   override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] =
     expr match {

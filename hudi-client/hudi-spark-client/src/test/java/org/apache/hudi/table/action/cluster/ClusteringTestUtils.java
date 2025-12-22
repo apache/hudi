@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -97,7 +96,7 @@ public class ClusteringTestUtils {
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build())
+            .build())
         .withClusteringConfig(clusteringConfig)
         .withPreCommitValidatorConfig(HoodiePreCommitValidatorConfig.newBuilder()
             .withPreCommitValidator(SqlQueryEqualityPreCommitValidator.class.getName())
@@ -123,7 +122,7 @@ public class ClusteringTestUtils {
 
   public static HoodieClusteringPlan createClusteringPlan(HoodieTableMetaClient metaClient, String instantTime, String fileId) {
     try {
-      String basePath = metaClient.getBasePath();
+      String basePath = metaClient.getBasePath().toString();
       String partition = DEFAULT_PARTITION_PATHS[0];
       createBaseFile(basePath, partition, instantTime, fileId, 1);
       FileSlice slice = new FileSlice(partition, instantTime, fileId);

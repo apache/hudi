@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -30,7 +31,7 @@ import java.util.Arrays;
 @ConfigClassProperty(name = "Error table Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that are required for Error table configs")
-public class HoodieErrorTableConfig {
+public class HoodieErrorTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> ERROR_TABLE_ENABLED = ConfigProperty
       .key("hoodie.errortable.enable")
       .defaultValue(false)
@@ -71,6 +72,12 @@ public class HoodieErrorTableConfig {
       .key("hoodie.errortable.validate.targetschema.enable")
       .defaultValue(false)
       .withDocumentation("Records with schema mismatch with Target Schema are sent to Error Table.");
+
+  public static final ConfigProperty<Boolean> ERROR_ENABLE_VALIDATE_RECORD_CREATION = ConfigProperty
+      .key("hoodie.errortable.validate.recordcreation.enable")
+      .defaultValue(true)
+      .sinceVersion("0.15.0")
+      .withDocumentation("Records that fail to be created due to keygeneration failure or other issues will be sent to the Error Table");
 
   public static final ConfigProperty<String> ERROR_TABLE_WRITE_FAILURE_STRATEGY = ConfigProperty
       .key("hoodie.errortable.write.failure.strategy")

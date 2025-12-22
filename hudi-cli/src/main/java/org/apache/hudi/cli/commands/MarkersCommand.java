@@ -21,7 +21,6 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
@@ -42,10 +41,9 @@ public class MarkersCommand {
       @ShellOption(value = "--sparkMemory", defaultValue = "1G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DELETE_MARKER.toString(), master, sparkMemory, instantTime,
-        metaClient.getBasePath());
+        HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

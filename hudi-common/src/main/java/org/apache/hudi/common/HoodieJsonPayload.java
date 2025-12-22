@@ -36,6 +36,8 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * Hoodie json payload.
  */
@@ -74,7 +76,7 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
     Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
     DeflaterOutputStream dos = new DeflaterOutputStream(baos, deflater, true);
     try {
-      dos.write(jsonData.getBytes());
+      dos.write(getUTF8Bytes(jsonData));
     } finally {
       dos.flush();
       dos.close();

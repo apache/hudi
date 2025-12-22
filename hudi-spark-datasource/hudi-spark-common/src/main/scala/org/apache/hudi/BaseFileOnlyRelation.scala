@@ -18,12 +18,13 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX
 import org.apache.hudi.HoodieBaseRelation.projectReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +51,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
                                 override val metaClient: HoodieTableMetaClient,
                                 override val optParams: Map[String, String],
                                 private val userSchema: Option[StructType],
-                                private val globPaths: Seq[Path],
+                                private val globPaths: Seq[StoragePath],
                                 private val prunedDataSchema: Option[StructType] = None)
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
     with SparkAdapterSupport {
@@ -114,11 +115,11 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
     val fileSplits = fileSlices.flatMap { fileSlice =>
       // TODO fix, currently assuming parquet as underlying format
-      val fs = fileSlice.getBaseFile.get.getFileStatus
+      val pathInfo: StoragePathInfo = fileSlice.getBaseFile.get.getPathInfo
       HoodieDataSourceHelper.splitFiles(
         sparkSession = sparkSession,
-        file = fs,
-        partitionValues = getPartitionColumnsAsInternalRow(fs)
+        file = pathInfo,
+        partitionValues = getPartitionColumnsAsInternalRow(pathInfo)
       )
     }
       // NOTE: It's important to order the splits in the reverse order of their
@@ -199,7 +200,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
           // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
           //       list of globbed paths which complicates partitioning discovery for Spark.
           //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
-          BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
+          BASE_PATH_PARAM -> metaClient.getBasePath.toString
         ),
         partitionColumns = partitionColumns
       )

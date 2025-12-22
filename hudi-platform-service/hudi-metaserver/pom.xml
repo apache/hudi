@@ -20,19 +20,19 @@
     <parent>
         <artifactId>hudi-platform-service</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.14.1</version>
+        <version>0.16.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-metaserver</artifactId>
-    <version>0.14.1</version>
+    <version>0.16.0-SNAPSHOT</version>
 
     <name>hudi-metaserver</name>
     <packaging>pom</packaging>
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <h2.version>1.4.200</h2.version>
+        <h2.version>2.2.220</h2.version>
         <!-- Thrift related properties -->
         <thrift.home>/usr/local</thrift.home>
         <thrift.install.env>docker</thrift.install.env>

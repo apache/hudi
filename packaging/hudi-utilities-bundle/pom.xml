@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.1</version>
+    <version>0.16.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -91,6 +91,7 @@
               </transformers>
               <artifactSet>
                 <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
@@ -115,6 +116,7 @@
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.roaringbitmap:RoaringBitmap</include>
                   <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
                        bundle the same JSR310 version that is included in spark runtime -->
                   <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
@@ -122,6 +124,8 @@
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
+                  <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
+                  <include>com.google.protobuf:protobuf-java</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
@@ -129,6 +133,7 @@
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
                   <include>io.confluent:kafka-schema-registry-client</include>
+                  <include>io.confluent:kafka-protobuf-serializer</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
                   <include>io.dropwizard.metrics:metrics-jmx</include>
@@ -137,6 +142,8 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
+                  <include>com.uber.m3:tally-m3</include>
+                  <include>com.uber.m3:tally-core</include>
                   <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.spark:spark-token-provider-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
@@ -225,6 +232,18 @@
                   <pattern>org.apache.httpcomponents.</pattern>
                   <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.roaringbitmap.</pattern>
+                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.uber.m3.</pattern>
+                  <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>
@@ -248,9 +267,6 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>src/test/resources</directory>
       </resource>
     </resources>
   </build>

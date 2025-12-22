@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -36,7 +37,6 @@ import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionIdentifier;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -75,18 +75,21 @@ public class TestFileIndex {
     conf.setBoolean(METADATA_ENABLED, true);
     conf.setBoolean(HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf).rowType(TestConfigurations.ROW_TYPE).build();
+    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf)
+        .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("partition");
-    List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), hiveStylePartitioning);
+    List<Map<String, String>> partitions =
+        fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(),
+            hiveStylePartitioning);
     assertTrue(partitions.stream().allMatch(m -> m.size() == 1));
     String partitionPaths = partitions.stream()
         .map(Map::values).flatMap(Collection::stream).sorted().collect(Collectors.joining(","));
     assertThat("should have 4 partitions", partitionPaths, is("par1,par2,par3,par4"));
 
-    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-    assertThat(fileStatuses.length, is(4));
-    assertTrue(Arrays.stream(fileStatuses)
-        .allMatch(fileStatus -> fileStatus.getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())));
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    assertThat(pathInfoList.size(), is(4));
+    assertTrue(pathInfoList.stream().allMatch(fileInfo ->
+        fileInfo.getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())));
   }
 
   @Test
@@ -96,14 +99,17 @@ public class TestFileIndex {
     conf.setString(KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
     conf.setBoolean(METADATA_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf).rowType(TestConfigurations.ROW_TYPE).build();
+    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf)
+        .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("");
-    List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
+    List<Map<String, String>> partitions =
+        fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
     assertThat(partitions.size(), is(0));
 
-    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-    assertThat(fileStatuses.length, is(1));
-    assertTrue(fileStatuses[0].getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension()));
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    assertThat(pathInfoList.size(), is(1));
+    assertTrue(pathInfoList.get(0).getPath().toString()
+        .endsWith(HoodieFileFormat.PARQUET.getFileExtension()));
   }
 
   @ParameterizedTest
@@ -111,13 +117,15 @@ public class TestFileIndex {
   void testFileListingEmptyTable(boolean enableMetadata) {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(METADATA_ENABLED, enableMetadata);
-    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf).rowType(TestConfigurations.ROW_TYPE).build();
+    FileIndex fileIndex = FileIndex.builder().path(new Path(tempFile.getAbsolutePath())).conf(conf)
+        .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("partition");
-    List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
+    List<Map<String, String>> partitions =
+        fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
     assertThat(partitions.size(), is(0));
 
-    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
-    assertThat(fileStatuses.length, is(0));
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    assertThat(pathInfoList.size(), is(0));
   }
 
   @Test
@@ -138,15 +146,15 @@ public class TestFileIndex {
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
                 Arrays.asList(
-                    new FieldReferenceExpression("uuid", DataTypes.BIGINT(), 0, 0), 
+                    new FieldReferenceExpression("uuid", DataTypes.BIGINT(), 0, 0),
                     new ValueLiteralExpression((byte) 5, DataTypes.TINYINT().notNull())),
                 DataTypes.BOOLEAN()
             ))))
             .partitionPruner(null)
             .build();
 
-    FileStatus[] files = fileIndex.getFilesInPartitions();
-    assertThat(files.length, is(2));
+    List<StoragePathInfo> files = fileIndex.getFilesInPartitions();
+    assertThat(files.size(), is(2));
   }
 
   private void writeBigintDataset(Configuration conf) throws Exception {

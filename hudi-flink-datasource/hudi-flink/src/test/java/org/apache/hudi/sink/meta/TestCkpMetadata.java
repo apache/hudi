@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -96,7 +96,7 @@ public class TestCkpMetadata {
 
   private CkpMetadata getCkpMetadata(String uniqueId) {
     String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
+    FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
     return CkpMetadata.getInstance(fs, basePath, uniqueId);
   }
 }

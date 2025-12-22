@@ -17,10 +17,10 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -33,35 +33,36 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
+import org.apache.spark.scheduler.SparkListener;
+import org.apache.spark.scheduler.SparkListenerStageSubmitted;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
+import org.apache.spark.sql.HoodieUnsafeUtils;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import scala.Tuple2;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import scala.Tuple2;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -349,10 +350,55 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
+  }
+
+  @Test
+  public void testBulkInsertParallelismParam() {
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet("_row_key"))
+        .combineInput(true, true)
+        .withPreCombineField("ts").build();
+    int checkParallelism = 7;
+    config.setValue("hoodie.bulkinsert.shuffle.parallelism", String.valueOf(checkParallelism));
+    StageCheckBulkParallelismListener stageCheckBulkParallelismListener =
+        new StageCheckBulkParallelismListener("org.apache.hudi.HoodieDatasetBulkInsertHelper$.dedupeRows");
+    sqlContext.sparkContext().addSparkListener(stageCheckBulkParallelismListener);
+    List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
+    Dataset<Row> dataset = sqlContext.createDataFrame(inserts, structType).repartition(3);
+    assertNotEquals(checkParallelism, HoodieUnsafeUtils.getNumPartitions(dataset));
+    assertNotEquals(checkParallelism, sqlContext.sparkContext().defaultParallelism());
+    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+        new NonSortPartitionerWithRows(), "000001111");
+    // trigger job
+    result.count();
+    assertEquals(checkParallelism, stageCheckBulkParallelismListener.getParallelism());
+    sqlContext.sparkContext().removeSparkListener(stageCheckBulkParallelismListener);
+  }
+
+  class StageCheckBulkParallelismListener extends SparkListener {
+
+    private boolean checkFlag = false;
+    private String checkMessage;
+    private int parallelism;
+
+    StageCheckBulkParallelismListener(String checkMessage) {
+      this.checkMessage = checkMessage;
+    }
+
+    @Override
+    public void onStageSubmitted(SparkListenerStageSubmitted stageSubmitted) {
+      if (checkFlag) {
+        // dedup next stage is reduce task
+        this.parallelism = stageSubmitted.stageInfo().numTasks();
+        checkFlag = false;
+      }
+      if (stageSubmitted.stageInfo().details().contains(checkMessage)) {
+        checkFlag = true;
+      }
+    }
+
+    public int getParallelism() {
+      return parallelism;
+    }
   }
 }

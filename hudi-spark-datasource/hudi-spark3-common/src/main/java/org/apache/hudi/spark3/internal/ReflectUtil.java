@@ -18,36 +18,13 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement;
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
+
 import org.apache.spark.sql.catalyst.util.DateFormatter;
 
-import scala.Option;
-import scala.collection.Seq;
-import scala.collection.immutable.Map;
-
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.time.ZoneId;
 
 public class ReflectUtil {
-
-  public static InsertIntoStatement createInsertInto(LogicalPlan table, Map<String, Option<String>> partition, Seq<String> userSpecifiedCols,
-                                                     LogicalPlan query, boolean overwrite, boolean ifPartitionNotExists) {
-    try {
-      if (HoodieSparkUtils.isSpark3_0()) {
-        Constructor<InsertIntoStatement> constructor = InsertIntoStatement.class.getConstructor(
-                LogicalPlan.class, Map.class, LogicalPlan.class, boolean.class, boolean.class);
-        return constructor.newInstance(table, partition, query, overwrite, ifPartitionNotExists);
-      } else {
-        Constructor<InsertIntoStatement> constructor = InsertIntoStatement.class.getConstructor(
-                LogicalPlan.class, Map.class, Seq.class, LogicalPlan.class, boolean.class, boolean.class);
-        return constructor.newInstance(table, partition, userSpecifiedCols, query, overwrite, ifPartitionNotExists);
-      }
-    } catch (Exception e) {
-      throw new RuntimeException("Error in create InsertIntoStatement", e);
-    }
-  }
 
   public static DateFormatter getDateFormatter(ZoneId zoneId) {
     try {

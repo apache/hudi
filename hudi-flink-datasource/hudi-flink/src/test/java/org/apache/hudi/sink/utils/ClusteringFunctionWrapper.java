@@ -56,6 +56,10 @@ public class ClusteringFunctionWrapper {
    */
   private ClusteringPlanOperator clusteringPlanOperator;
   /**
+   * Output to collect the clustering plan events.
+   */
+  private CollectorOutput<ClusteringPlanEvent> planEventOutput;
+  /**
    * Output to collect the clustering commit events.
    */
   private CollectorOutput<ClusteringCommitEvent> commitEventOutput;
@@ -83,6 +87,8 @@ public class ClusteringFunctionWrapper {
 
   public void openFunction() throws Exception {
     clusteringPlanOperator = new ClusteringPlanOperator(conf);
+    planEventOutput =  new CollectorOutput<>();
+    clusteringPlanOperator.setup(streamTask, streamConfig, planEventOutput);
     clusteringPlanOperator.open();
 
     clusteringOperator = new ClusteringOperator(conf, TestConfigurations.ROW_TYPE);

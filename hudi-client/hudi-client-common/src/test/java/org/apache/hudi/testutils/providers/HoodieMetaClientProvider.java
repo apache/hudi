@@ -22,19 +22,34 @@ package org.apache.hudi.testutils.providers;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 public interface HoodieMetaClientProvider {
 
-  HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException;
+  HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException;
 
   default HoodieTableFileSystemView getHoodieTableFileSystemView(
-      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, FileStatus[] fileStatuses) {
-    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      List<StoragePathInfo> pathInfoList) {
+    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, pathInfoList);
+  }
+
+  default SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
+    try {
+      return new HoodieTableFileSystemView(metaClient,
+          metaClient.getActiveTimeline(),
+          HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
+      );
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error getting file system view", ioe);
+    }
   }
 }

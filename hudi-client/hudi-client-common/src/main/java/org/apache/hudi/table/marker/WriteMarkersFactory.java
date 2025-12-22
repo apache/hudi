@@ -18,12 +18,13 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,9 +51,9 @@ public class WriteMarkersFactory {
               + "but embedded timeline server is not enabled.  Falling back to direct markers.");
           return new DirectWriteMarkers(table, instantTime);
         }
-        String basePath = table.getMetaClient().getBasePath();
+        String basePath = table.getMetaClient().getBasePath().toString();
         if (StorageSchemes.HDFS.getScheme().equals(
-            FSUtils.getFs(basePath, table.getContext().getHadoopConf().newCopy()).getScheme())) {
+            HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf().unwrapCopyAs(Configuration.class)).getScheme())) {
           LOG.warn("Timeline-server-based markers are not supported for HDFS: "
               + "base path " + basePath + ".  Falling back to direct markers.");
           return new DirectWriteMarkers(table, instantTime);

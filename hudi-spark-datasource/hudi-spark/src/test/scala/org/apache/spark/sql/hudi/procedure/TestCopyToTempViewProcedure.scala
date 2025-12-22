@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
 

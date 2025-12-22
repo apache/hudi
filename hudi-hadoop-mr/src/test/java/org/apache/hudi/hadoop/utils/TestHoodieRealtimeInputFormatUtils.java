@@ -18,11 +18,10 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
-
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,7 +35,7 @@ public class TestHoodieRealtimeInputFormatUtils {
 
   @BeforeEach
   public void setUp() {
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     hadoopConf.set("fs.defaultFS", "file:///");
     hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
   }

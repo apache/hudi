@@ -22,7 +22,6 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.spark.launcher.SparkLauncher;
@@ -46,11 +45,9 @@ public class UpgradeOrDowngradeCommand {
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
 
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String toVersionName = getHoodieTableVersionName(toVersion, true);
-    sparkLauncher.addAppArgs(SparkCommand.UPGRADE.toString(), master, sparkMemory, metaClient.getBasePath(), toVersionName);
+    sparkLauncher.addAppArgs(SparkCommand.UPGRADE.toString(), master, sparkMemory, HoodieCLI.basePath, toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -71,10 +68,9 @@ public class UpgradeOrDowngradeCommand {
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
 
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String toVersionName = getHoodieTableVersionName(toVersion, false);
-    sparkLauncher.addAppArgs(SparkCommand.DOWNGRADE.toString(), master, sparkMemory, metaClient.getBasePath(), toVersionName);
+    sparkLauncher.addAppArgs(SparkCommand.DOWNGRADE.toString(), master, sparkMemory, HoodieCLI.basePath, toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

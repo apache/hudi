@@ -19,18 +19,16 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata, HoodieWriteStat}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.List
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -63,7 +61,7 @@ class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilde
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
     val hoodieInstantOption = getCommitForInstant(timeline, instantTime)
@@ -75,7 +73,7 @@ class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilde
 
     val meta = commitMetadataOptional.get
     val rows = new util.ArrayList[Row]
-    for (entry <- meta.getPartitionToWriteStats.entrySet) {
+    for (entry <- meta.getPartitionToWriteStats.entrySet.asScala) {
       val action: String = hoodieInstantOption.get.getAction
       val path: String = entry.getKey
       val stats: List[HoodieWriteStat] = entry.getValue
@@ -85,7 +83,7 @@ class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilde
       var totalRecordsInserted: Long = 0
       var totalBytesWritten: Long = 0
       var totalWriteErrors: Long = 0
-      for (stat <- stats) {
+      for (stat <- stats.asScala) {
         if (stat.getPrevCommit == HoodieWriteStat.NULL_COMMIT) {
           totalFilesAdded += 1
         }
@@ -111,7 +109,7 @@ class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilde
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
-    val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
+    val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
   }
 

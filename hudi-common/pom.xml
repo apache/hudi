@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.1</version>
+    <version>0.16.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -104,6 +104,12 @@
 
   <dependencies>
     <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-io</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.openjdk.jol</groupId>
       <artifactId>jol-core</artifactId>
     </dependency>
@@ -183,22 +189,12 @@
       <artifactId>rocksdbjni</artifactId>
     </dependency>
 
-    <!-- Hadoop -->
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-      <scope>provided</scope>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-io</artifactId>
+      <version>${project.version}</version>
+      <classifier>tests</classifier>
+      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -296,5 +292,52 @@
       <artifactId>disruptor</artifactId>
       <version>${disruptor.version}</version>
     </dependency>
+
+    <!-- Dropwizard Metrics -->
+    <dependency>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-graphite</artifactId>
+          <exclusions>
+              <exclusion>
+                  <groupId>com.rabbitmq</groupId>
+                  <artifactId>*</artifactId>
+              </exclusion>
+          </exclusions>
+      </dependency>
+      <dependency>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-core</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-jmx</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient_httpserver</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient_dropwizard</artifactId>
+      </dependency>
+      <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>simpleclient_pushgateway</artifactId>
+      </dependency>
+    <dependency>
+      <groupId>com.uber.m3</groupId>
+      <artifactId>tally-m3</artifactId>
+      <version>${tally.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.uber.m3</groupId>
+      <artifactId>tally-core</artifactId>
+      <version>${tally.version}</version>
+    </dependency>
+
   </dependencies>
 </project>

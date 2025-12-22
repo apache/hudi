@@ -21,13 +21,13 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
@@ -66,7 +66,7 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMER_
 /**
  * Wrapper over HoodieStreamer.java class.
  * Helps with ingesting incremental data into hoodie datasets for multiple tables.
- * Currently supports only COPY_ON_WRITE storage type.
+ * Supports COPY_ON_WRITE and MERGE_ON_READ storage types.
  */
 public class HoodieMultiTableStreamer {
 
@@ -86,7 +86,7 @@ public class HoodieMultiTableStreamer {
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
         "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
-    FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
     TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();

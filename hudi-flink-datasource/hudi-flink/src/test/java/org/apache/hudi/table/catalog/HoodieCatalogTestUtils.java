@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -73,5 +76,9 @@ public class HoodieCatalogTestUtils {
     } catch (IOException e) {
       throw new CatalogException("Failed to create test HiveConf to HiveCatalog.", e);
     }
+  }
+
+  public static StorageConfiguration<?> createStorageConf() {
+    return new HadoopStorageConfiguration(createHiveConf());
   }
 }

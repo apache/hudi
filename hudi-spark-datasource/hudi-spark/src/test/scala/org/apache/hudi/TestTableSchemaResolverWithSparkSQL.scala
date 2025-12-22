@@ -17,121 +17,27 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.commons.io.FileUtils
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieMetadataRecord
-import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-import org.apache.spark.SparkContext
-import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-
-import scala.collection.JavaConverters
 
 /**
  * Test suite for TableSchemaResolver with SparkSqlWriter.
  */
 @Tag("functional")
-class TestTableSchemaResolverWithSparkSQL {
-  var spark: SparkSession = _
-  var sqlContext: SQLContext = _
-  var sc: SparkContext = _
-  var tempPath: java.nio.file.Path = _
-  var tempBootStrapPath: java.nio.file.Path = _
-  var hoodieFooTableName = "hoodie_foo_tbl"
-  var tempBasePath: String = _
-  var commonTableModifier: Map[String, String] = Map()
-
-  case class StringLongTest(uuid: String, ts: Long)
-
-  /**
-   * Setup method running before each test.
-   */
-  @BeforeEach
-  def setUp(): Unit = {
-    initSparkContext()
-    tempPath = java.nio.file.Files.createTempDirectory("hoodie_test_path")
-    tempBootStrapPath = java.nio.file.Files.createTempDirectory("hoodie_test_bootstrap")
-    tempBasePath = tempPath.toAbsolutePath.toString
-    commonTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
-  }
-
-  /**
-   * Tear down method running after each test.
-   */
-  @AfterEach
-  def tearDown(): Unit = {
-    cleanupSparkContexts()
-    FileUtils.deleteDirectory(tempPath.toFile)
-    FileUtils.deleteDirectory(tempBootStrapPath.toFile)
-  }
-
-  /**
-   * Utility method for initializing the spark context.
-   */
-  def initSparkContext(): Unit = {
-    spark = SparkSession.builder()
-      .config(getSparkConfForTest(hoodieFooTableName))
-      .getOrCreate()
-    sc = spark.sparkContext
-    sc.setLogLevel("ERROR")
-    sqlContext = spark.sqlContext
-  }
-
-  /**
-   * Utility method for cleaning up spark resources.
-   */
-  def cleanupSparkContexts(): Unit = {
-    if (sqlContext != null) {
-      sqlContext.clearCache();
-      sqlContext = null;
-    }
-    if (sc != null) {
-      sc.stop()
-      sc = null
-    }
-    if (spark != null) {
-      spark.close()
-    }
-  }
-
-  /**
-   * Utility method for creating common params for writer.
-   *
-   * @param path               Path for hoodie table
-   * @param hoodieFooTableName Name of hoodie table
-   * @param tableType          Type of table
-   * @return Map of common params
-   */
-  def getCommonParams(path: java.nio.file.Path, hoodieFooTableName: String, tableType: String): Map[String, String] = {
-    Map("path" -> path.toAbsolutePath.toString,
-      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1",
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
-  }
-
-  /**
-   * Utility method for converting list of Row to list of Seq.
-   *
-   * @param inputList list of Row
-   * @return list of Seq
-   */
-  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
-    JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
+class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
 
   @Test
   def testTableSchemaResolverInMetadataTable(): Unit = {
@@ -161,10 +67,7 @@ class TestTableSchemaResolverWithSparkSQL {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df1)
 
     val metadataTablePath = tempPath.toAbsolutePath.toString + "/.hoodie/metadata"
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(metadataTablePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, metadataTablePath)
 
     // Delete latest metadata table deltacommit
     // Get schema from metadata table hfile format base file.
@@ -203,10 +106,7 @@ class TestTableSchemaResolverWithSparkSQL {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
 
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(tempPath.toAbsolutePath.toString)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, tempPath.toAbsolutePath.toString)
 
     assertTrue(new TableSchemaResolver(metaClient).hasOperationField)
     schemaValuationBasedOnDataFile(metaClient, schema.toString())

@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.INIT_INSTANT_TS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +76,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     jsc = JavaSparkContext.fromSparkContext(spark().sparkContext());
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
   }
 
   private String generateS3EventMetadata(Long objectSize, String bucketName, String objectKey, String commitTime)
@@ -122,7 +121,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         "s3.object.key", "s3.object.size");
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         emptyDataset, 50L, queryInfo, new CloudObjectIncrCheckpoint(null, null));
-    assertEquals(INIT_INSTANT_TS, result.getKey().toString());
+    assertEquals("commit2", result.getKey().toString());
     assertTrue(!result.getRight().isPresent());
   }
 
@@ -261,8 +260,10 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     filePathSizeAndCommitTime.add(Triple.of("path/to/file8.json", 100L, "commit3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file6.json", 250L, "commit3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file7.json", 50L, "commit3"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file8.json", 50L, "commit3"));
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
+    // Test case 1 when queryInfo.endInstant() is equal to lastCheckpointCommit
     QueryInfo queryInfo = new QueryInfo(
         QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
         "commit3", "_hoodie_commit_time",
@@ -270,6 +271,15 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         inputDs, 1500L, queryInfo, new CloudObjectIncrCheckpoint("commit3", "path/to/file8.json"));
     assertEquals("commit3#path/to/file8.json", result.getKey().toString());
+    assertTrue(!result.getRight().isPresent());
+    // Test case 2 when queryInfo.endInstant() is greater than lastCheckpointCommit
+    queryInfo = new QueryInfo(
+        QUERY_TYPE_INCREMENTAL_OPT_VAL(), "commit1", "commit1",
+        "commit4", "_hoodie_commit_time",
+        "s3.object.key", "s3.object.size");
+    result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
+        inputDs, 1500L, queryInfo, new CloudObjectIncrCheckpoint("commit3","path/to/file8.json"));
+    assertEquals("commit4", result.getKey().toString());
     assertTrue(!result.getRight().isPresent());
   }
 

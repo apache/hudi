@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.Assertions._
@@ -88,11 +89,7 @@ class TestHoodieSparkUtils {
   @Test
   def testCreateRddSchemaEvol(): Unit = {
     val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
-      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+      .config(getSparkConfForTest("Hoodie Datasource test"))
       .getOrCreate
 
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -126,11 +123,7 @@ class TestHoodieSparkUtils {
   @Test
   def testCreateRddWithNestedSchemas(): Unit = {
     val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
-      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+      .config(getSparkConfForTest("Hoodie Datasource test"))
       .getOrCreate
 
     val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
@@ -226,6 +219,10 @@ object TestHoodieSparkUtils {
         StructField(name, dataType, nullable = false, metadata)
       case y: StructField => y
     })
+  }
+
+  def getSchemaColumnNotNullable(structType: StructType, columnName: String): StructType = {
+    setNullableRec(structType, columnName.split('.'), 0)
   }
 
   def setColumnNotNullable(df: DataFrame, columnName: String): DataFrame = {

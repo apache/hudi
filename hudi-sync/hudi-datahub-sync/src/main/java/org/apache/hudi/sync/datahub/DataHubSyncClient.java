@@ -21,53 +21,79 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
+import org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier;
+import org.apache.hudi.sync.datahub.util.SchemaFieldsUtil;
 
+import com.linkedin.common.BrowsePathEntry;
+import com.linkedin.common.BrowsePathEntryArray;
+import com.linkedin.common.BrowsePathsV2;
+import com.linkedin.common.DataPlatformInstance;
+import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.Status;
+import com.linkedin.common.SubTypes;
+import com.linkedin.common.UrnArray;
 import com.linkedin.common.urn.DatasetUrn;
-import com.linkedin.data.template.SetMode;
-import com.linkedin.data.template.StringMap;
-import com.linkedin.dataset.DatasetProperties;
-import com.linkedin.schema.ArrayType;
-import com.linkedin.schema.BooleanType;
-import com.linkedin.schema.BytesType;
-import com.linkedin.schema.EnumType;
-import com.linkedin.schema.FixedType;
-import com.linkedin.schema.MapType;
-import com.linkedin.schema.NullType;
-import com.linkedin.schema.NumberType;
-import com.linkedin.schema.OtherSchema;
-import com.linkedin.schema.RecordType;
-import com.linkedin.schema.SchemaField;
-import com.linkedin.schema.SchemaFieldArray;
-import com.linkedin.schema.SchemaFieldDataType;
-import com.linkedin.schema.SchemaMetadata;
-import com.linkedin.schema.StringType;
-import com.linkedin.schema.UnionType;
+import com.linkedin.common.urn.Urn;
+import com.linkedin.container.Container;
+import com.linkedin.container.ContainerProperties;
+import com.linkedin.data.template.StringArray;
+import com.linkedin.domain.Domains;
+import com.linkedin.metadata.aspect.patch.builder.DatasetPropertiesPatchBuilder;
+import com.linkedin.mxe.MetadataChangeProposal;
+import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
-import org.apache.avro.AvroTypeException;
+import io.datahubproject.schematron.converters.avro.AvroSchemaConverter;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class DataHubSyncClient extends HoodieSyncClient {
 
+  private static final Logger LOG = LoggerFactory.getLogger(DataHubSyncClient.class);
+
   protected final DataHubSyncConfig config;
+  private final DataPlatformUrn dataPlatformUrn;
+  private final Option<String> dataPlatformInstance;
+  private final Option<Urn> dataPlatformInstanceUrn;
   private final DatasetUrn datasetUrn;
+  private final Urn databaseUrn;
+  private final String tableName;
+  private final String databaseName;
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
-  public DataHubSyncClient(DataHubSyncConfig config) {
+  public DataHubSyncClient(DataHubSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config);
     this.config = config;
-    this.datasetUrn = config.datasetIdentifier.getDatasetUrn();
+    HoodieDataHubDatasetIdentifier datasetIdentifier =
+            config.getDatasetIdentifier();
+    this.dataPlatformUrn = datasetIdentifier.getDataPlatformUrn();
+    this.dataPlatformInstance = datasetIdentifier.getDataPlatformInstance();
+    this.dataPlatformInstanceUrn = datasetIdentifier.getDataPlatformInstanceUrn();
+    this.datasetUrn = datasetIdentifier.getDatasetUrn();
+    this.databaseUrn = datasetIdentifier.getDatabaseUrn();
+    this.tableName = datasetIdentifier.getTableName();
+    this.databaseName = datasetIdentifier.getDatabaseName();
   }
 
   @Override
@@ -75,45 +101,193 @@ public class DataHubSyncClient extends HoodieSyncClient {
     throw new UnsupportedOperationException("Not supported: `getLastCommitTimeSynced`");
   }
 
+  protected Option<String> getLastCommitTime() {
+    return getActiveTimeline().lastInstant()
+        .map(HoodieInstant::getTimestamp);
+  }
+
+  protected Option<String> getLastCommitCompletionTime() {
+    int countInstants = getActiveTimeline().countInstants();
+    return getActiveTimeline()
+        .getInstantsOrderedByStateTransitionTime()
+        .skip(countInstants - 1)
+        .findFirst()
+        .map(HoodieInstant::getStateTransitionTime)
+        .map(Option::of).orElseGet(Option::empty);
+  }
+
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().getTimestamp()));
+    Option<String> lastCommitTime = getLastCommitTime();
+    if (lastCommitTime.isPresent()) {
+      updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTime.get()));
+    } else {
+      LOG.error("Failed to get last commit time");
+    }
+
+    Option<String> lastCommitCompletionTime = getLastCommitCompletionTime();
+    if (lastCommitCompletionTime.isPresent()) {
+      updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionTime.get()));
+    } else {
+      LOG.error("Failed to get last commit completion time");
+    }
+  }
+
+  private MetadataChangeProposal createDatasetPropertiesAspect(String tableName, Map<String, String> tableProperties) {
+    DatasetPropertiesPatchBuilder datasetPropertiesPatchBuilder = new DatasetPropertiesPatchBuilder().urn(datasetUrn);
+    if (tableProperties != null) {
+      tableProperties.forEach(datasetPropertiesPatchBuilder::addCustomProperty);
+    }
+    if (tableName != null) {
+      datasetPropertiesPatchBuilder.setName(tableName);
+    }
+    return datasetPropertiesPatchBuilder.build();
   }
 
   @Override
   public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    MetadataChangeProposalWrapper propertiesChangeProposal = MetadataChangeProposalWrapper.builder()
-            .entityType("dataset")
-            .entityUrn(datasetUrn)
-            .upsert()
-            .aspect(new DatasetProperties().setCustomProperties(new StringMap(tableProperties)))
-            .build();
-
-    DatahubResponseLogger responseLogger = new DatahubResponseLogger();
+    // Use PATCH API to avoid overwriting existing properties
+    MetadataChangeProposal proposal = createDatasetPropertiesAspect(tableName, tableProperties);
+    DataHubResponseLogger responseLogger = new DataHubResponseLogger();
 
     try (RestEmitter emitter = config.getRestEmitter()) {
-      emitter.emit(propertiesChangeProposal, responseLogger).get();
+      Future<MetadataWriteResponse> future = emitter.emit(proposal, responseLogger);
+      future.get();
       return true;
     } catch (Exception e) {
-      throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": "
-              + tableProperties, e);
+      if (config.suppressExceptions()) {
+        LOG.error("Failed to sync properties for Dataset {}: {}", datasetUrn, tableProperties, e);
+        return false;
+      } else {
+        throw new HoodieDataHubSyncException(
+            "Failed to sync properties for Dataset " + datasetUrn + ": " + tableProperties, e);
+      }
     }
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType schema) {
+  public void updateTableSchema(String tableName, MessageType schema /*, SchemaDifference schemaDifference */) {
     try (RestEmitter emitter = config.getRestEmitter()) {
-      DatahubResponseLogger responseLogger = new DatahubResponseLogger();
-      MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName);
-      emitter.emit(schemaChange, responseLogger).get();
+      DataHubResponseLogger responseLogger = new DataHubResponseLogger();
 
-      // When updating an entity, it is necessary to set its soft-delete status to false, or else the update won't get
-      // reflected in the UI.
-      MetadataChangeProposalWrapper softDeleteUndoProposal = createUndoSoftDelete();
-      emitter.emit(softDeleteUndoProposal, responseLogger).get();
+      Stream<MetadataChangeProposalWrapper> proposals =
+          Stream.of(createContainerEntity(), createDatasetEntity()).flatMap(stream -> stream);
+
+      // Execute all proposals in parallel and collect futures
+      List<Future<MetadataWriteResponse>> futures = proposals.map(
+          p -> {
+            try {
+              return emitter.emit(p, responseLogger);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }
+      ).collect(Collectors.toList());
+
+      List<MetadataWriteResponse> successfulResults = new ArrayList<>();
+      List<Throwable> failures = new ArrayList<>();
+
+      for (Future<MetadataWriteResponse> future : futures) {
+        try {
+          successfulResults.add(future.get(30, TimeUnit.SECONDS));
+        } catch (TimeoutException e) {
+          failures.add(new HoodieDataHubSyncException("Operation timed out", e));
+        } catch (InterruptedException | ExecutionException e) {
+          failures.add(e);
+        }
+      }
+
+      if (!failures.isEmpty()) {
+        if (!config.suppressExceptions()) {
+          throw new HoodieDataHubSyncException("Failed to sync " + failures.size() + " operations", failures.get(0));
+        } else {
+          for (Throwable failure : failures) {
+            LOG.error("Failed to sync operation", failure);
+          }
+        }
+      }
     } catch (Exception e) {
-      throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
+      if (!config.suppressExceptions()) {
+        throw new HoodieDataHubSyncException(String.format("Failed to sync metadata for dataset %s", tableName), e);
+      } else {
+        LOG.error("Failed to sync metadata for dataset {}", tableName, e);
+      }
     }
+  }
+
+  private MetadataChangeProposalWrapper createContainerAspect(Urn entityUrn, Urn containerUrn) {
+    MetadataChangeProposalWrapper containerProposal = MetadataChangeProposalWrapper.builder()
+        .entityType(entityUrn.getEntityType())
+        .entityUrn(entityUrn)
+        .upsert()
+        .aspect(new Container().setContainer(containerUrn))
+        .build();
+    return containerProposal;
+  }
+
+  private MetadataChangeProposalWrapper createBrowsePathsAspect(Urn entityUrn, List<BrowsePathEntry> paths) {
+    BrowsePathEntryArray browsePathEntryArray = new BrowsePathEntryArray(paths);
+    MetadataChangeProposalWrapper browsePathsProposal = MetadataChangeProposalWrapper.builder()
+        .entityType(entityUrn.getEntityType())
+        .entityUrn(entityUrn)
+        .upsert()
+        .aspect(new BrowsePathsV2().setPath(browsePathEntryArray))
+        .build();
+    return browsePathsProposal;
+  }
+
+  private MetadataChangeProposalWrapper createDataPlatformInstanceAspect(Urn entityUrn) {
+    DataPlatformInstance dataPlatformInstanceAspect = new DataPlatformInstance().setPlatform(this.dataPlatformUrn);
+    if (this.dataPlatformInstanceUrn.isPresent()) {
+      dataPlatformInstanceAspect.setInstance(dataPlatformInstanceUrn.get());
+    }
+
+    MetadataChangeProposalWrapper dataPlatformInstanceProposal = MetadataChangeProposalWrapper.builder()
+            .entityType(entityUrn.getEntityType())
+            .entityUrn(entityUrn)
+            .upsert()
+            .aspect(dataPlatformInstanceAspect)
+            .build();
+    return dataPlatformInstanceProposal;
+  }
+
+  private MetadataChangeProposalWrapper createDomainAspect(Urn entityUrn) {
+    try {
+      Urn domainUrn = Urn.createFromString(config.getDomainIdentifier());
+      MetadataChangeProposalWrapper attachDomainProposal = MetadataChangeProposalWrapper.builder()
+          .entityType(entityUrn.getEntityType())
+          .entityUrn(entityUrn)
+          .upsert()
+          .aspect(new Domains().setDomains(new UrnArray(domainUrn)))
+          .build();
+      return attachDomainProposal;
+    } catch (URISyntaxException e) {
+      LOG.warn("Failed to create domain URN from string: {}", config.getDomainIdentifier());
+    }
+    return null;
+  }
+
+  private Stream<MetadataChangeProposalWrapper> createContainerEntity() {
+    MetadataChangeProposalWrapper containerEntityProposal = MetadataChangeProposalWrapper.builder()
+        .entityType("container")
+        .entityUrn(databaseUrn)
+        .upsert()
+        .aspect(new ContainerProperties().setName(databaseName))
+        .build();
+
+    List<BrowsePathEntry> paths = dataPlatformInstanceUrn.map(dpiUrn -> Collections.singletonList(
+        new BrowsePathEntry().setUrn(dpiUrn).setId(dpiUrn.toString()))
+    ).orElse(Collections.emptyList());
+
+    Stream<MetadataChangeProposalWrapper> resultStream = Stream.of(
+            containerEntityProposal,
+            createSubTypeAspect(databaseUrn, "Database"),
+            createDataPlatformInstanceAspect(databaseUrn),
+            createBrowsePathsAspect(databaseUrn, paths),
+            createStatusAspect(databaseUrn),
+            config.attachDomain() ? createDomainAspect(databaseUrn) : null
+        ).filter(Objects::nonNull);
+    return resultStream;
   }
 
   @Override
@@ -126,40 +300,68 @@ public class DataHubSyncClient extends HoodieSyncClient {
     // no op;
   }
 
-  private MetadataChangeProposalWrapper createUndoSoftDelete() {
-    MetadataChangeProposalWrapper softDeleteUndoProposal = MetadataChangeProposalWrapper.builder()
-            .entityType("dataset")
-            .entityUrn(datasetUrn)
-            .upsert()
-            .aspect(SOFT_DELETE_FALSE)
-            .aspectName("status")
-            .build();
+  private MetadataChangeProposalWrapper<Status> createStatusAspect(Urn urn) {
+    MetadataChangeProposalWrapper<Status> softDeleteUndoProposal = MetadataChangeProposalWrapper.builder()
+        .entityType(urn.getEntityType())
+        .entityUrn(urn)
+        .upsert()
+        .aspect(SOFT_DELETE_FALSE)
+        .build();
     return softDeleteUndoProposal;
   }
 
-  private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName) {
-    Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
-    List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
-            .setFieldPath(f.name())
-            .setType(toSchemaFieldDataType(f.schema().getType()))
-            .setDescription(f.doc(), SetMode.IGNORE_NULL)
-            .setNativeDataType(f.schema().getType().getName())).collect(Collectors.toList());
+  private MetadataChangeProposalWrapper<SubTypes> createSubTypeAspect(Urn urn, String subType) {
+    MetadataChangeProposalWrapper subTypeProposal = MetadataChangeProposalWrapper.builder()
+        .entityType(urn.getEntityType())
+        .entityUrn(urn)
+        .upsert()
+        .aspect(new SubTypes().setTypeNames(new StringArray(subType)))
+        .build();
+    return subTypeProposal;
+  }
 
-    final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
-    platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
+  private MetadataChangeProposalWrapper createSchemaMetadataAspect(String tableName) {
+    Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
+    AvroSchemaConverter avroSchemaConverter = AvroSchemaConverter.builder().build();
+    com.linkedin.schema.SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
+        avroSchema,
+        false,
+        false,
+        datasetUrn.getPlatformEntity(),
+        null
+    );
+
+    // Reorder fields to relocate _hoodie_ metadata fields to the end
+    schemaMetadata.setFields(SchemaFieldsUtil.reorderPrefixedFields(schemaMetadata.getFields(), "_hoodie_"));
 
     return MetadataChangeProposalWrapper.builder()
-            .entityType("dataset")
-            .entityUrn(datasetUrn)
-            .upsert()
-            .aspect(new SchemaMetadata()
-                    .setSchemaName(tableName)
-                    .setVersion(0)
-                    .setHash("")
-                    .setPlatform(datasetUrn.getPlatformEntity())
-                    .setPlatformSchema(platformSchema)
-                    .setFields(new SchemaFieldArray(fields)))
-            .build();
+        .entityType("dataset")
+        .entityUrn(datasetUrn)
+        .upsert()
+        .aspect(schemaMetadata)
+        .build();
+  }
+
+  private Stream<MetadataChangeProposalWrapper> createDatasetEntity() {
+    BrowsePathEntry databasePath = new BrowsePathEntry().setUrn(databaseUrn).setId(databaseUrn.toString());
+    List<BrowsePathEntry> paths = dataPlatformInstanceUrn.map(dpiUrn -> {
+      List<BrowsePathEntry> list = new ArrayList<BrowsePathEntry>();
+      list.add(new BrowsePathEntry().setUrn(dpiUrn).setId(dpiUrn.toString()));
+      list.add(databasePath);
+      return list;
+    }
+    ).orElse(Collections.singletonList(databasePath));
+
+    Stream<MetadataChangeProposalWrapper> result = Stream.of(
+            createStatusAspect(datasetUrn),
+            createSubTypeAspect(datasetUrn, "Table"),
+            createDataPlatformInstanceAspect(datasetUrn),
+            createBrowsePathsAspect(datasetUrn, paths),
+            createContainerAspect(datasetUrn, databaseUrn),
+            createSchemaMetadataAspect(tableName),
+            config.attachDomain() ? createDomainAspect(datasetUrn) : null
+    ).filter(Objects::nonNull);
+    return result;
   }
 
   Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
@@ -167,38 +369,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
       return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read avro schema", e);
-    }
-  }
-
-  static SchemaFieldDataType toSchemaFieldDataType(Schema.Type type) {
-    switch (type) {
-      case BOOLEAN:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new BooleanType()));
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new NumberType()));
-      case MAP:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new MapType()));
-      case ENUM:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new EnumType()));
-      case NULL:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new NullType()));
-      case ARRAY:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new ArrayType()));
-      case BYTES:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new BytesType()));
-      case FIXED:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new FixedType()));
-      case UNION:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new UnionType()));
-      case RECORD:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new RecordType()));
-      case STRING:
-        return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new StringType()));
-      default:
-        throw new AvroTypeException("Unexpected type: " + type.getName());
     }
   }
 }

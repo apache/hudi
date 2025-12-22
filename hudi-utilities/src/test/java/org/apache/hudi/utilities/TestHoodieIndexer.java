@@ -39,6 +39,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -77,6 +79,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implements SparkProvider {
@@ -202,7 +205,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
     String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString());
+        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     String mdtCommitTime = HoodieTableMetadataUtil.createAsyncIndexerTimestamp(indexUptoInstantTime);
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
@@ -218,7 +221,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metadataMetaClient = reload(metadataMetaClient);
     // Simulate heartbeats for ongoing write from async indexer in the metadata table
     HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
-        metadataMetaClient.getFs(), metadataMetaClient.getBasePathV2().toString(),
+        metadataMetaClient.getStorage(), metadataMetaClient.getBasePath().toString(),
         CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue().longValue(),
         CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
     heartbeatClient.start(mdtCommitTime);
@@ -267,7 +270,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient.getActiveTimeline().revertToInflight(commit);
 
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metadataConfig, metaClient.getBasePathV2().toString());
+        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
         .filter(i -> i.getTimestamp().equals(commitTime))
@@ -289,7 +292,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // start the indexer and validate files index is completely built out
     HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
     // The catchup won't finish due to inflight delta commit, and this is expected
-    assertEquals(-1, indexer.start(0));
+    Throwable cause = assertThrows(RuntimeException.class, () ->  indexer.start(0))
+        .getCause();
+    assertTrue(cause instanceof HoodieMetadataException);
+    assertTrue(cause.getMessage().contains("Failed to index partition"));
 
     // Now, make sure that the inflight delta commit happened before the async indexer
     // is intact
@@ -335,7 +341,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build indexer config which has only col stats enabled
     indexMetadataPartitionsAndAssert(COLUMN_STATS, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}), tableName, "streamer-config/indexer.properties");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
             metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
@@ -365,7 +372,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     config.propsFilePath = propsPath;
     // start the indexer and validate index building fails
     HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
-    assertEquals(-1, indexer.start(0));
+    Throwable cause = assertThrows(RuntimeException.class, () ->  indexer.start(0))
+        .getCause();
+    assertTrue(cause instanceof HoodieException);
+    assertTrue(cause.getMessage().contains("Metadata table is not yet initialized"));
 
     // validate table config
     metaClient = reload(metaClient);
@@ -381,7 +391,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build indexer config which has only col stats enabled
     indexMetadataPartitionsAndAssert(COLUMN_STATS, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}), tableName, "streamer-config/indexer.properties");
 
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
             metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());

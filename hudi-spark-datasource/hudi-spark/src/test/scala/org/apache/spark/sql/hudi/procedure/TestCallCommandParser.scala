@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.CollectionUtils.createImmutableList
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.{CallCommand, NamedArgument, PositionalArgument}
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DataType, DataTypes}
 
 import java.math.BigDecimal

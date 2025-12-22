@@ -65,7 +65,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .key("hoodie.log.compaction.enable")
       .defaultValue("false")
       .markAdvanced()
-      .sinceVersion("0.14")
+      .sinceVersion("0.14.0")
       .withDocumentation("By enabling log compaction through this config, log compaction will also get enabled for the metadata table.");
 
   public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty

@@ -18,12 +18,14 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.ParquetTableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 
@@ -32,8 +34,6 @@ import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -42,6 +42,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -104,8 +106,8 @@ public class TableOptionProperties {
                                       Configuration hadoopConf,
                                       Map<String, String> options) throws IOException {
     Path propertiesFilePath = getPropertiesFilePath(basePath);
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    try (FSDataOutputStream outputStream = fs.create(propertiesFilePath)) {
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
+    try (OutputStream outputStream = fs.create(propertiesFilePath)) {
       Properties properties = new Properties();
       properties.putAll(options);
       properties.store(outputStream,
@@ -122,8 +124,8 @@ public class TableOptionProperties {
     Map<String, String> options = new HashMap<>();
     Properties props = new Properties();
 
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    try (FSDataInputStream inputStream = fs.open(propertiesFilePath)) {
+    FileSystem fs = HadoopFSUtils.getFs(basePath, hadoopConf);
+    try (InputStream inputStream = fs.open(propertiesFilePath)) {
       props.load(inputStream);
       for (final String name : props.stringPropertyNames()) {
         options.put(name, props.getProperty(name));
@@ -136,7 +138,7 @@ public class TableOptionProperties {
   }
 
   private static Path getPropertiesFilePath(String basePath) {
-    String auxPath = basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+    String auxPath = basePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
     return new Path(auxPath, FILE_NAME);
   }
 
@@ -178,7 +180,7 @@ public class TableOptionProperties {
       boolean withOperationField) {
     RowType rowType = supplementMetaFields((RowType) catalogTable.getSchema().toPhysicalRowDataType().getLogicalType(), withOperationField);
     Schema schema = AvroSchemaConverter.convertToSchema(rowType);
-    MessageType messageType = TableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
+    MessageType messageType = ParquetTableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
         partitionKeys,
@@ -189,7 +191,16 @@ public class TableOptionProperties {
     return properties.entrySet().stream()
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))
         .collect(Collectors.toMap(e -> KEY_MAPPING.get(e.getKey()),
-            e -> e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key()) ? VALUE_MAPPING.get(e.getValue()) : e.getValue()));
+            e -> {
+              if (e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key())) {
+                  String sparkTableType = VALUE_MAPPING.get(e.getValue());
+                  if (sparkTableType == null) {
+                    throw new HoodieValidationException(String.format("%s's value is invalid", e.getKey()));
+                  }
+                  return sparkTableType;
+              }
+              return e.getValue();
+            }));
   }
 
   private static RowType supplementMetaFields(RowType rowType, boolean withOperationField) {

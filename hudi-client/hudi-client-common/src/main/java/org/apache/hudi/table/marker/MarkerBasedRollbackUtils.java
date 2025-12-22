@@ -23,9 +23,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,8 +63,8 @@ public class MarkerBasedRollbackUtils {
   public static List<String> getAllMarkerPaths(HoodieTable table, HoodieEngineContext context,
                                                String instant, int parallelism) throws IOException {
     String markerDir = table.getMetaClient().getMarkerFolderPath(instant);
-    FileSystem fileSystem = table.getMetaClient().getFs();
-    Option<MarkerType> markerTypeOption = readMarkerType(fileSystem, markerDir);
+    HoodieStorage storage = table.getStorage();
+    Option<MarkerType> markerTypeOption = readMarkerType(storage, markerDir);
 
     // If there is no marker type file "MARKERS.type", first assume "DIRECT" markers are used.
     // If not, then fallback to "TIMELINE_SERVER_BASED" markers.
@@ -75,22 +75,26 @@ public class MarkerBasedRollbackUtils {
       } catch (IOException | IllegalArgumentException e) {
         LOG.warn(String.format("%s not present and %s marker failed with error: %s. So, falling back to %s marker",
             MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED));
-        return getTimelineServerBasedMarkers(context, parallelism, markerDir, fileSystem);
+        return getTimelineServerBasedMarkers(context, parallelism, markerDir, storage);
       }
     }
 
     switch (markerTypeOption.get()) {
       case TIMELINE_SERVER_BASED:
         // Reads all markers written by the timeline server
-        return getTimelineServerBasedMarkers(context, parallelism, markerDir, fileSystem);
+        return getTimelineServerBasedMarkers(context, parallelism, markerDir, storage);
       default:
         throw new HoodieException(
             "The marker type \"" + markerTypeOption.get().name() + "\" is not supported.");
     }
   }
 
-  private static List<String> getTimelineServerBasedMarkers(HoodieEngineContext context, int parallelism, String markerDir, FileSystem fileSystem) {
-    Map<String, Set<String>> markersMap = readTimelineServerBasedMarkersFromFileSystem(markerDir, fileSystem, context, parallelism);
+  private static List<String> getTimelineServerBasedMarkers(HoodieEngineContext context,
+                                                            int parallelism,
+                                                            String markerDir,
+                                                            HoodieStorage storage) {
+    Map<String, Set<String>> markersMap =
+        readTimelineServerBasedMarkersFromFileSystem(markerDir, storage, context, parallelism);
     return markersMap.values().stream()
         .flatMap(Collection::stream)
         .collect(Collectors.toList());

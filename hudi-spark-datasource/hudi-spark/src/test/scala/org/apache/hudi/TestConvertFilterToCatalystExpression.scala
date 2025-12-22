@@ -34,7 +34,7 @@ class TestConvertFilterToCatalystExpression {
     fields.append(StructField("name", StringType, nullable = true))
     fields.append(StructField("price", DoubleType, nullable = true))
     fields.append(StructField("ts", IntegerType, nullable = false))
-    StructType(fields)
+    StructType(fields.toSeq)
   }
 
   private def convertToCatalystExpression(filters: Array[Filter],

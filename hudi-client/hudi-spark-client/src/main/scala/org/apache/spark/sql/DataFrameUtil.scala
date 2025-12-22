@@ -18,6 +18,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.LogicalRDD
@@ -31,7 +32,8 @@ object DataFrameUtil {
    */
   def createFromInternalRows(sparkSession: SparkSession, schema:
   StructType, rdd: RDD[InternalRow]): DataFrame = {
-    val logicalPlan = LogicalRDD(schema.toAttributes, rdd)(sparkSession)
+    val logicalPlan = LogicalRDD(
+      SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rdd)(sparkSession)
     Dataset.ofRows(sparkSession, logicalPlan)
   }
 }

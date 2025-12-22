@@ -19,11 +19,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.FileSplit
-import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
-import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -33,6 +28,13 @@ import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.FileSplit
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -51,6 +53,7 @@ import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
@@ -121,8 +124,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val sqlConf = sparkSession.sessionState.conf
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
     val enableVectorizedReader: Boolean =
-      sqlConf.parquetVectorizedReaderEnabled &&
-        resultSchema.forall(_.dataType.isInstanceOf[AtomicType])
+      ParquetUtils.isBatchReadSupportedForSchema(sqlConf, resultSchema)
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
@@ -159,7 +161,9 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-        InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, sharedConf, if (validCommits == null) "" else validCommits)
+        val storage = new HoodieHadoopStorage(tablePath, sharedConf)
+        InternalSchemaCache.getInternalSchemaByVersionId(
+          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits)
       } else {
         null
       }
@@ -187,7 +191,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         } else {
           // Spark 3.2.0
           val datetimeRebaseMode =
-            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark33DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           createParquetFilters(
             parquetSchema,
             pushDownDate,
@@ -243,6 +247,13 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         implicitTypeChangeInfo
       }
 
+      if (enableVectorizedReader && shouldUseInternalSchema &&
+        !typeChangeInfos.values().forall(_.getLeft.isInstanceOf[AtomicType])) {
+        throw new IllegalArgumentException(
+          "Nested types with type changes(implicit or explicit) cannot be read in vectorized mode. " +
+            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
+      }
+
       val hadoopAttemptContext =
         new TaskAttemptContextImpl(hadoopAttemptConf, attemptId)
 
@@ -287,9 +298,9 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           } else {
             // Spark 3.2.0
             val datetimeRebaseMode =
-              Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+              Spark33DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             val int96RebaseMode =
-              Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+              Spark33DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             createVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
@@ -349,9 +360,9 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
             int96RebaseSpec)
         } else {
           val datetimeRebaseMode =
-            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark33DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           val int96RebaseMode =
-            Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+            Spark33DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           createParquetReadSupport(
             convertTz,
             /* enableVectorizedReader = */ false,

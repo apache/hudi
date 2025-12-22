@@ -73,6 +73,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWrite
 import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -300,7 +301,7 @@ public class TestHoodieAvroUtils {
     // partitioned table test.
     String schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
         + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
-        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]},";
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]}";
     Schema expectedSchema = new Schema.Parser().parse(schemaStr);
     GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");
@@ -323,7 +324,7 @@ public class TestHoodieAvroUtils {
     schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
         + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
         + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
-        + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
+        + "{\"name\": \"pii_col\", \"type\": \"string\"}]}";
     expectedSchema = new Schema.Parser().parse(schemaStr);
     rec1 = HoodieAvroUtils.removeFields(rec, Collections.singleton(""));
     assertEquals(expectedSchema, rec1.getSchema());
@@ -528,7 +529,7 @@ public class TestHoodieAvroUtils {
     expectedWrapperClass.put("bytesField", BytesWrapper.class);
     record.put("stringField", "abcdefghijk");
     expectedWrapperClass.put("stringField", StringWrapper.class);
-    record.put("decimalField", ByteBuffer.wrap("9213032.4966".getBytes()));
+    record.put("decimalField", ByteBuffer.wrap(getUTF8Bytes("9213032.4966")));
     expectedWrapperClass.put("decimalField", BytesWrapper.class);
     record.put("timeMillisField", 57996136);
     expectedWrapperClass.put("timeMillisField", IntWrapper.class);
@@ -627,5 +628,28 @@ public class TestHoodieAvroUtils {
     // validate properties are properly copied over
     assertEquals("custom_schema_property_value", schemaWithMetadata.getProp("custom_schema_property"));
     assertEquals("value", originalFieldsInUpdatedSchema.get(0).getProp("custom_field_property"));
+  }
+
+  @Test
+  void testSafeAvroToJsonStringMissingRequiredField() {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("non_pii_col", "val1");
+    record.put("pii_col", "val2");
+    record.put("timestamp", 3.5);
+    String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
+    assertEquals("{\"timestamp\": 3.5, \"_row_key\": null, \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
+  }
+
+  @Test
+  void testSafeAvroToJsonStringBadDataType() {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("non_pii_col", "val1");
+    record.put("_row_key", "key");
+    record.put("pii_col", "val2");
+    record.put("timestamp", "foo");
+    String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
+    assertEquals("{\"timestamp\": \"foo\", \"_row_key\": \"key\", \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
   }
 }

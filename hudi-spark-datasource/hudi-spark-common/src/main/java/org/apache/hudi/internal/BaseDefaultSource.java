@@ -18,6 +18,9 @@
 
 package org.apache.hudi.internal;
 
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 
@@ -27,7 +30,7 @@ import org.apache.spark.sql.SparkSession;
 public class BaseDefaultSource {
 
   protected SparkSession sparkSession = null;
-  protected Configuration configuration = null;
+  protected StorageConfiguration<Configuration> configuration = null;
 
   protected SparkSession getSparkSession() {
     if (sparkSession == null) {
@@ -36,9 +39,10 @@ public class BaseDefaultSource {
     return sparkSession;
   }
 
-  protected Configuration getConfiguration() {
+  protected StorageConfiguration<Configuration> getConfiguration() {
     if (configuration == null) {
-      this.configuration = getSparkSession().sparkContext().hadoopConfiguration();
+      this.configuration = HadoopFSUtils.getStorageConf(
+          getSparkSession().sparkContext().hadoopConfiguration());
     }
     return configuration;
   }

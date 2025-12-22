@@ -152,8 +152,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     if (bucketIndex.containsKey(partition)) {
       return;
     }
-    LOG.info(String.format("Loading Hoodie Table %s, with path %s", this.metaClient.getTableConfig().getTableName(),
-        this.metaClient.getBasePath() + "/" + partition));
+    LOG.info("Loading Hoodie Table {}, with path {}/{}", this.metaClient.getTableConfig().getTableName(),
+        this.metaClient.getBasePath(), partition);
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();

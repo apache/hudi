@@ -17,20 +17,17 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hadoop.hbase.io.hfile.CacheConfig
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
-import org.apache.hudi.HoodieBaseRelation._
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, SerializableConfiguration}
+import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
+import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
+import org.apache.hudi.common.model.HoodieFileFormat.HFILE
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
@@ -42,12 +39,21 @@ import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
-import org.apache.hudi.io.storage.HoodieAvroHFileReader
+import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -55,7 +61,6 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpr
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
@@ -65,9 +70,7 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 
-import java.net.URI
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
@@ -113,7 +116,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
 
-  protected lazy val basePath: Path = metaClient.getBasePathV2
+  protected lazy val basePath: Path = new Path(metaClient.getBasePath.toUri)
 
   // NOTE: Record key-field is assumed singular here due to the either of
   //          - In case Hudi's meta fields are enabled: record key will be pre-materialized (stored) as part
@@ -174,9 +177,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     } getOrElse {
       Try(schemaResolver.getTableAvroSchema) match {
         case Success(schema) => schema
-        case Failure(e) =>
-          logError("Failed to fetch schema from the table", e)
-          throw new HoodieSchemaException("Failed to fetch schema from the table")
+        case Failure(e) => throw e
       }
     }
 
@@ -412,7 +413,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
-  protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
+  protected def listLatestFileSlices(globPaths: Seq[StoragePath], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     queryTimestamp match {
       case Some(ts) =>
         specifiedQueryTimestamp.foreach(t => validateTimestampAsOf(metaClient, t))
@@ -424,12 +425,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
         }
 
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+        val fsView = new HoodieTableFileSystemView(
+          metaClient, timeline, sparkAdapter.getSparkPartitionedFileUtils.toFileStatuses(partitionDirs)
+            .map(fileStatus => HadoopFSUtils.convertToStoragePathInfo(fileStatus))
+            .asJava)
 
         fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
-          val relativePath = getRelativePartitionPath(basePath, partitionPath)
-          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, ts).iterator().asScala.toSeq
-        }
+          val relativePath = getRelativePartitionPath(convertToStoragePath(basePath), partitionPath)
+          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, ts).iterator().asScala
+        }.toSeq
 
       case _ => Seq()
     }
@@ -478,15 +482,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * and pass this reader on parquet file. So that, we can query the partition columns.
    */
 
-  protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow =
-    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, shouldExtractPartitionValuesFromPartitionPath)
+  protected def getPartitionColumnsAsInternalRow(file: StoragePathInfo): InternalRow =
+    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePath, shouldExtractPartitionValuesFromPartitionPath)
 
-  protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus, basePath: Path,
+  protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: StoragePath,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
-      val tablePathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(basePath)
-      val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(file.getPath.getParent)
-      val relativePath = new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
+      val tablePathWithoutScheme = basePath.getPathWithoutSchemeAndAuthority
+      val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
+      val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
       val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
         partitionColumns,
@@ -595,7 +599,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val validCommits = timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
 
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
     conf
@@ -746,13 +750,17 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 filters: Seq[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val hadoopConfBroadcast =
-      spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+    val storageConfBroadcast = spark.sparkContext.broadcast(HadoopFSUtils.getStorageConf(hadoopConf))
 
     partitionedFile => {
-      val hadoopConf = hadoopConfBroadcast.value.get()
+      val storageConf = storageConfBroadcast.value
       val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(partitionedFile)
-      val reader = new HoodieAvroHFileReader(hadoopConf, filePath, new CacheConfig(hadoopConf))
+      val hoodieConfig = new HoodieConfig()
+      hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
+        options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
+      val reader = new HoodieSparkIOFactory(new HoodieHadoopStorage(filePath, storageConf))
+        .getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, filePath, HFILE)
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable

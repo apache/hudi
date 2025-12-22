@@ -100,7 +100,7 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-      val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
+      val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine)
 
       if (hoodieCleanMeta == null) Seq.empty
       else Seq(Row(hoodieCleanMeta.getStartCleanTime,

@@ -29,11 +29,12 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * A converter that converts a string array into internal row data fields.
@@ -101,7 +102,7 @@ public class StringToRowDataConverter {
         return StringData::fromString;
       case BINARY:
       case VARBINARY:
-        return field -> field.getBytes(StandardCharsets.UTF_8);
+        return field -> getUTF8Bytes(field);
       case DECIMAL:
         DecimalType decimalType = (DecimalType) logicalType;
         return field ->

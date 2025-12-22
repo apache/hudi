@@ -41,13 +41,14 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,14 +56,13 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
@@ -78,6 +78,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   public static final Integer CLEAN_PLAN_VERSION_1 = CleanPlanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_PLAN_VERSION_2 = CleanPlanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_PLAN_VERSION = CLEAN_PLAN_VERSION_2;
+  public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -86,6 +87,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final HoodieWriteConfig config;
   private transient HoodieEngineContext context;
+  private List<String> savepointedTimestamps;
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -104,30 +106,43 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()), entry.getValue()))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    // load all partitions in advance if necessary.
-    if (shouldUseBatchLookup(hoodieTable.getMetaClient().getTableConfig(), config)) {
-      LOG.info("Load all partitions and files into file system view in advance.");
-      fileSystemView.loadAllPartitions();
-    }
+    // collect savepointed timestamps to assist with incremental cleaning. For non-partitioned and metadata table, we may not need this.
+    this.savepointedTimestamps = hoodieTable.isMetadataTable() ? Collections.emptyList() : (hoodieTable.isPartitioned() ? new ArrayList<>(hoodieTable.getSavepointTimestamps())
+        : Collections.emptyList());
+  }
+
+  /**
+   * @return list of savepointed timestamps in active timeline as of this clean planning.
+   */
+  List<String> getSavepointedTimestamps() {
+    return this.savepointedTimestamps;
   }
 
   /**
    * Get the list of data file names savepointed.
    */
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!hoodieTable.getSavepointTimestamps().contains(savepointTime)) {
+    HoodieSavepointMetadata metadata = getSavepointMetadata(savepointTime);
+    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
+  }
+
+  private Stream<String> getPartitionsFromSavepoint(String savepointTime) {
+    HoodieSavepointMetadata metadata = getSavepointMetadata(savepointTime);
+    return metadata.getPartitionMetadata().keySet().stream();
+  }
+
+  private HoodieSavepointMetadata getSavepointMetadata(String savepointTimestamp) {
+    if (!hoodieTable.getSavepointTimestamps().contains(savepointTimestamp)) {
       throw new HoodieSavepointException(
-          "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
+          "Could not get data files for savepoint " + savepointTimestamp + ". No such savepoint.");
     }
-    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
-    HoodieSavepointMetadata metadata;
+    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTimestamp);
     try {
-      metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+      return TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
           hoodieTable.getActiveTimeline().getInstantDetails(instant).get());
     } catch (IOException e) {
-      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
+      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTimestamp, e);
     }
-    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
   }
 
   /**
@@ -191,25 +206,72 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
         + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
         + ". New Instant to retain : " + newInstantToRetain);
-    return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
+
+    List<String> incrementalPartitions = hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
         instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
             cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-            HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
-              try {
-                if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-                  HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                      hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
-                  return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
-                } else {
-                  HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                      .fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
-                          HoodieCommitMetadata.class);
-                  return commitMetadata.getPartitionToWriteStats().keySet().stream();
-                }
-              } catch (IOException e) {
-                throw new HoodieIOException(e.getMessage(), e);
-              }
-            }).distinct().collect(Collectors.toList());
+            HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp()))
+        .flatMap(this::getPartitionsForInstants).distinct().collect(Collectors.toList());
+
+    // If any savepoint is removed b/w previous clean and this clean planning, lets include the partitions of interest.
+    // for metadata table and non partitioned table, we do not need this additional processing.
+    if (hoodieTable.isMetadataTable() || !hoodieTable.isPartitioned()) {
+      return incrementalPartitions;
+    }
+
+    List<String> partitionsFromDeletedSavepoints = getPartitionsFromDeletedSavepoint(cleanMetadata);
+    LOG.info("Including partitions part of savepointed commits which was removed after last known clean " + partitionsFromDeletedSavepoints.toString());
+    List<String> partitionsOfInterest = new ArrayList<>(incrementalPartitions);
+    partitionsOfInterest.addAll(partitionsFromDeletedSavepoints);
+    return partitionsOfInterest.stream().distinct().collect(Collectors.toList());
+  }
+
+  private List<String> getPartitionsFromDeletedSavepoint(HoodieCleanMetadata cleanMetadata) {
+    List<String> savepointedTimestampsFromLastClean = cleanMetadata.getExtraMetadata() == null ? Collections.emptyList()
+        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
+        .filter(partition -> !StringUtils.isNullOrEmpty(partition)).collect(Collectors.toList());
+    if (savepointedTimestampsFromLastClean.isEmpty()) {
+      return Collections.emptyList();
+    }
+    // check for any savepointed removed in latest compared to previous saved list
+    List<String> removedSavepointedTimestamps = new ArrayList<>(savepointedTimestampsFromLastClean);
+    removedSavepointedTimestamps.removeAll(savepointedTimestamps);
+    if (removedSavepointedTimestamps.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    // fetch list of partitions from the removed savepoints and add it to return list
+    return removedSavepointedTimestamps.stream().flatMap(savepointCommit -> {
+      Option<HoodieInstant> instantOption = hoodieTable.getCompletedCommitsTimeline().filter(instant -> instant.getTimestamp().equals(savepointCommit)).firstInstant();
+      if (!instantOption.isPresent()) {
+        LOG.warn("Skipping to process a commit for which savepoint was removed as the instant moved to archived timeline already");
+        return Stream.empty();
+      }
+      HoodieInstant instant = instantOption.get();
+      return getPartitionsForInstants(instant);
+    }).collect(Collectors.toList());
+  }
+
+  /**
+   * Fetch partitions updated as part of a HoodieInstant.
+   * @param instant {@link HoodieInstant} of interest.
+   * @return partitions that were part of {@link HoodieInstant} given.
+   */
+  private Stream<String> getPartitionsForInstants(HoodieInstant instant) {
+    try {
+      if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
+        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
+      } else {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
+                HoodieCommitMetadata.class);
+        return commitMetadata.getPartitionToWriteStats().keySet().stream();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
   }
 
   /**
@@ -218,7 +280,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
+    return FSUtils.getAllPartitionPaths(context, hoodieTable.getStorage(), config.getMetadataConfig(), config.getBasePath());
   }
 
   /**
@@ -404,8 +466,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private boolean hasPendingFiles(String partitionPath) {
     try {
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
-      Path fullPartitionPath = new Path(hoodieTable.getMetaClient().getBasePathV2(), partitionPath);
-      fsView.addFilesToView(FSUtils.getAllDataFilesInPartition(hoodieTable.getMetaClient().getFs(), fullPartitionPath));
+      StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePath(), partitionPath);
+      fsView.addFilesToView(partitionPath, FSUtils.getAllDataFilesInPartition(
+          hoodieTable.getStorage(), fullPartitionPath));
       // use #getAllFileGroups(partitionPath) instead of #getAllFileGroups() to exclude the replaced file groups.
       return fsView.getAllFileGroups(partitionPath).findAny().isPresent();
     } catch (Exception ex) {

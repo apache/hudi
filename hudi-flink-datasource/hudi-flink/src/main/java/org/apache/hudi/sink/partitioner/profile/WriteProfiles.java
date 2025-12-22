@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -28,18 +27,23 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,13 +90,13 @@ public class WriteProfiles {
    * Returns all the incremental write file statuses with the given commits metadata.
    * Only existing files are included.
    *
-   * @param basePath           Table base path
-   * @param hadoopConf         The hadoop conf
-   * @param metadataList       The commit metadata list (should in ascending order)
-   * @param tableType          The table type
+   * @param basePath     Table base path
+   * @param hadoopConf   The hadoop conf
+   * @param metadataList The commit metadata list (should in ascending order)
+   * @param tableType    The table type
    * @return the file status array
    */
-  public static FileStatus[] getFilesFromMetadata(
+  public static List<StoragePathInfo> getFilesFromMetadata(
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
@@ -111,31 +115,33 @@ public class WriteProfiles {
    * @return the file status array or null if any file is missing with ignoreMissingFiles as false
    */
   @Nullable
-  public static FileStatus[] getFilesFromMetadata(
+  public static List<StoragePathInfo> getFilesFromMetadata(
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
       boolean ignoreMissingFiles) {
-    FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
-    Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath.toString(), HadoopFSUtils.getStorageConf(hadoopConf));
+    Map<String, StoragePathInfo> uniqueIdToInfoMap = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
     // from the latest commit, so here we traverse in reverse order
     for (int i = metadataList.size() - 1; i >= 0; i--) {
-      for (Map.Entry<String, FileStatus> entry : getFilesToRead(hadoopConf, metadataList.get(i), basePath.toString(), tableType).entrySet()) {
-        if (StreamerUtil.isValidFile(entry.getValue()) && !uniqueIdToFileStatus.containsKey(entry.getKey())) {
-          if (StreamerUtil.fileExists(fs, entry.getValue().getPath())) {
-            uniqueIdToFileStatus.put(entry.getKey(), entry.getValue());
+      for (Map.Entry<String, StoragePathInfo> entry : getFilesToRead(hadoopConf, metadataList.get(i),
+          basePath.toString(), tableType).entrySet()) {
+        if (StreamerUtil.isValidFile(entry.getValue())
+            && !uniqueIdToInfoMap.containsKey(entry.getKey())) {
+          if (StreamerUtil.fileExists(storage, entry.getValue().getPath())) {
+            uniqueIdToInfoMap.put(entry.getKey(), entry.getValue());
           } else if (!ignoreMissingFiles) {
             return null;
           }
         }
       }
     }
-    return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
+    return new ArrayList<>(uniqueIdToInfoMap.values());
   }
 
-  private static Map<String, FileStatus> getFilesToRead(
+  private static Map<String, StoragePathInfo> getFilesToRead(
       Configuration hadoopConf,
       HoodieCommitMetadata metadata,
       String basePath,
@@ -143,9 +149,9 @@ public class WriteProfiles {
   ) {
     switch (tableType) {
       case COPY_ON_WRITE:
-        return metadata.getFileIdToFileStatus(hadoopConf, basePath);
+        return metadata.getFileIdToInfo(basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToFileStatus(hadoopConf, basePath);
+        return metadata.getFullPathToInfo(new HoodieHadoopStorage(basePath, hadoopConf), basePath);
       default:
         throw new AssertionError();
     }

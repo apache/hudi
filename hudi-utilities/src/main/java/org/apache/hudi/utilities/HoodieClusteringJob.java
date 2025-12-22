@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -46,6 +45,7 @@ import java.util.Date;
 import java.util.List;
 
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
@@ -195,6 +195,10 @@ public class HoodieClusteringJob {
           LOG.info("Running Mode: [" + EXECUTE + "]; Do cluster");
           return doCluster(jsc);
         }
+        case PURGE_PENDING_INSTANT: {
+          LOG.info("Running Mode: [" + PURGE_PENDING_INSTANT + "];");
+          return doPurgePendingInstant(jsc);
+        }
         default: {
           LOG.error("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return -1;
@@ -211,7 +215,7 @@ public class HoodieClusteringJob {
         // Instant time is not specified
         // Find the earliest scheduled clustering instant for execution
         Option<HoodieInstant> firstClusteringInstant =
-            metaClient.getActiveTimeline().filterPendingReplaceTimeline().firstInstant();
+            metaClient.getActiveTimeline().getFirstPendingClusterInstant();
         if (firstClusteringInstant.isPresent()) {
           cfg.clusteringInstantTime = firstClusteringInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
@@ -257,14 +261,15 @@ public class HoodieClusteringJob {
 
       if (cfg.retryLastFailedClusteringJob) {
         HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-        HoodieTimeline inflightHoodieTimeline = table.getActiveTimeline().filterPendingReplaceTimeline().filterInflights();
-        if (!inflightHoodieTimeline.empty()) {
-          HoodieInstant inflightClusteringInstant = inflightHoodieTimeline.lastInstant().get();
+        Option<HoodieInstant> lastClusterOpt = table.getActiveTimeline().getLastPendingClusterInstant();
+
+        if (lastClusterOpt.isPresent()) {
+          HoodieInstant inflightClusteringInstant = lastClusterOpt.get();
           Date clusteringStartTime = HoodieActiveTimeline.parseDateFromInstantTime(inflightClusteringInstant.getTimestamp());
           if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
             // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
             LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
-            instantTime = Option.of(inflightHoodieTimeline.lastInstant().get().getTimestamp());
+            instantTime = Option.of(inflightClusteringInstant.getTimestamp());
           } else {
             LOG.info(inflightClusteringInstant + " might still be in progress, will trigger a new clustering job.");
           }
@@ -283,6 +288,15 @@ public class HoodieClusteringJob {
       clean(client);
       return UtilHelpers.handleErrors(metadata.get(), instantTime.get());
     }
+  }
+
+  private int doPurgePendingInstant(JavaSparkContext jsc) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      client.purgePendingClustering(cfg.clusteringInstantTime);
+    }
+    return 0;
   }
 
   private void clean(SparkRDDWriteClient<?> client) {

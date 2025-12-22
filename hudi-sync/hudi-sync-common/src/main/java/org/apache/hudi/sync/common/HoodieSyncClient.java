@@ -22,12 +22,13 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.ParquetTableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -61,7 +62,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     this.config = config;
     this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(config.getHadoopConf())
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(config.getHadoopConf()))
         .setBasePath(config.getString(META_SYNC_BASE_PATH))
         .setLoadActiveTimelineOnLoad(true)
         .build();
@@ -76,7 +77,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   public String getBasePath() {
-    return metaClient.getBasePathV2().toString();
+    return metaClient.getBasePath().toString();
   }
 
   public boolean isBootstrap() {
@@ -93,16 +94,13 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * Going through archive timeline is a costly operation, and it should be avoided unless some start time is given.
    */
   public Set<String> getDroppedPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
-    HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
-        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced)
-        : metaClient.getActiveTimeline();
-    return new HashSet<>(TimelineUtils.getDroppedPartitions(timeline));
+    return new HashSet<>(TimelineUtils.getDroppedPartitions(metaClient, lastCommitTimeSynced, lastCommitCompletionTimeSynced));
   }
 
   @Override
   public MessageType getStorageSchema() {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      return new ParquetTableSchemaResolver(metaClient).getTableParquetSchema();
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read schema from storage.", e);
     }
@@ -111,7 +109,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   @Override
   public MessageType getStorageSchema(boolean includeMetadataField) {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema(includeMetadataField);
+      return new ParquetTableSchemaResolver(metaClient).getTableParquetSchema(includeMetadataField);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read schema from storage.", e);
     }
@@ -123,8 +121,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
    * @return All relative partitions paths.
    */
   public List<String> getAllPartitionPathsOnStorage() {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     return FSUtils.getAllPartitionPaths(engineContext,
+        metaClient.getStorage(),
         config.getString(META_SYNC_BASE_PATH),
         config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA),
         config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
@@ -163,7 +162,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : allPartitionsOnStorage) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+      Path storagePartitionPath =
+          HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
@@ -185,7 +185,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       String storagePath = paths.get(storageValue);
       try {
         String relativePath = FSUtils.getRelativePartitionPath(
-            metaClient.getBasePathV2(), new CachingPath(storagePath));
+            metaClient.getBasePath(), new StoragePath(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
         LOG.error("Cannot parse the path stored in the metastore, ignoring it for "
@@ -206,7 +206,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : writtenPartitionsOnStorage) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+      Path storagePartitionPath =
+          HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);

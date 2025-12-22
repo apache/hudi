@@ -18,28 +18,38 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
+import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.metadata.{BaseTableMetadata, HoodieBackedTableMetadata, HoodieTableMetadata, MetadataPartitionType}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+import org.apache.hudi.util.JavaScalaConverters.convertJavaListToScalaSeq
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.functions.{col, explode}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.Collections
+import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 
 @Tag("functional")
@@ -82,7 +92,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Insert records
     val newRecords = dataGen.generateInserts("001", 100)
-    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala.toSeq)
 
     newRecordsDF.write.format(hudi)
       .options(combinedOpts)
@@ -92,7 +102,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Update records
     val updatedRecords = dataGen.generateUpdates("002", newRecords)
-    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala.toSeq)
 
     updatedRecordsDF.write.format(hudi)
       .options(combinedOpts)
@@ -134,13 +144,14 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val partitionPathToTest = "2015/03/16"
     val engineContext = new HoodieSparkEngineContext(jsc())
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build();
-    val baseTableMetada : HoodieTableMetadata = new HoodieBackedTableMetadata(engineContext, metadataConfig, s"$basePath", false)
+    val baseTableMetada: HoodieTableMetadata = new HoodieBackedTableMetadata(
+      engineContext, hoodieStorage(), metadataConfig, s"$basePath", false)
 
-    val fileStatuses = baseTableMetada.getAllFilesInPartition(new Path(s"$basePath/" + partitionPathToTest))
-    val fileName = fileStatuses.apply(0).getPath.getName
+    val fileStatuses = baseTableMetada.getAllFilesInPartition(new StoragePath(s"$basePath/" + partitionPathToTest))
+    val fileName = fileStatuses.get(0).getPath.getName
 
-    val partitionFileNamePair : java.util.List[org.apache.hudi.common.util.collection.Pair[String, String]] = new util.ArrayList
-    partitionFileNamePair.add(org.apache.hudi.common.util.collection.Pair.of(partitionPathToTest,fileName))
+    val partitionFileNamePair: java.util.List[org.apache.hudi.common.util.collection.Pair[String, String]] = new util.ArrayList
+    partitionFileNamePair.add(org.apache.hudi.common.util.collection.Pair.of(partitionPathToTest, fileName))
 
     val colStatsRecords = baseTableMetada.getColumnStats(partitionFileNamePair, "begin_lat")
     assertEquals(colStatsRecords.size(), 1)
@@ -148,7 +159,9 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
-      .readRangeFromParquetMetadata(jsc().hadoopConfiguration(), fileStatuses.apply(0).getPath, Collections.singletonList("begin_lat"))
+      .readColumnStatsFromMetadata(
+        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
+        fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
@@ -185,17 +198,18 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val partitionPathToTest = ""
     val engineContext = new HoodieSparkEngineContext(jsc())
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build();
-    val baseTableMetada : HoodieTableMetadata = new HoodieBackedTableMetadata(engineContext, metadataConfig, s"$basePath", false)
+    val baseTableMetada: HoodieTableMetadata = new HoodieBackedTableMetadata(
+      engineContext, hoodieStorage(), metadataConfig, s"$basePath", false)
 
     val allPartitionPaths = baseTableMetada.getAllPartitionPaths
     assertEquals(allPartitionPaths.size(), 1)
     assertEquals(allPartitionPaths.get(0), HoodieTableMetadata.EMPTY_PARTITION_NAME)
 
-    val fileStatuses = baseTableMetada.getAllFilesInPartition(new Path(s"$basePath/"))
-    val fileName = fileStatuses.apply(0).getPath.getName
+    val fileStatuses = baseTableMetada.getAllFilesInPartition(new StoragePath(s"$basePath/"))
+    val fileName = fileStatuses.get(0).getPath.getName
 
-    val partitionFileNamePair : java.util.List[org.apache.hudi.common.util.collection.Pair[String, String]] = new util.ArrayList
-    partitionFileNamePair.add(org.apache.hudi.common.util.collection.Pair.of(partitionPathToTest,fileName))
+    val partitionFileNamePair: java.util.List[org.apache.hudi.common.util.collection.Pair[String, String]] = new util.ArrayList
+    partitionFileNamePair.add(org.apache.hudi.common.util.collection.Pair.of(partitionPathToTest, fileName))
 
     val colStatsRecords = baseTableMetada.getColumnStats(partitionFileNamePair, "begin_lat")
     assertEquals(colStatsRecords.size(), 1)
@@ -203,7 +217,9 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
-      .readRangeFromParquetMetadata(jsc().hadoopConfiguration(), fileStatuses.apply(0).getPath, Collections.singletonList("begin_lat"))
+      .readColumnStatsFromMetadata(
+        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
+        fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
@@ -215,5 +231,169 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
   private def parseRecords(records: Seq[String]) = {
     spark.read.json(spark.sparkContext.parallelize(records, 2))
+  }
+
+  @Test
+  def testTimeTravelQuery(): Unit = {
+    val dataGen = new HoodieTestDataGenerator()
+    val metadataOpts: Map[String, String] = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ",
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "5"
+    )
+    val combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
+
+    // Insert T0
+    val newRecords = dataGen.generateInserts("000", 100)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala.toSeq)
+    newRecordsDF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    //Validate T0
+    val metaClient = HoodieTableMetaClient.builder
+      .setConf(storageConf())
+      .setBasePath(s"$basePath/.hoodie/metadata")
+      .build
+    val timelineT0 = metaClient.getActiveTimeline
+    assertEquals(3, timelineT0.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT0.lastInstant().get().getAction)
+    val t0 = timelineT0.lastInstant().get().getTimestamp
+
+    val filesT0 = getFiles(basePath)
+    assertEquals(3, filesT0.size)
+
+    val baseMetaClient = HoodieTableMetaClient.builder
+      .setConf(storageConf())
+      .setBasePath(basePath)
+      .build
+    val filesT0FS = getFilesFromFs(baseMetaClient)
+    assertEquals(3, filesT0FS.size)
+    assertEquals(3, filesT0.intersect(filesT0FS).size)
+
+    // Update T1
+    val updatedRecords = dataGen.generateUpdates("001", newRecords)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala.toSeq)
+    updatedRecordsDF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    //Validate T1
+    val timelineT1 = metaClient.reloadActiveTimeline()
+    assertEquals(4, timelineT1.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT1.lastInstant().get().getAction)
+    val t1 =  timelineT1.lastInstant().get().getTimestamp
+
+    val filesT1 = getFiles(basePath)
+    assertEquals(6, filesT1.size)
+    assertEquals(3, filesT1.diff(filesT0).size)
+
+    val filesT1FS = getFilesFromFs(baseMetaClient)
+    assertEquals(6, filesT1FS.size)
+    assertEquals(6, filesT1.intersect(filesT1FS).size)
+
+    val filesT1travelT0 = getFilesAsOf(basePath, t0)
+    assertEquals(3, filesT1travelT0.size)
+    assertEquals(3, filesT1travelT0.intersect(filesT0).size)
+
+    //Update T2
+    val updatedRecords2 = dataGen.generateUpdates("002", updatedRecords)
+    val updatedRecords2DF = parseRecords(recordsToStrings(updatedRecords2).asScala.toSeq)
+    updatedRecords2DF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    //Validate T2
+    val timelineT2 = metaClient.reloadActiveTimeline()
+    assertEquals(5, timelineT2.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT2.lastInstant().get().getAction)
+    val t2 =  timelineT2.lastInstant().get().getTimestamp
+
+    val filesT2 = getFiles(basePath)
+    assertEquals(9, filesT2.size)
+    assertEquals(3, filesT2.diff(filesT1).size)
+
+    val filesT2FS = getFilesFromFs(baseMetaClient)
+    assertEquals(9, filesT2FS.size)
+    assertEquals(9, filesT2.intersect(filesT2FS).size)
+
+    val filesT2travelT1 = getFilesAsOf(basePath, t1)
+    assertEquals(6, filesT2travelT1.size)
+    assertEquals(6, filesT2travelT1.intersect(filesT1).size)
+
+    val filesT2travelT0 = getFilesAsOf(basePath, t0)
+    assertEquals(3, filesT2travelT0.size)
+    assertEquals(3, filesT2travelT0.intersect(filesT0).size)
+
+    //Update T3
+    val updatedRecords3 = dataGen.generateUpdates("003", updatedRecords2)
+    val updatedRecords3DF = parseRecords(recordsToStrings(updatedRecords3).asScala.toSeq)
+    updatedRecords3DF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    //Validate T3
+    val timelineT3 = metaClient.reloadActiveTimeline()
+    assertEquals(7, timelineT3.countInstants())
+    assertEquals(HoodieTimeline.COMMIT_ACTION, timelineT3.getInstants.get(5).getAction)
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT3.lastInstant().get().getAction)
+
+    val filesT3 = getFiles(basePath)
+    assertEquals(12, filesT3.size)
+    assertEquals(3, filesT3.diff(filesT2).size)
+
+    val filesT3FS = getFilesFromFs(baseMetaClient)
+    assertEquals(12, filesT3FS.size)
+    assertEquals(12, filesT3.intersect(filesT3FS).size)
+
+    val filesT3travelT2 = getFilesAsOf(basePath, t2)
+    assertEquals(9, filesT3travelT2.size)
+    assertEquals(9, filesT3travelT2.intersect(filesT2).size)
+
+    val filesT3travelT1 = getFilesAsOf(basePath, t1)
+    assertEquals(6, filesT3travelT1.size)
+    assertEquals(6, filesT3travelT1.intersect(filesT1).size)
+
+    val filesT3travelT0 = getFilesAsOf(basePath, t0)
+    assertEquals(3, filesT3travelT0.size)
+    assertEquals(3, filesT3travelT0.intersect(filesT0).size)
+  }
+
+  private def getFilesAsOf(basePath: String, timestamp: String): scala.collection.GenSet[Any] = {
+    getFiles(basePath, Map(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key() -> timestamp))
+  }
+
+  private def getFiles(basePath: String): scala.collection.GenSet[Any] = {
+    getFiles(basePath, Map.empty)
+  }
+
+  private def getFiles(basePath: String, opts: Map[String, String]): scala.collection.GenSet[Any] = {
+    spark.read.format(hudi).options(opts).load(s"$basePath/.hoodie/metadata").where("type = 2").select(explode(col("filesystemMetadata"))).drop("value").rdd.map(r => r(0)).collect().toSet
+  }
+
+  private def getFilesFromFs(metaClient: HoodieTableMetaClient): scala.collection.GenSet[Any] = {
+    val engineContext = new HoodieSparkEngineContext(jsc())
+    val files = new util.ArrayList[String]()
+    val fsview = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+      metaClient, HoodieMetadataConfig.newBuilder.enable(false).build())
+    fsview.loadAllPartitions()
+    convertJavaListToScalaSeq(fsview.getAllFileGroups.collect(Collectors.toList())).foreach(fg => {
+      convertJavaListToScalaSeq(fg.getAllFileSlices.collect(Collectors.toList())).foreach(fileSlice => {
+        if (fileSlice.getBaseFile.isPresent) {
+          files.add(fileSlice.getBaseFile.get().getFileName)
+        }
+        convertJavaListToScalaSeq(fileSlice.getLogFiles.collect(Collectors.toList())).foreach(logFile => files.add(logFile.getFileName))
+      })
+    })
+    files.toArray.toSet
   }
 }

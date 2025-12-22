@@ -18,9 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+import org.apache.hudi.storage.StorageConfiguration;
+
+import org.apache.hadoop.conf.Configuration;
 
 /**
  * Configuration to hold details about a DFS based output type, implements {@link DeltaConfig}.
@@ -43,10 +45,10 @@ public class DFSDeltaConfig extends DeltaConfig {
   private boolean useHudiToGenerateUpdates;
 
   public DFSDeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
-                        SerializableConfiguration configuration,
+                        StorageConfiguration<Configuration> storageConf,
                         String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
                         int inputParallelism, boolean deleteOldInputData, boolean useHudiToGenerateUpdates) {
-    super(deltaOutputMode, deltaInputType, configuration);
+    super(deltaOutputMode, deltaInputType, storageConf);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
     this.maxFileSize = maxFileSize;

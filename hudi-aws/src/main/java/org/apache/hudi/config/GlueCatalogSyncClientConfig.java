@@ -22,6 +22,11 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import java.util.stream.IntStream;
 
 /**
  * Hoodie Configs for Glue.
@@ -40,10 +45,48 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Glue catalog sync based client will skip archiving the table version if this config is set to true");
 
+  public static final ConfigProperty<Integer> ALL_PARTITIONS_READ_PARALLELISM = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "all_partitions_read_parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .withValidValues(IntStream.rangeClosed(1, 10).mapToObj(Integer::toString).toArray(String[]::new))
+      .sinceVersion("0.15.0")
+      .withDocumentation("Parallelism for listing all partitions(first time sync). Should be in interval [1, 10].");
+
+  public static final ConfigProperty<Integer> CHANGED_PARTITIONS_READ_PARALLELISM = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "changed_partitions_read_parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Parallelism for listing changed partitions(second and subsequent syncs).");
+
+  public static final ConfigProperty<Integer> PARTITION_CHANGE_PARALLELISM = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_change_parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Parallelism for change operations - such as create/update/delete.");
+
   public static final ConfigProperty<Boolean> GLUE_METADATA_FILE_LISTING = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "metadata_file_listing")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Makes athena use the metadata table to list partitions and files. Currently it won't benefit from other features such stats indexes");
+
+  public static final ConfigProperty<Boolean> META_SYNC_PARTITION_INDEX_FIELDS_ENABLE = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields.enable")
+      .defaultValue(false)
+      .sinceVersion("0.15.0")
+      .withDocumentation("Enable aws glue partition index feature, to speedup partition based query pattern");
+
+  public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+          .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
+      .sinceVersion("0.15.0")
+      .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by semicolon.",
+          "By default, when the feature is enabled, all the partition will be indexed.",
+          "You can create up to three indexes, separate them by comma. Eg: col1;col2;col3,col2,col3"));
 }

@@ -19,18 +19,19 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.14.1</version>
+        <version>0.16.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-aws</artifactId>
-    <version>0.14.1</version>
+    <version>0.16.0-SNAPSHOT</version>
 
     <name>hudi-aws</name>
     <packaging>jar</packaging>
 
     <properties>
         <dynamodb-local.version>1.15.0</dynamodb-local.version>
+        <moto.version>5.0.1</moto.version>
     </properties>
 
     <dependencies>
@@ -41,6 +42,11 @@
         </dependency>
 
         <!-- Hoodie -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-client-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
@@ -255,6 +261,21 @@
                                         </wait>
                                     </run>
                                 </image>
+                                <image>
+                                    <name>motoserver/moto:${moto.version}</name>
+                                    <alias>it-aws</alias>
+                                    <run>
+                                        <ports>
+                                            <port>${moto.port}:${moto.port}</port>
+                                        </ports>
+                                        <wait>
+                                            <http>
+                                                <url>${moto.endpoint}/moto-api/</url>
+                                            </http>
+                                            <time>10000</time>
+                                        </wait>
+                                    </run>
+                                </image>
                             </images>
                         </configuration>
                     </execution>
@@ -276,9 +297,6 @@
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <directory>src/test/resources</directory>
             </resource>
         </resources>
     </build>

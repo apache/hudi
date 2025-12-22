@@ -19,6 +19,9 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.types.StructType
+
 /**
  * Utils on schema, which have different implementation across Spark versions.
  */
@@ -34,4 +37,10 @@ trait HoodieSchemaUtils {
   def checkColumnNameDuplication(columnNames: Seq[String],
                                  colType: String,
                                  caseSensitiveAnalysis: Boolean): Unit
+
+  /**
+   * SPARK-44353 StructType#toAttributes was removed in Spark 3.5.0
+   * Use DataTypeUtils#toAttributes for Spark 3.5+
+   */
+  def toAttributes(struct: StructType): Seq[Attribute]
 }

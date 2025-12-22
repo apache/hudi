@@ -34,6 +34,7 @@ public class HoodieWriteMetadata<O> {
 
   private O writeStatuses;
   private Option<Duration> indexLookupDuration = Option.empty();
+  private Option<Long> sourceReadAndIndexDurationMs = Option.empty();
 
   // Will be set when auto-commit happens
   private boolean isCommitted;
@@ -58,6 +59,9 @@ public class HoodieWriteMetadata<O> {
     newMetadataInstance.setWriteStatuses(transformedWriteStatuses);
     if (indexLookupDuration.isPresent()) {
       newMetadataInstance.setIndexLookupDuration(indexLookupDuration.get());
+    }
+    if (sourceReadAndIndexDurationMs.isPresent()) {
+      newMetadataInstance.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs.get());
     }
     newMetadataInstance.setCommitted(isCommitted);
     newMetadataInstance.setCommitMetadata(commitMetadata);
@@ -130,6 +134,14 @@ public class HoodieWriteMetadata<O> {
 
   public void setIndexLookupDuration(Duration indexLookupDuration) {
     this.indexLookupDuration = Option.ofNullable(indexLookupDuration);
+  }
+
+  public Option<Long> getSourceReadAndIndexDurationMs() {
+    return sourceReadAndIndexDurationMs;
+  }
+
+  public void setSourceReadAndIndexDurationMs(Long sourceReadAndIndexDurationMs) {
+    this.sourceReadAndIndexDurationMs = Option.of(sourceReadAndIndexDurationMs);
   }
 
   public Map<String, List<String>> getPartitionToReplaceFileIds() {

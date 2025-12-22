@@ -34,6 +34,7 @@ public class MarkerOperation implements Serializable {
   // GET requests
   public static final String ALL_MARKERS_URL = String.format("%s/%s", BASE_URL, "all");
   public static final String CREATE_AND_MERGE_MARKERS_URL = String.format("%s/%s", BASE_URL, "create-and-merge");
+  public static final String APPEND_MARKERS_URL = String.format("%s/%s", BASE_URL, "append");
   public static final String MARKERS_DIR_EXISTS_URL = String.format("%s/%s", BASE_URL, "dir/exists");
 
   // POST requests

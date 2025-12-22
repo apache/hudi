@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.14.1</version>
+        <version>0.16.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -30,7 +30,7 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <h2.version>1.4.200</h2.version>
+        <h2.version>2.2.220</h2.version>
     </properties>
 
     <dependencies>
@@ -99,7 +99,7 @@
                         </goals>
                         <configuration>
                             <artifactSet>
-                                <includes>
+                                <includes combine.children="append">
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-metaserver-server</include>
                                     <include>org.apache.thrift:libthrift</include>

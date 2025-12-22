@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,13 +43,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -160,7 +161,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getStorage();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
@@ -184,11 +185,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
-    List<String> logFiles = operation.getDeltaFileNames().stream().map(
-        p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
+    List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
+            new StoragePath(FSUtils.constructAbsolutePath(
+                metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
@@ -196,7 +198,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withInstantRange(instantRange)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
@@ -206,11 +207,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withPartition(operation.getPartitionPath())
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
-        .withInstantRange(instantRange)
+        .withTableMetaClient(metaClient)
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
+        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
 
     // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
     // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
@@ -238,18 +239,25 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
-      s.getStat().setPartitionPath(operation.getPartitionPath());
-      s.getStat()
+      final HoodieWriteStat stat = s.getStat();
+      stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+      stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+      stat.setTotalLogRecords(scanner.getTotalLogRecords());
+      stat.setPartitionPath(operation.getPartitionPath());
+      stat
           .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
-      s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
+      stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
+      stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+      stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
       RuntimeStats runtimeStats = new RuntimeStats();
+      // scan time has to be obtained from scanner.
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      s.getStat().setRuntimeStats(runtimeStats);
+      // create and upsert time are obtained from the create or merge handle.
+      if (stat.getRuntimeStats() != null) {
+        runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
+        runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
+      }
+      stat.setRuntimeStats(runtimeStats);
     }).collect(toList());
   }
 

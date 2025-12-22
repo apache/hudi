@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.14.1</version>
+        <version>0.16.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -74,6 +74,13 @@
         <dependency>
             <groupId>org.rocksdb</groupId>
             <artifactId>rocksdbjni</artifactId>
+        </dependency>
+
+        <!-- Override the provided scope defined in hudi-common -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <scope>compile</scope>
         </dependency>
 
         <!-- Hadoop -->
@@ -158,6 +165,7 @@
                          Include hudi-timeline-server with javalin dependencies. 
                          hadoop deps are to be provided at runtime. see run_server.sh 
                       -->
+                      <include>org.apache.hudi:hudi-hadoop-common</include>
                       <include>org.apache.hudi:hudi-common</include>
                       <include>org.apache.hudi:hudi-timeline-service</include>
                       <include>org.mortbay.jetty:jetty</include>
@@ -191,6 +199,7 @@
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
                       <include>org.openjdk.jol:jol-core</include>
+                      <include>org.apache.avro:avro</include>
                   </includes>
                 </artifactSet>
                 <relocations combine.children="append">
@@ -205,6 +214,10 @@
                     <relocation>
                         <pattern>com.fasterxml.jackson.</pattern>
                         <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                        <pattern>org.apache.avro.</pattern>
+                        <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                     </relocation>
                 </relocations>
             </configuration>

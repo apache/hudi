@@ -21,12 +21,12 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.model.{BootstrapFileMapping, HoodieFileGroupId}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder {
@@ -62,7 +62,7 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     val desc = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
 
     val basePath: String = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     if (partitionPath.isEmpty && fileIds.nonEmpty) throw new IllegalStateException("PartitionPath is mandatory when passing fileIds.")
 
@@ -78,14 +78,14 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     } else if (partitionPath.nonEmpty) {
       mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
     } else {
-      for (part <- indexedPartitions) {
+      for (part <- indexedPartitions.asScala) {
         mappingList.addAll(indexReader.getSourceFileMappingForPartition(part))
       }
     }
 
-    val rows: java.util.List[Row] = mappingList
+    val rows: java.util.List[Row] = mappingList.asScala
       .map(mapping => Row(mapping.getPartitionPath, mapping.getFileId, mapping.getBootstrapBasePath,
-        mapping.getBootstrapPartitionPath, mapping.getBootstrapFileStatus.getPath.getUri)).toList
+        mapping.getBootstrapPartitionPath, mapping.getBootstrapFileStatus.getPath.getUri)).asJava
 
     val df = spark.createDataFrame(rows, OUTPUT_TYPE)
 

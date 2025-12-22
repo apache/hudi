@@ -192,6 +192,31 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testIndexTypeCheck() {
+    ResolvedSchema schema = SchemaBuilder.instance()
+            .field("f0", DataTypes.INT().notNull())
+            .field("f1", DataTypes.VARCHAR(20))
+            .field("f2", DataTypes.TIMESTAMP(3))
+            .field("ts", DataTypes.TIMESTAMP(3))
+            .primaryKey("f0")
+            .build();
+
+    // Index type unset. The default value will be ok
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+
+    // Invalid index type will throw exception
+    this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET_AA");
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+
+    // Valid index type will be ok
+    this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+  }
+
+  @Test
   void testTableTypeCheck() {
     ResolvedSchema schema = SchemaBuilder.instance()
             .field("f0", DataTypes.INT().notNull())

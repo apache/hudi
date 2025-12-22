@@ -21,7 +21,6 @@ package org.apache.hudi.sink;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,12 +32,14 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
@@ -93,7 +94,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * Hive config options.
    */
-  private final SerializableConfiguration hiveConf;
+  private final StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf;
 
   /**
    * Coordinator context.
@@ -173,7 +174,7 @@ public class StreamWriteOperatorCoordinator
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
-    this.hiveConf = new SerializableConfiguration(HadoopConfigurations.getHiveConf(conf));
+    this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
   }
 
   @Override
@@ -318,7 +319,7 @@ public class StreamWriteOperatorCoordinator
 
   private void initHiveSync() {
     this.hiveSyncExecutor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    this.hiveSyncContext = HiveSyncContext.create(conf, this.hiveConf);
+    this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
   }
 
   private void syncHiveAsync() {
@@ -435,6 +436,21 @@ public class StreamWriteOperatorCoordinator
           .filter(evt -> evt.getWriteStatuses().size() > 0)
           .findFirst().map(WriteMetadataEvent::getInstantTime)
           .orElse(WriteMetadataEvent.BOOTSTRAP_INSTANT);
+
+      // if currentInstant is pending && bootstrap event instant is empty
+      // reuse currentInstant, reject bootstrap
+      if (this.metaClient.reloadActiveTimeline().filterInflightsAndRequested().containsInstant(this.instant)
+              && instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)
+              && this.tableState.operationType == WriteOperationType.INSERT) {
+        LOG.warn("Reuse current pending Instant {} with {} operationType, "
+                + "ignoring empty bootstrap event.", this.instant, WriteOperationType.INSERT.value());
+        reset();
+
+        // send commit act event to unblock write tasks
+        sendCommitAckEvents(-1L);
+        return;
+      }
+
       initInstant(instant);
     }
   }
@@ -574,12 +590,17 @@ public class StreamWriteOperatorCoordinator
       }
     } else {
       LOG.error("Error when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      LOG.error("The first 100 error messages");
-      writeResults.stream().filter(WriteStatus::hasErrors).limit(100).forEach(ws -> {
-        LOG.error("Global error for partition path {} and fileID {}: {}",
-            ws.getGlobalError(), ws.getPartitionPath(), ws.getFileId());
+      LOG.error("The first 10 files with write errors:");
+      writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+        if (ws.getGlobalError() != null) {
+          LOG.error("Global error for partition path {} and fileID {}: {}",
+              ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
+        }
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " and value " + value));
+          LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
+              ws.getPartitionPath(), ws.getFileId());
+          ws.getErrors().entrySet().stream().limit(100).forEach(entry -> LOG.error("Error for key: "
+              + entry.getKey() + " and Exception: " + entry.getValue().getMessage()));
         }
       });
       // Rolls back instant

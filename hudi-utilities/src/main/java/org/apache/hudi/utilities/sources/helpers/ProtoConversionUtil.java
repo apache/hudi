@@ -17,15 +17,18 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DoubleValue;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
@@ -56,6 +59,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS;
+import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS;
+
 /**
  * A utility class to help translate from Proto to Avro.
  */
@@ -70,6 +80,17 @@ public class ProtoConversionUtil {
   public static Schema getAvroSchemaForMessageClass(Class clazz, SchemaConfig schemaConfig) {
 
     return new AvroSupport(schemaConfig).getSchema(clazz);
+  }
+
+  /**
+   * Creates an Avro {@link Schema} for the provided {@link Descriptors.Descriptor}.
+   * Intended for use when the descriptor is provided by an external registry.
+   * @param descriptor The protobuf descriptor
+   * @param schemaConfig configuration used to determine how to handle particular cases when converting from the proto schema
+   * @return An Avro schema
+   */
+  public static Schema getAvroSchemaForMessageDescriptor(Descriptors.Descriptor descriptor, SchemaConfig schemaConfig) {
+    return new AvroSupport(schemaConfig).getSchema(descriptor);
   }
 
   /**
@@ -97,6 +118,13 @@ public class ProtoConversionUtil {
       this.wrappedPrimitivesAsRecords = wrappedPrimitivesAsRecords;
       this.maxRecursionDepth = maxRecursionDepth;
       this.timestampsAsRecords = timestampsAsRecords;
+    }
+
+    public static SchemaConfig fromProperties(TypedProperties props) {
+      boolean wrappedPrimitivesAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS);
+      int maxRecursionDepth = getIntWithAltKeys(props, PROTO_SCHEMA_MAX_RECURSION_DEPTH);
+      boolean timestampsAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS);
+      return new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
     }
 
     public boolean isWrappedPrimitivesAsRecords() {
@@ -129,7 +157,7 @@ public class ProtoConversionUtil {
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
     private static final Schema RECURSION_OVERFLOW_SCHEMA = Schema.createRecord("recursion_overflow", null, "org.apache.hudi.proto", false,
         Arrays.asList(new Schema.Field(OVERFLOW_DESCRIPTOR_FIELD_NAME, STRING_SCHEMA, null, ""),
-            new Schema.Field(OVERFLOW_BYTES_FIELD_NAME, Schema.create(Schema.Type.BYTES), null, "".getBytes())));
+            new Schema.Field(OVERFLOW_BYTES_FIELD_NAME, Schema.create(Schema.Type.BYTES), null, getUTF8Bytes(""))));
     // A cache of the proto class name paired with whether wrapped primitives should be flattened as the key and the generated avro schema as the value
     private static final Map<SchemaCacheKey, Schema> SCHEMA_CACHE = new ConcurrentHashMap<>();
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
@@ -155,11 +183,11 @@ public class ProtoConversionUtil {
       this.timestampsAsRecords = schemaConfig.isTimestampsAsRecords();
     }
 
-    public static GenericRecord convert(Schema schema, Message message) {
+    static GenericRecord convert(Schema schema, Message message) {
       return (GenericRecord) convertObject(schema, message);
     }
 
-    public Schema getSchema(Class c) {
+    Schema getSchema(Class c) {
       return SCHEMA_CACHE.computeIfAbsent(new SchemaCacheKey(c, wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords), key -> {
         try {
           Object descriptor = c.getMethod("getDescriptor").invoke(null);
@@ -173,6 +201,16 @@ public class ProtoConversionUtil {
           throw new RuntimeException(e);
         }
       });
+    }
+
+    /**
+     * Translates a Proto Message descriptor into an Avro Schema.
+     * Does not cache since external system may evolve the schema and that can result in a stale version of the avro schema.
+     * @param descriptor the descriptor for the proto message
+     * @return an avro schema
+     */
+    Schema getSchema(Descriptors.Descriptor descriptor) {
+      return getMessageSchema(descriptor, new CopyOnWriteMap<>(), getNamespace(descriptor.getFullName()));
     }
 
     private Schema getEnumSchema(Descriptors.EnumDescriptor enumDescriptor) {
@@ -400,7 +438,21 @@ public class ProtoConversionUtil {
           if (value instanceof Message) {
             // check if this is a Timestamp
             if (LogicalTypes.timestampMicros().equals(schema.getLogicalType())) {
-              return Timestamps.toMicros((Timestamp) value);
+              if (value instanceof Timestamp) {
+                return Timestamps.toMicros((Timestamp) value);
+              } else if (value instanceof DynamicMessage) {
+                Timestamp.Builder builder = Timestamp.newBuilder();
+                ((DynamicMessage) value).getAllFields().forEach((fieldDescriptor, fieldValue) -> {
+                  if (fieldDescriptor.getFullName().equals("google.protobuf.Timestamp.seconds")) {
+                    builder.setSeconds((Long) fieldValue);
+                  } else if (fieldDescriptor.getFullName().equals("google.protobuf.Timestamp.nanos")) {
+                    builder.setNanos((Integer) fieldValue);
+                  }
+                });
+                return Timestamps.toMicros(builder.build());
+              } else {
+                throw new HoodieSchemaException("Unexpected message type while handling timestamps: " + value.getClass().getName());
+              }
             } else {
               tmpValue = getWrappedValue(value);
             }

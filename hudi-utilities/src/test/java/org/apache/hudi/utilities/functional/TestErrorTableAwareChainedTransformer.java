@@ -129,7 +129,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   })
   public void testErrorTableAwareChainedTransformerValidationFails(String transformerName) {
     assertThrows(HoodieTransformException.class,
-        () -> new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty()));
+        () -> new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")), Option::empty));
   }
 
   @ParameterizedTest
@@ -141,7 +141,7 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   })
   public void testErrorTableAwareChainedTransformerValidationPasses(String transformerName) {
     ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")),
-        Option.empty());
+        Option::empty);
     assertNotNull(transformer);
   }
 }

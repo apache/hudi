@@ -145,6 +145,32 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   @Test
+  public void testAppendInsertAfterFailoverWithEmptyCheckpoint() throws Exception {
+    // open the function and ingest data
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    preparePipeline()
+        .assertEmptyDataFiles()
+        // make an empty snapshot
+        .checkpoint(1)
+        .assertEmptyEvent()
+        // trigger a partial failure
+        .subTaskFails(0, 1)
+        .assertNextEvent()
+        // make sure coordinator send an ack event to unblock the writers.
+        .assertNextSubTaskEvent()
+        // write a set of data and check the result.
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
+        .end();
+  }
+
+  // Only when Job level fails with INSERT operationType can we roll back the unfinished instant.
+  // Task level failed retry, we should reuse the unfinished Instant with INSERT operationType
+  @Test
   public void testPartialFailover() throws Exception {
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
     conf.setString(FlinkOptions.OPERATION, "INSERT");
@@ -159,7 +185,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         // if the write task can not fetch any pending instant when starts up(the coordinator restarts),
         // it will send an event to the coordinator
-        .coordinatorFails()
+        .restartCoordinator()
         .subTaskFails(0, 2)
         // the subtask can not fetch the instant to write until a new instant is initialized
         .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
@@ -168,6 +194,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // the last checkpoint instant was rolled back by subTaskFails(0, 2)
         // with EAGER cleaning strategy
         .assertNoEvent()
+        .checkpoint(4)
+        .assertNextEvent()
+        .subTaskFails(0, 4)
+        // the last checkpoint instant can not be rolled back by subTaskFails(0, 4) with INSERT write operationType
+        // because last data has been snapshot by checkpoint complete but instant has not been committed
+        // so we need re-commit it
+        .assertEmptyEvent()
         .end();
   }
 

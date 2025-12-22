@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.spark.api.java.JavaRDD;
 
-import scala.Serializable;
+import java.io.Serializable;
 
 /**
  * Base class for Json kafka source post processor. User can define their own processor that extends this class to do

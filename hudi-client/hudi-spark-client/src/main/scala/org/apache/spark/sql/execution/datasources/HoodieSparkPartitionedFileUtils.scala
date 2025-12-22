@@ -19,11 +19,13 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
- * Utils on Spark [[PartitionedFile]] to adapt to type changes.
+ * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] to adapt to type changes.
  * Before Spark 3.4.0,
  * ```
  * case class PartitionedFile(
@@ -51,7 +53,7 @@ trait HoodieSparkPartitionedFileUtils extends Serializable {
    * @param partitionedFile Spark [[PartitionedFile]] instance.
    * @return Hadoop [[Path]] instance.
    */
-  def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path
+  def getPathFromPartitionedFile(partitionedFile: PartitionedFile): StoragePath
 
   /**
    * Gets the [[String]] path from Spark [[PartitionedFile]] instance.
@@ -65,13 +67,23 @@ trait HoodieSparkPartitionedFileUtils extends Serializable {
    * Creates a new [[PartitionedFile]] instance.
    *
    * @param partitionValues value of partition columns to be prepended to each row.
-   * @param filePath URI of the file to read.
-   * @param start the beginning offset (in bytes) of the block.
-   * @param length number of bytes to read.
+   * @param filePath        URI of the file to read.
+   * @param start           the beginning offset (in bytes) of the block.
+   * @param length          number of bytes to read.
    * @return a new [[PartitionedFile]] instance.
    */
   def createPartitionedFile(partitionValues: InternalRow,
-                            filePath: Path,
+                            filePath: StoragePath,
                             start: Long,
                             length: Long): PartitionedFile
+
+  /**
+   * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
+   */
+  def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus]
+
+  /**
+   * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
+   */
+  def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory
 }

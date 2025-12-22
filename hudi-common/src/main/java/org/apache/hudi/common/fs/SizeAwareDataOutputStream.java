@@ -55,7 +55,7 @@ public class SizeAwareDataOutputStream {
   }
 
   public void write(byte[] v, int offset, int len) throws IOException {
-    size.addAndGet(len + offset);
+    size.addAndGet((long) len + offset);
     outputStream.write(v, offset, len);
   }
 

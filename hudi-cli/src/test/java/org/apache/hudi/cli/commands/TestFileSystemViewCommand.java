@@ -79,7 +79,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   }
 
   private void createNonpartitionedTable() throws IOException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String nonpartitionedTableName = "nonpartitioned_" + tableName();
@@ -101,11 +101,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Write date files and log file
     String testWriteToken = "2-0-2";
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
-        .makeBaseFileName(commitTime1, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime1, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
-        .makeBaseFileName(commitTime2, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime2, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(nonpartitionedTablePath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
@@ -120,7 +120,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   }
 
   private void createPartitionedTable() throws IOException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String partitionedTableName = "partitioned_" + tableName();
@@ -144,11 +144,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Write date files and log file
     String testWriteToken = "1-0-1";
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeBaseFileName(commitTime1, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime1, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeBaseFileName(commitTime2, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime2, testWriteToken, fileId1, BASE_FILE_EXTENSION)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 

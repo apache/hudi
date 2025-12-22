@@ -20,11 +20,11 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
@@ -73,7 +73,7 @@ public class TestBucketAssigner {
 
     writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(HadoopConfigurations.getHadoopConf(conf)),
+        HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(conf)),
         new FlinkTaskContextSupplier(null));
     StreamerUtil.initTableIfNotExists(conf);
   }

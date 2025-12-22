@@ -29,11 +29,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,22 +45,29 @@ import java.util.UUID;
 public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkWriteableTestTable.class);
 
-  private HoodieSparkWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
-                                        BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {
-    this(basePath, fs, metaClient, schema, filter, metadataWriter, Option.empty());
+  private HoodieSparkWriteableTestTable(String basePath, HoodieStorage storage,
+                                        HoodieTableMetaClient metaClient, Schema schema,
+                                        BloomFilter filter,
+                                        HoodieTableMetadataWriter metadataWriter) {
+    this(basePath, storage, metaClient, schema, filter, metadataWriter, Option.empty());
   }
 
-  private HoodieSparkWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
-                                        BloomFilter filter, HoodieTableMetadataWriter metadataWriter, Option<HoodieEngineContext> context) {
-    super(basePath, fs, metaClient, schema, filter, metadataWriter, context);
+  private HoodieSparkWriteableTestTable(String basePath, HoodieStorage storage,
+                                        HoodieTableMetaClient metaClient, Schema schema,
+                                        BloomFilter filter,
+                                        HoodieTableMetadataWriter metadataWriter,
+                                        Option<HoodieEngineContext> context) {
+    super(basePath, storage, metaClient, schema, filter, metadataWriter, context);
   }
 
-  public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
+  public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
+                                                 BloomFilter filter) {
     return of(metaClient, schema, filter, Option.empty());
   }
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter, Option<HoodieEngineContext> context) {
-    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(),
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePath().toString(),
+        metaClient.getRawHoodieStorage(),
         metaClient, schema, filter, null, context);
   }
 
@@ -71,7 +78,8 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter,
                                                  HoodieTableMetadataWriter metadataWriter, Option<HoodieEngineContext> context) {
-    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(),
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePath().toString(),
+        metaClient.getRawHoodieStorage(),
         metaClient, schema, filter, metadataWriter, context);
   }
 
@@ -136,7 +144,7 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
     return this;
   }
 
-  public Path withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+  public StoragePath withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
     return super.withInserts(partition, fileId, records, new SparkTaskContextSupplier());
   }
 

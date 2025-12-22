@@ -21,13 +21,13 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
 
@@ -71,7 +71,7 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
 
     @Override
     protected byte[] getUTF8Bytes(String key) {
-      return key.getBytes(StandardCharsets.UTF_8);
+      return StringUtils.getUTF8Bytes(key);
     }
   }
 }

@@ -46,10 +46,24 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
         Option.of(consumer), transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
   }
 
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, int recordSamplingRate, int recordCacheLimit, final Iterator<I> inputItr,
+                                 HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
+    this(bufferLimitInBytes, recordSamplingRate, recordCacheLimit, Collections.singletonList(new IteratorBasedQueueProducer<>(inputItr)),
+        Option.of(consumer), transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
+  }
+
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<HoodieProducer<I>> producers,
                                  Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
                                  final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
     super(producers, consumer, new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator), preExecuteRunnable);
+  }
+
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, int recordSamplingRate, int recordCacheLimit, List<HoodieProducer<I>> producers,
+                                 Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
+                                 final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
+    super(producers, consumer,
+        new BoundedInMemoryQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator, recordSamplingRate, recordCacheLimit),
+        preExecuteRunnable);
   }
 
   @Override

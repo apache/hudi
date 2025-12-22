@@ -22,14 +22,16 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,12 +43,14 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
   private final LogRecordScannerCallback callback;
 
-  private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                         String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
+  private HoodieUnMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                         String latestInstantTime, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger);
+                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+    super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
+        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
+         hoodieTableMetaClientOption);
     this.callback = callback;
   }
 
@@ -95,13 +99,12 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
   public static class Builder extends AbstractHoodieLogRecordReader.Builder {
-    private FileSystem fs;
+    private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
     private Schema readerSchema;
     private InternalSchema internalSchema;
     private String latestInstantTime;
-    private boolean readBlocksLazily;
     private boolean reverseReader;
     private int bufferSize;
     private Option<InstantRange> instantRange = Option.empty();
@@ -109,14 +112,21 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private LogRecordScannerCallback callback;
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    private HoodieTableMetaClient hoodieTableMetaClient;
 
-    public Builder withFileSystem(FileSystem fs) {
-      this.fs = fs;
+    public Builder withStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
     public Builder withBasePath(String basePath) {
       this.basePath = basePath;
+      return this;
+    }
+
+    @Override
+    public Builder withBasePath(StoragePath basePath) {
+      this.basePath = basePath.toString();
       return this;
     }
 
@@ -140,11 +150,6 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
     public Builder withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
-      return this;
-    }
-
-    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
-      this.readBlocksLazily = readBlocksLazily;
       return this;
     }
 
@@ -181,12 +186,19 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
+    public HoodieUnMergedLogRecordScanner.Builder withTableMetaClient(
+        HoodieTableMetaClient hoodieTableMetaClient) {
+      this.hoodieTableMetaClient = hoodieTableMetaClient;
+      return this;
+    }
+
+    @Override
     public HoodieUnMergedLogRecordScanner build() {
       ValidationUtils.checkArgument(recordMerger != null);
 
-      return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger);
+      return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
+          latestInstantTime, reverseReader, bufferSize, callback, instantRange,
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

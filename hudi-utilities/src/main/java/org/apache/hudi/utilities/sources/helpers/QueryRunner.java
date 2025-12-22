@@ -100,7 +100,7 @@ public class QueryRunner {
     Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType()).load(sourcePath);
     QueryInfo snapshotQueryInfo = snapshotLoadQuerySplitterOption
-        .map(snapshotLoadQuerySplitter -> snapshotLoadQuerySplitter.getNextCheckpoint(snapshot, queryInfo))
+        .map(snapshotLoadQuerySplitter -> snapshotLoadQuerySplitter.getNextCheckpoint(snapshot, queryInfo, Option.empty()))
         .orElse(queryInfo);
     return Pair.of(snapshotQueryInfo, applySnapshotQueryFilters(snapshot, snapshotQueryInfo));
   }

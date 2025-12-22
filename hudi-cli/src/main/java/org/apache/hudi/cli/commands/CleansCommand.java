@@ -145,7 +145,7 @@ public class CleansCommand {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
     String cmd = SparkMain.SparkCommand.CLEAN.toString();
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, metaClient.getBasePath(), propsFilePath);
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, HoodieCLI.basePath, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

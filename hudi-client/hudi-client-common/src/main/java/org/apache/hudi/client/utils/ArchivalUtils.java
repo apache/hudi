@@ -20,7 +20,6 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -51,7 +50,7 @@ import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
  */
 public class ArchivalUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTimelineArchiver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ArchivalUtils.class);
 
   /**
    *  getMinAndMaxInstantsToKeep is used by archival service to find the

@@ -18,12 +18,14 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
@@ -47,7 +49,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
   private final Function<Long, String> seqIdGenerator;
 
-  public HoodieSparkParquetWriter(Path file,
+  public HoodieSparkParquetWriter(StoragePath file,
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,

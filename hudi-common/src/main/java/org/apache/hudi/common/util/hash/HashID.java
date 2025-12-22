@@ -20,16 +20,17 @@
 package org.apache.hudi.common.util.hash;
 
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.IOUtils;
 
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
-import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * A stateless Hash class which generates ID for the desired bit count.
@@ -85,7 +86,7 @@ public class HashID implements Serializable {
    * @return Hash value for the message as byte array
    */
   public static byte[] hash(final String message, final Size bits) {
-    return hash(message.getBytes(StandardCharsets.UTF_8), bits);
+    return hash(getUTF8Bytes(message), bits);
   }
 
   /**
@@ -108,7 +109,7 @@ public class HashID implements Serializable {
   }
 
   public static int getXXHash32(final String message, int hashSeed) {
-    return getXXHash32(message.getBytes(StandardCharsets.UTF_8), hashSeed);
+    return getXXHash32(getUTF8Bytes(message), hashSeed);
   }
 
   public static int getXXHash32(final byte[] message, int hashSeed) {
@@ -121,10 +122,10 @@ public class HashID implements Serializable {
     switch (bits) {
       case BITS_32:
         XXHash32 hash32 = factory.hash32();
-        return Bytes.toBytes(hash32.hash(message, 0, message.length, HASH_SEED));
+        return IOUtils.toBytes(hash32.hash(message, 0, message.length, HASH_SEED));
       case BITS_64:
         XXHash64 hash64 = factory.hash64();
-        return Bytes.toBytes(hash64.hash(message, 0, message.length, HASH_SEED));
+        return IOUtils.toBytes(hash64.hash(message, 0, message.length, HASH_SEED));
       default:
         throw new HoodieIOException("XX" + bits + " hash is unsupported!");
     }

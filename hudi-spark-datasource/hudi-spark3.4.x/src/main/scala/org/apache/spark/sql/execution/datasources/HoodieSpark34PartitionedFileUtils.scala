@@ -19,16 +19,18 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.paths.SparkPath
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
- * Utils on Spark [[PartitionedFile]] for Spark 3.4.
+ * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 3.4.
  */
 object HoodieSpark34PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
-  override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path = {
-    partitionedFile.filePath.toPath
+  override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): StoragePath = {
+    new StoragePath(partitionedFile.filePath.toPath.toUri)
   }
 
   override def getStringPathFromPartitionedFile(partitionedFile: PartitionedFile): String = {
@@ -36,9 +38,17 @@ object HoodieSpark34PartitionedFileUtils extends HoodieSparkPartitionedFileUtils
   }
 
   override def createPartitionedFile(partitionValues: InternalRow,
-                                     filePath: Path,
+                                     filePath: StoragePath,
                                      start: Long,
                                      length: Long): PartitionedFile = {
-    PartitionedFile(partitionValues, SparkPath.fromPath(filePath), start, length)
+    PartitionedFile(partitionValues, SparkPath.fromUri(filePath.toUri), start, length)
+  }
+
+  override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
+    partitionDirs.flatMap(_.files)
+  }
+
+  override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
+    PartitionDirectory(internalRow, statuses)
   }
 }

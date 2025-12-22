@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -28,7 +29,6 @@ import org.apache.hudi.internal.schema.Types;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -295,7 +295,7 @@ public class SerDeHelper {
       return Option.empty();
     }
     try {
-      return Option.of(fromJson((new ObjectMapper(new JsonFactory())).readValue(json, JsonNode.class)));
+      return Option.of(fromJson(JsonUtils.getObjectMapper().readTree(json)));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -311,7 +311,7 @@ public class SerDeHelper {
   public static TreeMap<Long, InternalSchema> parseSchemas(String json) {
     TreeMap<Long, InternalSchema> result = new TreeMap<>();
     try {
-      JsonNode jsonNode = (new ObjectMapper(new JsonFactory())).readValue(json, JsonNode.class);
+      JsonNode jsonNode = JsonUtils.getObjectMapper().readTree(json);
       if (!jsonNode.has(SCHEMAS)) {
         throw new IllegalArgumentException(String.format("cannot parser schemas from current json string, missing key name: %s", SCHEMAS));
       }

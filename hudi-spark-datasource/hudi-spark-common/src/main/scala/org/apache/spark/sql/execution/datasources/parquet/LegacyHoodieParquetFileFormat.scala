@@ -38,12 +38,8 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
   override def toString: String = "Hoodie-Parquet"
 
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    if (HoodieSparkUtils.gteqSpark3_4) {
-      val conf = sparkSession.sessionState.conf
-      conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
-    } else {
-      super.supportBatch(sparkSession, schema)
-    }
+    sparkAdapter
+      .createLegacyHoodieParquetFileFormat(true).get.supportBatch(sparkSession, schema)
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,

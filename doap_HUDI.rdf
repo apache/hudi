@@ -126,6 +126,21 @@
         <created>2023-05-25</created>
         <revision>0.13.1</revision>
       </Version>
+      <Version>
+        <name>Apache Hudi 0.14.0</name>
+        <created>2023-09-28</created>
+        <revision>0.14.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.14.1</name>
+        <created>2024-01-04</created>
+        <revision>0.14.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.15.0</name>
+        <created>2024-06-04</created>
+        <revision>0.15.0</revision>
+      </Version>
     </release>
     <repository>
       <GitRepository>

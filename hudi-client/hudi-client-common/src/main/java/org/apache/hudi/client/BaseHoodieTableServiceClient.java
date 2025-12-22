@@ -57,7 +57,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
@@ -72,7 +71,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -82,9 +80,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
@@ -197,7 +197,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
 
     // Check if a commit or compaction instant with a greater timestamp is on the timeline.
     // If an instant is found then abort log compaction, since it is no longer needed.
@@ -217,7 +217,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieInstant inflightInstant = HoodieTimeline.getLogCompactionInflightInstant(logCompactionInstantTime);
     if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
       LOG.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
-      table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          Option.of(txnManager));
       table.getMetaClient().reloadActiveTimeline();
       throw new HoodieException("Execution is aborted since it found an Inflight logcompaction,"
           + "log compaction plans are mutable plans, so reschedule another logcompaction.");
@@ -247,7 +248,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected void runAnyPendingCompactions(HoodieTable table) {
     table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants()
         .forEach(instant -> {
-          LOG.info("Running previously failed inflight compaction at instant " + instant);
+          LOG.info("Running previously failed inflight compaction at instant {}", instant);
           compact(instant.getTimestamp(), true);
         });
   }
@@ -255,7 +256,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected void runAnyPendingLogCompactions(HoodieTable table) {
     table.getActiveTimeline().getWriteTimeline().filterPendingLogCompactionTimeline().getInstantsAsStream()
         .forEach(instant -> {
-          LOG.info("Running previously failed inflight log compaction at instant " + instant);
+          LOG.info("Running previously failed inflight log compaction at instant {}", instant);
           logCompact(instant.getTimestamp(), true);
         });
   }
@@ -287,11 +288,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          Option.of(txnManager));
       table.getMetaClient().reloadActiveTimeline();
     }
     compactionTimer = metrics.getCompactionCtx();
@@ -312,7 +314,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, createTable(config, context.getHadoopConf().get()), compactionInstantTime);
+    completeCompaction(metadata, createTable(config, context.getStorageConf().unwrapAs(Configuration.class)), compactionInstantTime);
   }
 
   /**
@@ -328,10 +330,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
-      LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
+      LOG.info("Committing Compaction {}", compactionCommitTime);
+      LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
+      releaseResources(compactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -341,7 +345,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, COMPACTION_ACTION)
       );
     }
-    LOG.info("Compacted successfully on commit " + compactionCommitTime);
+    LOG.info("Compacted successfully on commit {}", compactionCommitTime);
   }
 
   /**
@@ -388,10 +392,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, logCompactionCommitTime, metadata, context.emptyHoodieData());
-      LOG.info("Committing Log Compaction " + logCompactionCommitTime + ". Finished with result " + metadata);
+      LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
+      LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
+      releaseResources(logCompactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -401,7 +407,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION)
       );
     }
-    LOG.info("Log Compacted successfully on commit " + logCompactionCommitTime);
+    LOG.info("Log Compacted successfully on commit {}", logCompactionCommitTime);
   }
 
   /**
@@ -441,15 +447,20 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
-      table.getMetaClient().reloadActiveTimeline();
+      if (pendingClusteringTimeline.isPendingClusterInstant(inflightInstant.getTimestamp())) {
+        table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+            Option.of(txnManager));
+        table.getMetaClient().reloadActiveTimeline();
+      } else {
+        throw new HoodieClusteringException("Non clustering replace-commit inflight at timestamp " + clusteringInstant);
+      }
     }
     clusteringTimer = metrics.getClusteringCtx();
-    LOG.info("Starting clustering at " + clusteringInstant);
+    LOG.info("Starting clustering at {}", clusteringInstant);
     HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
     HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(writeMetadata);
     // Validation has to be done after cloning. if not, it could result in referencing the write status twice which means clustering could get executed twice.
@@ -469,6 +480,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, Option.ofNullable(convertToWriteStatus(writeMetadata)));
     }
     return clusteringMetadata;
+  }
+
+  public boolean purgePendingClustering(String clusteringInstant) {
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
+    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
+    if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
+      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), true,
+          Option.of(txnManager));
+      table.getMetaClient().reloadActiveTimeline();
+      return true;
+    }
+    return false;
   }
 
   protected abstract void validateClusteringCommit(HoodieWriteMetadata<O> clusteringMetadata, String clusteringCommitTime, HoodieTable table);
@@ -494,17 +518,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         preCommit(metadata);
       }
       // Update table's metadata (table)
-      writeTableMetadata(table, clusteringInstant.getTimestamp(), metadata, writeStatuses.orElse(context.emptyHoodieData()));
+      writeTableMetadata(table, clusteringInstant.getTimestamp(), metadata, writeStatuses.orElseGet(context::emptyHoodieData));
 
-      LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
+      LOG.info("Committing Clustering {}", clusteringCommitTime);
+      LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
 
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           clusteringInstant,
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(metadata.toJsonString())));
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(clusteringInstant));
+      releaseResources(clusteringCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -514,7 +540,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION)
       );
     }
-    LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+    LOG.info("Clustering successfully on commit {}", clusteringCommitTime);
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
@@ -564,7 +590,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     // if just inline schedule is enabled
     if (!config.inlineClusteringEnabled() && config.scheduleInlineClustering()
-        && table.getActiveTimeline().filterPendingReplaceTimeline().empty()) {
+        && !table.getActiveTimeline().getLastPendingClusterInstant().isPresent()) {
       // proceed only if there are no pending clustering
       metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
       inlineScheduleClustering(extraMetadata);
@@ -585,7 +611,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         tableServiceType.getAction(), instantTime));
     try {
       this.txnManager.beginTransaction(inflightInstant, Option.empty());
-      LOG.info("Scheduling table service " + tableServiceType);
+      LOG.info("Scheduling table service {}", tableServiceType);
       return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
       this.txnManager.endTransaction(inflightInstant);
@@ -606,25 +632,25 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         LOG.info("Scheduling archiving is not supported. Skipping.");
         break;
       case CLUSTER:
-        LOG.info("Scheduling clustering at instant time :" + instantTime);
+        LOG.info("Scheduling clustering at instant time: {}", instantTime);
         Option<HoodieClusteringPlan> clusteringPlan = table
             .scheduleClustering(context, instantTime, extraMetadata);
         option = clusteringPlan.isPresent() ? Option.of(instantTime) : Option.empty();
         break;
       case COMPACT:
-        LOG.info("Scheduling compaction at instant time :" + instantTime);
+        LOG.info("Scheduling compaction at instant time: {}", instantTime);
         Option<HoodieCompactionPlan> compactionPlan = table
             .scheduleCompaction(context, instantTime, extraMetadata);
         option = compactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
         break;
       case LOG_COMPACT:
-        LOG.info("Scheduling log compaction at instant time :" + instantTime);
+        LOG.info("Scheduling log compaction at instant time: {}", instantTime);
         Option<HoodieCompactionPlan> logCompactionPlan = table
             .scheduleLogCompaction(context, instantTime, extraMetadata);
         option = logCompactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
         break;
       case CLEAN:
-        LOG.info("Scheduling cleaning at instant time :" + instantTime);
+        LOG.info("Scheduling cleaning at instant time: {}", instantTime);
         Option<HoodieCleanerPlan> cleanerPlan = table
             .scheduleCleaning(context, instantTime, extraMetadata);
         option = cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
@@ -635,7 +661,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     Option<String> instantRange = delegateToTableServiceManager(tableServiceType, table);
     if (instantRange.isPresent()) {
-      LOG.info("Delegate instant [" + instantRange.get() + "] to table service manager");
+      LOG.info("Delegate instant [{}] to table service manager", instantRange.get());
     }
 
     return option;
@@ -679,34 +705,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().forEach(instant -> {
       Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant);
       if (instantPlan.isPresent()) {
-        LOG.info("Running pending clustering at instant " + instantPlan.get().getLeft());
+        LOG.info("Running pending clustering at instant {}", instantPlan.get().getLeft());
         cluster(instant.getTimestamp(), true);
       }
     });
-  }
-
-  /**
-   * Write the HoodieCommitMetadata to metadata table if available.
-   *
-   * @param table         {@link HoodieTable} of interest.
-   * @param instantTime   instant time of the commit.
-   * @param metadata      instance of {@link HoodieCommitMetadata}.
-   * @param writeStatuses Write statuses of the commit
-   */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
-    if (metadataWriterOpt.isPresent()) {
-      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
-      } catch (Exception e) {
-        if (e instanceof HoodieException) {
-          throw (HoodieException) e;
-        } else {
-          throw new HoodieException("Failed to update metadata", e);
-        }
-      }
-    }
   }
 
   /**
@@ -749,7 +751,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.info("Cleaner started");
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
-        scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
+        scheduleClean(cleanInstantTime);
         table.getMetaClient().reloadActiveTimeline();
       }
 
@@ -768,7 +770,18 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
           + " cleanerElapsedMs" + durationMs);
     }
+    releaseResources(cleanInstantTime);
     return metadata;
+  }
+
+  private void scheduleClean(String cleanInstantTime) {
+    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, CLEAN_ACTION, cleanInstantTime);
+    try {
+      txnManager.beginTransaction(Option.of(cleanInstant), Option.empty());
+      scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
+    } finally {
+      txnManager.endTransaction(Option.of(cleanInstant));
+    }
   }
 
   /**
@@ -934,11 +947,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
         // do we need to handle failed rollback of a bootstrap
         rollbackFailedBootstrap();
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
+        HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
         break;
       } else {
         rollback(entry.getKey(), entry.getValue(), skipLocking);
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
+        HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
       }
     }
   }
@@ -951,7 +964,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // from the async indexer (`HoodieIndexer`).
       // TODO(HUDI-5733): This should be cleaned up once the proper fix of rollbacks in the
       //  metadata table is landed.
-      if (isMetadataTable(metaClient.getBasePathV2().toString())) {
+      if (isMetadataTable(metaClient.getBasePath().toString())) {
         return inflightInstantsStream.map(HoodieInstant::getTimestamp).filter(entry -> {
           if (curInstantTime.isPresent()) {
             return !entry.equals(curInstantTime.get());
@@ -1008,7 +1021,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   @Deprecated
   public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, boolean skipLocking) throws HoodieRollbackException {
-    final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
+    final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().getTimestamp())
+        .orElseGet(HoodieActiveTimeline::createNewInstantTime);
     return rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTime, skipLocking);
   }
 
@@ -1035,8 +1049,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                 + "(exists in active timeline: %s), with rollback plan: %s",
             rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent()));
         Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
-            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
-                false));
+            .orElseGet(() -> scheduleRollback(table, rollbackInstantTime, commitInstantOpt, skipLocking));
         if (rollbackPlanOption.isPresent()) {
           // There can be a case where the inflight rollback failed after the instant files
           // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
@@ -1063,6 +1076,22 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     } catch (Exception e) {
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
+    }
+  }
+
+  private Option<HoodieRollbackPlan> scheduleRollback(HoodieTable table, String rollbackInstantTime, Option<HoodieInstant> commitInstantOpt,
+                                                      boolean skipLocking) {
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, rollbackInstantTime, HoodieTimeline.ROLLBACK_ACTION);
+    try {
+      if (!skipLocking) {
+        txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      }
+      return table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      if (!skipLocking) {
+        txnManager.endTransaction(Option.of(rollbackInstant));
+      }
     }
   }
 
@@ -1140,5 +1169,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           throw new HoodieException(message);
       }
     }
+  }
+
+  /**
+   * Called after each commit of a compaction or clustering table service,
+   * to release any resources used.
+   */
+  protected void releaseResources(String instantTime) {
+    // do nothing here
   }
 }

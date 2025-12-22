@@ -57,12 +57,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.queue.DisruptorWaitStrategyType;
 import org.apache.hudi.common.util.queue.ExecutorType;
-import org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -73,6 +71,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -80,9 +79,7 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.orc.CompressionKind;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,7 +95,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -347,6 +343,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
+  public static final ConfigProperty<String> WRITE_BUFFER_RECORD_SAMPLING_RATE = ConfigProperty
+      .key("hoodie.write.buffer.record.sampling.rate")
+      .defaultValue(String.valueOf(64))
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Sampling rate of in-memory buffer used to estimate object size. Higher value lead to lower CPU usage.");
+
+  public static final ConfigProperty<String> WRITE_BUFFER_RECORD_CACHE_LIMIT = ConfigProperty
+      .key("hoodie.write.buffer.record.cache.limit")
+      .defaultValue(String.valueOf(128 * 1024))
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Maximum queue size of in-memory buffer for parallelizing network reads and lake storage writes.");
+
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.limit.bytes")
       .defaultValue(String.valueOf(1024))
@@ -530,7 +540,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE = ConfigProperty
       .key("hoodie.merge.allow.duplicate.on.inserts")
-      .defaultValue("false")
+      .defaultValue("true")
       .markAdvanced()
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
@@ -562,7 +572,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> NUM_RETRIES_ON_CONFLICT_FAILURES = ConfigProperty
       .key("hoodie.write.num.retries.on.conflict.failures")
       .defaultValue(0)
-      .sinceVersion("0.13.0")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
 
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
@@ -730,6 +741,14 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
 
+  public static final ConfigProperty<Boolean> ENABLE_TIMESTAMP_ORDERING_VALIDATION = ConfigProperty
+      .key("hoodie.timestamp.ordering.validate.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("Enable validation for commit time generation to ensure new commit time generated is always the latest among other entries. "
+          + "This is for additional safety to always generate a monotonically increasing commit times (for ingestion writer, table services etc).");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -750,6 +769,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
+  private HoodieMetricsConfig metricsConfig;
   private HoodieMetaserverConfig metaserverConfig;
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
@@ -1144,6 +1164,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
+    this.metricsConfig = HoodieMetricsConfig.newBuilder().fromProperties(props).build();
     this.metaserverConfig = HoodieMetaserverConfig.newBuilder().fromProperties(props).build();
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
@@ -1319,6 +1340,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getWriteBufferLimitBytes() {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
+  }
+
+  public int getWriteBufferRecordSamplingRate() {
+    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_RECORD_SAMPLING_RATE));
+  }
+
+  public int getWriteBufferRecordCacheLimit() {
+    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_RECORD_CACHE_LIMIT));
   }
 
   public String getWriteExecutorDisruptorWaitStrategy() {
@@ -2046,9 +2075,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
 
-  public CompressionCodecName getParquetCompressionCodec() {
-    String codecName = getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
-    return CompressionCodecName.fromConf(StringUtils.isNullOrEmpty(codecName) ? null : codecName);
+  public String getParquetCompressionCodec() {
+    return getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
   }
 
   public boolean parquetDictionaryEnabled() {
@@ -2065,6 +2093,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String parquetFieldIdWriteEnabled() {
     return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
+  }
+
+  public boolean parquetBloomFilterEnabled() {
+    return getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
   }
 
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
@@ -2088,8 +2120,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
   }
 
-  public Compression.Algorithm getHFileCompressionAlgorithm() {
-    return Compression.Algorithm.valueOf(getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME));
+  public String getHFileCompressionAlgorithm() {
+    return getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME);
   }
 
   public long getOrcMaxFileSize() {
@@ -2112,152 +2144,162 @@ public class HoodieWriteConfig extends HoodieConfig {
    * metrics properties.
    */
   public boolean isMetricsOn() {
-    return getBoolean(HoodieMetricsConfig.TURN_METRICS_ON);
+    return metricsConfig.isMetricsOn();
   }
 
   /**
    * metrics properties.
    */
   public boolean isCompactionLogBlockMetricsOn() {
-    return getBoolean(HoodieMetricsConfig.TURN_METRICS_COMPACTION_LOG_BLOCKS_ON);
+    return metricsConfig.isCompactionLogBlockMetricsOn();
   }
 
   public boolean isExecutorMetricsEnabled() {
-    return Boolean.parseBoolean(
-        getStringOrDefault(HoodieMetricsConfig.EXECUTOR_METRICS_ENABLE, "false"));
+    return metricsConfig.isExecutorMetricsEnabled();
   }
 
   public boolean isLockingMetricsEnabled() {
-    return getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE);
+    return metricsConfig.isLockingMetricsEnabled();
   }
 
   public MetricsReporterType getMetricsReporterType() {
-    return MetricsReporterType.valueOf(getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE));
+    return metricsConfig.getMetricsReporterType();
   }
 
   public String getGraphiteServerHost() {
-    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME);
+    return metricsConfig.getGraphiteServerHost();
   }
 
   public int getGraphiteServerPort() {
-    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM);
+    return metricsConfig.getGraphiteServerPort();
   }
 
   public String getGraphiteMetricPrefix() {
-    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
+    return metricsConfig.getGraphiteMetricPrefix();
   }
 
   public int getGraphiteReportPeriodSeconds() {
-    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
+    return metricsConfig.getGraphiteReportPeriodSeconds();
+  }
+
+  public String getM3ServerHost() {
+    return metricsConfig.getM3ServerHost();
+  }
+
+  public int getM3ServerPort() {
+    return metricsConfig.getM3ServerPort();
+  }
+
+  public String getM3Tags() {
+    return metricsConfig.getM3Tags();
+  }
+
+  public String getM3Env() {
+    return metricsConfig.getM3Env();
+  }
+
+  public String getM3Service() {
+    return metricsConfig.getM3Service();
   }
 
   public String getJmxHost() {
-    return getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
+    return metricsConfig.getJmxHost();
   }
 
   public String getJmxPort() {
-    return getString(HoodieMetricsJmxConfig.JMX_PORT_NUM);
+    return metricsConfig.getJmxPort();
   }
 
   public int getDatadogReportPeriodSeconds() {
-    return getInt(HoodieMetricsDatadogConfig.REPORT_PERIOD_IN_SECONDS);
+    return metricsConfig.getDatadogReportPeriodSeconds();
   }
 
   public ApiSite getDatadogApiSite() {
-    return ApiSite.valueOf(getString(HoodieMetricsDatadogConfig.API_SITE_VALUE));
+    return metricsConfig.getDatadogApiSite();
   }
 
   public String getDatadogApiKey() {
-    if (props.containsKey(HoodieMetricsDatadogConfig.API_KEY.key())) {
-      return getString(HoodieMetricsDatadogConfig.API_KEY);
-
-    } else {
-      Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
-          getString(HoodieMetricsDatadogConfig.API_KEY_SUPPLIER));
-      return apiKeySupplier.get();
-    }
+    return metricsConfig.getDatadogApiKey();
   }
 
   public boolean getDatadogApiKeySkipValidation() {
-    return getBoolean(HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION);
+    return metricsConfig.getDatadogApiKeySkipValidation();
   }
 
   public int getDatadogApiTimeoutSeconds() {
-    return getInt(HoodieMetricsDatadogConfig.API_TIMEOUT_IN_SECONDS);
+    return metricsConfig.getDatadogApiTimeoutSeconds();
   }
 
   public String getDatadogMetricPrefix() {
-    return getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE);
+    return metricsConfig.getDatadogMetricPrefix();
   }
 
   public String getDatadogMetricHost() {
-    return getString(HoodieMetricsDatadogConfig.METRIC_HOST_NAME);
+    return metricsConfig.getDatadogMetricHost();
   }
 
   public List<String> getDatadogMetricTags() {
-    return Arrays.stream(getStringOrDefault(
-        HoodieMetricsDatadogConfig.METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
+    return metricsConfig.getDatadogMetricTags();
   }
 
   public int getCloudWatchReportPeriodSeconds() {
-    return getInt(HoodieMetricsCloudWatchConfig.REPORT_PERIOD_SECONDS);
+    return metricsConfig.getCloudWatchReportPeriodSeconds();
   }
 
   public String getCloudWatchMetricPrefix() {
-    return getString(HoodieMetricsCloudWatchConfig.METRIC_PREFIX);
+    return metricsConfig.getCloudWatchMetricPrefix();
   }
 
   public String getCloudWatchMetricNamespace() {
-    return getString(HoodieMetricsCloudWatchConfig.METRIC_NAMESPACE);
+    return metricsConfig.getCloudWatchMetricNamespace();
   }
 
   public int getCloudWatchMaxDatumsPerRequest() {
-    return getInt(HoodieMetricsCloudWatchConfig.MAX_DATUMS_PER_REQUEST);
+    return metricsConfig.getCloudWatchMaxDatumsPerRequest();
   }
 
   public String getMetricReporterClassName() {
-    return getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME);
+    return metricsConfig.getMetricReporterClassName();
   }
 
   public int getPrometheusPort() {
-    return getInt(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT_NUM);
+    return metricsConfig.getPrometheusPort();
   }
 
   public String getPushGatewayHost() {
-    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST_NAME);
+    return metricsConfig.getPushGatewayHost();
   }
 
   public int getPushGatewayPort() {
-    return getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT_NUM);
+    return metricsConfig.getPushGatewayPort();
   }
 
   public int getPushGatewayReportPeriodSeconds() {
-    return getInt(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS);
+    return metricsConfig.getPushGatewayReportPeriodSeconds();
   }
 
   public boolean getPushGatewayDeleteOnShutdown() {
-    return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE);
+    return metricsConfig.getPushGatewayDeleteOnShutdown();
   }
 
   public String getPushGatewayJobName() {
-    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOBNAME);
+    return metricsConfig.getPushGatewayJobName();
   }
 
   public String getPushGatewayLabels() {
-    return getString(HoodieMetricsPrometheusConfig.PUSHGATEWAY_LABELS);
+    return metricsConfig.getPushGatewayLabels();
   }
 
   public boolean getPushGatewayRandomJobNameSuffix() {
-    return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
+    return metricsConfig.getPushGatewayRandomJobNameSuffix();
   }
 
   public String getMetricReporterMetricsNamePrefix() {
-    // Metrics prefixes should not have a dot as this is usually a separator
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX).replaceAll("\\.", "_");
+    return metricsConfig.getMetricReporterMetricsNamePrefix();
   }
 
   public String getMetricReporterFileBasedConfigs() {
-    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_FILE_BASED_CONFIGS_PATH);
+    return metricsConfig.getMetricReporterFileBasedConfigs();
   }
 
   /**
@@ -2310,6 +2352,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;
+  }
+
+  public HoodieMetricsConfig getMetricsConfig() {
+    return metricsConfig;
   }
 
   public HoodieTableServiceManagerConfig getTableServiceManagerConfig() {
@@ -2399,7 +2445,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isRecordIndexEnabled() {
-    return metadataConfig.enableRecordIndex();
+    return metadataConfig.isRecordIndexEnabled();
   }
 
   public int getRecordIndexMinFileGroupCount() {
@@ -2583,6 +2629,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
+  public Boolean shouldEnableTimestampOrderingValidation() {
+    return getBoolean(ENABLE_TIMESTAMP_ORDERING_VALIDATION);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2606,6 +2656,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
+    private boolean isMetricsM3ConfigSet = false;
     private boolean isLayoutConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
@@ -2636,6 +2687,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPath(String basePath) {
       writeConfig.setValue(BASE_PATH, basePath);
+      return this;
+    }
+
+    public Builder withPath(StoragePath basePath) {
+      writeConfig.setValue(BASE_PATH, basePath.toString());
       return this;
     }
 
@@ -2750,6 +2806,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWriteBufferRecordSamplingRate(int recordSamplingRate) {
+      writeConfig.setValue(WRITE_BUFFER_RECORD_SAMPLING_RATE, String.valueOf(recordSamplingRate));
+      return this;
+    }
+
+    public Builder withWriteBufferRecordCacheLimit(int recordCacheLimit) {
+      writeConfig.setValue(WRITE_BUFFER_RECORD_CACHE_LIMIT, String.valueOf(recordCacheLimit));
+      return this;
+    }
+
     public Builder withWriteExecutorDisruptorWaitStrategy(String waitStrategy) {
       writeConfig.setValue(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY, String.valueOf(waitStrategy));
       return this;
@@ -2827,6 +2893,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig mericsGraphiteConfig) {
       writeConfig.getProps().putAll(mericsGraphiteConfig.getProps());
       isMetricsGraphiteConfigSet = true;
+      return this;
+    }
+
+    public Builder withMetricsM3Config(HoodieMetricsM3Config metricsM3Config) {
+      writeConfig.getProps().putAll(metricsM3Config.getProps());
+      isMetricsM3ConfigSet = true;
       return this;
     }
 
@@ -3072,6 +3144,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWritesFileIdEncoding(Integer fileIdEncoding) {
       writeConfig.setValue(WRITES_FILEID_ENCODING, Integer.toString(fileIdEncoding));
+      return this;
+    }
+
+    public Builder withEnableTimestampOrderingValidation(boolean enableTimestampOrderingValidation) {
+      writeConfig.setValue(ENABLE_TIMESTAMP_ORDERING_VALIDATION, Boolean.toString(enableTimestampOrderingValidation));
       return this;
     }
 

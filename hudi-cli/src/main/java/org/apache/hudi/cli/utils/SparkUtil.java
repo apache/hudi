@@ -21,9 +21,9 @@ package org.apache.hudi.cli.utils;
 import org.apache.hudi.cli.HoodieCliSparkConfig;
 import org.apache.hudi.cli.commands.SparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -126,7 +126,7 @@ public class SparkUtil {
   public static JavaSparkContext initJavaSparkContext(SparkConf sparkConf) {
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);
-    FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());
+    HadoopFSUtils.prepareHadoopConf(jsc.hadoopConfiguration());
     return jsc;
   }
 

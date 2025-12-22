@@ -21,13 +21,14 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.HoodieRepairTool;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -76,7 +77,7 @@ public class SparkDataSourceContinuousIngestTool {
 
   public SparkDataSourceContinuousIngestTool(JavaSparkContext jsc, Config cfg) {
     if (cfg.propsFilePath != null) {
-      cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
+      cfg.propsFilePath = HadoopFSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     }
     this.context = new HoodieSparkEngineContext(jsc);
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -106,7 +107,8 @@ public class SparkDataSourceContinuousIngestTool {
   public void run() {
     try {
       SparkDataSourceContinuousIngest sparkDataSourceContinuousIngest =
-          new SparkDataSourceContinuousIngest(sparkSession, context.getHadoopConf().get(), new Path(cfg.sourcePath), cfg.sparkFormat,
+          new SparkDataSourceContinuousIngest(
+              sparkSession, context.getStorageConf().unwrapAs(Configuration.class), new Path(cfg.sourcePath), cfg.sparkFormat,
               new Path(cfg.checkpointFilePath), new Path(cfg.basePath), getPropsAsMap(props),
               cfg.minSyncIntervalSeconds);
       sparkDataSourceContinuousIngest.startIngestion();

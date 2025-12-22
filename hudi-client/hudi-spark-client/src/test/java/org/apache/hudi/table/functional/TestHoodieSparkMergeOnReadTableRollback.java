@@ -19,8 +19,12 @@
 
 package org.apache.hudi.table.functional;
 
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -34,6 +38,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -41,7 +46,6 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -50,19 +54,21 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -78,16 +84,19 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NO_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
-public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunctionalTestHarness {
+public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRollback {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -114,7 +123,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       client.commit(newCommitTime, jsc().parallelize(statuses));
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertTrue(commit.isPresent());
       assertEquals("001", commit.get().getTimestamp(), "commit should be 001");
 
@@ -131,18 +140,21 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertNoWriteErrors(statuses);
 
       // Set TableType to MOR
-      metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ);
+      metaClient = getHoodieMetaClient(MERGE_ON_READ);
 
       // rollback a COW commit when TableType is MOR
       client.rollback(newCommitTime);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView =
+          getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
+              allFiles);
 
       final String absentCommit = newCommitTime;
-      assertAll(tableView.getLatestBaseFiles().map(file -> () -> assertNotEquals(absentCommit, file.getCommitTime())));
+      assertAll(tableView.getLatestBaseFiles()
+          .map(file -> () -> assertNotEquals(absentCommit, file.getCommitTime())));
     }
   }
 
@@ -158,7 +170,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
     Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
@@ -187,11 +199,12 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertTrue(deltaCommit.isPresent());
       assertEquals("000000001", deltaCommit.get().getTimestamp(), "Delta commit should be 000000001");
 
-      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
+          metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.findAny().isPresent());
 
@@ -216,7 +229,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         List<String> inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -228,14 +241,18 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         secondClient.rollback(commitTime1);
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
-        List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
-            .contains("_" + commitTime1)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
+        List<String> remainingFiles = allFiles.stream()
+            .filter(file -> file.getPath().getName().contains("_" + commitTime1))
+            .map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
         assertEquals(0, remainingFiles.size(), "These files should have been rolled-back "
-            + "when rolling back commit " + commitTime1 + " but are still remaining. Files: " + remainingFiles);
+            + "when rolling back commit " + commitTime1 + " but are still remaining. Files: "
+            + remainingFiles);
         inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath());
+        recordsRead =
+            HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
+                basePath());
         assertEquals(200, recordsRead.size());
       }
 
@@ -253,7 +270,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         List<String> inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -267,18 +284,24 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         thirdClient.rollback(commitTime2);
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
-        List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
-            .contains("_" + commitTime2)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
+        List<String> remainingFiles = allFiles.stream()
+            .filter(file -> file.getPath().getName().contains("_" + commitTime2))
+            .map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
         assertEquals(0, remainingFiles.size(), "These files should have been rolled-back "
-            + "when rolling back commit " + commitTime2 + " but are still remaining. Files: " + remainingFiles);
+            + "when rolling back commit " + commitTime2 + " but are still remaining. Files: "
+            + remainingFiles);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-        tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+        tableView =
+            getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
+                allFiles);
         inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath());
+        recordsRead =
+            HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
+                basePath());
         // check that the number of records read is still correct after rollback operation
         assertEquals(200, recordsRead.size());
 
@@ -305,16 +328,134 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         metaClient = HoodieTableMetaClient.reload(metaClient);
 
         final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
-        assertTrue(Arrays.stream(listAllBaseFilesInPath(hoodieTable))
+        assertTrue(listAllBaseFilesInPath(hoodieTable).stream()
             .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
         hoodieTable.rollbackInflightCompaction(new HoodieInstant(
-            HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime));
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime), Option.empty());
         allFiles = listAllBaseFilesInPath(hoodieTable);
         metaClient = HoodieTableMetaClient.reload(metaClient);
         tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
 
         assertFalse(tableView.getLatestBaseFiles().anyMatch(file -> compactedCommitTime.equals(file.getCommitTime())));
         assertAll(tableView.getLatestBaseFiles().map(file -> () -> assertNotEquals(compactedCommitTime, file.getCommitTime())));
+      }
+    }
+  }
+
+  public static List<Arguments> testReattemptRollbackArguments() {
+    List<Arguments> arguments = new ArrayList<>();
+    for (boolean arg1 : new Boolean[] {true, false}) {
+      for (boolean arg2 : new Boolean[] {true, false}) {
+        arguments.add(Arguments.of(arg1, arg2));
+      }
+    }
+    return arguments;
+  }
+
+  @ParameterizedTest
+  @MethodSource("testReattemptRollbackArguments")
+  void testReattemptRollback(boolean rollbackUsingMarkers, boolean partitionedTable) throws Exception {
+    HoodieWriteConfig.Builder cfgBuilder =
+        getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
+
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    HoodieWriteConfig cfg = cfgBuilder.build();
+
+    Properties properties = CollectionUtils.copy(cfg.getProps());
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+
+      HoodieTestDataGenerator dataGen = partitionedTable ? new HoodieTestDataGenerator()
+          : new HoodieTestDataGenerator(new String[] {NO_PARTITION_PATH});
+
+      // Test delta commit rollback
+      /*
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "000000001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+
+      JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
+
+      List<WriteStatus> statuses = writeStatusJavaRDD.collect();
+      assertNoWriteErrors(statuses);
+
+      client.commit(newCommitTime, jsc().parallelize(statuses));
+
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+
+      Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
+      assertTrue(deltaCommit.isPresent());
+      assertEquals("000000001", deltaCommit.get().getTimestamp(), "Delta commit should be 000000001");
+
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      assertFalse(commit.isPresent());
+
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
+      assertFalse(dataFilesToRead.findAny().isPresent());
+
+      tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+      dataFilesToRead = tableView.getLatestBaseFiles();
+      assertTrue(dataFilesToRead.findAny().isPresent(),
+          "should list the base files we wrote in the delta commit");
+
+      /*
+       * Write 2 (updates - testing failed delta commit)
+       */
+      final String commitTime1 = "000000002";
+      // WriteClient with custom config (disable small file handling)
+      try (SparkRDDWriteClient secondClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
+        secondClient.startCommitWithTime(commitTime1);
+
+        List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
+        copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
+
+        List<String> inputPaths = tableView.getLatestBaseFiles()
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+            .collect(Collectors.toList());
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
+            basePath());
+        assertEquals(200, recordsRead.size());
+
+        statuses = secondClient.upsert(jsc().parallelize(copyOfRecords, 1), commitTime1).collect();
+        // Verify there are no errors
+        assertNoWriteErrors(statuses);
+
+        // simulate a failed rollback
+        String rollbackInstantTime = "000000003";
+        HoodieActiveTimeline activeTimeline = hoodieTable.getActiveTimeline().reload();
+        HoodieInstant failedDeltaCommitInstant = activeTimeline.getDeltaCommitTimeline().lastInstant().get();
+        assertEquals(commitTime1, failedDeltaCommitInstant.getTimestamp());
+        Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(hoodieTable.getContext(), rollbackInstantTime,
+            failedDeltaCommitInstant, false, secondClient.getConfig().shouldRollbackUsingMarkers(), false);
+        assertTrue(rollbackPlan.isPresent());
+
+        MergeOnReadRollbackActionExecutor rollbackExecutor = new MergeOnReadRollbackActionExecutor<>(hoodieTable.getContext(),
+            secondClient.getConfig(), hoodieTable, rollbackInstantTime, failedDeltaCommitInstant, true, false);
+        List<HoodieRollbackStat> partialRollbackResult = rollbackExecutor.doRollbackAndGetStats(rollbackPlan.get());
+        // check that all partitions are included in this rollback
+        assertEquals(copyOfRecords.stream().map(HoodieRecord::getPartitionPath).distinct().count(), partialRollbackResult.size());
+
+        // do second rollback which should success
+        HoodieRollbackMetadata rollbackMetadata = hoodieTable.rollback(hoodieTable.getContext(), rollbackInstantTime, failedDeltaCommitInstant,
+            true, false);
+        HoodieRollbackStat rollbackStatInFirstTrial = partialRollbackResult.get(0);
+        HoodieRollbackPartitionMetadata rollbackPartitionMetadata = rollbackMetadata.getPartitionMetadata().get(rollbackStatInFirstTrial.getPartitionPath());
+
+        // check the log files generated in the first trial also appear in the second one.
+        Map<String, Long> commandLogBlockFiles = rollbackPartitionMetadata.getRollbackLogFiles();
+        for (StoragePathInfo fileStatus : rollbackStatInFirstTrial.getCommandBlocksCount().keySet()) {
+          Long fileSize = commandLogBlockFiles.get(fileStatus.getPath().toString());
+          assertNotNull(fileSize);
+          assertEquals(fileStatus.getLength(), fileSize);
+        }
       }
     }
   }
@@ -330,7 +471,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
     Properties properties = getPropertiesForKeyGen(populateMetaFields);
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -363,17 +504,21 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, commitInstant.getAction());
       assertEquals(200, getTotalRecordsWritten(instantCommitMetadataPairOpt.get().getValue()));
 
-      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+      Option<HoodieInstant> commit =
+          metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
 
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
+          metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.findAny().isPresent());
 
-      tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+      tableView =
+          getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
+              allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
           "Should list the base files we wrote in the delta commit");
@@ -396,7 +541,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         List<String> dataFiles = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), dataFiles,
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), dataFiles,
             basePath());
         assertEquals(200, recordsRead.size());
 
@@ -512,7 +657,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
     Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -531,7 +676,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       upsertRecords(client, "002", records, dataGen);
 
-      client.savepoint("002","user1","comment1");
+      client.savepoint("002", "user1", "comment1");
 
       upsertRecords(client, "003", records, dataGen);
       upsertRecords(client, "004", records, dataGen);
@@ -572,10 +717,13 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       // verify that no files are present after 002. every data file should have been cleaned up
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
+          metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.anyMatch(file -> HoodieTimeline.compareTimestamps("002", HoodieTimeline.GREATER_THAN, file.getCommitTime())));
+      assertFalse(dataFilesToRead.anyMatch(
+          file -> HoodieTimeline.compareTimestamps("002", HoodieTimeline.GREATER_THAN,
+              file.getCommitTime())));
 
       client.deleteSavepoint("002");
       assertFalse(metaClient.reloadActiveTimeline().getSavePointTimeline().containsInstant("002"));
@@ -586,7 +734,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
     copyOfRecords = dataGen.generateUpdates(commitTime, copyOfRecords);
-    List<WriteStatus>  statuses = client.upsert(jsc().parallelize(copyOfRecords, 1), commitTime).collect();
+    List<WriteStatus> statuses = client.upsert(jsc().parallelize(copyOfRecords, 1), commitTime).collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
     client.commit(commitTime, jsc().parallelize(statuses));
@@ -611,7 +759,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     properties.putAll(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
 
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
@@ -666,13 +814,16 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   private void validateRecords(HoodieWriteConfig cfg, HoodieTableMetaClient metaClient, List<HoodieRecord> expectedRecords) throws IOException {
 
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-    FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-    HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
+    List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+    HoodieTableFileSystemView tableView =
+        getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
+            allFiles);
     List<String> inputPaths = tableView.getLatestBaseFiles()
         .map(hf -> new Path(hf.getPath()).getParent().toString())
         .collect(Collectors.toList());
-    List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths,
-        basePath());
+    List<GenericRecord> recordsRead =
+        HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
+            basePath());
     assertRecords(expectedRecords, recordsRead);
   }
 
@@ -720,7 +871,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   void testInsertsGeneratedIntoLogFilesRollback(boolean rollbackUsingMarkers) throws Exception {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
@@ -767,13 +918,13 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       for (HoodieInstant.State state : Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT)) {
         HoodieInstant toCopy = new HoodieInstant(state, HoodieTimeline.DELTA_COMMIT_ACTION, lastCommitTime);
         File file = Files.createTempFile(tempFolder, null, null).toFile();
-        metaClient.getFs().copyToLocalFile(new Path(metaClient.getMetaPath(), toCopy.getFileName()),
+        fs().copyToLocalFile(new Path(metaClient.getMetaPath().toString(), toCopy.getFileName()),
             new Path(file.getAbsolutePath()));
         fileNameMap.put(file.getAbsolutePath(), toCopy.getFileName());
       }
       Path markerDir = new Path(Files.createTempDirectory(tempFolder, null).toAbsolutePath().toString());
       if (rollbackUsingMarkers) {
-        metaClient.getFs().copyToLocalFile(new Path(metaClient.getMarkerFolderPath(lastCommitTime)),
+        fs().copyToLocalFile(new Path(metaClient.getMarkerFolderPath(lastCommitTime)),
             markerDir);
       }
 
@@ -792,14 +943,14 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertEquals(0, numLogFiles);
       for (Map.Entry<String, String> entry : fileNameMap.entrySet()) {
         try {
-          metaClient.getFs().copyFromLocalFile(new Path(entry.getKey()),
-              new Path(metaClient.getMetaPath(), entry.getValue()));
+          fs().copyFromLocalFile(new Path(entry.getKey()),
+              new Path(metaClient.getMetaPath().toString(), entry.getValue()));
         } catch (IOException e) {
           throw new HoodieIOException("Error copying state from local disk.", e);
         }
       }
       if (rollbackUsingMarkers) {
-        metaClient.getFs().copyFromLocalFile(new Path(markerDir, lastCommitTime),
+        fs().copyFromLocalFile(new Path(markerDir, lastCommitTime),
             new Path(metaClient.getMarkerFolderPath(lastCommitTime)));
       }
       Thread.sleep(1000);
@@ -813,7 +964,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(boolean rollbackUsingMarkers) throws Exception {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
@@ -854,8 +1005,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
-      table.rollbackInflightCompaction(new HoodieInstant(
-          HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime));
+      table.rollbackInflightCompaction(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime), Option.empty());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(config, context(), metaClient);
@@ -876,7 +1026,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   public void testLazyRollbackOfFailedCommit(boolean rollbackUsingMarkers) throws Exception {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
     HoodieWriteConfig cfg = getWriteConfig(true, rollbackUsingMarkers);
     HoodieWriteConfig autoCommitFalseCfg = getWriteConfig(false, rollbackUsingMarkers);
@@ -908,20 +1058,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       // remain the same.
       assertEquals(numLogFilesAfterRollback, numLogFilesAfterCompaction);
     }
-  }
-
-  private List<HoodieRecord> insertRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime) {
-    /*
-     * Write 1 (only inserts, written as base file)
-     */
-    client.startCommitWithTime(commitTime);
-
-    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
-    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-
-    List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
-    assertNoWriteErrors(statuses);
-    return records;
   }
 
   private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
@@ -992,15 +1128,36 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     return cfgBuilder.build();
   }
 
-  private SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
-    try {
-      return new HoodieTableFileSystemView(metaClient,
-          metaClient.getActiveTimeline(),
-          HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
-      );
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error getting file system view", ioe);
-    }
+  /**
+   * Scenario: data table is updated, no changes to MDT
+   */
+  @Test
+  public void testRollbackWithFailurePreMDT() throws IOException {
+    testRollbackWithFailurePreMDT(MERGE_ON_READ);
   }
 
+  /**
+   * Scenario: data table is updated, deltacommit is completed in MDT
+   */
+  @Test
+  public void testRollbackWithFailurePostMDT() throws IOException {
+    testRollbackWithFailurePostMDT(MERGE_ON_READ);
+  }
+
+  /**
+   * Scenario: data table is updated, deltacommit is completed in MDT then during rollback,
+   * data table is updated, no changes to MDT
+   */
+  @Test
+  public void testRollbackWithFailurePostMDTRollbackFailsPreMDT() throws IOException {
+    testRollbackWithFailurePostMDT(MERGE_ON_READ, true);
+  }
+
+  /**
+   * Scenario: data table is updated, deltacommit of interest is inflight in MDT
+   */
+  @Test
+  public void testRollbackWithFailureInMDT() throws Exception {
+    testRollbackWithFailureinMDT(MERGE_ON_READ);
+  }
 }

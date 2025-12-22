@@ -31,10 +31,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * All the metadata that is used for consistent hashing bucket index
@@ -104,7 +106,7 @@ public class HoodieConsistentHashingMetadata implements Serializable {
     byteBuffer.putLong(bucketStart);
     byteBuffer.putLong(bucketEnd);
     byte[] longBytes = byteBuffer.array();
-    byte[] partitionPathBytes = partitionPath.getBytes(StandardCharsets.UTF_8);
+    byte[] partitionPathBytes = getUTF8Bytes(partitionPath);
     byte[] combinedBytes = new byte[longBytes.length + partitionPathBytes.length];
     System.arraycopy(longBytes, 0, combinedBytes, 0, longBytes.length);
     System.arraycopy(partitionPathBytes, 0, combinedBytes, longBytes.length, partitionPathBytes.length);
@@ -152,12 +154,12 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   }
 
   public byte[] toBytes() throws IOException {
-    return toJsonString().getBytes(StandardCharsets.UTF_8);
+    return getUTF8Bytes(toJsonString());
   }
 
   public static HoodieConsistentHashingMetadata fromBytes(byte[] bytes) throws IOException {
     try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), HoodieConsistentHashingMetadata.class);
+      return fromJsonString(fromUTF8Bytes(bytes), HoodieConsistentHashingMetadata.class);
     } catch (Exception e) {
       throw new IOException("unable to read hashing metadata", e);
     }

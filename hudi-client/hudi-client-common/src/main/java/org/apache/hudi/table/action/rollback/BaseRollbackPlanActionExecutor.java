@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -113,6 +114,9 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
       HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.getTimestamp(),
           instantToRollback.getAction()), rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
       if (!skipTimelinePublish) {
+        if (!canProceedWithRollback(rollbackInstant)) {
+          return Option.empty();
+        }
         if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.getTimestamp())) {
           LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
         } else {
@@ -126,6 +130,23 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
       LOG.error("Got exception when saving rollback requested file", e);
       throw new HoodieIOException(e.getMessage(), e);
     }
+  }
+
+  private boolean canProceedWithRollback(HoodieInstant rollbackInstant) {
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      // check for concurrent rollbacks. i.e if the commit being rolledback is already rolled back, we can bail out.
+      HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(table.getMetaClient());
+      HoodieTimeline reloadedActiveTimeline = reloadedMetaClient.getActiveTimeline();
+      if (!reloadedActiveTimeline.filterInflightsAndRequested().containsInstant(instantToRollback.getTimestamp())
+          && !reloadedActiveTimeline.filterCompletedInstants().containsInstant(instantToRollback.getTimestamp())) {
+        // if instant to rollback is already rolled back, we can bail out.
+        return false;
+      } else {
+        // since we had already reloaded the timeline above, lets avoid additional reload with validateForLatestTimestamp.
+        table.validateForLatestTimestampWithoutReload(reloadedMetaClient, rollbackInstant.getTimestamp());
+      }
+    }
+    return true;
   }
 
   @Override

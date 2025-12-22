@@ -120,6 +120,6 @@ object HoodieProcedureUtils {
     if (noneInstants.nonEmpty) {
       throw new HoodieException (s"specific ${noneInstants.mkString(",")} instants is not exist")
     }
-    instants.sortBy(f => f)
+    instants.sortBy(f => f).toSeq
   }
 }

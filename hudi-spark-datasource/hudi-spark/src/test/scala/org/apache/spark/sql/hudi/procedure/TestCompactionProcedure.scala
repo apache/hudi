@@ -19,10 +19,11 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
-
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
@@ -285,7 +286,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
         spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
 
-        val metaClient = HoodieTableMetaClient.builder.setConf(new Configuration).setBasePath(tmp.getCanonicalPath).build
+        val metaClient = createMetaClient(tmp.getCanonicalPath)
         val instants = metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants
         assertResult(1)(instants.size())
         val ts = instants.get(0).getTimestamp

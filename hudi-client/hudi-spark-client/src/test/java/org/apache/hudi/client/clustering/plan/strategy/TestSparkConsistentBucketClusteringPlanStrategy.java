@@ -19,6 +19,7 @@
 package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.FileSlice;
@@ -29,7 +30,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -60,8 +60,8 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
   private void setup() throws IOException {
     initPath();
     initSparkContexts();
-    initFileSystem();
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    initHoodieStorage();
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @AfterEach
@@ -133,7 +133,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
 
     int mergeSize = (int) (maxFileSize * BUCKET_MERGE_THRESHOLD.defaultValue());
-    int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
+    int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2 + 10, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
     List<FileSlice> fileSlices = IntStream.range(0, metadata.getNodes().size()).mapToObj(
         i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPrefix(), fsSize[i] / 2, fsSize[i] / 2)
     ).collect(Collectors.toList());

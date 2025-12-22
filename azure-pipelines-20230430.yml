@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE:
-# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.17 profiles.
+# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.18 profiles.
 # PRs will need to keep in sync with master's version to trigger the CI runs.
 
 trigger:
@@ -30,18 +30,31 @@ parameters:
     type: object
     default:
       - 'hudi-common'
+      - 'hudi-client/hudi-spark-client'
+  - name: job2UTModules
+    type: object
+    default:
       - 'hudi-flink-datasource'
       - 'hudi-flink-datasource/hudi-flink'
-      - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
       - 'hudi-flink-datasource/hudi-flink1.17.x'
-  - name: job2Modules
+      - 'hudi-flink-datasource/hudi-flink1.18.x'
+  - name: job2FTModules
     type: object
     default:
+      - 'hudi-common'
+      - 'hudi-flink-datasource'
+      - 'hudi-flink-datasource/hudi-flink'
+      - 'hudi-flink-datasource/hudi-flink1.14.x'
+      - 'hudi-flink-datasource/hudi-flink1.15.x'
+      - 'hudi-flink-datasource/hudi-flink1.16.x'
+      - 'hudi-flink-datasource/hudi-flink1.17.x'
+      - 'hudi-flink-datasource/hudi-flink1.18.x'
       - 'hudi-client/hudi-spark-client'
-  - name: job3UTModules
+      - 'hudi-spark-datasource/hudi-spark'
+  - name: job34UTModules
     type: object
     default:
       - 'hudi-spark-datasource'
@@ -50,12 +63,13 @@ parameters:
       - 'hudi-spark-datasource/hudi-spark3.2plus-common'
       - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
-  - name: job4UTModules
+  - name: job6UTModules
     type: object
     default:
       - '!hudi-hadoop-mr'
       - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
+      - '!hudi-cli'
       - '!hudi-common'
       - '!hudi-examples'
       - '!hudi-examples/hudi-examples-common'
@@ -64,21 +78,22 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
+      - '!hudi-flink-datasource/hudi-flink1.18.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.2.x'
       - '!hudi-spark-datasource/hudi-spark3.2plus-common'
       - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
-  - name: job4FTModules
+  - name: job6FTModules
     type: object
     default:
       - '!hudi-client/hudi-spark-client'
+      - '!hudi-cli'
       - '!hudi-common'
       - '!hudi-examples'
       - '!hudi-examples/hudi-examples-common'
@@ -87,137 +102,241 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
+      - '!hudi-flink-datasource/hudi-flink1.18.x'
+      - '!hudi-spark-datasource/hudi-spark'
+  - name: job4HudiSparkDmlOthersWildcardSuites
+    type: object
+    default:
+      - 'org.apache.hudi'
+      - 'org.apache.spark.hudi'
+      - 'org.apache.spark.sql.avro'
+      - 'org.apache.spark.sql.execution'
+      - 'org.apache.spark.sql.hudi.analysis'
+      - 'org.apache.spark.sql.hudi.command'
+      - 'org.apache.spark.sql.hudi.common'
+      - 'org.apache.spark.sql.hudi.dml'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.17'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
+  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
+  SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
-  JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
-  JOB3_MODULES: ${{ join(',',parameters.job3UTModules) }}
-  JOB4_UT_MODULES: ${{ join(',',parameters.job4UTModules) }}
-  JOB4_FT_MODULES: ${{ join(',',parameters.job4FTModules) }}
+  JOB2_UT_MODULES: ${{ join(',',parameters.job2UTModules) }}
+  JOB2_FT_MODULES: ${{ join(',',parameters.job2FTModules) }}
+  JOB34_MODULES: ${{ join(',',parameters.job34UTModules) }}
+  JOB3_SPARK_DDL_WILDCARD_SUITES: 'org.apache.spark.sql.hudi.ddl'
+  JOB6_SPARK_PROCEDURE_WILDCARD_SUITES: 'org.apache.spark.sql.hudi.procedure'
+  JOB4_SPARK_DML_OTHERS_WILDCARD_SUITES: ${{ join(',',parameters.job4HudiSparkDmlOthersWildcardSuites) }}
+  JOB6_UT_MODULES: ${{ join(',',parameters.job6UTModules) }}
+  JOB6_FT_MODULES: ${{ join(',',parameters.job6FTModules) }}
 
 stages:
   - stage: test
+    variables:
+      - name: DOCKER_BUILDKIT
+        value: 1
     jobs:
       - job: UT_FT_1
-        displayName: UT FT common & flink & UT client/spark-client
-        timeoutInMinutes: '150'
+        displayName: UT common & client/spark-client
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB1_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
-            displayName: UT common flink client/spark-client
+            displayName: UT common & client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT common flink
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
-              publishJUnitResults: false
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
-        displayName: FT client/spark-client
-        timeoutInMinutes: '150'
+        displayName: UT flink & FT common & flink & spark-client & hudi-spark
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB2_FT_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
-            displayName: FT client/spark-client
+            displayName: UT flink
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB2_UT_MODULES)
               publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FT common & flink & client/spark-client & hudi-spark-datasource/hudi-spark
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_FT_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
-        displayName: UT spark-datasource
-        timeoutInMinutes: '240'
+        displayName: UT spark-datasource Java Tests & DDL
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB34_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
-            displayName: UT spark-datasource
+            displayName: Java UT spark-datasource
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) -pl $(JOB34_MODULES)
               publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: Scala UT spark-datasource DDL
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB3_SPARK_DDL_WILDCARD_SUITES)" -pl $(JOB34_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
-        displayName: UT FT other modules
-        timeoutInMinutes: '240'
+        displayName: UT spark-datasource DML & others
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL)
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB34_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
-            displayName: UT other modules
+            displayName: Scala UT spark-datasource DML & others
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: false
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB4_SPARK_DML_OTHERS_WILDCARD_SUITES)" -pl $(JOB34_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT other modules
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_5
+        displayName: UT FT Hudi Streamer
+        timeoutInMinutes: '90'
+        steps:
+          - task: Docker@2
+            displayName: "login to docker hub"
             inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
+              command: "login"
+              containerRegistry: "apachehudi-docker-hub"
+          - task: Docker@2
+            displayName: "load repo into image"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'build'
+              Dockerfile: '**/Dockerfile'
+              ImageName: $(Build.BuildId)
+          - task: Docker@2
+            displayName: "UT FT other modules"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'run'
+              arguments: >
+                -v $(Build.SourcesDirectory):/hudi
+                -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
+                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="Test*DeltaStreamer*" -DfailIfNoTests=false -pl hudi-utilities"
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              searchFolder: '$(Build.SourcesDirectory)'
+              failTaskOnFailedTests: true
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_6
+        displayName: UT FT other modules
+        timeoutInMinutes: '90'
+        steps:
+          - task: Docker@2
+            displayName: "login to docker hub"
+            inputs:
+              command: "login"
+              containerRegistry: "apachehudi-docker-hub"
+          - task: Docker@2
+            displayName: "load repo into image"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'build'
+              Dockerfile: '**/Dockerfile'
+              ImageName: $(Build.BuildId)
+          - task: Docker@2
+            displayName: "UT FT other modules"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'run'
+              arguments: >
+                -v $(Build.SourcesDirectory):/hudi
+                -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
+                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_PROCEDURE_WILDCARD_SUITES)" -pl $(JOB34_MODULES)
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_UT_MODULES)
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dtest="!Test*DeltaStreamer*" -DfailIfNoTests=false -pl $(JOB6_FT_MODULES)"
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              searchFolder: '$(Build.SourcesDirectory)'
+              failTaskOnFailedTests: true
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases

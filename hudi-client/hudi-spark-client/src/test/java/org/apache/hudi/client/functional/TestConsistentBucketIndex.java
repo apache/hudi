@@ -27,8 +27,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -46,8 +44,8 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -103,10 +101,10 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     } else {
       initTestDataGenerator(new String[] {""});
     }
-    initFileSystem();
+    initHoodieStorage();
     Properties props = getPropertiesForKeyGen(populateMetaFields);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder()
         .withProperties(props)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
@@ -240,13 +238,14 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
         }).sum();
     Assertions.assertEquals(numFilesCreated, numberOfLogFiles);
     // The record number should be doubled if we disable the merge
-    hadoopConf.set("hoodie.realtime.merge.skip", "true");
+    storageConf.set("hoodie.realtime.merge.skip", "true");
     Assertions.assertEquals(totalRecords * 2, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 
   private int readRecordsNum(String[] partitions, boolean populateMetaFields) {
-    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf,
-        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()), basePath, new JobConf(hadoopConf), true, populateMetaFields).size();
+    return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf,
+        Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()), basePath,
+        new JobConf(storageConf.unwrap()), true, populateMetaFields).size();
   }
 
   /**
@@ -286,7 +285,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
   }
 
   private FileStatus[] listStatus(String p, boolean realtime) {
-    JobConf jobConf = new JobConf(hadoopConf);
+    JobConf jobConf = new JobConf(storageConf.unwrap());
     FileInputFormat.setInputPaths(jobConf, Paths.get(basePath, p).toString());
     FileInputFormat format = HoodieInputFormatUtils.getInputFormat(HoodieFileFormat.PARQUET, realtime, jobConf);
     try {
@@ -309,7 +308,6 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+        .withEmbeddedTimelineServerEnabled(true);
   }
 }

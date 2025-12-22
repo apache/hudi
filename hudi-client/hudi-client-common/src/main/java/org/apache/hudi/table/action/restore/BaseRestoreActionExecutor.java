@@ -62,7 +62,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
                                    String savepointToRestoreTimestamp) {
     super(context, config, table, instantTime);
     this.savepointToRestoreTimestamp = savepointToRestoreTimestamp;
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
   @Override

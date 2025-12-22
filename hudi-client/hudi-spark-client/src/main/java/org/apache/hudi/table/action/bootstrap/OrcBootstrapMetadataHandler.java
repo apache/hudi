@@ -25,18 +25,20 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.AvroOrcUtils;
-import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
+import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
@@ -57,23 +59,26 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(Path sourceFilePath) throws IOException {
-    Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
+  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+    Reader orcReader = OrcFile.createReader(
+        new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = orcReader.getSchema();
     return AvroOrcUtils.createAvroSchema(orcSchema);
   }
 
   @Override
-  void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle, Path sourceFilePath, KeyGeneratorInterface keyGenerator,
+  void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
+                        StoragePath sourceFilePath, KeyGeneratorInterface keyGenerator,
                         String partitionPath, Schema avroSchema) throws Exception {
     // TODO support spark orc reader
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
     }
-    Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
+    Reader orcReader = OrcFile.createReader(
+        new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     HoodieExecutor<Void> executor = null;
-    RecordReader reader = orcReader.rows(new Reader.Options(table.getHadoopConf()).schema(orcSchema));
+    RecordReader reader = orcReader.rows(new Reader.Options((Configuration) table.getStorageConf().unwrap()).schema(orcSchema));
     try {
       executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
           new BootstrapRecordConsumer(bootstrapHandle), inp -> {

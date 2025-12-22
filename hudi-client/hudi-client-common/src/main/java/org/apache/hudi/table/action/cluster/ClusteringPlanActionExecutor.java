@@ -57,7 +57,8 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getLastClusterCommit();
+    Option<HoodieInstant> lastClusteringInstant =
+        table.getActiveTimeline().getLastClusteringInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
@@ -97,6 +98,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
             .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
             .setClusteringPlan(planOption.get())
             .build();
+        table.validateForLatestTimestamp(clusteringInstant.getTimestamp());
         table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
             TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
       } catch (IOException ioe) {

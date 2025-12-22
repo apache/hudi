@@ -64,7 +64,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     // We have some records to be tagged (two different partitions)
     initMetaClient();
   }

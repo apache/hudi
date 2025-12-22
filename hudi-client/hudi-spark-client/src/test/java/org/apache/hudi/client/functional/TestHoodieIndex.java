@@ -35,8 +35,6 @@ import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -53,16 +51,17 @@ import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -124,10 +123,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex, boolean rollbackUsingMarkers) throws Exception {
     initPath();
     initSparkContexts();
-    initFileSystem();
+    initHoodieStorage();
 
     Properties keyGenProps = getPropsForKeyGen(indexType, populateMetaFields);
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, keyGenProps);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, keyGenProps);
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
         .fromProperties(keyGenProps)
         .withIndexType(indexType);
@@ -360,7 +359,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
     // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
     // upsert will not run into conflicts.
-    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), newCommitTime + ".inflight"));
+    metaClient.getStorage().deleteDirectory(
+        new StoragePath(metaClient.getMetaPath(), newCommitTime + ".inflight"));
 
     writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
@@ -403,6 +403,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     return Stream.of(data).map(Arguments::of);
   }
 
+  @Disabled("HUDI-7353")
   @ParameterizedTest
   @MethodSource("regularIndexTypeParams")
   public void testTagLocationAndFetchRecordLocations(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
@@ -441,23 +442,28 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     final String fileId3 = "fileID3";
 
     Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
-    Path baseFilePath = testTable.forCommit("0000001").withInserts(p1, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath =
+        testTable.forCommit("0000001").withInserts(p1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation("0000001", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
         partitionToFilesNameLengthMap, false, false);
 
     partitionToFilesNameLengthMap.clear();
-    baseFilePath = testTable.forCommit("0000002").withInserts(p1, fileId2, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
-    partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
+    baseFilePath =
+        testTable.forCommit("0000002").withInserts(p1, fileId2, Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
+    partitionToFilesNameLengthMap.computeIfAbsent(p1, k -> new ArrayList<>())
+        .add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation("0000002", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
         partitionToFilesNameLengthMap, false, false);
 
     partitionToFilesNameLengthMap.clear();
-    baseFilePath = testTable.forCommit("0000003").withInserts(p2, fileId3, Collections.singletonList(record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
-    partitionToFilesNameLengthMap.computeIfAbsent(p2, k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
+    baseFilePath =
+        testTable.forCommit("0000003").withInserts(p2, fileId3, Collections.singletonList(record4));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
+    partitionToFilesNameLengthMap.computeIfAbsent(p2, k -> new ArrayList<>())
+        .add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation("0000003", WriteOperationType.UPSERT, Arrays.asList(p1, p2),
         partitionToFilesNameLengthMap, false, false);
 
@@ -645,8 +651,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+        .withEmbeddedTimelineServerEnabled(true);
   }
 
   private JavaPairRDD<HoodieKey, Option<Pair<String, String>>> getRecordLocations(JavaRDD<HoodieKey> keyRDD, HoodieTable hoodieTable) {

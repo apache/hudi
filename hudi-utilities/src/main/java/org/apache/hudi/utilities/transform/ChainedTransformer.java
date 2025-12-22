@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -51,26 +52,26 @@ public class ChainedTransformer implements Transformer {
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   protected final List<TransformerInfo> transformers;
-  private final Option<Schema> sourceSchemaOpt;
+  private final Supplier<Option<Schema>> sourceSchemaSupplier;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
     for (Transformer transformer : transformersList) {
       this.transformers.add(new TransformerInfo(transformer));
     }
-    this.sourceSchemaOpt = Option.empty();
+    this.sourceSchemaSupplier = Option::empty;
   }
 
   /**
    * Creates a chained transformer using the input transformer class names. Refer {@link HoodieStreamer.Config#transformerClassNames}
    * for more information on how the transformers can be configured.
    *
-   * @param sourceSchemaOpt                   Schema from the dataset the transform is applied to
+   * @param sourceSchemaSupplier              Supplies the schema (if schema provider is present) for the dataset the transform is applied to
    * @param configuredTransformers            List of configured transformer class names.
    */
-  public ChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt) {
+  public ChainedTransformer(List<String> configuredTransformers, Supplier<Option<Schema>> sourceSchemaSupplier) {
     this.transformers = new ArrayList<>(configuredTransformers.size());
-    this.sourceSchemaOpt = sourceSchemaOpt;
+    this.sourceSchemaSupplier = sourceSchemaSupplier;
 
     Set<String> identifiers = new HashSet<>();
     for (String configuredTransformer : configuredTransformers) {
@@ -120,16 +121,13 @@ public class ChainedTransformer implements Transformer {
 
   private StructType getExpectedTransformedSchema(TransformerInfo transformerInfo, JavaSparkContext jsc, SparkSession sparkSession,
                                                   Option<StructType> incomingStructOpt, Option<Dataset<Row>> rowDatasetOpt, TypedProperties properties) {
+    Option<Schema> sourceSchemaOpt = sourceSchemaSupplier.get();
     if (!sourceSchemaOpt.isPresent() && !rowDatasetOpt.isPresent()) {
       throw new HoodieTransformPlanException("Either source schema or source dataset should be available to fetch the schema");
     }
     StructType incomingStruct = incomingStructOpt
-        .orElse(sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
-    try {
-      return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
-    } catch (Exception e) {
-      throw e;
-    }
+        .orElseGet(() -> sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
+    return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
   }
 
   @Override

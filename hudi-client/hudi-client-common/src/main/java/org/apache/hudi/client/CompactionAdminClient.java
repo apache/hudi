@@ -41,11 +41,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.action.compact.OperationResult;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,15 +125,16 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (!dryRun && allSuccess.isPresent() && allSuccess.get()) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      if (metaClient.getFs().exists(inflightPath)) {
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), inflight.getFileName());
+      if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
       }
       // Leave the trace in aux folder but delete from metapath.
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
-      boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+      boolean deleted = metaClient.getStorage().deleteFile(
+          new StoragePath(metaClient.getMetaPath(), instant.getFileName()));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return res;
@@ -164,15 +164,15 @@ public class CompactionAdminClient extends BaseHoodieClient {
           CompactionUtils.getAllPendingCompactionOperations(metaClient).get(fgId);
       HoodieCompactionPlan plan =
           CompactionUtils.getCompactionPlan(metaClient, compactionOperationWithInstant.getKey());
-      List<HoodieCompactionOperation> newOps = plan.getOperations().stream().filter(
-          op -> (!op.getFileId().equals(fgId.getFileId())) && (!op.getPartitionPath().equals(fgId.getPartitionPath())))
+      List<HoodieCompactionOperation> newOps = plan.getOperations().stream().filter(op ->
+              (!op.getFileId().equals(fgId.getFileId())) && (!op.getPartitionPath().equals(fgId.getPartitionPath())))
           .collect(Collectors.toList());
       HoodieCompactionPlan newPlan =
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
           new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      if (metaClient.getFs().exists(inflightPath)) {
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), inflight.getFileName());
+      if (metaClient.getStorage().exists(inflightPath)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);
       }
@@ -239,13 +239,13 @@ public class CompactionAdminClient extends BaseHoodieClient {
     FileSlice merged =
         fileSystemView.getLatestMergedFileSlicesBeforeOrOn(op.getPartitionPath(), lastInstant.getTimestamp())
             .filter(fs -> fs.getFileId().equals(op.getFileId())).findFirst().get();
-    final int maxVersion = op.getDeltaFileNames().stream().map(lf -> FSUtils.getFileVersionFromLog(new Path(lf)))
+    final int maxVersion = op.getDeltaFileNames().stream().map(lf -> FSUtils.getFileVersionFromLog(new StoragePath(lf)))
         .reduce((x, y) -> x > y ? x : y).orElse(0);
     List<HoodieLogFile> logFilesToBeMoved =
         merged.getLogFiles().filter(lf -> lf.getLogVersion() > maxVersion).collect(Collectors.toList());
     return logFilesToBeMoved.stream().map(lf -> {
       ValidationUtils.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
-      HoodieLogFile newLogFile = new HoodieLogFile(new CachingPath(lf.getPath().getParent(),
+      HoodieLogFile newLogFile = new HoodieLogFile(new StoragePath(lf.getPath().getParent(),
           FSUtils.makeLogFileName(lf.getFileId(), "." + lf.getFileExtension(),
               compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       return Pair.of(lf, newLogFile);
@@ -262,12 +262,14 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   protected static void renameLogFile(HoodieTableMetaClient metaClient, HoodieLogFile oldLogFile,
       HoodieLogFile newLogFile) throws IOException {
-    FileStatus[] statuses = metaClient.getFs().listStatus(oldLogFile.getPath());
-    ValidationUtils.checkArgument(statuses.length == 1, "Only one status must be present");
-    ValidationUtils.checkArgument(statuses[0].isFile(), "Source File must exist");
-    ValidationUtils.checkArgument(oldLogFile.getPath().getParent().equals(newLogFile.getPath().getParent()),
+    List<StoragePathInfo> pathInfoList =
+        metaClient.getStorage().listDirectEntries(oldLogFile.getPath());
+    ValidationUtils.checkArgument(pathInfoList.size() == 1, "Only one status must be present");
+    ValidationUtils.checkArgument(pathInfoList.get(0).isFile(), "Source File must exist");
+    ValidationUtils.checkArgument(
+        oldLogFile.getPath().getParent().equals(newLogFile.getPath().getParent()),
         "Log file must only be moved within the parent directory");
-    metaClient.getFs().rename(oldLogFile.getPath(), newLogFile.getPath());
+    metaClient.getStorage().rename(oldLogFile.getPath(), newLogFile.getPath());
   }
 
   /**
@@ -292,10 +294,10 @@ public class CompactionAdminClient extends BaseHoodieClient {
           FileSlice fs = fileSliceOptional.get();
           Option<HoodieBaseFile> df = fs.getBaseFile();
           if (operation.getDataFileName().isPresent()) {
-            String expPath = metaClient.getFs()
-                .getFileStatus(
-                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-                        new Path(operation.getDataFileName().get())))
+            String expPath = metaClient.getStorage()
+                .getPathInfo(new StoragePath(
+                    FSUtils.constructAbsolutePath(metaClient.getBasePath(), operation.getPartitionPath()),
+                    operation.getDataFileName().get()))
                 .getPath().toString();
             ValidationUtils.checkArgument(df.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
@@ -305,10 +307,11 @@ public class CompactionAdminClient extends BaseHoodieClient {
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
           Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {
             try {
-              FileStatus[] fileStatuses = metaClient.getFs().listStatus(new Path(
-                  FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), new Path(dp)));
-              ValidationUtils.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
-              return new HoodieLogFile(fileStatuses[0]);
+              List<StoragePathInfo> pathInfoList = metaClient.getStorage()
+                  .listDirectEntries(new StoragePath(
+                      FSUtils.constructAbsolutePath(metaClient.getBasePath(), operation.getPartitionPath()), dp));
+              ValidationUtils.checkArgument(pathInfoList.size() == 1, "Expect only 1 file-status");
+              return new HoodieLogFile(pathInfoList.get(0));
             } catch (FileNotFoundException fe) {
               throw new CompactionValidationException(fe.getMessage());
             } catch (IOException ioe) {
@@ -447,11 +450,11 @@ public class CompactionAdminClient extends BaseHoodieClient {
         .orElse(HoodieLogFile.LOGFILE_BASE_VERSION - 1);
     String logExtn = fileSliceForCompaction.getLogFiles().findFirst().map(lf -> "." + lf.getFileExtension())
         .orElse(HoodieLogFile.DELTA_EXTENSION);
-    String parentPath = fileSliceForCompaction.getBaseFile().map(df -> new Path(df.getPath()).getParent().toString())
+    String parentPath = fileSliceForCompaction.getBaseFile().map(df -> new StoragePath(df.getPath()).getParent().toString())
         .orElse(fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getPath().getParent().toString()).get());
     for (HoodieLogFile toRepair : logFilesToRepair) {
       int version = maxUsedVersion + 1;
-      HoodieLogFile newLf = new HoodieLogFile(new CachingPath(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
+      HoodieLogFile newLf = new HoodieLogFile(new StoragePath(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
           logExtn, operation.getBaseInstantTime(), version, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       result.add(Pair.of(toRepair, newLf));
       maxUsedVersion = version;

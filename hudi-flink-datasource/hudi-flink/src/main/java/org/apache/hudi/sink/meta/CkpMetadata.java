@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -26,6 +25,8 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -77,7 +78,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   private List<String> instantCache;
 
   private CkpMetadata(Configuration config) {
-    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
+    this(HadoopFSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
         config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID));
   }
 
@@ -216,7 +217,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   }
 
   public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
-    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
+    return new CkpMetadata((FileSystem) metaClient.getStorage().getFileSystem(), metaClient.getBasePath().toString(), uniqueId);
   }
 
   public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {
@@ -225,7 +226,8 @@ public class CkpMetadata implements Serializable, AutoCloseable {
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
     // .hoodie/.aux/ckp_meta
-    String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+    String metaPath = basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME
+        + StoragePath.SEPARATOR + CKP_META;
     return StringUtils.isNullOrEmpty(uniqueId) ? metaPath : metaPath + "_" + uniqueId;
   }
 

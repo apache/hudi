@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.execution.columnar.InMemoryRelation
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class HoodieSparkProcedureTestBase extends HoodieSparkSqlTestBase {
   override def generateTableName: String = {

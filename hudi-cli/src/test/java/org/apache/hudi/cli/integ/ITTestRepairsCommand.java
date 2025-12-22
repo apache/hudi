@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.RepairsCommand;
@@ -36,14 +33,19 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
+
+import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -82,7 +84,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     duplicatedNoPartitionPath = HoodieTestDataGenerator.NO_PARTITION_PATH;
     repairedOutputPath = Paths.get(basePath, "tmp").toString();
 
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     // generate 200 records
@@ -169,8 +171,9 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // get fs and check number of latest files
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPath).toString())));
-    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+        storage.listDirectEntries(new StoragePath(tablePath, duplicatedPartitionPath)));
+    List<String> filteredStatuses =
+        fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(3, filteredStatuses.size(), "There should be 3 files.");
 
     // Before deduplicate, all files contain 210 records
@@ -186,8 +189,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, resultForCmd.toString());
 
     // After deduplicate, there are 200 records
-    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
-    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(repairedOutputPath));
+    files = pathInfoList.stream().map(status -> status.getPath().toString()).toArray(String[]::new);
     Dataset result = readFiles(files);
     assertEquals(200, result.count());
   }
@@ -199,8 +202,10 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     connectTableAndReloadMetaClient(tablePath);
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPathWithUpdates).toString())));
-    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+        storage.listDirectEntries(
+            new StoragePath(Paths.get(tablePath, duplicatedPartitionPathWithUpdates).toString())));
+    List<String> filteredStatuses =
+        fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(2, filteredStatuses.size(), "There should be 2 files.");
 
     // Before deduplicate, all files contain 110 records
@@ -216,8 +221,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, resultForCmd.toString());
 
     // After deduplicate, there are 100 records
-    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
-    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(repairedOutputPath));
+    files = pathInfoList.stream().map(status -> status.getPath().toString()).toArray(String[]::new);
     Dataset result = readFiles(files);
     assertEquals(100, result.count());
   }
@@ -229,8 +234,10 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     connectTableAndReloadMetaClient(tablePath);
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPathWithUpserts).toString())));
-    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+        storage.listDirectEntries(
+            new StoragePath(Paths.get(tablePath, duplicatedPartitionPathWithUpserts).toString())));
+    List<String> filteredStatuses =
+        fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(3, filteredStatuses.size(), "There should be 3 files.");
 
     // Before deduplicate, all files contain 120 records
@@ -246,8 +253,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, resultForCmd.toString());
 
     // After deduplicate, there are 100 records
-    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
-    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(repairedOutputPath));
+    files = pathInfoList.stream().map(status -> status.getPath().toString()).toArray(String[]::new);
     Dataset result = readFiles(files);
     assertEquals(100, result.count());
   }
@@ -262,8 +269,9 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     connectTableAndReloadMetaClient(tablePath);
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        fs.listStatus(new Path(Paths.get(tablePath, duplicatedNoPartitionPath).toString())));
-    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+        storage.listDirectEntries(new StoragePath(tablePath, duplicatedNoPartitionPath)));
+    List<String> filteredStatuses =
+        fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(2, filteredStatuses.size(), "There should be 2 files.");
 
     // Before deduplicate, all files contain 110 records
@@ -279,8 +287,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, resultForCmd.toString());
 
     // After deduplicate, there are 100 records
-    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
-    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(repairedOutputPath));
+    files = pathInfoList.stream().map(status -> status.getPath().toString()).toArray(String[]::new);
     Dataset result = readFiles(files);
     assertEquals(100, result.count());
   }
@@ -296,8 +304,10 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // get fs and check number of latest files
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPath).toString())));
-    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+        storage.listDirectEntries(
+            new StoragePath(Paths.get(tablePath, duplicatedPartitionPath).toString())));
+    List<String> filteredStatuses =
+        fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
     assertEquals(3, filteredStatuses.size(), "There should be 3 files.");
 
     // Before deduplicate, all files contain 210 records
@@ -313,8 +323,9 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + partitionPath, resultForCmd.toString());
 
     // After deduplicate, there are 200 records under partition path
-    FileStatus[] fileStatus = fs.listStatus(new Path(Paths.get(tablePath, duplicatedPartitionPath).toString()));
-    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    List<StoragePathInfo> pathInfoList =
+        storage.listDirectEntries(new StoragePath(tablePath, duplicatedPartitionPath));
+    files = pathInfoList.stream().map(status -> status.getPath().toString()).toArray(String[]::new);
     Dataset result = readFiles(files);
     assertEquals(200, result.count());
   }

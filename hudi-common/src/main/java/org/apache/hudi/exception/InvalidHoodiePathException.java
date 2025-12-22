@@ -18,14 +18,18 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 /**
  * An exception thrown when hoodie path is invalid.
  */
 public class InvalidHoodiePathException extends HoodieException {
 
-  public InvalidHoodiePathException(Path path, String type) {
+  public InvalidHoodiePathException(String path, String type) {
+    super("Invalid path " + path + " of type " + type);
+  }
+  
+  public InvalidHoodiePathException(StoragePath path, String type) {
     super("Invalid path " + path + " of type " + type);
   }
 }

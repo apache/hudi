@@ -45,8 +45,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -57,18 +58,16 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
-import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_avro_test_";
-
-  protected static KafkaTestUtils testUtils;
 
   protected static HoodieTestDataGenerator dataGen;
 
@@ -78,25 +77,31 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
   protected SchemaProvider schemaProvider;
 
+  protected KafkaTestUtils testUtils;
+
   @BeforeAll
   public static void initClass() {
-    testUtils = new KafkaTestUtils();
     dataGen = new HoodieTestDataGenerator(0xDEED);
+  }
+
+  @BeforeEach
+  public void setup() {
+    testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void cleanupClass() {
+  @AfterEach
+  public void tearDown() {
     testUtils.teardown();
   }
 
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", topic);
+    props.setProperty("hoodie.streamer.source.kafka.topic", topic);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
+    props.setProperty("hoodie.streamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue()));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
@@ -150,47 +155,62 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testAppendKafkaOffsets() throws IOException {
-    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {dataGen.generateGenericRecord().getSchema().toString()}, fs(), SCHEMA_PATH);
-    ConsumerRecord<Object, Object> recordConsumerRecord = new ConsumerRecord<Object,Object>("test", 0, 1L,
-        "test", dataGen.generateGenericRecord());
-    JavaRDD<ConsumerRecord<Object, Object>> rdd = jsc().parallelize(Arrays.asList(recordConsumerRecord));
+    UtilitiesTestBase.Helpers.saveStringsToDFS(
+        new String[] {dataGen.generateGenericRecord().getSchema().toString()}, hoodieStorage(),
+        SCHEMA_PATH);
+    ConsumerRecord<Object, Object> recordConsumerRecord =
+        new ConsumerRecord<Object, Object>("test", 0, 1L,
+            "test", dataGen.generateGenericRecord());
+    JavaRDD<ConsumerRecord<Object, Object>> rdd =
+        jsc().parallelize(Arrays.asList(recordConsumerRecord));
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.source.kafka.topic", "test");
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", SCHEMA_PATH);
+    props.put("hoodie.streamer.source.kafka.topic", "test");
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", SCHEMA_PATH);
     SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()),
+        props, jsc(), new ArrayList<>());
 
-    AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
-    GenericRecord withoutKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
+    AvroKafkaSource avroKafkaSource =
+        new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
+    GenericRecord withoutKafkaOffsets =
+        avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
 
     props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
     schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()),
+        props, jsc(), new ArrayList<>());
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
     GenericRecord withKafkaOffsets = avroKafkaSource.maybeAppendKafkaOffsets(rdd).collect().get(0);
-    assertEquals(4,withKafkaOffsets.getSchema().getFields().size() - withoutKafkaOffsets.getSchema().getFields().size());
-    assertEquals("test",withKafkaOffsets.get("_hoodie_kafka_source_key").toString());
+    assertEquals(4, withKafkaOffsets.getSchema().getFields().size()
+        - withoutKafkaOffsets.getSchema().getFields().size());
+    assertEquals("test", withKafkaOffsets.get("_hoodie_kafka_source_key").toString());
 
     // scenario with null kafka key
-    ConsumerRecord<Object, Object> recordConsumerRecordNullKafkaKey = new ConsumerRecord<Object,Object>("test", 0, 1L,
+    ConsumerRecord<Object, Object> recordConsumerRecordNullKafkaKey =
+        new ConsumerRecord<Object, Object>("test", 0, 1L,
             null, dataGen.generateGenericRecord());
-    JavaRDD<ConsumerRecord<Object, Object>> rddNullKafkaKey = jsc().parallelize(Arrays.asList(recordConsumerRecordNullKafkaKey));
+    JavaRDD<ConsumerRecord<Object, Object>> rddNullKafkaKey =
+        jsc().parallelize(Arrays.asList(recordConsumerRecordNullKafkaKey));
     avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, null);
-    GenericRecord withKafkaOffsetsAndNullKafkaKey = avroKafkaSource.maybeAppendKafkaOffsets(rddNullKafkaKey).collect().get(0);
+    GenericRecord withKafkaOffsetsAndNullKafkaKey =
+        avroKafkaSource.maybeAppendKafkaOffsets(rddNullKafkaKey).collect().get(0);
     assertNull(withKafkaOffsetsAndNullKafkaKey.get("_hoodie_kafka_source_key"));
   }
 
   @Test
   public void testAppendKafkaOffsetsSourceFormatAdapter() throws IOException {
-    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {dataGen.generateGenericRecord().getSchema().toString()}, fs(), SCHEMA_PATH);
+    UtilitiesTestBase.Helpers.saveStringsToDFS(
+        new String[] {dataGen.generateGenericRecord().getSchema().toString()}, hoodieStorage(),
+        SCHEMA_PATH);
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
 
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", SCHEMA_PATH);
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", SCHEMA_PATH);
     SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()),
+        props, jsc(), new ArrayList<>());
 
-    props.put("hoodie.deltastreamer.source.kafka.value.deserializer.class", ByteArrayDeserializer.class.getName());
+    props.put("hoodie.streamer.source.kafka.value.deserializer.class", ByteArrayDeserializer.class.getName());
     int numPartitions = 2;
     int numMessages = 30;
     testUtils.createTopic(topic,numPartitions);

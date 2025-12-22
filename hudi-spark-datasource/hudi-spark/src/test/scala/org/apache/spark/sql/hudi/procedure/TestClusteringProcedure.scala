@@ -22,19 +22,20 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.util
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
@@ -440,7 +441,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
 
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       val instants = metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.iterator().asScala.map(_.getTimestamp).toSeq
       assert(2 == instants.size)
 
@@ -504,7 +505,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate"-> "false"))
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
       assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
 
@@ -575,7 +576,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       // insert records
       writeRecords(fileNum, numRecords, 0, basePath,  metadataOpts ++ Map("hoodie.avro.schema.validate"-> "false"))
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       val avgSize = avgRecord(metaClient.getActiveTimeline)
       val avgCount = Math.ceil(1.0 * numRecords / fileNum).toLong
 

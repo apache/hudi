@@ -46,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -93,11 +92,12 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
       // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
       if (config.getEngineType() == EngineType.SPARK) {
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-        table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction().firstInstant()
-            .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-                HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
-                "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
-                    + ", Compaction scheduled at " + instantTime));
+        Option<HoodieInstant> earliestInflightOpt = table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction().firstInstant();
+        if (earliestInflightOpt.isPresent() && !HoodieTimeline.compareTimestamps(earliestInflightOpt.get().getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime)) {
+          LOG.warn("Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflightOpt.get()
+              + ", Compaction scheduled at " + instantTime + ". Hence skipping to schedule compaction");
+          return Option.empty();
+        }
       }
       // Committed and pending compaction instants should have strictly lower timestamps
       List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
@@ -114,6 +114,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
+      table.validateForLatestTimestamp(instantTime);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
           HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
@@ -235,12 +236,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
   }
 
   private Long parsedToSeconds(String time) {
-    long timestamp;
-    try {
-      timestamp = HoodieActiveTimeline.parseDateFromInstantTime(time).getTime() / 1000;
-    } catch (ParseException e) {
-      throw new HoodieCompactionException(e.getMessage(), e);
-    }
-    return timestamp;
+    return HoodieActiveTimeline.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
+            .getTime() / 1000;
   }
 }

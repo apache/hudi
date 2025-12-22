@@ -108,7 +108,7 @@ def test_title():
 #                                                                             #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                            
     
-#Enums for the the outcome of parsing a single line
+#Enums for the outcome of parsing a single line
 class Outcomes:
     #error was found so we should stop parsing and exit with error
     ERROR = 0
@@ -389,21 +389,29 @@ class ValidateBody:
 #Generate the validator for the current template.
 #needs to be manually updated
 def make_default_validator(body, debug=False):
-    changelogs = ParseSectionData("CHANGELOGS",
+    changelogs = ParseSectionData("CHANGE_LOGS",
         "### Change Logs",
         {"_Describe context and summary for this change. Highlight if any code was copied._"})
     impact = ParseSectionData("IMPACT",
         "### Impact",
         {"_Describe any public API or user-facing feature change or any performance impact._"})
-    risklevel = RiskLevelData("RISKLEVEL",
+    risklevel = RiskLevelData("RISK_LEVEL",
         "### Risk level",
         {"_If medium or high, explain what verification was done to mitigate the risks._"})
+    docsUpdate = ParseSectionData("DOCUMENTATION_UPDATE",
+        "### Documentation Update",
+        {"_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        "",
+        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"none\"._",
+        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
+        "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
+        "  changes to the website._"})
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
         {})
-    parseSections = ParseSections([changelogs, impact, risklevel, checklist])
+    parseSections = ParseSections([changelogs, impact, risklevel, docsUpdate, checklist])
 
-    return ValidateBody(body, "CHANGELOGS", parseSections, debug)
+    return ValidateBody(body, "CHANGE_LOGS", parseSections, debug)
 
 
 #takes a list of strings and returns a string of those lines separated by \n
@@ -466,6 +474,21 @@ def test_body():
     good_risklevel = template_risklevel.copy()
     good_risklevel[1] = "none"
 
+    template_docs_update = [
+        "### Documentation Update",
+        "",
+        "_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        "",
+        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"none\"._",
+        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
+        "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
+        "  changes to the website._",
+        ""
+    ]
+
+    good_docs_update = template_docs_update.copy()
+    good_docs_update[1] = "update docs"
+
     template_checklist = [
         "### Contributor's checklist",
         "",
@@ -476,10 +499,10 @@ def test_body():
     ]
 
     #list of sections that when combined form a valid body
-    good_sections = [good_changelogs, good_impact, good_risklevel, template_checklist]
+    good_sections = [good_changelogs, good_impact, good_risklevel, good_docs_update, template_checklist]
 
     #list of sections that when combined form the template
-    template_sections = [template_changelogs, template_impact, template_risklevel, template_checklist]
+    template_sections = [template_changelogs, template_impact, template_risklevel, template_docs_update, template_checklist]
 
     tests_passed = True
     #Test section not filled out
@@ -530,9 +553,6 @@ def test_body():
     print("*****")
     
     return tests_passed
-
-
-
 
 
 if __name__ == '__main__':

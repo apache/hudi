@@ -38,8 +38,8 @@ import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -61,7 +61,6 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -88,6 +87,7 @@ import java.util.stream.IntStream;
 import static junit.framework.TestCase.assertEquals;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_PROPERTIES_FILE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 import static org.hamcrest.CoreMatchers.is;
@@ -166,6 +166,10 @@ public class TestData {
         insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
             TimestampData.fromEpochMillis(i), StringData.fromString("par1"))));
   }
+
+  public static List<RowData> DATA_SET_UPDATE_BEFORE = Arrays.asList(
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
 
   // data set of test_source.data
   public static List<RowData> DATA_SET_SOURCE_INSERT = Arrays.asList(
@@ -808,7 +812,7 @@ public class TestData {
       Function<GenericRecord, String> extractor) throws IOException {
 
     // 1. init flink table
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath.toURI().toString(), new org.apache.hadoop.conf.Configuration());
+    HoodieTableMetaClient metaClient = createMetaClient(basePath.toURI().toString());
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.toURI().toString()).build();
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
@@ -846,13 +850,13 @@ public class TestData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param fs         The file system
+   * @param storage    {@link HoodieStorage} instance.
    * @param baseFile   The file base to check, should be a directory
    * @param expected   The expected results mapping, the key should be the partition path
    * @param partitions The expected partition number
    */
   public static void checkWrittenDataMOR(
-      FileSystem fs,
+      HoodieStorage storage,
       File baseFile,
       Map<String, String> expected,
       int partitions) throws Exception {
@@ -864,7 +868,7 @@ public class TestData {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .fromFile(hoodiePropertiesFile)
         .withPath(basePath).build();
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath, new org.apache.hadoop.conf.Configuration());
+    HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 
@@ -888,7 +892,7 @@ public class TestData {
             .map(logFile -> logFile.getPath().toString())
             .collect(Collectors.toList());
         if (logPaths.size() > 0) {
-          scanner = getScanner(fs, basePath, logPaths, schema, latestInstant);
+          scanner = getScanner(storage, basePath, logPaths, schema, latestInstant);
         }
         String baseFilePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
         Set<String> keyToSkip = new HashSet<>();
@@ -938,18 +942,17 @@ public class TestData {
    * Returns the scanner to read avro log files.
    */
   private static HoodieMergedLogRecordScanner getScanner(
-      FileSystem fs,
+      HoodieStorage storage,
       String basePath,
       List<String> logPaths,
       Schema readSchema,
       String instant) {
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(readSchema)
         .withLatestInstantTime(instant)
-        .withReadBlocksLazily(false)
         .withReverseReader(false)
         .withBufferSize(16 * 1024 * 1024)
         .withMaxMemorySizeInBytes(1024 * 1024L)

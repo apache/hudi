@@ -81,13 +81,15 @@ public class TimelineUtils {
   }
 
   /**
-   * Returns partitions that have been deleted or marked for deletion in the given timeline.
+   * Returns partitions that have been deleted or marked for deletion in the timeline between given commit time range.
    * Does not include internal operations such as clean in the timeline.
    */
-  public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
+  public static List<String> getDroppedPartitions(HoodieTableMetaClient metaClient, Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
+    HoodieTimeline timeline = lastCommitTimeSynced.isPresent()
+        ? TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced)
+        : metaClient.getActiveTimeline();
     HoodieTimeline completedTimeline = timeline.getWriteTimeline().filterCompletedInstants();
     HoodieTimeline replaceCommitTimeline = completedTimeline.getCompletedReplaceTimeline();
-
     Map<String, String> partitionToLatestDeleteTimestamp = replaceCommitTimeline.getInstantsAsStream()
         .map(instant -> {
           try {
@@ -102,6 +104,21 @@ public class TimelineUtils {
         .flatMap(pair -> pair.getRight().getPartitionToReplaceFileIds().keySet().stream()
             .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
+    // cleaner could delete a partition when there are no active filegroups in the partition
+    HoodieTimeline cleanerTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+    cleanerTimeline.getInstantsAsStream()
+        .forEach(instant -> {
+          try {
+            HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(cleanerTimeline.getInstantDetails(instant).get());
+            cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+              if (Boolean.TRUE.equals(partitionMetadata.getIsPartitionDeleted())) {
+                partitionToLatestDeleteTimestamp.put(partition, instant.getTimestamp());
+              }
+            });
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to get partitions cleaned at " + instant, e);
+          }
+        });
 
     if (partitionToLatestDeleteTimestamp.isEmpty()) {
       // There is no dropped partitions
@@ -440,7 +457,7 @@ public class TimelineUtils {
   }
 
   public enum HollowCommitHandling {
-    FAIL, BLOCK, USE_TRANSITION_TIME;
+    FAIL, BLOCK, USE_TRANSITION_TIME
   }
 
   public static boolean isDeletePartition(WriteOperationType operation) {

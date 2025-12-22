@@ -31,8 +31,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.avro.generic.GenericRecord;
@@ -272,7 +274,7 @@ public class ColumnStatsIndices {
       LogicalType logicalType,
       Map<LogicalType, AvroToRowDataConverters.AvroToRowDataConverter> converters) {
     AvroToRowDataConverters.AvroToRowDataConverter converter =
-        converters.computeIfAbsent(logicalType, k -> AvroToRowDataConverters.createConverter(logicalType));
+        converters.computeIfAbsent(logicalType, k -> AvroToRowDataConverters.createConverter(logicalType, true));
     return converter.convert(rawVal);
   }
 
@@ -285,7 +287,7 @@ public class ColumnStatsIndices {
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Deserializing fetched records into [[RowData]]s
     HoodieTableMetadata metadataTable = HoodieTableMetadata.create(
-        HoodieFlinkEngineContext.DEFAULT,
+        HoodieFlinkEngineContext.DEFAULT, new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
         metadataConfig, basePath);
 
     // TODO encoding should be done internally w/in HoodieBackedTableMetadata

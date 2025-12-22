@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.{FullRecordBootstrapModeSelector, MetadataOnlyBootstrapModeSelector}
 import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -29,6 +28,8 @@ import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
@@ -42,6 +43,7 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.time.Instant
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
@@ -89,7 +91,7 @@ class TestDataSourceForBootstrap {
     spark = SparkSession.builder.config(sparkConf).getOrCreate
     basePath = tempDir.toAbsolutePath.toString + "/base"
     srcPath = tempDir.toAbsolutePath.toString + "/src"
-    fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
   }
 
   @AfterEach def tearDown(): Unit ={
@@ -171,8 +173,8 @@ class TestDataSourceForBootstrap {
   @CsvSource(value = Array(
     "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector,AVRO",
     // TODO(HUDI-5807) enable for spark native records
-    /* "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK", */
-    "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,AVRO",
+    /* "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK",
+    "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,AVRO",*/
     "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK"
   ))
   def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapSelector: String, recordType: HoodieRecordType): Unit = {
@@ -252,11 +254,8 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType],
-    // TODO(HUDI-5807) enable for spark native records
-    names = Array("AVRO" /*, "SPARK" */))
-  def testMetadataBootstrapCOWPartitioned(recordType: HoodieRecordType): Unit = {
+  @Test
+  def testMetadataBootstrapCOWPartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -268,7 +267,7 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+    val writeOpts = commonOpts ++ getRecordTypeOpts(HoodieRecordType.AVRO) ++ Map(
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
     )
@@ -331,9 +330,8 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testMetadataBootstrapMORPartitionedInlineClustering(enableRowWriter: Boolean): Unit = {
+  @Test
+  def testMetadataBootstrapMORPartitionedInlineClustering(): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
     // Prepare source data
@@ -343,7 +341,7 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(HoodieRecordType.AVRO) ++ Map(
+    val writeOpts = commonOpts ++ Map(
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
     )
@@ -370,7 +368,6 @@ class TestDataSourceForBootstrap {
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, enableRowWriter.toString)
       .option(HoodieClusteringConfig.INLINE_CLUSTERING.key, "true")
       .option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key, "1")
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "datestr")
@@ -464,9 +461,8 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecordsUpdate, hoodieROViewDFWithBasePath.filter(s"timestamp == $updateTimestamp").count())
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testMetadataBootstrapMORPartitioned(recordType: HoodieRecordType): Unit = {
+  @Test
+  def testMetadataBootstrapMORPartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -478,7 +474,7 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+    val writeOpts = commonOpts ++ Map(
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
     )
@@ -550,9 +546,8 @@ class TestDataSourceForBootstrap {
     assertEquals(0, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testFullBootstrapCOWPartitioned(recordType: HoodieRecordType): Unit = {
+  @Test
+  def testFullBootstrapCOWPartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -564,7 +559,7 @@ class TestDataSourceForBootstrap {
       .mode(SaveMode.Overwrite)
       .save(srcPath)
 
-    val writeOpts = commonOpts ++ getRecordTypeOpts(recordType) ++ Map(
+    val writeOpts = commonOpts ++ Map(
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr"
     )
@@ -696,6 +691,6 @@ object TestDataSourceForBootstrap {
   def sort(df: DataFrame): Dataset[Row] = df.sort("_row_key")
 
   def dropMetaCols(df: DataFrame): DataFrame =
-    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
 
 }

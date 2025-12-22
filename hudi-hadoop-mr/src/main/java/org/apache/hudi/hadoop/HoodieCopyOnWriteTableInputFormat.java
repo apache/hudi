@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
@@ -45,8 +46,11 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -56,9 +60,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -221,7 +224,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   private List<FileStatus> listStatusForSnapshotMode(JobConf job,
                                                      Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                      List<Path> snapshotPaths) {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(job));
     List<FileStatus> targetFiles = new ArrayList<>();
 
     TypedProperties props = new TypedProperties(new Properties());
@@ -247,7 +250,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
               tableMetaClient,
               props,
               HoodieTableQueryType.SNAPSHOT,
-              partitionPaths,
+              partitionPaths.stream().map(HadoopFSUtils::convertToStoragePath).collect(Collectors.toList()),
               queryCommitInstant,
               shouldIncludePendingCommits);
 

@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation.CompactionOperation
@@ -35,5 +36,7 @@ case class CompactionHoodieTableCommand(table: CatalogTable,
     CompactionHoodiePathCommand(basePath, operation, instantTimestamp).run(sparkSession)
   }
 
-  override val output: Seq[Attribute] = RunCompactionProcedure.builder.get().build.outputType.toAttributes
+  override val output: Seq[Attribute] =
+    SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(
+      RunCompactionProcedure.builder.get().build.outputType)
 }

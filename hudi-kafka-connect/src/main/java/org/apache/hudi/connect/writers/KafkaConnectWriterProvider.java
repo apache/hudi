@@ -40,6 +40,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.schema.SchemaProvider;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.common.TopicPartition;
@@ -67,7 +68,8 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       KafkaConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
-    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
+    StorageConfiguration<Configuration> storageConf =
+        KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
 
     try {
       this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null
@@ -96,7 +98,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
           .withWritesFileIdEncoding(1)
           .build();
 
-      context = new HoodieJavaEngineContext(hadoopConf);
+      context = new HoodieJavaEngineContext(storageConf);
 
       hudiJavaClient = new HoodieJavaWriteClient<>(context, writeConfig);
     } catch (Throwable e) {

@@ -20,13 +20,16 @@ package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
@@ -46,7 +49,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(LockManager.class);
   private final HoodieWriteConfig writeConfig;
   private final LockConfiguration lockConfiguration;
-  private final SerializableConfiguration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
   private final int maxRetries;
   private final long maxWaitTimeInMs;
   private transient HoodieLockMetrics metrics;
@@ -58,13 +61,13 @@ public class LockManager implements Serializable, AutoCloseable {
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, TypedProperties lockProps) {
     this.writeConfig = writeConfig;
-    this.hadoopConf = new SerializableConfiguration(fs.getConf());
+    this.storageConf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
     this.lockConfiguration = new LockConfiguration(lockProps);
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
-    metrics = new HoodieLockMetrics(writeConfig);
+    metrics = new HoodieLockMetrics(writeConfig, new HoodieHadoopStorage(fs));
   }
 
   public void lock() {
@@ -107,7 +110,11 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   public void unlock() {
     getLockProvider().unlock();
-    metrics.updateLockHeldTimerMetrics();
+    try {
+      metrics.updateLockHeldTimerMetrics();
+    } catch (HoodieException e) {
+      LOG.error(String.format("Exception encountered when updating lock metrics: %s", e));
+    }
     close();
   }
 
@@ -116,7 +123,8 @@ public class LockManager implements Serializable, AutoCloseable {
     if (lockProvider == null) {
       LOG.info("LockProvider " + writeConfig.getLockProviderClass());
       lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
-          lockConfiguration, hadoopConf.get());
+          new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+          lockConfiguration, storageConf);
     }
     return lockProvider;
   }

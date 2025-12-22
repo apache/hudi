@@ -79,7 +79,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, hadoopConf, dataGen);
+    Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen);
     assertEquals(75, recordMap.size());
   }
 
@@ -111,7 +111,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 
   @Test
@@ -146,13 +146,13 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
         false, false, 5, 150, 2, config.populateMetaFields());
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
 
     // now run compaction
     client.compact(timeStamp.get());
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
 
     commitTimeBetweenPrevAndNew = commitTime;
     commitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -161,7 +161,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
         false, false, 5, 200, 2, config.populateMetaFields());
     // Verify all the records.
     metaClient.reloadActiveTimeline();
-    assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 
   @Override

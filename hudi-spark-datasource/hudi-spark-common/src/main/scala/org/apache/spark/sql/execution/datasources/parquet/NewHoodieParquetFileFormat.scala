@@ -19,14 +19,16 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.{REALTIME_PAYLOAD_COMBINE_OPT_VAL, REALTIME_SKIP_MERGE_OPT_VAL}
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, PartitionFileSliceMapping, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, PartitionFileSliceMapping, RecordMergingFileIterator, SparkAdapterSupport}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -39,8 +41,8 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.util.SerializableConfiguration
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 /**
  * This class does bootstrap and MOR merging so that we can use hadoopfs relation.
@@ -138,14 +140,14 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                 val partitionValues = fileSliceMapping.getInternalRow
                 val logFiles = getLogFilesFromSlice(fileSlice)
                 if (requiredSchemaWithMandatory.isEmpty) {
-                  val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+                  val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen)
                   baseFileReader(baseFile)
                 } else if (bootstrapFileOpt.isPresent) {
                   val bootstrapIterator = buildBootstrapIterator(skeletonReader, bootstrapBaseReader,
                     skeletonReaderAppend, bootstrapBaseAppend, bootstrapFileOpt.get(), hoodieBaseFile, partitionValues,
                     needMetaCols, needDataCols)
                   (isMOR, logFiles.nonEmpty) match {
-                    case (true, true) => buildMergeOnReadIterator(bootstrapIterator, logFiles, filePath.getParent,
+                    case (true, true) => buildMergeOnReadIterator(bootstrapIterator, logFiles, new Path(filePath.getParent.toUri),
                       bootstrapReaderOutput, requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues,
                       broadcastedHadoopConf.value.value)
                     case (true, false) => appendPartitionAndProject(bootstrapIterator, bootstrapReaderOutput,
@@ -155,8 +157,8 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                   }
                 } else {
                   if (logFiles.nonEmpty) {
-                    val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
-                    buildMergeOnReadIterator(preMergeBaseFileReader(baseFile), logFiles, filePath.getParent, requiredSchemaWithMandatory,
+                    val baseFile = createPartitionedFile(InternalRow.empty, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen)
+                    buildMergeOnReadIterator(preMergeBaseFileReader(baseFile), logFiles, new Path(filePath.getParent.toUri), requiredSchemaWithMandatory,
                       requiredSchemaWithMandatory, outputSchema, partitionSchema, partitionValues, broadcastedHadoopConf.value.value)
                   } else {
                     throw new IllegalStateException("should not be here since file slice should not have been broadcasted since it has no log or data files")
@@ -253,15 +255,15 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                              partitionValues: InternalRow, needMetaCols: Boolean,
                              needDataCols: Boolean): Iterator[InternalRow] = {
     lazy val skeletonFile = if (skeletonReaderAppend) {
-      createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+      createPartitionedFile(partitionValues, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen)
     } else {
-      createPartitionedFile(InternalRow.empty, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
+      createPartitionedFile(InternalRow.empty, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen)
     }
 
     lazy val dataFile = if (bootstrapBaseAppend) {
-      createPartitionedFile(partitionValues, bootstrapBaseFile.getHadoopPath, 0, bootstrapBaseFile.getFileLen)
+      createPartitionedFile(partitionValues, bootstrapBaseFile.getStoragePath, 0, bootstrapBaseFile.getFileLen)
     } else {
-      createPartitionedFile(InternalRow.empty, bootstrapBaseFile.getHadoopPath, 0, bootstrapBaseFile.getFileLen)
+      createPartitionedFile(InternalRow.empty, bootstrapBaseFile.getStoragePath, 0, bootstrapBaseFile.getFileLen)
     }
 
     lazy val skeletonIterator = skeletonReader(skeletonFile)
@@ -325,7 +327,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
         //new SkipMergeIterator(logFiles, partitionPath, iter, inputSchema, tableSchema.value,
         //  requiredSchemaWithMandatory, requiredAvroSchema, tableState.value, hadoopConf)
       case REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
-        new RecordMergingFileIterator(logFiles, partitionPath, iter, inputSchema, tableSchema.value,
+        new RecordMergingFileIterator(logFiles, new StoragePath(partitionPath.toUri), iter, inputSchema, tableSchema.value,
           requiredSchemaWithMandatory, requiredAvroSchema, tableState.value, hadoopConf)
     }
     appendPartitionAndProject(morIterator, requiredSchemaWithMandatory, partitionSchema,

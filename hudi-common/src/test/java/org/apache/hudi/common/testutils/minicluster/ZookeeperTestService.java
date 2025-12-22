@@ -37,6 +37,8 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.util.Objects;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * A Zookeeper minicluster service implementation.
  * <p/>
@@ -174,7 +176,7 @@ public class ZookeeperTestService {
       try {
         try (Socket sock = new Socket("localhost", port)) {
           OutputStream outstream = sock.getOutputStream();
-          outstream.write("stat".getBytes());
+          outstream.write(getUTF8Bytes("stat"));
           outstream.flush();
         }
       } catch (IOException e) {
@@ -202,7 +204,7 @@ public class ZookeeperTestService {
         BufferedReader reader = null;
         try {
           OutputStream outstream = sock.getOutputStream();
-          outstream.write("stat".getBytes());
+          outstream.write(getUTF8Bytes("stat"));
           outstream.flush();
 
           Reader isr = new InputStreamReader(sock.getInputStream());

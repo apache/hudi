@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
@@ -36,7 +33,12 @@ import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.hadoop.fs.Path
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -51,6 +53,7 @@ import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import java.io.Closeable
 import java.util.Properties
 import java.util.stream.Collectors
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -112,11 +115,11 @@ class HoodieCDCRDD(
       metaClient: HoodieTableMetaClient
     ) extends Iterator[InternalRow] with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
-    private lazy val fs = metaClient.getFs.getFileSystem
+    private lazy val storage = metaClient.getStorage
 
     private lazy val conf = confBroadcast.value.value
 
-    private lazy val basePath = metaClient.getBasePathV2
+    private lazy val basePath = metaClient.getBasePath
 
     private lazy val tableConfig = metaClient.getTableConfig
 
@@ -141,7 +144,7 @@ class HoodieCDCRDD(
         .fromProperties(props)
         .build()
       HoodieTableState(
-        pathToString(basePath),
+        basePath.toUri.toString,
         Some(split.changes.last.getInstant),
         recordKeyField,
         preCombineFieldOpt,
@@ -408,11 +411,11 @@ class HoodieCDCRDD(
         currentCDCFileSplit.getCdcInferCase match {
           case BASE_FILE_INSERT =>
             assert(currentCDCFileSplit.getCdcFiles != null && currentCDCFileSplit.getCdcFiles.size() == 1)
-            val absCDCPath = new Path(basePath, currentCDCFileSplit.getCdcFiles.get(0))
-            val fileStatus = fs.getFileStatus(absCDCPath)
+            val absCDCPath = new StoragePath(basePath, currentCDCFileSplit.getCdcFiles.get(0))
+            val pathInfo = storage.getPathInfo(absCDCPath)
 
             val pf = sparkPartitionedFileUtils.createPartitionedFile(
-              InternalRow.empty, absCDCPath, 0, fileStatus.getLen)
+              InternalRow.empty, absCDCPath, 0, pathInfo.getLength)
             recordIter = parquetReader(pf)
           case BASE_FILE_DELETE =>
             assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
@@ -421,8 +424,8 @@ class HoodieCDCRDD(
             assert(currentCDCFileSplit.getCdcFiles != null && currentCDCFileSplit.getCdcFiles.size() == 1
               && currentCDCFileSplit.getBeforeFileSlice.isPresent)
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
-            val absLogPath = new Path(basePath, currentCDCFileSplit.getCdcFiles.get(0))
-            val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
+            val absLogPath = new StoragePath(basePath, currentCDCFileSplit.getCdcFiles.get(0))
+            val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(storage.getPathInfo(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsPairIterator
           case AS_IS =>
@@ -442,9 +445,9 @@ class HoodieCDCRDD(
             }
 
             val cdcLogFiles = currentCDCFileSplit.getCdcFiles.asScala.map { cdcFile =>
-              new HoodieLogFile(fs.getFileStatus(new Path(basePath, cdcFile)))
+              new HoodieLogFile(storage.getPathInfo(new StoragePath(basePath, cdcFile)))
             }.toArray
-            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(fs, cdcLogFiles, cdcAvroSchema)
+            cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcAvroSchema)
           case REPLACE_COMMIT =>
             if (currentCDCFileSplit.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -467,23 +470,23 @@ class HoodieCDCRDD(
     private def resetRecordFormat(): Unit = {
       recordToLoad = currentCDCFileSplit.getCdcInferCase match {
         case BASE_FILE_INSERT =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
             null, null))
         case BASE_FILE_DELETE =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
         case LOG_FILE =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             null, convertToUTF8String(currentInstant),
             null, null))
         case AS_IS =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             null, convertToUTF8String(currentInstant),
             null, null))
         case REPLACE_COMMIT =>
-          InternalRow.fromSeq(Array(
+          InternalRow.fromSeq(Seq(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
             null, null))
       }
@@ -496,7 +499,7 @@ class HoodieCDCRDD(
     private def loadBeforeFileSliceIfNeeded(fileSlice: FileSlice): Unit = {
       val files = List(fileSlice.getBaseFile.get().getPath) ++
         fileSlice.getLogFiles.collect(Collectors.toList[HoodieLogFile]).asScala
-          .map(f => pathToString(f.getPath)).toList
+          .map(f => f.getPath.toUri.toString).toList
       val same = files.sorted == beforeImageFiles.sorted.toList
       if (!same) {
         // clear up the beforeImageRecords
@@ -515,12 +518,12 @@ class HoodieCDCRDD(
     }
 
     private def loadFileSlice(fileSlice: FileSlice): Iterator[InternalRow] = {
-      val baseFileStatus = fs.getFileStatus(new Path(fileSlice.getBaseFile.get().getPath))
+      val baseFileInfo = storage.getPathInfo(fileSlice.getBaseFile.get().getStoragePath)
       val basePartitionedFile = sparkPartitionedFileUtils.createPartitionedFile(
         InternalRow.empty,
-        baseFileStatus.getPath,
+        baseFileInfo.getPath,
         0,
-        baseFileStatus.getLen
+        baseFileInfo.getLength
       )
       val logFiles = fileSlice.getLogFiles
         .sorted(HoodieLogFile.getLogFileComparator)

@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.apache.hadoop.util.hash.Hash;
+import org.apache.hudi.common.util.hash.Hash;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;

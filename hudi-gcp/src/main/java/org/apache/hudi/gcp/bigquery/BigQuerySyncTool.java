@@ -54,6 +54,8 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_
 public class BigQuerySyncTool extends HoodieSyncTool {
 
   private static final Logger LOG = LoggerFactory.getLogger(BigQuerySyncTool.class);
+  private static final String SUFFIX_MANIFEST = "_manifest";
+  private static final String SUFFIX_VERSIONS = "_versions";
 
   private final BigQuerySyncConfig config;
   private final String tableName;
@@ -70,8 +72,8 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     super(props);
     this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
-    this.manifestTableName = tableName + "_manifest";
-    this.versionsTableName = tableName + "_versions";
+    this.manifestTableName = tableName + SUFFIX_MANIFEST;
+    this.versionsTableName = tableName + SUFFIX_VERSIONS;
     this.snapshotViewName = tableName;
     this.bqSyncClient = new HoodieBigQuerySyncClient(config);
     // reuse existing meta client if not provided (only test cases will provide their own meta client)
@@ -86,8 +88,8 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     super(properties);
     this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
-    this.manifestTableName = tableName + "_manifest";
-    this.versionsTableName = tableName + "_versions";
+    this.manifestTableName = tableName + SUFFIX_MANIFEST;
+    this.versionsTableName = tableName + SUFFIX_VERSIONS;
     this.snapshotViewName = tableName;
     this.bqSyncClient = bigQuerySyncClient;
     this.metaClient = metaClient;
@@ -117,7 +119,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
   private boolean tableExists(HoodieBigQuerySyncClient bqSyncClient, String tableName) {
     if (bqSyncClient.tableExists(tableName)) {
-      LOG.info(tableName + " already exists");
+      LOG.info("{} already exists. Skip table creation.", tableName);
       return true;
     }
     return false;

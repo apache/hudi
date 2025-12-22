@@ -90,7 +90,8 @@ public class ITTestSchemaEvolution {
   public void testMergeOnReadInputFormatBaseFileOnlyIterator() throws Exception {
     TableOptions tableOptions = defaultTableOptions(tempFile.getAbsolutePath())
         .withOption(FlinkOptions.READ_AS_STREAMING.key(), true)
-        .withOption(FlinkOptions.READ_START_COMMIT.key(), FlinkOptions.START_COMMIT_EARLIEST);
+        .withOption(FlinkOptions.READ_START_COMMIT.key(), FlinkOptions.START_COMMIT_EARLIEST)
+        .withOption(FlinkOptions.READ_STREAMING_SKIP_COMPACT.key(), false);
     testSchemaEvolution(tableOptions);
   }
 
@@ -98,7 +99,8 @@ public class ITTestSchemaEvolution {
   public void testMergeOnReadInputFormatBaseFileOnlyFilteringIterator() throws Exception {
     TableOptions tableOptions = defaultTableOptions(tempFile.getAbsolutePath())
         .withOption(FlinkOptions.READ_AS_STREAMING.key(), true)
-        .withOption(FlinkOptions.READ_START_COMMIT.key(), 1);
+        .withOption(FlinkOptions.READ_START_COMMIT.key(), 1)
+        .withOption(FlinkOptions.READ_STREAMING_SKIP_COMPACT.key(), false);
     testSchemaEvolution(tableOptions);
   }
 

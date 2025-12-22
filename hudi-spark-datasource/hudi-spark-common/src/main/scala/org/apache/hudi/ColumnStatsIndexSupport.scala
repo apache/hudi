@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.generic.GenericData
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
@@ -35,6 +33,9 @@ import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
+
+import org.apache.avro.Conversions.DecimalConversion
+import org.apache.avro.generic.GenericData
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -45,6 +46,7 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.nio.ByteBuffer
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -58,7 +60,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
+    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
 
   @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
@@ -83,7 +85,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * w/in the Metadata Table
    */
   def isIndexAvailable: Boolean = {
-    checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
+    checkState(metadataConfig.isEnabled, "Metadata Table support has to be enabled")
     metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
   }
 
@@ -122,7 +124,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
             //       of the transposed table in memory, facilitating execution of the subsequently chained operations
             //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
             //       Optimizer)
-            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
+            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
           } else {
             val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
             spark.createDataFrame(rdd, indexSchema)
@@ -270,17 +272,21 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                   acc ++= Seq(colStatRecord.getMinValue, colStatRecord.getMaxValue, colStatRecord.getNullCount)
                 case None =>
                   // NOTE: This could occur in either of the following cases:
-                  //    1. Particular file does not have this particular column (which is indexed by Column Stats Index):
-                  //       in this case we're assuming missing column to essentially contain exclusively
-                  //       null values, we set min/max values as null and null-count to be equal to value-count (this
-                  //       behavior is consistent with reading non-existent columns from Parquet)
+                  //    1. When certain columns exist in the schema but are absent in some data files due to
+                  //       schema evolution or other reasons, these columns will not be present in the column stats.
+                  //       In this case, we fill in default values by setting the min, max and null-count to null
+                  //       (this behavior is consistent with reading non-existent columns from Parquet).
+                  //    2. When certain columns are present both in the schema and the data files,
+                  //       but the column stats are absent for these columns due to their types not supporting indexing,
+                  //       we also set these columns to default values.
                   //
-                  // This is a way to determine current column's index without explicit iteration (we're adding 3 stats / column)
-                  acc ++= Seq(null, null, valueCount)
+                  // This approach prevents errors during data skipping and, because the filter includes an isNull check,
+                  // these conditions will not affect the accurate return of files from data skipping.
+                  acc ++= Seq(null, null, null)
               }
           }
 
-        Row(coalescedRowValuesSeq:_*)
+        Row(coalescedRowValuesSeq.toSeq: _*)
       }))
 
     (transposedRows, indexSchema)
@@ -300,7 +306,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
         //       of the transposed table in memory, facilitating execution of the subsequently chained operations
         //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
         //       Optimizer)
-        createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala, columnStatsRecordStructType)
+        createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
       } else {
         createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
       }
@@ -335,7 +341,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2.toString)
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     val colStatsDF = spark.read.format("org.apache.hudi")
       .options(metadataConfig.getProps.asScala)

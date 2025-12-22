@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -29,20 +28,21 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -73,9 +73,11 @@ public class MarkerUtils {
    */
   public static String stripMarkerFolderPrefix(String fullMarkerPath, String basePath, String instantTime) {
     ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN),
-        String.format("Using DIRECT markers but marker path does not contain extension: %s", HoodieTableMetaClient.MARKER_EXTN));
-    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
-        new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))).toString();
+        String.format("Using DIRECT markers but marker path does not contain extension: %s",
+            HoodieTableMetaClient.MARKER_EXTN));
+    String markerRootPath = new StoragePath(
+        String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))
+        .getPathWithoutSchemeAndAuthority().toString();
     return stripMarkerFolderPrefix(fullMarkerPath, markerRootPath);
   }
 
@@ -94,40 +96,40 @@ public class MarkerUtils {
   }
 
   /**
-   * @param fileSystem file system to use.
-   * @param markerDir  marker directory.
+   * @param storage   {@link HoodieStorage} to use.
+   * @param markerDir marker directory.
    * @return {@code true} if the MARKERS.type file exists; {@code false} otherwise.
    */
-  public static boolean doesMarkerTypeFileExist(FileSystem fileSystem, String markerDir) throws IOException {
-    return fileSystem.exists(new Path(markerDir, MARKER_TYPE_FILENAME));
+  public static boolean doesMarkerTypeFileExist(HoodieStorage storage, String markerDir) throws IOException {
+    return storage.exists(new StoragePath(markerDir, MARKER_TYPE_FILENAME));
   }
 
   /**
    * Reads the marker type from `MARKERS.type` file.
    *
-   * @param fileSystem file system to use.
-   * @param markerDir  marker directory.
+   * @param storage   {@link HoodieStorage} to use.
+   * @param markerDir marker directory.
    * @return the marker type, or empty if the marker type file does not exist.
    */
-  public static Option<MarkerType> readMarkerType(FileSystem fileSystem, String markerDir) {
-    Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
-    FSDataInputStream fsDataInputStream = null;
+  public static Option<MarkerType> readMarkerType(HoodieStorage storage, String markerDir) {
+    StoragePath markerTypeFilePath = new StoragePath(markerDir, MARKER_TYPE_FILENAME);
+    InputStream inputStream = null;
     Option<MarkerType> content = Option.empty();
     try {
-      if (!doesMarkerTypeFileExist(fileSystem, markerDir)) {
+      if (!doesMarkerTypeFileExist(storage, markerDir)) {
         return Option.empty();
       }
-      fsDataInputStream = fileSystem.open(markerTypeFilePath);
-      String markerType = FileIOUtils.readAsUTFString(fsDataInputStream);
+      inputStream = storage.open(markerTypeFilePath);
+      String markerType = FileIOUtils.readAsUTFString(inputStream);
       if (StringUtils.isNullOrEmpty(markerType)) {
         return Option.empty();
       }
       content = Option.of(MarkerType.valueOf(markerType));
     } catch (IOException e) {
-      throw new HoodieIOException("Cannot read marker type file " + markerTypeFilePath.toString()
+      throw new HoodieIOException("Cannot read marker type file " + markerTypeFilePath
           + "; " + e.getMessage(), e);
     } finally {
-      closeQuietly(fsDataInputStream);
+      closeQuietly(inputStream);
     }
     return content;
   }
@@ -136,38 +138,38 @@ public class MarkerUtils {
    * Writes the marker type to the file `MARKERS.type`.
    *
    * @param markerType marker type.
-   * @param fileSystem file system to use.
+   * @param storage    {@link HoodieStorage} to use.
    * @param markerDir  marker directory.
    */
-  public static void writeMarkerTypeToFile(MarkerType markerType, FileSystem fileSystem, String markerDir) {
-    Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
-    FSDataOutputStream fsDataOutputStream = null;
+  public static void writeMarkerTypeToFile(MarkerType markerType, HoodieStorage storage, String markerDir) {
+    StoragePath markerTypeFilePath = new StoragePath(markerDir, MARKER_TYPE_FILENAME);
+    OutputStream outputStream = null;
     BufferedWriter bufferedWriter = null;
     try {
-      fsDataOutputStream = fileSystem.create(markerTypeFilePath, false);
-      bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
+      outputStream = storage.create(markerTypeFilePath, false);
+      bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
       bufferedWriter.write(markerType.toString());
     } catch (IOException e) {
-      throw new HoodieException("Failed to create marker type file " + markerTypeFilePath.toString()
+      throw new HoodieException("Failed to create marker type file " + markerTypeFilePath
           + "; " + e.getMessage(), e);
     } finally {
       closeQuietly(bufferedWriter);
-      closeQuietly(fsDataOutputStream);
+      closeQuietly(outputStream);
     }
   }
 
   /**
    * Deletes `MARKERS.type` file.
    *
-   * @param fileSystem file system to use.
-   * @param markerDir  marker directory.
+   * @param storage   {@link HoodieStorage} to use.
+   * @param markerDir marker directory.
    */
-  public static void deleteMarkerTypeFile(FileSystem fileSystem, String markerDir) {
-    Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
+  public static void deleteMarkerTypeFile(HoodieStorage storage, String markerDir) {
+    StoragePath markerTypeFilePath = new StoragePath(markerDir, MARKER_TYPE_FILENAME);
     try {
-      fileSystem.delete(markerTypeFilePath, false);
+      storage.deleteFile(markerTypeFilePath);
     } catch (IOException e) {
-      throw new HoodieIOException("Cannot delete marker type file " + markerTypeFilePath.toString()
+      throw new HoodieIOException("Cannot delete marker type file " + markerTypeFilePath
           + "; " + e.getMessage(), e);
     }
   }
@@ -176,26 +178,26 @@ public class MarkerUtils {
    * Reads files containing the markers written by timeline-server-based marker mechanism.
    *
    * @param markerDir   marker directory.
-   * @param fileSystem  file system to use.
+   * @param storage     file system to use.
    * @param context     instance of {@link HoodieEngineContext} to use
    * @param parallelism parallelism to use
    * @return A {@code Map} of file name to the set of markers stored in the file.
    */
   public static Map<String, Set<String>> readTimelineServerBasedMarkersFromFileSystem(
-      String markerDir, FileSystem fileSystem, HoodieEngineContext context, int parallelism) {
-    Path dirPath = new Path(markerDir);
+      String markerDir, HoodieStorage storage, HoodieEngineContext context, int parallelism) {
+    StoragePath dirPath = new StoragePath(markerDir);
     try {
-      if (fileSystem.exists(dirPath)) {
-        Predicate<FileStatus> prefixFilter = fileStatus ->
-            fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
-        Predicate<FileStatus> markerTypeFilter = fileStatus ->
-            !fileStatus.getPath().getName().equals(MARKER_TYPE_FILENAME);
+      if (storage.exists(dirPath)) {
+        Predicate<StoragePathInfo> prefixFilter = pathInfo ->
+            pathInfo.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
+        Predicate<StoragePathInfo> markerTypeFilter = pathInfo ->
+            !pathInfo.getPath().getName().equals(MARKER_TYPE_FILENAME);
         return FSUtils.parallelizeSubPathProcess(
-            context, fileSystem, dirPath, parallelism, prefixFilter.and(markerTypeFilter),
+            context, storage, dirPath, parallelism, prefixFilter.and(markerTypeFilter),
             pairOfSubPathAndConf -> {
               String markersFilePathStr = pairOfSubPathAndConf.getKey();
-              SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
-              return readMarkersFromFile(new Path(markersFilePathStr), conf);
+              StorageConfiguration<?> conf = pairOfSubPathAndConf.getValue();
+              return readMarkersFromFile(new StoragePath(markersFilePathStr), conf);
             });
       }
       return new HashMap<>();
@@ -208,10 +210,10 @@ public class MarkerUtils {
    * Reads the markers stored in the underlying file.
    *
    * @param markersFilePath file path for the markers
-   * @param conf            serializable config
+   * @param conf            storage config
    * @return markers in a {@code Set} of String.
    */
-  public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf) {
+  public static Set<String> readMarkersFromFile(StoragePath markersFilePath, StorageConfiguration<?> conf) {
     return readMarkersFromFile(markersFilePath, conf, false);
   }
 
@@ -219,18 +221,20 @@ public class MarkerUtils {
    * Reads the markers stored in the underlying file.
    *
    * @param markersFilePath File path for the markers.
-   * @param conf            Serializable config.
+   * @param conf            storage config.
    * @param ignoreException Whether to ignore IOException.
    * @return Markers in a {@code Set} of String.
    */
-  public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf, boolean ignoreException) {
-    FSDataInputStream fsDataInputStream = null;
+  public static Set<String> readMarkersFromFile(StoragePath markersFilePath,
+                                                StorageConfiguration<?> conf,
+                                                boolean ignoreException) {
+    InputStream inputStream = null;
     Set<String> markers = new HashSet<>();
     try {
       LOG.debug("Read marker file: " + markersFilePath);
-      FileSystem fs = markersFilePath.getFileSystem(conf.get());
-      fsDataInputStream = fs.open(markersFilePath);
-      markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(fsDataInputStream));
+      HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf);
+      inputStream = storage.open(markersFilePath);
+      markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));
     } catch (IOException e) {
       String errorMessage = "Failed to read MARKERS file " + markersFilePath;
       if (ignoreException) {
@@ -239,7 +243,7 @@ public class MarkerUtils {
         throw new HoodieIOException(errorMessage, e);
       }
     } finally {
-      closeQuietly(fsDataInputStream);
+      closeQuietly(inputStream);
     }
     return markers;
   }
@@ -248,12 +252,13 @@ public class MarkerUtils {
    * Gets all marker directories.
    *
    * @param tempPath Temporary folder under .hoodie.
-   * @param fs       File system to use.
+   * @param storage  File system to use.
    * @return All marker directories.
    * @throws IOException upon error.
    */
-  public static List<Path> getAllMarkerDir(Path tempPath, FileSystem fs) throws IOException {
-    return Arrays.stream(fs.listStatus(tempPath)).map(FileStatus::getPath).collect(Collectors.toList());
+  public static List<StoragePath> getAllMarkerDir(StoragePath tempPath,
+                                                  HoodieStorage storage) throws IOException {
+    return storage.listDirectEntries(tempPath).stream().map(StoragePathInfo::getPath).collect(Collectors.toList());
   }
 
   /**
@@ -288,21 +293,25 @@ public class MarkerUtils {
    * 2. Skip all instants after currentInstantTime
    * 3. Skip dead writers related instants based on heart-beat
    * 4. Skip pending compaction instant (For now we don' do early conflict check with compact action)
-   *      Because we don't want to let pending compaction block common writer.
+   * Because we don't want to let pending compaction block common writer.
+   *
    * @param instants
    * @return
    */
-  public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline, List<Path> instants, String currentInstantTime,
-                                                  long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) {
+  public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline,
+                                                  List<StoragePath> instants, String currentInstantTime,
+                                                  long maxAllowableHeartbeatIntervalInMs,
+                                                  HoodieStorage storage, String basePath) {
 
-    return instants.stream().map(Path::toString).filter(instantPath -> {
+    return instants.stream().map(StoragePath::toString).filter(instantPath -> {
       String instantTime = markerDirToInstantTime(instantPath);
       return instantTime.compareToIgnoreCase(currentInstantTime) < 0
           && !activeTimeline.filterPendingCompactionTimeline().containsInstant(instantTime)
           && !activeTimeline.filterPendingReplaceTimeline().containsInstant(instantTime);
     }).filter(instantPath -> {
       try {
-        return !isHeartbeatExpired(markerDirToInstantTime(instantPath), maxAllowableHeartbeatIntervalInMs, fs, basePath);
+        return !isHeartbeatExpired(markerDirToInstantTime(instantPath),
+            maxAllowableHeartbeatIntervalInMs, storage, basePath);
       } catch (IOException e) {
         return false;
       }

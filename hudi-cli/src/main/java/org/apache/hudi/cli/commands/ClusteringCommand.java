@@ -62,7 +62,7 @@ public class ClusteringCommand {
     String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
     sparkLauncher.addAppArgs(SparkCommand.CLUSTERING_SCHEDULE.toString(), master, sparkMemory,
-        client.getBasePath(), client.getTableConfig().getTableName(), clusteringInstantTime, propsFilePath);
+        HoodieCLI.basePath, client.getTableConfig().getTableName(), clusteringInstantTime, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -101,7 +101,7 @@ public class ClusteringCommand {
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkCommand.CLUSTERING_RUN.toString(), master, sparkMemory,
-        client.getBasePath(), client.getTableConfig().getTableName(), clusteringInstantTime,
+        HoodieCLI.basePath, client.getTableConfig().getTableName(), clusteringInstantTime,
         parallelism, retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
@@ -138,7 +138,7 @@ public class ClusteringCommand {
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkCommand.CLUSTERING_SCHEDULE_AND_EXECUTE.toString(), master, sparkMemory,
-        client.getBasePath(), client.getTableConfig().getTableName(), parallelism, retry, propsFilePath);
+        HoodieCLI.basePath, client.getTableConfig().getTableName(), parallelism, retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

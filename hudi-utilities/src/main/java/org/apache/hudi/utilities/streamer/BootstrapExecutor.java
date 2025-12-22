@@ -33,6 +33,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
@@ -245,7 +246,7 @@ public class BootstrapExecutor implements Serializable {
           HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName()));
     }
 
-    builder.initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
+    builder.initTable(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()), cfg.targetBasePath);
   }
 
   public HoodieWriteConfig getBootstrapConfig() {

@@ -38,10 +38,10 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
@@ -69,9 +70,10 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
-    fs.mkdirs(new Path(basePath));
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, HoodieFileFormat.PARQUET);
+    initHoodieStorage();
+    storage.createDirectory(new StoragePath(basePath));
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ,
+        HoodieFileFormat.PARQUET);
     initTestDataGenerator();
   }
 
@@ -81,7 +83,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  @EnumSource(value = HoodieTableType.class, names = {"MERGE_ON_READ"})
   public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType) throws Exception {
     // create inserts X 1
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -122,67 +124,123 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     // Create upserts, schedule cleaning, schedule compaction in parallel
-    String instant4 = HoodieActiveTimeline.createNewInstantTime();
     Future future1 = executors.submit(() -> {
       int numRecords = 100;
       String commitTimeBetweenPrevAndNew = instantTime2;
       try {
-        // For both COW and MOR table types the commit should not be blocked, since we are giving preference to ingestion.
-        createCommitWithUpserts(cfg, client1, instantTime3, commitTimeBetweenPrevAndNew, instant4, numRecords);
-        validInstants.add(instant4);
+        int counter = 0;
+        while (counter++ < 5) { // we can't really time which writer triggers first and which one triggers later. So, lets add few rounds of retries.
+          // For both COW and MOR table types the commit should not be blocked, since we are giving preference to ingestion.
+          try {
+            String instant4 = HoodieActiveTimeline.createNewInstantTime();
+            createCommitWithUpserts(cfg, client1, instantTime3, commitTimeBetweenPrevAndNew, instant4, numRecords);
+            validInstants.add(instant4);
+            break;
+          } catch (IllegalArgumentException e) {
+            if (!e.getMessage().toString().contains("Found later commit time")) {
+              throw e;
+            }
+          }
+        }
       } catch (Exception e1) {
         throw new RuntimeException(e1);
       }
     });
-    String instant5 = HoodieActiveTimeline.createNewInstantTime();
+    AtomicReference<String> instant5Ref = new AtomicReference<>();
     Future future2 = executors.submit(() -> {
       try {
-        client2.scheduleTableService(instant5, Option.empty(), TableServiceType.COMPACT);
+        int counter = 0;
+        while (counter++ < 5) { // we can't really time which writer triggers first and which one triggers later. So, lets add few rounds of retries.
+          try {
+            String instant5 = HoodieActiveTimeline.createNewInstantTime();
+            client2.scheduleTableService(instant5, Option.empty(), TableServiceType.COMPACT);
+            instant5Ref.set(instant5);
+            break;
+          } catch (IllegalArgumentException e) {
+            if (!e.getMessage().toString().contains("Found later commit time")) {
+              throw e;
+            }
+          }
+        }
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {
           throw new RuntimeException(e2);
         }
       }
     });
-    String instant6 = HoodieActiveTimeline.createNewInstantTime();
+    AtomicReference<String> instant6Ref = new AtomicReference<>();
     Future future3 = executors.submit(() -> {
-      try {
-        client2.scheduleTableService(instant6, Option.empty(), TableServiceType.CLEAN);
-      } catch (Exception e2) {
-        throw new RuntimeException(e2);
+      int counter = 0;
+      while (counter++ < 5) { // we can't really time which writer triggers first and which one triggers later. So, lets add few rounds of retries.
+        try {
+          String instant6 = HoodieActiveTimeline.createNewInstantTime();
+          client2.scheduleTableService(instant6, Option.empty(), TableServiceType.CLEAN);
+          instant6Ref.set(instant6);
+          break;
+        } catch (IllegalArgumentException e) {
+          if (!e.getMessage().toString().contains("Found later commit time")) {
+            throw e;
+          }
+        } catch (Exception e2) {
+          throw new RuntimeException(e2);
+        }
       }
     });
     future1.get();
     future2.get();
     future3.get();
     // Create inserts, run cleaning, run compaction in parallel
-    String instant7 = HoodieActiveTimeline.createNewInstantTime();
     future1 = executors.submit(() -> {
       int numRecords = 100;
-      try {
-        createCommitWithInserts(cfg, client1, instantTime3, instant7, numRecords);
-        validInstants.add(instant7);
-      } catch (Exception e1) {
-        throw new RuntimeException(e1);
+      int counter = 0;
+      while (counter++ < 5) { // we can't really time which writer triggers first and which one triggers later. So, lets add few rounds of retries.
+        try {
+          String instant7 = HoodieActiveTimeline.createNewInstantTime();
+          createCommitWithInserts(cfg, client1, instantTime3, instant7, numRecords);
+          validInstants.add(instant7);
+          break;
+        } catch (IllegalArgumentException e) {
+          if (!e.getMessage().toString().contains("Found later commit time")) {
+            throw e;
+          }
+        } catch (Exception e1) {
+          throw new RuntimeException(e1);
+        }
       }
     });
     future2 = executors.submit(() -> {
-      try {
-        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5);
-        client2.commitCompaction(instant5, compactionMetadata.getCommitMetadata().get(), Option.empty());
-        validInstants.add(instant5);
-      } catch (Exception e2) {
-        if (tableType == HoodieTableType.MERGE_ON_READ) {
-          Assertions.assertTrue(e2 instanceof HoodieWriteConflictException);
+      int counter = 0;
+      while (counter++ < 5) { // we can't really time which writer triggers first and which one triggers later. So, lets add few rounds of retries.
+        try {
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5Ref.get());
+          client2.commitCompaction(instant5Ref.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
+          validInstants.add(instant5Ref.get());
+          break;
+        } catch (IllegalArgumentException e) {
+          if (!e.getMessage().toString().contains("Found later commit time")) {
+            throw e;
+          }
+        } catch (Exception e2) {
+          if (tableType == HoodieTableType.MERGE_ON_READ) {
+            Assertions.assertTrue(e2 instanceof HoodieWriteConflictException);
+          }
         }
       }
     });
     future3 = executors.submit(() -> {
-      try {
-        client2.clean(instant6, false);
-        validInstants.add(instant6);
-      } catch (Exception e2) {
-        throw new RuntimeException(e2);
+      int counter = 0;
+      while (counter++ < 5) { // we can't really time which writer triggers first and which one triggers later. So, lets add few rounds of retries.
+        try {
+          client2.clean(instant6Ref.get(), false);
+          validInstants.add(instant6Ref.get());
+          break;
+        } catch (IllegalArgumentException e) {
+          if (!e.getMessage().toString().contains("Found later commit time")) {
+            throw e;
+          }
+        } catch (Exception e2) {
+          throw new RuntimeException(e2);
+        }
       }
     });
     future1.get();
@@ -192,6 +250,10 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
     Assertions.assertTrue(validInstants.containsAll(completedInstants));
+  }
+
+  private String getNextCommitTime() {
+    return HoodieActiveTimeline.createNewInstantTime();
   }
 
   @ParameterizedTest

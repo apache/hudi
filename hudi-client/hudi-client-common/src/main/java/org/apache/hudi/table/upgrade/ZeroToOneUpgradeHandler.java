@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -33,6 +31,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
@@ -104,8 +104,8 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
             // not feasible to differentiate MERGE from CREATE. hence creating with MERGE IOType for all base files.
             writeMarkers.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
           }
-          for (FileStatus fileStatus : rollbackStat.getCommandBlocksCount().keySet()) {
-            writeMarkers.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
+          for (StoragePathInfo pathInfo : rollbackStat.getCommandBlocksCount().keySet()) {
+            writeMarkers.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(pathInfo.getPath().toString(), table), IOType.APPEND);
           }
         }
       }
@@ -118,8 +118,9 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     List<HoodieRollbackRequest> hoodieRollbackRequests =
         new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().getTimestamp(), false)
             .getRollbackRequests(commitInstantOpt.get());
-    return new BaseRollbackHelper(table.getMetaClient(), table.getConfig())
-        .collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);
+    String rollbackInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    return new BaseRollbackHelper(table, table.getConfig())
+        .collectRollbackStats(context, rollbackInstantTime, commitInstantOpt.get(), hoodieRollbackRequests);
   }
 
   /**
@@ -132,7 +133,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
    * @return the marker file name thus curated.
    */
   private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable<?, ?, ?, ?> table) {
-    Path logPath = new Path(table.getMetaClient().getBasePath(), logFilePath);
+    StoragePath logPath = new StoragePath(table.getMetaClient().getBasePath(), logFilePath);
     String fileId = FSUtils.getFileIdFromLogPath(logPath);
     String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);
     String writeToken = FSUtils.getWriteTokenFromLogPath(logPath);

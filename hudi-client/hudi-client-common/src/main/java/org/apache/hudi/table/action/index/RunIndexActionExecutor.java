@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -37,13 +36,13 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,9 +97,9 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-    if (config.getMetadataConfig().enableMetrics()) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieIndexer")));
+    this.txnManager = new TransactionManager(config, table.getStorage());
+    if (config.getMetadataConfig().isMetricsEnabled()) {
+      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -156,8 +155,10 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           LOG.info("Total remaining instants to index: " + instantsToCatchup.size());
 
           // reconcile with metadata table timeline
-          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePathV2().toString());
-          HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataBasePath).build();
+          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePath().toString());
+          HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+              .setBasePath(metadataBasePath).build();
           Set<String> metadataCompletedTimestamps = getCompletedArchivedAndActiveInstantsAfter(indexUptoInstant, metadataMetaClient).stream()
               .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
@@ -211,13 +212,14 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     });
     table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
     table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
-    HoodieTableConfig.update(table.getMetaClient().getFs(), new Path(table.getMetaClient().getMetaPath()), table.getMetaClient().getTableConfig().getProps());
+    HoodieTableConfig.update(table.getStorage(),
+        table.getMetaClient().getMetaPath(), table.getMetaClient().getTableConfig().getProps());
 
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
       MetadataPartitionType partitionType = MetadataPartitionType.valueOf(partition.toUpperCase(Locale.ROOT));
-      if (metadataPartitionExists(table.getMetaClient().getBasePathV2().toString(), context, partitionType)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePathV2().toString(), context, partitionType);
+      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType)) {
+        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType);
       }
     });
 

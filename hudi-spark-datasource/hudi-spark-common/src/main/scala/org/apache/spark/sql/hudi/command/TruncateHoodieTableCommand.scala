@@ -17,12 +17,14 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
@@ -61,19 +63,21 @@ case class TruncateHoodieTableCommand(
 
     val basePath = hoodieCatalogTable.tableLocation
     val properties = hoodieCatalogTable.tableConfig.getProps
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     if (partitionSpec.isEmpty) {
-      val targetPath = new Path(basePath)
+      val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val storage = HoodieStorageUtils.getStorage(
+        basePath, HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf))
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties
       val metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
-        .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
+        .initTable(
+          HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf),
+          hoodieCatalogTable.tableLocation)
       hoodieCatalogTable.tableConfig.clearMetadataPartitions(metaClient)
     } else {
       val normalizedSpecs: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>

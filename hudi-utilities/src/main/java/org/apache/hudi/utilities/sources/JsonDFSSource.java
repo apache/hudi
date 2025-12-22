@@ -47,7 +47,7 @@ public class JsonDFSSource extends JsonSource {
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return selPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
-        .orElse(new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
+        .orElseGet(() -> new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
   }
 
   private JavaRDD<String> fromFiles(String pathStr) {

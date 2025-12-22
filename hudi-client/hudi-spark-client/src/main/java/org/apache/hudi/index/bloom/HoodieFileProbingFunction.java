@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -29,8 +28,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.slf4j.Logger;
@@ -60,12 +60,12 @@ public class HoodieFileProbingFunction implements
   private static final long BLOOM_FILTER_CHECK_MAX_FILE_COUNT_PER_BATCH = 256;
 
   private final Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast;
-  private final SerializableConfiguration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
 
   public HoodieFileProbingFunction(Broadcast<HoodieTableFileSystemView> baseFileOnlyViewBroadcast,
-                                   SerializableConfiguration hadoopConf) {
+                                   StorageConfiguration<?> storageConf) {
     this.baseFileOnlyViewBroadcast = baseFileOnlyViewBroadcast;
-    this.hadoopConf = hadoopConf;
+    this.storageConf = storageConf;
   }
 
   @Override
@@ -127,8 +127,8 @@ public class HoodieFileProbingFunction implements
             // TODO add assertion that file is checked only once
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
-            List<String> matchingKeys = HoodieIndexUtils.filterKeysFromFile(new Path(dataFile.getPath()),
-                candidateRecordKeys, hadoopConf.get());
+            List<String> matchingKeys = HoodieIndexUtils.filterKeysFromFile(dataFile.getStoragePath(),
+                candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
 
             LOG.debug(
                 String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",

@@ -17,12 +17,14 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.hudi.common.util.{BinaryUtil, StringUtils}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import java.io.IOException
+import java.time.Instant
 
 class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
@@ -49,10 +51,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call downgrade_table(table => '$tableName')""")(
         s"Argument: to_version is required")
 
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       // verify hoodie.table.version of the original table
       assertResult(HoodieTableVersion.SIX.versionCode) {
@@ -104,16 +103,44 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
       // downgrade table to THREE
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'THREE')""")(Seq(true))
-      // upgrade table to FOUR
-      checkAnswer(s"""call upgrade_table(table => '$tableName', to_version => 'FOUR')""")(Seq(true))
+      var metaClient = createMetaClient(spark, tablePath)
+      val storage = metaClient.getStorage
+      // verify hoodie.table.version of the table is THREE
+      assertResult(HoodieTableVersion.THREE.versionCode) {
+        metaClient.getTableConfig.getTableVersion.versionCode()
+      }
+      val metaPathDir = new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METAFOLDER_NAME)
+      // delete checksum from hoodie.properties
+      val props = HoodieTableConfig.fetchConfigs(storage, metaPathDir.toString)
+      props.remove(HoodieTableConfig.TABLE_CHECKSUM.key)
+      try {
+        val outputStream = storage.create(new StoragePath(metaPathDir, HoodieTableConfig.HOODIE_PROPERTIES_FILE))
+        props.store(outputStream, "Updated at " + Instant.now)
+        outputStream.close()
+      } catch {
+        case e: Exception => fail(e)
+      }
+      // verify hoodie.table.checksum is deleted from hoodie.properties
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertResult(false) {metaClient.getTableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM)}
+      // upgrade table to SIX
+      checkAnswer(s"""call upgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertResult(HoodieTableVersion.SIX.versionCode) {
+        metaClient.getTableConfig.getTableVersion.versionCode()
+      }
+      val expectedCheckSum = BinaryUtil.generateChecksum(StringUtils.getUTF8Bytes(tableName))
+      assertResult(expectedCheckSum) {
+        metaClient.getTableConfig.getLong(HoodieTableConfig.TABLE_CHECKSUM)
+      }
     }
   }
 
   @throws[IOException]
   private def assertTableVersionFromPropertyFile(metaClient: HoodieTableMetaClient, versionCode: Int): Unit = {
-    val propertyFile = new Path(metaClient.getMetaPath + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)
+    val propertyFile = new StoragePath(metaClient.getMetaPath + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)
     // Load the properties and verify
-    val fsDataInputStream = metaClient.getFs.open(propertyFile)
+    val fsDataInputStream = metaClient.getStorage.open(propertyFile)
     val config = new HoodieConfig
     config.getProps.load(fsDataInputStream)
     fsDataInputStream.close()

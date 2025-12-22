@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal;
 
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -74,7 +75,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     // execute N rounds
     for (int i = 0; i < 2; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
           STRUCT_TYPE, populateMetaFields, sorted);
@@ -116,7 +117,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields, "true");
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     for (int i = 0; i < 1; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
           STRUCT_TYPE, populateMetaFields, sorted);
@@ -161,7 +162,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
-    String instantTime = "001";
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
     HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
         STRUCT_TYPE, true, false);
 

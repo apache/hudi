@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
@@ -41,14 +42,14 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -67,6 +68,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRestoreMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utils for creating dummy Hudi files in testing.
@@ -89,39 +91,45 @@ public class FileCreateUtils {
   }
 
   public static String logFileName(String instantTime, String fileId, int version) {
-    return logFileName(instantTime, fileId, version, HoodieFileFormat.HOODIE_LOG.getFileExtension());
+    return logFileName(instantTime, fileId, version,
+        HoodieFileFormat.HOODIE_LOG.getFileExtension());
   }
 
-  public static String logFileName(String instantTime, String fileId, int version, String fileExtension) {
+  public static String logFileName(String instantTime, String fileId, int version,
+                                   String fileExtension) {
     return FSUtils.makeLogFileName(fileId, fileExtension, instantTime, version, WRITE_TOKEN);
   }
 
-  public static String markerFileName(String instantTime, String fileId, IOType ioType) {
-    return markerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION);
+  public static String markerFileName(String fileName, IOType ioType) {
+    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, ioType.name());
   }
 
-  public static String markerFileName(String instantTime, String fileId, IOType ioType, String fileExtension) {
-    return markerFileName(instantTime, fileId, ioType, fileExtension, WRITE_TOKEN);
+  public static String dataFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
+    return markerFileName(FSUtils.makeBaseFileName(instantTime, writeToken, fileId, fileExtension), ioType);
   }
 
-  public static String markerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
-    return String.format("%s_%s_%s%s%s.%s", fileId, writeToken, instantTime, fileExtension,
-        HoodieTableMetaClient.MARKER_EXTN, ioType);
+  public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, int logVersion) {
+    return logFileMarkerFileName(instantTime, fileId, ioType, HoodieLogFile.DELTA_EXTENSION, logVersion);
   }
 
-  private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
-    org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    if (!fs.exists(parentPath)) {
-      fs.create(parentPath).close();
+  public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, int logVersion) {
+    return markerFileName(FSUtils.makeLogFileName(fileId, fileExtension, instantTime, logVersion, WRITE_TOKEN), ioType);
+  }
+
+  private static void createMetaFile(String basePath, String instantTime, String suffix,
+                                     HoodieStorage storage) throws IOException {
+    StoragePath parentPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    if (!storage.exists(parentPath)) {
+      storage.create(parentPath).close();
     }
-    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
-    if (!fs.exists(metaFilePath)) {
-      fs.create(metaFilePath).close();
+    StoragePath metaFilePath = new StoragePath(parentPath, instantTime + suffix);
+    if (!storage.exists(metaFilePath)) {
+      storage.create(metaFilePath).close();
     }
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    createMetaFile(basePath, instantTime, suffix, "".getBytes());
+    createMetaFile(basePath, instantTime, suffix, getUTF8Bytes(""));
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
@@ -137,11 +145,11 @@ public class FileCreateUtils {
     }
   }
 
-  private static void deleteMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
-    org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
-    if (fs.exists(metaFilePath)) {
-      fs.delete(metaFilePath, true);
+  private static void deleteMetaFile(String basePath, String instantTime, String suffix, HoodieStorage storage) throws IOException {
+    StoragePath parentPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    StoragePath metaFilePath = new StoragePath(parentPath, instantTime + suffix);
+    if (storage.exists(metaFilePath)) {
+      storage.deleteFile(metaFilePath);
     }
   }
 
@@ -160,18 +168,22 @@ public class FileCreateUtils {
   public static void createCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> metadata) throws IOException {
     if (metadata.isPresent()) {
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION,
-          metadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+          getUTF8Bytes(metadata.get().toJsonString()));
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
     }
   }
 
-  public static void createSavepointCommit(String basePath, String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, TimelineMetadataUtils.serializeSavepointMetadata(savepointMetadata).get());
+  public static void createSavepointCommit(String basePath, String instantTime,
+                                           HoodieSavepointMetadata savepointMetadata)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION,
+        TimelineMetadataUtils.serializeSavepointMetadata(savepointMetadata).get());
   }
 
-  public static void createCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION, fs);
+  public static void createCommit(String basePath, String instantTime, HoodieStorage storage)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION, storage);
   }
 
   public static void createRequestedCommit(String basePath, String instantTime) throws IOException {
@@ -183,75 +195,102 @@ public class FileCreateUtils {
   }
 
   public static void createDeltaCommit(String basePath, String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, getUTF8Bytes(metadata.toJsonString()));
   }
 
   public static void createDeltaCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
   }
 
-  public static void createDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
+  public static void createDeltaCommit(String basePath, String instantTime,
+                                       HoodieStorage storage) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, storage);
   }
 
-  public static void createRequestedDeltaCommit(String basePath, String instantTime) throws IOException {
+  public static void createRequestedDeltaCommit(String basePath, String instantTime)
+      throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
   }
 
-  public static void createInflightDeltaCommit(String basePath, String instantTime) throws IOException {
+  public static void createInflightDeltaCommit(String basePath, String instantTime)
+      throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
   }
 
-  public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
+  public static void createInflightReplaceCommit(String basePath, String instantTime)
+      throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
   }
 
   public static void createReplaceCommit(String basePath, String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, getUTF8Bytes(metadata.toJsonString()));
   }
 
-  public static void createRequestedReplaceCommit(String basePath, String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws IOException {
+  public static void createRequestedReplaceCommit(String basePath, String instantTime,
+                                                  Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata)
+      throws IOException {
     if (requestedReplaceMetadata.isPresent()) {
-      createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata.get()).get());
+      createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION,
+          serializeRequestedReplaceMetadata(requestedReplaceMetadata.get()).get());
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
     }
   }
 
-  public static void createInflightReplaceCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws IOException {
+  public static void createInflightReplaceCommit(String basePath, String instantTime,
+                                                 Option<HoodieCommitMetadata> inflightReplaceMetadata)
+      throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
-      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, inflightReplaceMetadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, getUTF8Bytes(inflightReplaceMetadata.get().toJsonString()));
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
     }
   }
 
-  public static void createRequestedCompactionCommit(String basePath, String instantTime, HoodieCompactionPlan requestedCompactionPlan) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION, serializeCompactionPlan(requestedCompactionPlan).get());
+  public static void createRequestedCompactionCommit(String basePath, String instantTime,
+                                                     HoodieCompactionPlan requestedCompactionPlan)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION,
+        serializeCompactionPlan(requestedCompactionPlan).get());
   }
 
-  public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, serializeCleanMetadata(metadata).get());
+  public static void createCleanFile(String basePath, String instantTime,
+                                     HoodieCleanMetadata metadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION,
+        serializeCleanMetadata(metadata).get());
   }
 
-  public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanMetadata(metadata).get());
+  public static void createCleanFile(String basePath, String instantTime,
+                                     HoodieCleanMetadata metadata, boolean isEmpty)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION,
+        isEmpty ? EMPTY_BYTES : serializeCleanMetadata(metadata).get());
   }
 
-  public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
+  public static void createRequestedCleanFile(String basePath, String instantTime,
+                                              HoodieCleanerPlan cleanerPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION,
+        serializeCleanerPlan(cleanerPlan).get());
   }
 
-  public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+  public static void createRequestedCleanFile(String basePath, String instantTime,
+                                              HoodieCleanerPlan cleanerPlan, boolean isEmpty)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION,
+        isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
-  public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
+  public static void createInflightCleanFile(String basePath, String instantTime,
+                                             HoodieCleanerPlan cleanerPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION,
+        serializeCleanerPlan(cleanerPlan).get());
   }
 
-  public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+  public static void createInflightCleanFile(String basePath, String instantTime,
+                                             HoodieCleanerPlan cleanerPlan, boolean isEmpty)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION,
+        isEmpty ? EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
   public static void createRequestedRollbackFile(String basePath, String instantTime, HoodieRollbackPlan plan) throws IOException {
@@ -368,9 +407,38 @@ public class FileCreateUtils {
 
   public static String createMarkerFile(String basePath, String partitionPath, String commitInstant,
       String instantTime, String fileId, IOType ioType, String writeToken) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, commitInstant, partitionPath);
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     Files.createDirectories(parentPath);
-    Path markerFilePath = parentPath.resolve(markerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION, writeToken));
+    Path markerFilePath = parentPath.resolve(dataFileMarkerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION, writeToken));
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
+      throws IOException {
+    return createLogFileMarker(basePath, partitionPath, instantTime, instantTime, fileId, ioType, HoodieLogFile.LOGFILE_BASE_VERSION);
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String baseInstantTime, String instantTime, String fileId,
+                                           IOType ioType,
+                                           int logVersion)
+      throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(logFileMarkerFileName(baseInstantTime, fileId, ioType, logVersion));
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createFileMarkerByFileName(String basePath, String partitionPath, String instantTime, String fileName, IOType ioType)
+      throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(markerFileName(fileName, ioType));
     if (Files.notExists(markerFilePath)) {
       Files.createFile(markerFilePath);
     }
@@ -450,13 +518,17 @@ public class FileCreateUtils {
   /**
    * Find total basefiles for passed in paths.
    */
-  public static Map<String, Long> getBaseFileCountsForPaths(String basePath, FileSystem fs, String... paths) {
+  public static Map<String, Long> getBaseFileCountsForPaths(String basePath, HoodieStorage storage,
+                                                            String... paths) {
     Map<String, Long> toReturn = new HashMap<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+          storage.getConf(), basePath);
       for (String path : paths) {
-        TableFileSystemView.BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new org.apache.hadoop.fs.Path(path)));
+        TableFileSystemView.BaseFileOnlyView fileSystemView =
+            new HoodieTableFileSystemView(metaClient,
+                metaClient.getCommitsTimeline().filterCompletedInstants(),
+                storage.globEntries(new StoragePath(path)));
         toReturn.put(path, fileSystemView.getLatestBaseFiles().count());
       }
       return toReturn;
@@ -465,12 +537,14 @@ public class FileCreateUtils {
     }
   }
 
-  public static void deleteDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
-    deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
+  public static void deleteDeltaCommit(String basePath, String instantTime,
+                                       HoodieStorage storage) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, storage);
   }
 
-  public static void deleteSavepointCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
-    deleteMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION, fs);
-    deleteMetaFile(basePath, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, fs);
+  public static void deleteSavepointCommit(String basePath, String instantTime,
+                                           HoodieStorage storage) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION, storage);
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, storage);
   }
 }

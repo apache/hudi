@@ -46,9 +46,4 @@ public final class LocalTaskContextSupplier extends TaskContextSupplier {
     return Option.empty();
   }
 
-  @Override
-  public Supplier<Integer> getAttemptNumberSupplier() {
-    return () -> 0;
-  }
-
 }

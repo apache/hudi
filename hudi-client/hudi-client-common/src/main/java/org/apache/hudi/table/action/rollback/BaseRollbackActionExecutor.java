@@ -37,11 +37,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,7 +89,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.skipLocking = skipLocking;
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
   /**
@@ -118,6 +118,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
     // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp())
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    // For MOR table rollbacks, rollback command blocks might generate markers under rollback instant. So, lets clean up the markers if any.
+    WriteMarkersFactory.get(config.getMarkersType(), table, rollbackInstant.getTimestamp())
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
 
     return rollbackMetadata;
@@ -174,7 +177,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
         try {
-          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getFs(),
+          if (!HoodieHeartbeatClient.heartbeatExists(table.getStorage(),
               config.getBasePath(), instantTimeToRollback)) {
             throw new HoodieRollbackException(
                 "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
@@ -188,7 +191,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
           return true;
         }
-        return !ClusteringUtils.isPendingClusteringInstant(table.getMetaClient(), instant);
+        return !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant);
       }).map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
       if ((instantTimeToRollback != null) && !inflights.isEmpty()
@@ -239,7 +242,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
    * @return list of {@link HoodieRollbackStat}s.
    */
   protected List<HoodieRollbackStat> executeRollback(HoodieInstant instantToRollback, HoodieRollbackPlan rollbackPlan) {
-    return new BaseRollbackHelper(table.getMetaClient(), config).performRollback(context, instantToRollback, rollbackPlan.getRollbackRequests());
+    return new BaseRollbackHelper(table, config).performRollback(context, instantTime, instantToRollback, rollbackPlan.getRollbackRequests());
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
@@ -312,10 +315,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       return;
     }
 
-    Path backupDir = new Path(config.getRollbackBackupDirectory());
+    StoragePath backupDir = new StoragePath(config.getRollbackBackupDirectory());
     if (!backupDir.isAbsolute()) {
       // Path specified is relative to the meta directory
-      backupDir = new Path(table.getMetaClient().getMetaPath(), config.getRollbackBackupDirectory());
+      backupDir = new StoragePath(table.getMetaClient().getMetaPath(), config.getRollbackBackupDirectory());
     }
 
     // Determine the instants to back up

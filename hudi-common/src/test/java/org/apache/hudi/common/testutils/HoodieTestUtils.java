@@ -18,8 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -27,13 +26,20 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.junit.jupiter.api.Assumptions;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -44,7 +50,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
-import org.junit.jupiter.api.Assumptions;
+
+import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 
 /**
  * A utility class for testing.
@@ -56,9 +63,28 @@ public class HoodieTestUtils {
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
+  public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
 
-  public static Configuration getDefaultHadoopConf() {
-    return new Configuration();
+  public static StorageConfiguration<Configuration> getDefaultStorageConf() {
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Boolean.class}, false);
+  }
+
+  public static StorageConfiguration<Configuration> getDefaultStorageConfWithDefaults() {
+    return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
+        new Class<?>[] {Boolean.class}, true);
+  }
+
+  public static HoodieStorage getDefaultStorage() {
+    return getStorage(DEFAULT_URI);
+  }
+
+  public static HoodieStorage getStorage(String path) {
+    return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
+  }
+
+  public static HoodieStorage getStorage(StoragePath path) {
+    return HoodieStorageUtils.getStorage(path, getDefaultStorageConf());
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {
@@ -66,11 +92,11 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType) throws IOException {
-    return init(getDefaultHadoopConf(), basePath, tableType);
+    return init(getDefaultStorageConf(), basePath, tableType);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, Properties properties) throws IOException {
-    return init(getDefaultHadoopConf(), basePath, tableType, properties);
+    return init(getDefaultStorageConf(), basePath, tableType, properties);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator) throws IOException {
@@ -89,7 +115,7 @@ public class HoodieTestUtils {
       props.put("hoodie.datasource.write.partitionpath.field", partitionFieldConfigValue);
       props.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFieldConfigValue);
     }
-    return init(getDefaultHadoopConf(), basePath, tableType, props);
+    return init(getDefaultStorageConf(), basePath, tableType, props);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable) throws IOException {
@@ -97,40 +123,40 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieFileFormat baseFileFormat) throws IOException {
-    return init(getDefaultHadoopConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    return init(getDefaultStorageConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath) throws IOException {
-    return init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath) throws IOException {
+    return init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType)
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType)
       throws IOException {
-    return init(hadoopConf, basePath, tableType, new Properties());
+    return init(storageConf, basePath, tableType, new Properties());
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            String tableName)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
-    return init(hadoopConf, basePath, tableType, properties);
+    return init(storageConf, basePath, tableType, properties);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat, String databaseName)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
-    return init(hadoopConf, basePath, tableType, properties, databaseName);
+    return init(storageConf, basePath, tableType, properties, databaseName);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat) throws IOException {
-    return init(hadoopConf, basePath, tableType, baseFileFormat, false, null, true);
+    return init(storageConf, basePath, tableType, baseFileFormat, false, null, true);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields)
       throws IOException {
     Properties properties = new Properties();
@@ -139,15 +165,15 @@ public class HoodieTestUtils {
       properties.setProperty("hoodie.datasource.write.keygenerator.class", keyGenerator);
     }
     properties.setProperty("hoodie.populate.meta.fields", Boolean.toString(populateMetaFields));
-    return init(hadoopConf, basePath, tableType, properties);
+    return init(storageConf, basePath, tableType, properties);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties) throws IOException {
-    return init(hadoopConf, basePath, tableType, properties, null);
+    return init(storageConf, basePath, tableType, properties, null);
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
     HoodieTableMetaClient.PropertyBuilder builder =
@@ -165,7 +191,7 @@ public class HoodieTestUtils {
 
     Properties processedProperties = builder.fromProperties(properties).build();
 
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, processedProperties);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, processedProperties);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
@@ -176,7 +202,52 @@ public class HoodieTestUtils {
       props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
       props.put("hoodie.datasource.write.partitionpath.field", "datestr");
     }
-    return init(getDefaultHadoopConf(), basePath, tableType, props);
+    return init(getDefaultStorageConf(), basePath, tableType, props);
+  }
+
+  /**
+   * @param storageConf storage configuration.
+   * @param basePath    base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(StorageConfiguration<?> storageConf,
+                                                       String basePath) {
+    return HoodieTableMetaClient.builder()
+        .setConf(storageConf).setBasePath(basePath).build();
+  }
+
+  public static HoodieTableMetaClient createMetaClient(StorageConfiguration<?> storageConf,
+                                                       StoragePath basePath) {
+    return HoodieTableMetaClient.builder()
+            .setConf(storageConf).setBasePath(basePath).build();
+  }
+
+  /**
+   * @param storage  {@link HoodieStorage} instance.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(HoodieStorage storage,
+                                                       String basePath) {
+    return createMetaClient(storage.getConf().newInstance(), basePath);
+  }
+
+  /**
+   * @param context  Hudi engine context.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(HoodieEngineContext context,
+                                                       String basePath) {
+    return createMetaClient(context.getStorageConf().newInstance(), basePath);
+  }
+
+  /**
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance with default configuration for tests.
+   */
+  public static HoodieTableMetaClient createMetaClient(String basePath) {
+    return createMetaClient(getDefaultStorageConf(), basePath);
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
@@ -217,16 +288,16 @@ public class HoodieTestUtils {
   }
 
   public static void createCompactionCommitInMetadataTable(
-      Configuration hadoopConf, HoodieWrapperFileSystem wrapperFs, String basePath,
-      String instantTime) throws IOException {
+      StorageConfiguration<?> storageConf, String basePath, String instantTime) throws IOException {
     // This is to simulate a completed compaction commit in metadata table timeline,
     // so that the commits on data table timeline can be archived
     // Note that, if metadata table is enabled, instants in data table timeline,
     // which are more recent than the last compaction on the metadata table,
     // are not archived (HoodieTimelineArchiveLog::getInstantsToArchive)
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
-    HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
+    HoodieTestUtils.init(storageConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001",
+        storageConf);
   }
 
   public static int getJavaVersion() {

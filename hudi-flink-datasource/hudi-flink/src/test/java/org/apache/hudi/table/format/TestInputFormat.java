@@ -27,10 +27,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -349,7 +351,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .skipCompaction(false)
         .build();
 
@@ -390,7 +392,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(false)
         .build();
@@ -429,7 +431,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(true)
         .build();
@@ -494,7 +496,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipClustering(true)
         .build();
@@ -580,7 +582,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .build();
 
     // timeline: c1, c2.inflight, c3.inflight, c4
@@ -649,7 +651,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .build();
 
@@ -776,7 +778,8 @@ public class TestInputFormat {
       TestData.writeData(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
@@ -860,7 +863,8 @@ public class TestInputFormat {
       TestData.writeDataAsBatch(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
@@ -988,6 +992,29 @@ public class TestInputFormat {
   }
 
   @Test
+  void testMergeRecordWithUpdateBefore() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // write first batch with all insert data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    // write second batch with UPDATE_BEFORE record, send UPDATE_BEFORE for `id1`
+    TestData.writeData(TestData.DATA_SET_UPDATE_BEFORE, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    final String baseResult = TestData.rowDataToString(readData(inputFormat));
+    String expected = "["
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]";
+    assertThat(baseResult, is(expected));
+  }
+
+  @Test
   void testReadArchivedCommitsIncrementally() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
@@ -1009,7 +1036,8 @@ public class TestInputFormat {
         HoodieFlinkEngineContext.DEFAULT, FlinkWriteClients.getHoodieClientConfig(conf));
     writeClient.clean();
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 

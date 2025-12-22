@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -42,10 +43,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,8 +94,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                       String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
+  private HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                       String latestInstantTime, Long maxMemorySizeInBytes,
                                        boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                        Option<InstantRange> instantRange,
                                        ExternalSpillableMap.DiskMapType diskMapType,
@@ -103,9 +104,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        Option<String> partitionName,
                                        InternalSchema internalSchema,
                                        Option<String> keyFieldOverride,
-                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger);
+                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                      Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+    super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
+        hoodieTableMetaClientOption);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -206,12 +209,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
 
-    LOG.info("Number of log files scanned => " + logFilePaths.size());
-    LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
-    LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
-    LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
-    LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
-    LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
+    if (LOG.isInfoEnabled()) {
+      LOG.info("Number of log files scanned => {}", logFilePaths.size());
+      LOG.info("MaxMemoryInBytes allowed for compaction => {}", maxMemorySizeInBytes);
+      LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => {}", records.getInMemoryMapNumEntries());
+      LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => {}", records.getCurrentInMemoryMapSize());
+      LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => {}", records.getDiskBasedMapNumEntries());
+      LOG.info("Size of file spilled to disk => {}", records.getSizeOfFileOnDiskInBytes());
+    }
   }
 
   @Override
@@ -322,13 +327,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
   public static class Builder extends AbstractHoodieLogRecordReader.Builder {
-    private FileSystem fs;
+    private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;
     private Schema readerSchema;
     private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
     private String latestInstantTime;
-    private boolean readBlocksLazily;
     private boolean reverseReader;
     private int bufferSize;
     // specific configurations
@@ -346,16 +350,23 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
-    public Builder withFileSystem(FileSystem fs) {
-      this.fs = fs;
+    public Builder withStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
     @Override
     public Builder withBasePath(String basePath) {
       this.basePath = basePath;
+      return this;
+    }
+
+    @Override
+    public Builder withBasePath(StoragePath basePath) {
+      this.basePath = basePath.toString();
       return this;
     }
 
@@ -376,12 +387,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     @Override
     public Builder withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
-      return this;
-    }
-
-    @Override
-    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
-      this.readBlocksLazily = readBlocksLazily;
       return this;
     }
 
@@ -463,17 +468,25 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
+    public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+      this.hoodieTableMetaClient = hoodieTableMetaClient;
+      return this;
+    }
+
+    @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
-        this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
+        this.partitionName = getRelativePartitionPath(
+            new StoragePath(basePath), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
       ValidationUtils.checkArgument(recordMerger != null);
 
-      return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
+      return new HoodieMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
+          latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger);
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
+          Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

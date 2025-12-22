@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOpt
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{resolveExpr, splitPartitionAndDataPredicates}
 import org.apache.spark.sql.Row
@@ -34,6 +35,7 @@ import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class RunClusteringProcedure extends BaseProcedure
@@ -85,7 +87,7 @@ class RunClusteringProcedure extends BaseProcedure
     val parts = getArgValueOrDefault(args, PARAMETERS(9))
 
     val basePath: String = getBasePath(tableName, tablePath)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     var confs: Map[String, String] = Map.empty
 
     val selectedPartitions: String = (parts, predicate) match {
@@ -184,7 +186,7 @@ class RunClusteringProcedure extends BaseProcedure
       if (showInvolvedPartitions) {
         clusteringPlans.map { p =>
           Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
-            p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
+            p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala.toSeq))
         }
       } else {
         clusteringPlans.map { p =>
@@ -201,7 +203,7 @@ class RunClusteringProcedure extends BaseProcedure
   override def build: Procedure = new RunClusteringProcedure()
 
   def prunePartition(metaClient: HoodieTableMetaClient, predicate: String): String = {
-    val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath)
+    val options = Map(QUERY_TYPE.key() -> QUERY_TYPE_SNAPSHOT_OPT_VAL, "path" -> metaClient.getBasePath.toString)
     val hoodieFileIndex = HoodieFileIndex(sparkSession, metaClient, None, options,
       FileStatusCache.getOrCreate(sparkSession))
 

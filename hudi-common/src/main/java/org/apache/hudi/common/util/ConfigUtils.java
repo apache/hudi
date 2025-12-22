@@ -19,12 +19,14 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +38,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
@@ -55,6 +59,8 @@ public class ConfigUtils {
    * location to read.
    */
   public static final String TABLE_SERDE_PATH = "path";
+
+  public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
@@ -92,7 +98,7 @@ public class ConfigUtils {
   }
 
   /**
-   * Convert the key-value config to a map.The format of the config
+   * Convert the key-value config to a map.  The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
    *
    * @param keyValueConfig Key-value configs in properties format, i.e., multiple lines of
@@ -100,10 +106,23 @@ public class ConfigUtils {
    * @return A {@link Map} of key-value configs.
    */
   public static Map<String, String> toMap(String keyValueConfig) {
+    return toMap(keyValueConfig, "\n");
+  }
+
+  /**
+   * Convert the key-value config to a map. The format of the config is a key-value pair
+   * with defined separator.  For example, if the separator is a comma, the input is
+   * "k1=v1,k2=v2,k3=v3".
+   *
+   * @param keyValueConfig key-value configs in properties format, with defined separator.
+   * @param separator      the separator.
+   * @return A {@link Map} of key-value configs.
+   */
+  public static Map<String, String> toMap(String keyValueConfig, String separator) {
     if (StringUtils.isNullOrEmpty(keyValueConfig)) {
       return new HashMap<>();
     }
-    String[] keyvalues = keyValueConfig.split("\n");
+    String[] keyvalues = keyValueConfig.split(separator);
     Map<String, String> tableProperties = new HashMap<>();
     for (String keyValue : keyvalues) {
       // Handle multiple new lines and lines that contain only spaces after splitting
@@ -142,18 +161,6 @@ public class ConfigUtils {
       sb.append(entry.getKey()).append("=").append(entry.getValue());
     }
     return sb.toString();
-  }
-
-  /**
-   * Creates a Hadoop {@link Configuration} instance with the properties.
-   *
-   * @param props {@link Properties} instance.
-   * @return Hadoop {@link Configuration} instance.
-   */
-  public static Configuration createHadoopConf(Properties props) {
-    Configuration hadoopConf = new Configuration();
-    props.stringPropertyNames().forEach(k -> hadoopConf.set(k, props.getProperty(k)));
-    return hadoopConf;
   }
 
   /**
@@ -274,11 +281,11 @@ public class ConfigUtils {
    * Gets the raw value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
    */
-  public static Option<Object> getRawValueWithAltKeys(TypedProperties props,
+  public static Option<Object> getRawValueWithAltKeys(Properties props,
                                                       ConfigProperty<?> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return Option.ofNullable(props.get(configProperty.key()));
@@ -407,12 +414,12 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return boolean value if the config exists; default boolean value if the config does not exist
    * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
    */
-  public static boolean getBooleanWithAltKeys(TypedProperties props,
+  public static boolean getBooleanWithAltKeys(Properties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
     boolean defaultValue = configProperty.hasDefaultValue()
@@ -497,5 +504,17 @@ public class ConfigUtils {
       keys.addAll(configProperty.getAlternatives());
       return keys.stream();
     }).collect(Collectors.toSet());
+  }
+
+  public static HoodieConfig getReaderConfigs(StorageConfiguration<?> storageConf) {
+    HoodieConfig config = new HoodieConfig();
+    config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
+    config.setValue(USE_NATIVE_HFILE_READER,
+        Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
+    return config;
+  }
+
+  public static TypedProperties loadGlobalProperties() {
+    return ((PropertiesConfig) ReflectionUtils.loadClass("org.apache.hudi.common.config.DFSPropertiesConfiguration")).getGlobalProperties();
   }
 }

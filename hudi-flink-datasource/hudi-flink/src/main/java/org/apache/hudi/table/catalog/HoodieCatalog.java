@@ -20,7 +20,6 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -30,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
@@ -115,7 +115,7 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public void open() throws CatalogException {
-    fs = FSUtils.getFs(catalogPathStr, hadoopConf);
+    fs = HadoopFSUtils.getFs(catalogPathStr, hadoopConf);
     catalogPath = new Path(catalogPathStr);
     try {
       if (!fs.exists(catalogPath)) {
@@ -346,6 +346,10 @@ public class HoodieCatalog extends AbstractCatalog {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
       conf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
+
+      final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      boolean complexHoodieKey = pks.length > 1 || resolvedTable.getPartitionKeys().size() > 1;
+      StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
     } else {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }

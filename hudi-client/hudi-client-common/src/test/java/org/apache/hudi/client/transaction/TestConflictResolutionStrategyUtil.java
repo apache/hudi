@@ -207,22 +207,22 @@ public class TestConflictResolutionStrategyUtil {
     writeStat.setFileId("file-2");
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
-    FileCreateUtils.createReplaceCommit(metaClient.getBasePath(), instantTime, replaceMetadata);
+    FileCreateUtils.createReplaceCommit(metaClient.getBasePath().toString(), instantTime, replaceMetadata);
   }
 
   public static void createPendingCompaction(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
-    String fileId1 = "file-2";
+    String fileId1 = "file-1";
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
     compactionPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     operation.setFileId(fileId1);
     operation.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    operation.setDataFilePath("/file-2");
-    operation.setDeltaFilePaths(Arrays.asList("/file-2"));
+    operation.setDataFilePath("/file-1");
+    operation.setDeltaFilePaths(Arrays.asList("/file-1-log1"));
     compactionPlan.setOperations(Arrays.asList(operation));
     HoodieTestTable.of(metaClient)
         .addRequestedCompaction(instantTime, compactionPlan);
-    FileCreateUtils.createPendingInflightCompaction(metaClient.getBasePath(), instantTime);
+    FileCreateUtils.createPendingInflightCompaction(metaClient.getBasePath().toString(), instantTime);
   }
 
   public static void createCompleteCompaction(String instantTime, HoodieTableMetaClient metaClient) throws Exception {

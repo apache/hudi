@@ -48,12 +48,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
+import static org.apache.hudi.table.action.clean.CleanPlanner.SAVEPOINTED_TIMESTAMPS;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
-
   private final Option<Map<String, String>> extraMetadata;
 
   public CleanPlanActionExecutor(HoodieEngineContext context,
@@ -122,16 +123,22 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = new HashMap<>();
       List<String> partitionsToDelete = new ArrayList<>();
+      boolean shouldUseBatchLookup = shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config);
       for (int i = 0; i < partitionsToClean.size(); i += cleanerParallelism) {
         // Handles at most 'cleanerParallelism' number of partitions once at a time to avoid overlarge memory pressure to the timeline server
         // (remote or local embedded), thus to reduce the risk of an OOM exception.
         List<String> subPartitionsToClean = partitionsToClean.subList(i, Math.min(i + cleanerParallelism, partitionsToClean.size()));
+        if (shouldUseBatchLookup) {
+          LOG.info("Load partitions and files into file system view in advance. Paths: {}", subPartitionsToClean);
+          table.getHoodieView().loadPartitions(subPartitionsToClean);
+        }
         Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
             .map(subPartitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean, earliestInstant)), cleanerParallelism)
             .stream()
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
         cleanOps.putAll(cleanOpsWithPartitionMeta.entrySet().stream()
+            .filter(e -> !e.getValue().getValue().isEmpty())
             .collect(Collectors.toMap(Map.Entry::getKey, e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue()))));
 
         partitionsToDelete.addAll(cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
@@ -142,9 +149,17 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           planner.getLastCompletedCommitTimestamp(),
           config.getCleanerPolicy().name(), Collections.emptyMap(),
-          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
+          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete, prepareExtraMetadata(planner.getSavepointedTimestamps()));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
+    }
+  }
+
+  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps) {
+    if (savepointedTimestamps.isEmpty()) {
+      return Collections.emptyMap();
+    } else {
+      return Collections.singletonMap(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
     }
   }
 
@@ -164,6 +179,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
+        table.validateForLatestTimestamp(cleanInstant.getTimestamp());
         table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
         LOG.info("Requesting Cleaning with instant time " + cleanInstant);
       } catch (IOException e) {

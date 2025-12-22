@@ -17,11 +17,12 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Dataset, Row}
 
@@ -40,8 +41,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val basePath = s"${tmp.getCanonicalPath}"
 
       val srcName: String = "source"
-      val sourcePath = basePath + Path.SEPARATOR + srcName
-      val tablePath = basePath + Path.SEPARATOR + tableName
+      val sourcePath = basePath + StoragePath.SEPARATOR + srcName
+      val tablePath = basePath + StoragePath.SEPARATOR + tableName
       val jsc = new JavaSparkContext(spark.sparkContext)
 
       // generate test data
@@ -49,7 +50,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val timestamp: Long = Instant.now.toEpochMilli
       for (i <- 0 until partitions.size) {
         val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
-        df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
+        df.write.parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
       spark.sql("set hoodie.bootstrap.parallelism = 20")
@@ -105,8 +106,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val basePath = s"${tmp.getCanonicalPath}"
 
       val srcName: String = "source"
-      val sourcePath = basePath + Path.SEPARATOR + srcName
-      val tablePath = basePath + Path.SEPARATOR + tableName
+      val sourcePath = basePath + StoragePath.SEPARATOR + srcName
+      val tablePath = basePath + StoragePath.SEPARATOR + tableName
       val jsc = new JavaSparkContext(spark.sparkContext)
 
       // generate test data
@@ -114,7 +115,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val timestamp: Long = Instant.now.toEpochMilli
       for (i <- 0 until partitions.size) {
         val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
-        df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
+        df.write.parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
       spark.sql("set hoodie.bootstrap.parallelism = 20")
@@ -152,8 +153,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         result.length
       }
 
-      val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
-        .setConf(spark.sessionState.newHadoopConf()).build()
+      val metaClient = createMetaClient(spark, tablePath)
 
       assertResult("true") {
         metaClient.getTableConfig.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
@@ -171,8 +171,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val basePath = s"${tmp.getCanonicalPath}"
 
       val srcName: String = "source"
-      val sourcePath = basePath + Path.SEPARATOR + srcName
-      val tablePath = basePath + Path.SEPARATOR + tableName
+      val sourcePath = basePath + StoragePath.SEPARATOR + srcName
+      val tablePath = basePath + StoragePath.SEPARATOR + tableName
       val jsc = new JavaSparkContext(spark.sparkContext)
 
       // generate test data
@@ -227,8 +227,8 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val basePath = s"${tmp.getCanonicalPath}"
 
       val srcName: String = "source"
-      val sourcePath = basePath + Path.SEPARATOR + srcName
-      val tablePath = basePath + Path.SEPARATOR + tableName
+      val sourcePath = basePath + StoragePath.SEPARATOR + srcName
+      val tablePath = basePath + StoragePath.SEPARATOR + tableName
       val jsc = new JavaSparkContext(spark.sparkContext)
 
       // generate test data
@@ -236,7 +236,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val timestamp: Long = Instant.now.toEpochMilli
       for (i <- 0 until partitions.size) {
         val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, spark.sqlContext)
-        df.write.parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
+        df.write.parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
       spark.sql("set hoodie.bootstrap.parallelism = 20")

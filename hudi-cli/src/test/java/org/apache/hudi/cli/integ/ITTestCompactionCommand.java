@@ -44,8 +44,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,7 +84,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     tableName = "test_table_" + ITTestCompactionCommand.class.getName();
     basePath = Paths.get(basePath, tableName).toString();
 
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     // Create table and connect
     new TableCommand().createTable(
         basePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
@@ -248,13 +250,13 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
 
     metaClient.reloadActiveTimeline();
-    CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath());
+    CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath().toString());
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
         client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1, Option.empty(), false);
 
     renameFiles.forEach(lfPair -> {
       try {
-        metaClient.getFs().rename(lfPair.getLeft().getPath(), lfPair.getRight().getPath());
+        metaClient.getStorage().rename(lfPair.getLeft().getPath(), lfPair.getRight().getPath());
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }

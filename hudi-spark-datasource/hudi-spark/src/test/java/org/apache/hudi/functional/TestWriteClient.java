@@ -71,7 +71,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       result = client.insert(emptyRdd, secondCommit);
       assertTrue(client.commit(secondCommit, result), "Commit should succeed");
       // Schema Validations.
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, basePath);
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
       assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());

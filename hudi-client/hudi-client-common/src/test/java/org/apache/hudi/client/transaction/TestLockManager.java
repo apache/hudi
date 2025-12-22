@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.curator.test.TestingServer;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +79,8 @@ public class TestLockManager extends HoodieCommonTestHarness {
   @ValueSource(booleans = {true, false})
   void testLockAndUnlock(boolean multiWriter) {
     HoodieWriteConfig writeConfig = multiWriter ? getMultiWriterWriteConfig() : getSingleWriterWriteConfig();
-    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
+    LockManager lockManager = new LockManager(writeConfig,
+        (FileSystem) this.metaClient.getStorage().getFileSystem());
     LockManager mockLockManager = Mockito.spy(lockManager);
 
     assertDoesNotThrow(() -> {

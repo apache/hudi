@@ -31,11 +31,9 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -45,6 +43,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
@@ -115,14 +115,18 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
   public void testUpgradeDowngradeCommand(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
     // Start with hoodie.table.version to 5
     metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FIVE);
-    try (FSDataOutputStream os = metaClient.getFs().create(new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE), true)) {
+    try (OutputStream os = metaClient.getStorage().create(
+        new StoragePath(
+            metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE),
+        true)) {
       metaClient.getTableConfig().getProps().store(os, "");
     }
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     // verify marker files for inflight commit exists
     for (String partitionPath : DEFAULT_PARTITION_PATHS) {
-      assertEquals(1, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
+      assertEquals(1,
+          FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
 
     if (fromVersion != HoodieTableVersion.FIVE) {
@@ -161,12 +165,15 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
   }
 
   private void assertTableVersionFromPropertyFile(HoodieTableVersion expectedVersion) throws IOException {
-    Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    StoragePath propertyFile =
+        new StoragePath(
+            metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     // Load the properties and verify
-    FSDataInputStream fsDataInputStream = metaClient.getFs().open(propertyFile);
+    InputStream inputStream = metaClient.getStorage().open(propertyFile);
     HoodieConfig config = new HoodieConfig();
-    config.getProps().load(fsDataInputStream);
-    fsDataInputStream.close();
-    assertEquals(Integer.toString(expectedVersion.versionCode()), config.getString(HoodieTableConfig.VERSION));
+    config.getProps().load(inputStream);
+    inputStream.close();
+    assertEquals(Integer.toString(expectedVersion.versionCode()),
+        config.getString(HoodieTableConfig.VERSION));
   }
 }

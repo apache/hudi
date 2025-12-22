@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -46,7 +47,6 @@ import org.springframework.shell.Shell;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,7 +80,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
    */
   @BeforeEach
   public void init() {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
     tableName = tableName();
     tablePath = tablePath(tableName);
     metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
@@ -129,8 +130,8 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     // Test meta
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(archivePath, client.getArchivePath());
-    assertEquals(tablePath, client.getBasePath());
-    assertEquals(metaPath, client.getMetaPath());
+    assertEquals(tablePath, client.getBasePath().toString());
+    assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());
     assertEquals(new Integer(1), client.getTimelineLayoutVersion().getVersion());
   }
@@ -146,9 +147,9 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(metaPath + Path.SEPARATOR + "archive", client.getArchivePath());
-    assertEquals(tablePath, client.getBasePath());
-    assertEquals(metaPath, client.getMetaPath());
+    assertEquals(metaPath + StoragePath.SEPARATOR + "archive", client.getArchivePath());
+    assertEquals(tablePath, client.getBasePath().toString());
+    assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
   }
 
@@ -184,32 +185,32 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
-    FileSystem fs = FileSystem.get(hadoopConf());
-    fs.delete(new Path(tablePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
+    FileSystem fs = FileSystem.get(storageConf().unwrap());
+    fs.delete(new Path(tablePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table
     assertTrue(prepareTable());
 
     HoodieTimeline timeline =
-        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     assertEquals(0, timeline.countInstants(), "There should have no instant at first");
 
     // generate four savepoints
     for (int i = 100; i < 104; i++) {
       String instantTime = String.valueOf(i);
-      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, hadoopConf());
+      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, storageConf());
     }
 
     // Before refresh, no instant
     timeline =
-        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     assertEquals(0, timeline.countInstants(), "there should have no instant");
 
     Object result = shell.evaluate(() -> command);
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     timeline =
-        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
 
     // After refresh, there are 4 instants
     assertEquals(4, timeline.countInstants(), "there should have 4 instants");
@@ -218,7 +219,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   @Test
   public void testFetchTableSchema() throws Exception {
     // Create table and connect
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -285,6 +286,6 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     byte[] data = new byte[(int) fileToRead.length()];
     fis.read(data);
     fis.close();
-    return new String(data, StandardCharsets.UTF_8);
+    return fromUTF8Bytes(data);
   }
 }

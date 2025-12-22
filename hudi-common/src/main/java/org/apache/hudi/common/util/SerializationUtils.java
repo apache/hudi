@@ -92,9 +92,9 @@ public class SerializationUtils {
     byte[] serialize(Object obj) {
       kryo.reset();
       baos.reset();
-      Output output = new Output(baos);
-      this.kryo.writeClassAndObject(output, obj);
-      output.close();
+      try (Output output = new Output(baos)) {
+        this.kryo.writeClassAndObject(output, obj);
+      }
       return baos.toByteArray();
     }
 

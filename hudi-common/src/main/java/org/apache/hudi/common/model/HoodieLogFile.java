@@ -20,11 +20,9 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.hadoop.CachingPath;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -50,8 +48,8 @@ public class HoodieLogFile implements Serializable {
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
 
-  private transient FileStatus fileStatus;
-  private transient Path path;
+  private transient StoragePathInfo pathInfo;
+  private transient StoragePath path;
   private final String pathStr;
   private String fileId;
   private String baseCommitTime;
@@ -62,7 +60,7 @@ public class HoodieLogFile implements Serializable {
   private long fileLen;
 
   public HoodieLogFile(HoodieLogFile logFile) {
-    this.fileStatus = logFile.getFileStatus();
+    this.pathInfo = logFile.getPathInfo();
     this.path = logFile.getPath();
     this.pathStr = logFile.pathStr;
     this.fileId = logFile.getFileId();
@@ -74,15 +72,15 @@ public class HoodieLogFile implements Serializable {
     this.fileLen = logFile.getFileSize();
   }
 
-  public HoodieLogFile(FileStatus fileStatus) {
-    this(fileStatus, fileStatus.getPath(), fileStatus.getPath().toString(), fileStatus.getLen());
+  public HoodieLogFile(StoragePathInfo pathInfo) {
+    this(pathInfo, pathInfo.getPath(), pathInfo.getPath().toString(), pathInfo.getLength());
   }
 
-  public HoodieLogFile(Path logPath) {
+  public HoodieLogFile(StoragePath logPath) {
     this(null, logPath, logPath.toString(), -1);
   }
 
-  public HoodieLogFile(Path logPath, long fileLen) {
+  public HoodieLogFile(StoragePath logPath, long fileLen) {
     this(null, logPath, logPath.toString(), fileLen);
   }
 
@@ -90,14 +88,12 @@ public class HoodieLogFile implements Serializable {
     this(null, null, logPathStr, -1);
   }
 
-  private HoodieLogFile(FileStatus fileStatus, Path logPath, String logPathStr, long fileLen) {
-    this.fileStatus = fileStatus;
+  private HoodieLogFile(StoragePathInfo pathInfo, StoragePath logPath, String logPathStr, long fileLen) {
+    this.pathInfo = pathInfo;
     this.pathStr = logPathStr;
     this.fileLen = fileLen;
     this.logVersion = -1; // mark version as uninitialized
-    if (logPath instanceof CachingPath) {
-      this.path = logPath;
-    }
+    this.path = logPath;
   }
 
   private void parseFieldsFromPath() {
@@ -155,9 +151,9 @@ public class HoodieLogFile implements Serializable {
     return suffix;
   }
 
-  public Path getPath() {
+  public StoragePath getPath() {
     if (path == null) {
-      path = new CachingPath(pathStr);
+      path = new StoragePath(pathStr);
     }
     return path;
   }
@@ -174,21 +170,21 @@ public class HoodieLogFile implements Serializable {
     return fileLen;
   }
 
-  public FileStatus getFileStatus() {
-    return fileStatus;
+  public StoragePathInfo getPathInfo() {
+    return pathInfo;
   }
 
-  public void setFileStatus(FileStatus fileStatus) {
-    this.fileStatus = fileStatus;
+  public void setPathInfo(StoragePathInfo pathInfo) {
+    this.pathInfo = pathInfo;
   }
 
-  public HoodieLogFile rollOver(FileSystem fs, String logWriteToken) throws IOException {
+  public HoodieLogFile rollOver(HoodieStorage storage, String logWriteToken) throws IOException {
     String fileId = getFileId();
     String baseCommitTime = getBaseCommitTime();
-    Path path = getPath();
+    StoragePath path = getPath();
     String extension = "." + fileExtension;
-    int newVersion = FSUtils.computeNextLogVersion(fs, path.getParent(), fileId, extension, baseCommitTime);
-    return new HoodieLogFile(new CachingPath(path.getParent(),
+    int newVersion = FSUtils.computeNextLogVersion(storage, path.getParent(), fileId, extension, baseCommitTime);
+    return new HoodieLogFile(new StoragePath(path.getParent(),
         FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion, logWriteToken)));
   }
 

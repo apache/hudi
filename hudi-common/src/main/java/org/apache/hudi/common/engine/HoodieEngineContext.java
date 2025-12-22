@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Iterator;
 import java.util.List;
@@ -45,17 +45,17 @@ public abstract class HoodieEngineContext {
   /**
    * A wrapped hadoop configuration which can be serialized.
    */
-  private SerializableConfiguration hadoopConf;
+  private StorageConfiguration<?> storageConf;
 
   protected TaskContextSupplier taskContextSupplier;
 
-  public HoodieEngineContext(SerializableConfiguration hadoopConf, TaskContextSupplier taskContextSupplier) {
-    this.hadoopConf = hadoopConf;
+  public HoodieEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
+    this.storageConf = storageConf;
     this.taskContextSupplier = taskContextSupplier;
   }
 
-  public SerializableConfiguration getHadoopConf() {
-    return hadoopConf;
+  public StorageConfiguration<?> getStorageConf() {
+    return storageConf;
   }
 
   public TaskContextSupplier getTaskContextSupplier() {

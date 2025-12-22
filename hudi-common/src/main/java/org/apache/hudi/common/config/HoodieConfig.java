@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.loadGlobalProperties;
 
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
@@ -160,7 +161,7 @@ public class HoodieConfig implements Serializable {
   public <T> Integer getIntOrDefault(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Integer.parseInt(v.toString()))
-        .orElse(Integer.parseInt(configProperty.defaultValue().toString()));
+        .orElseGet(() -> Integer.parseInt(configProperty.defaultValue().toString()));
   }
 
   public <T> Boolean getBoolean(ConfigProperty<T> configProperty) {
@@ -234,7 +235,7 @@ public class HoodieConfig implements Serializable {
 
   public TypedProperties getProps(boolean includeGlobalProps) {
     if (includeGlobalProps) {
-      TypedProperties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
+      TypedProperties mergedProps = loadGlobalProperties();
       mergedProps.putAll(props);
       return mergedProps;
     } else {

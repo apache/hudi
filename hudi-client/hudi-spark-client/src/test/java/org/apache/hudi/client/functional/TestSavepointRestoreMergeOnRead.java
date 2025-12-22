@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -116,9 +116,11 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       assertRowNumberEqualsTo(30);
       // ensure there are no data files matching the compaction commit that was rolled back.
       String finalCompactionCommit = compactionCommit;
-      PathFilter filter = (path) -> path.toString().contains(finalCompactionCommit);
+      StoragePathFilter filter = (path) -> path.toString().contains(finalCompactionCommit);
       for (String pPath : dataGen.getPartitionPaths()) {
-        assertEquals(0, fs.listStatus(FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath), filter).length);
+        assertEquals(0, storage.listDirectEntries(
+            FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath),
+            filter).size());
       }
     }
   }
@@ -159,9 +161,11 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     }
     assertRowNumberEqualsTo(130);
     // verify there are new base files created matching the 2nd commit timestamp.
-    PathFilter filter = (path) -> path.toString().contains(secondCommit);
+    StoragePathFilter filter = (path) -> path.toString().contains(secondCommit);
     for (String pPath : dataGen.getPartitionPaths()) {
-      assertEquals(1, fs.listStatus(FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath), filter).length);
+      assertEquals(1, storage.listDirectEntries(
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath), filter)
+          .size());
     }
 
     // disable small file handling so that updates go to log files.
@@ -198,12 +202,17 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     // verify that entire file slice created w/ base instant time of 2nd commit is completely rolledback.
     filter = (path) -> path.toString().contains(secondCommit);
     for (String pPath : dataGen.getPartitionPaths()) {
-      assertEquals(0, fs.listStatus(FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath), filter).length);
+      assertEquals(0, storage.listDirectEntries(
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath), filter)
+          .size());
     }
     // ensure files matching 1st commit is intact
     filter = (path) -> path.toString().contains(firstCommit);
     for (String pPath : dataGen.getPartitionPaths()) {
-      assertEquals(1, fs.listStatus(FSUtils.getPartitionPath(hoodieWriteConfig.getBasePath(), pPath), filter).length);
+      assertEquals(1,
+          storage.listDirectEntries(
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath),
+              filter).size());
     }
   }
 

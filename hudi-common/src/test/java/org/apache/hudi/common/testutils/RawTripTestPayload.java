@@ -52,6 +52,7 @@ import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Example row change event based on some example data used by testcases. The data avro schema is
@@ -62,6 +63,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   public static final String JSON_DATA_SCHEMA_STR = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},"
       + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}";
   public static final Schema JSON_DATA_SCHEMA = new Schema.Parser().parse(JSON_DATA_SCHEMA_STR);
+  private static final MercifulJsonConverter JSON_CONVERTER = new MercifulJsonConverter();
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
@@ -205,8 +207,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     if (isDeleted) {
       return Option.empty();
     } else {
-      MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
-      return Option.of(jsonConverter.convert(getJsonData(), schema));
+      return Option.of(JSON_CONVERTER.convert(getJsonData(), schema));
     }
   }
 
@@ -216,8 +217,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
-    MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
-    return jsonConverter.convert(getJsonData(), schema);
+    return JSON_CONVERTER.convert(getJsonData(), schema);
   }
 
   @Override
@@ -245,7 +245,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DeflaterOutputStream dos = new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
     try {
-      dos.write(jsonData.getBytes());
+      dos.write(getUTF8Bytes(jsonData));
     } finally {
       dos.flush();
       dos.close();

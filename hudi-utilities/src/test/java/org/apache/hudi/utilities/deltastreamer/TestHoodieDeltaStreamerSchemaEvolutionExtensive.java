@@ -20,7 +20,10 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.TestHoodieSparkUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.streamer.ErrorEvent;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -31,7 +34,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -45,16 +50,24 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieDeltaStreamerSchemaEvolutionBase {
 
   protected void testBase(String updateFile, String updateColumn, String condition, int count) throws Exception {
+    testBase(updateFile, updateColumn, condition, count, null);
+  }
+
+  protected void testBase(String updateFile, String updateColumn, String condition, int count, ErrorEvent.ErrorReason reason) throws Exception {
     Map<String,Integer> conditions = new HashMap<>();
     conditions.put(condition, count);
-    testBase(updateFile, updateColumn, conditions, true);
+    testBase(updateFile, updateColumn, conditions, true, reason);
 
     //adding non-nullable cols should fail, but instead it is adding nullable cols
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, updateFile, updateColumn, condition, count, false));
   }
 
   protected void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions) throws Exception {
-    testBase(updateFile, updateColumn, conditions, true);
+    testBase(updateFile, updateColumn, conditions, null);
+  }
+
+  protected void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions, ErrorEvent.ErrorReason reason) throws Exception {
+    testBase(updateFile, updateColumn, conditions, true, reason);
   }
 
   protected void doFirstDeltaWrite() throws Exception {
@@ -100,10 +113,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
   /**
    * Main testing logic for non-type promotion tests
    */
-  protected void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions, Boolean nullable) throws Exception {
+  protected void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions, Boolean nullable, ErrorEvent.ErrorReason reason) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
     this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
 
     //first write
@@ -149,6 +163,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       if (updateFile.equals("testAddColChangeOrderAllFiles.json")) {
         //this test updates all 3 partitions instead of 2 like the rest of the tests
         numFiles++;
+      } else if (withErrorTable) {
+        numFiles--;
       }
       assertFileNumber(numFiles, false);
     }
@@ -161,12 +177,25 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       assertEquals(conditions.get(condition).intValue(), df.filter(condition).count());
     }
 
+    if (withErrorTable) {
+      List<ErrorEvent> recs = new ArrayList<>();
+      for (String key : TestErrorTable.commited.keySet()) {
+        Option<JavaRDD> errors = TestErrorTable.commited.get(key);
+        if (errors.isPresent()) {
+          if (!errors.get().isEmpty()) {
+            recs.addAll(errors.get().collect());
+          }
+        }
+      }
+      assertEquals(1, recs.size());
+      assertEquals(recs.get(0).getReason(), reason);
+    }
   }
 
   protected static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     //only testing row-writer enabled for now
-    for (Boolean rowWriterEnable : new Boolean[]{true}) {
+    for (Boolean rowWriterEnable : new Boolean[]{false, true}) {
       for (Boolean addFilegroups : new Boolean[]{false, true}) {
         for (Boolean multiLogFiles : new Boolean[]{false, true}) {
           for (Boolean shouldCluster : new Boolean[]{false, true}) {
@@ -181,6 +210,66 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       }
     }
     return b.build();
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testErrorTable(String tableType,
+                             Boolean shouldCluster,
+                             Boolean shouldCompact,
+                             Boolean rowWriterEnable,
+                             Boolean addFilegroups,
+                             Boolean multiLogFiles) throws Exception {
+    this.withErrorTable = true;
+    this.useSchemaProvider = false;
+    this.useTransformer = false;
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testMissingRecordKey.json", "driver", "driver = 'driver-003'", 1, ErrorEvent.ErrorReason.RECORD_CREATION);
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testErrorTableWithSchemaProvider(String tableType,
+                                               Boolean shouldCluster,
+                                               Boolean shouldCompact,
+                                               Boolean rowWriterEnable,
+                                               Boolean addFilegroups,
+                                               Boolean multiLogFiles) throws Exception {
+    this.withErrorTable = true;
+    this.useSchemaProvider = true;
+    this.useTransformer = false;
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testMissingRecordKey.json", "driver", "driver = 'driver-003'", 1, ErrorEvent.ErrorReason.INVALID_RECORD_SCHEMA);
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testErrorTableWithTransformer(String tableType,
+                             Boolean shouldCluster,
+                             Boolean shouldCompact,
+                             Boolean rowWriterEnable,
+                             Boolean addFilegroups,
+                             Boolean multiLogFiles) throws Exception {
+    this.withErrorTable = true;
+    this.useSchemaProvider = true;
+    this.useTransformer = true;
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testMissingRecordKey.json", "driver", "driver = 'driver-003'", 1, ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE);
   }
 
   /**
@@ -367,7 +456,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
   protected void testTypePromotionBase(String colName, DataType startType, DataType updateType, DataType endType) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
-    tableBasePath = basePath + "test_parquet_table" + testNum;
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
     this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
 
     //first write

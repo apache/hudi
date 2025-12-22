@@ -32,7 +32,6 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -51,7 +50,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -68,7 +67,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -79,6 +77,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
 import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
@@ -105,7 +104,7 @@ public class SparkBootstrapCommitActionExecutor<T>
         HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         WriteOperationType.BOOTSTRAP,
         extraMetadata);
-    bootstrapSourceFileSystem = FSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
+    bootstrapSourceFileSystem = HadoopFSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
   }
 
   private void validate() {
@@ -249,7 +248,7 @@ public class SparkBootstrapCommitActionExecutor<T>
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(metadata.toJsonString())));
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
@@ -336,13 +335,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
 
-    KeyGeneratorInterface keyGenerator;
-    try {
-      keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
-    } catch (IOException e) {
-      throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
-    }
-
+    KeyGeneratorInterface keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
     BootstrapPartitionPathTranslator translator = ReflectionUtils.loadClass(config.getBootstrapPartitionPathTranslatorClass());
 
     List<Pair<String, Pair<String, HoodieFileStatus>>> bootstrapPaths = partitions.stream()

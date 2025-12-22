@@ -23,7 +23,6 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -35,9 +34,11 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,12 +54,12 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
 
-  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
     return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty());
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
                                                  Option<String> inFlightInstantTimestamp) {
@@ -66,7 +67,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, EAGER, context, inFlightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
@@ -75,20 +76,19 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, failedWritesCleaningPolicy, context, inFlightInstantTimestamp);
   }
 
-  FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  FlinkHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inFlightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
   }
 
   @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       // should support executor metrics
-      Registry registry = Registry.getRegistry("HoodieMetadata");
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -153,7 +153,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     preWrite(instantTime);
 
     List<WriteStatus> statuses = isInitializing
-        ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, Option.empty())
+        ? writeClient.bulkInsertPreppedRecords(preppedRecordList, instantTime, bulkInsertPartitioner)
         : writeClient.upsertPreppedRecords(preppedRecordList, instantTime);
     // flink does not support auto-commit yet, also the auto commit logic is not complete as BaseHoodieWriteClient now.
     writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
@@ -198,5 +198,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void preWrite(String instantTime) {
     metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+  }
+
+  @Override
+  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return HoodieFlinkTable.create(writeConfig, engineContext, metaClient);
   }
 }

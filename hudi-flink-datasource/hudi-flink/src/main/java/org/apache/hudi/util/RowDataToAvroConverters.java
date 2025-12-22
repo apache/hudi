@@ -77,6 +77,10 @@ public class RowDataToAvroConverters {
    * Flink Table & SQL internal data structures to corresponding Avro data structures.
    */
   public static RowDataToAvroConverter createConverter(LogicalType type) {
+    return createConverter(type, true);
+  }
+
+  public static RowDataToAvroConverter createConverter(LogicalType type, boolean utcTimezone) {
     final RowDataToAvroConverter converter;
     switch (type.getTypeRoot()) {
       case NULL:
@@ -156,8 +160,34 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+        int precision = DataTypeUtils.precision(type);
+        if (precision <= 3) {
+          converter =
+            new RowDataToAvroConverter() {
+              private static final long serialVersionUID = 1L;
+
+              @Override
+              public Object convert(Schema schema, Object object) {
+                return ((TimestampData) object).toInstant().toEpochMilli();
+              }
+          };
+        } else if (precision <= 6) {
+          converter =
+              new RowDataToAvroConverter() {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public Object convert(Schema schema, Object object) {
+                  Instant instant = ((TimestampData) object).toInstant();
+                  return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
+                }
+            };
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision);
+        }
+        break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        final int precision = DataTypeUtils.precision(type);
+        precision = DataTypeUtils.precision(type);
         if (precision <= 3) {
           converter =
               new RowDataToAvroConverter() {
@@ -165,7 +195,7 @@ public class RowDataToAvroConverters {
 
                 @Override
                 public Object convert(Schema schema, Object object) {
-                  return ((TimestampData) object).toInstant().toEpochMilli();
+                  return utcTimezone ? ((TimestampData) object).toInstant().toEpochMilli() : ((TimestampData) object).toTimestamp().getTime();
                 }
               };
         } else if (precision <= 6) {
@@ -175,7 +205,7 @@ public class RowDataToAvroConverters {
 
                 @Override
                 public Object convert(Schema schema, Object object) {
-                  Instant instant = ((TimestampData) object).toInstant();
+                  Instant instant = utcTimezone ? ((TimestampData) object).toInstant() : ((TimestampData) object).toTimestamp().toInstant();
                   return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
                 }
               };
@@ -196,14 +226,14 @@ public class RowDataToAvroConverters {
             };
         break;
       case ARRAY:
-        converter = createArrayConverter((ArrayType) type);
+        converter = createArrayConverter((ArrayType) type, utcTimezone);
         break;
       case ROW:
-        converter = createRowConverter((RowType) type);
+        converter = createRowConverter((RowType) type, utcTimezone);
         break;
       case MAP:
       case MULTISET:
-        converter = createMapConverter(type);
+        converter = createMapConverter(type, utcTimezone);
         break;
       case RAW:
       default:
@@ -241,10 +271,10 @@ public class RowDataToAvroConverters {
     };
   }
 
-  private static RowDataToAvroConverter createRowConverter(RowType rowType) {
+  private static RowDataToAvroConverter createRowConverter(RowType rowType, boolean utcTimezone) {
     final RowDataToAvroConverter[] fieldConverters =
         rowType.getChildren().stream()
-            .map(RowDataToAvroConverters::createConverter)
+            .map(type -> createConverter(type, utcTimezone))
             .toArray(RowDataToAvroConverter[]::new);
     final LogicalType[] fieldTypes =
         rowType.getFields().stream()
@@ -276,10 +306,10 @@ public class RowDataToAvroConverters {
     };
   }
 
-  private static RowDataToAvroConverter createArrayConverter(ArrayType arrayType) {
+  private static RowDataToAvroConverter createArrayConverter(ArrayType arrayType, boolean utcTimezone) {
     LogicalType elementType = arrayType.getElementType();
     final ArrayData.ElementGetter elementGetter = ArrayData.createElementGetter(elementType);
-    final RowDataToAvroConverter elementConverter = createConverter(arrayType.getElementType());
+    final RowDataToAvroConverter elementConverter = createConverter(arrayType.getElementType(), utcTimezone);
 
     return new RowDataToAvroConverter() {
       private static final long serialVersionUID = 1L;
@@ -299,10 +329,10 @@ public class RowDataToAvroConverters {
     };
   }
 
-  private static RowDataToAvroConverter createMapConverter(LogicalType type) {
+  private static RowDataToAvroConverter createMapConverter(LogicalType type, boolean utcTimezone) {
     LogicalType valueType = AvroSchemaConverter.extractValueTypeToAvroMap(type);
     final ArrayData.ElementGetter valueGetter = ArrayData.createElementGetter(valueType);
-    final RowDataToAvroConverter valueConverter = createConverter(valueType);
+    final RowDataToAvroConverter valueConverter = createConverter(valueType, utcTimezone);
 
     return new RowDataToAvroConverter() {
       private static final long serialVersionUID = 1L;

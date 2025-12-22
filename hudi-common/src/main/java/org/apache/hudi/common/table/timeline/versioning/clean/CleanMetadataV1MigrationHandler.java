@@ -25,8 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -57,7 +56,7 @@ public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<Hoodie
   public HoodieCleanMetadata downgradeFrom(HoodieCleanMetadata input) {
     ValidationUtils.checkArgument(input.getVersion() == 2,
         "Input version is " + input.getVersion() + ". Must be 2");
-    final Path basePath = new Path(metaClient.getBasePath());
+    final StoragePath basePath = metaClient.getBasePath();
 
     final Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = input
         .getPartitionMetadata()
@@ -94,11 +93,11 @@ public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<Hoodie
         .setVersion(getManagedVersion()).build();
   }
 
-  private static String convertToV1Path(Path basePath, String partitionPath, String fileName) {
+  private static String convertToV1Path(StoragePath basePath, String partitionPath, String fileName) {
     if ((fileName == null) || (fileName.isEmpty())) {
       return fileName;
     }
 
-    return new Path(FSUtils.getPartitionPath(basePath, partitionPath), fileName).toString();
+    return new StoragePath(FSUtils.constructAbsolutePath(basePath, partitionPath), fileName).toString();
   }
 }

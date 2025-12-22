@@ -43,16 +43,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.MessageType;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -90,18 +86,19 @@ public class HoodieLogFileCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    FileSystem fs = HoodieCLI.getTableMetaClient().getFs();
-    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
+    HoodieStorage storage = HoodieCLI.getTableMetaClient().getStorage();
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(
+        storage, new StoragePath(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
         Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
         new HashMap<>();
     int numCorruptBlocks = 0;
     int dummyInstantTimeCount = 0;
-    String basePath = HoodieCLI.getTableMetaClient().getBasePathV2().toString();
+    String basePath = HoodieCLI.basePath;
 
     for (String logFilePath : logFilePaths) {
-      Path path = new Path(logFilePath);
+      StoragePath path = new StoragePath(logFilePath);
       String pathString = path.toString();
       String fileName;
       if (pathString.contains(basePath)) {
@@ -110,56 +107,53 @@ public class HoodieLogFileCommand {
       } else {
         fileName = path.getName();
       }
-      FileStatus[] fsStatus = fs.listStatus(path);
-      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(fs, path);
-      Schema writerSchema = schema != null
-          ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
+      Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, path);
+      try (Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), writerSchema)) {
 
-      // read the avro blocks
-      while (reader.hasNext()) {
-        HoodieLogBlock n = reader.next();
-        String instantTime;
-        AtomicInteger recordCount = new AtomicInteger(0);
-        if (n instanceof HoodieCorruptBlock) {
-          try {
+        // read the avro blocks
+        while (reader.hasNext()) {
+          HoodieLogBlock n = reader.next();
+          String instantTime;
+          AtomicInteger recordCount = new AtomicInteger(0);
+          if (n instanceof HoodieCorruptBlock) {
+            try {
+              instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
+              if (instantTime == null) {
+                throw new Exception("Invalid instant time " + instantTime);
+              }
+            } catch (Exception e) {
+              numCorruptBlocks++;
+              instantTime = "corrupt_block_" + numCorruptBlocks;
+              // could not read metadata for corrupt block
+            }
+          } else {
             instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
             if (instantTime == null) {
-              throw new Exception("Invalid instant time " + instantTime);
+              // This can happen when reading archived commit files since they were written without any instant time
+              dummyInstantTimeCount++;
+              instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
             }
-          } catch (Exception e) {
-            numCorruptBlocks++;
-            instantTime = "corrupt_block_" + numCorruptBlocks;
-            // could not read metadata for corrupt block
-          }
-        } else {
-          instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
-          if (instantTime == null) {
-            // This can happen when reading archived commit files since they were written without any instant time
-            dummyInstantTimeCount++;
-            instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
-          }
-          if (n instanceof HoodieDataBlock) {
-            try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = ((HoodieDataBlock) n).getRecordIterator(HoodieRecordType.AVRO)) {
-              recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
+            if (n instanceof HoodieDataBlock) {
+              try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = ((HoodieDataBlock) n).getRecordIterator(HoodieRecordType.AVRO)) {
+                recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
+              }
             }
           }
-        }
-        if (commitCountAndMetadata.containsKey(instantTime)) {
-          commitCountAndMetadata.get(instantTime).add(
-              new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
-                  new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
-        } else {
-          List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
-              Map<HeaderMetadataType, String>>, Integer>> list =
-              new ArrayList<>();
-          list.add(
-              new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
-                  new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
-          commitCountAndMetadata.put(instantTime, list);
+          if (commitCountAndMetadata.containsKey(instantTime)) {
+            commitCountAndMetadata.get(instantTime).add(
+                new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
+                    new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
+          } else {
+            List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
+                Map<HeaderMetadataType, String>>, Integer>> list =
+                new ArrayList<>();
+            list.add(
+                new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
+                    new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
+            commitCountAndMetadata.put(instantTime, list);
+          }
         }
       }
-      reader.close();
     }
     List<Comparable[]> rows = new ArrayList<>();
     ObjectMapper objectMapper = new ObjectMapper();
@@ -205,8 +199,9 @@ public class HoodieLogFileCommand {
     System.out.println("===============> Showing only " + limit + " records <===============");
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    FileSystem fs = client.getFs();
-    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
+    HoodieStorage storage = client.getStorage();
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(
+        storage, new StoragePath(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).sorted(Comparator.reverseOrder())
         .collect(Collectors.toList());
 
@@ -214,13 +209,13 @@ public class HoodieLogFileCommand {
     checkArgument(logFilePaths.size() > 0, "There is no log file");
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
-    AvroSchemaConverter converter = new AvroSchemaConverter();
     Schema readerSchema = null;
     // get schema from last log file
     for (int i = logFilePaths.size() - 1; i >= 0; i--) {
-      MessageType schema = TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.get(i)));
+      Schema schema = TableSchemaResolver.readSchemaFromLogFile(
+          storage, new StoragePath(logFilePaths.get(i)));
       if (schema != null) {
-        readerSchema = converter.convert(schema);
+        readerSchema = schema;
         break;
       }
     }
@@ -231,16 +226,13 @@ public class HoodieLogFileCommand {
       System.out.println("===========================> MERGING RECORDS <===================");
       HoodieMergedLogRecordScanner scanner =
           HoodieMergedLogRecordScanner.newBuilder()
-              .withFileSystem(fs)
+              .withStorage(storage)
               .withBasePath(client.getBasePath())
               .withLogFilePaths(logFilePaths)
               .withReaderSchema(readerSchema)
               .withLatestInstantTime(
                   client.getActiveTimeline()
-                      .getCommitTimeline().lastInstant().get().getTimestamp())
-              .withReadBlocksLazily(
-                  Boolean.parseBoolean(
-                      HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue()))
+                      .getCommitAndReplaceTimeline().lastInstant().get().getTimestamp())
               .withReverseReader(
                   Boolean.parseBoolean(
                       HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))
@@ -260,26 +252,25 @@ public class HoodieLogFileCommand {
       }
     } else {
       for (String logFile : logFilePaths) {
-        MessageType schema = TableSchemaResolver.readSchemaFromLogFile(client.getFs(), new CachingPath(logFile));
-        Schema writerSchema = schema != null
-            ? new AvroSchemaConverter().convert(Objects.requireNonNull(schema)) : null;
-        HoodieLogFormat.Reader reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(new CachingPath(logFile)), writerSchema);
-        // read the avro blocks
-        while (reader.hasNext()) {
-          HoodieLogBlock n = reader.next();
-          if (n instanceof HoodieDataBlock) {
-            HoodieDataBlock blk = (HoodieDataBlock) n;
-            try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
-              recordItr.forEachRemaining(record -> {
-                if (allRecords.size() < limit) {
-                  allRecords.add(record.getData());
-                }
-              });
+        Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
+            client.getStorage(), new StoragePath(logFile));
+        try (HoodieLogFormat.Reader reader =
+                 HoodieLogFormat.newReader(storage, new HoodieLogFile(new StoragePath(logFile)), writerSchema)) {
+          // read the avro blocks
+          while (reader.hasNext()) {
+            HoodieLogBlock n = reader.next();
+            if (n instanceof HoodieDataBlock) {
+              HoodieDataBlock blk = (HoodieDataBlock) n;
+              try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
+                recordItr.forEachRemaining(record -> {
+                  if (allRecords.size() < limit) {
+                    allRecords.add(record.getData());
+                  }
+                });
+              }
             }
           }
         }
-        reader.close();
         if (allRecords.size() >= limit) {
           break;
         }

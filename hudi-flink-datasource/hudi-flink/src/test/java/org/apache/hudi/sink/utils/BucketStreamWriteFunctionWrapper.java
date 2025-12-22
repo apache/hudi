@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketStreamWriteFunction;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -180,6 +181,11 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
 
   public StreamWriteOperatorCoordinator getCoordinator() {
     return coordinator;
+  }
+
+  @Override
+  public AbstractWriteFunction getWriteFunction() {
+    return this.writeFunction;
   }
 
   public MockOperatorCoordinatorContext getCoordinatorContext() {

@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - 'release-*'
+      - branch-0.x
   pull_request:
     paths-ignore:
       - '**.bmp'
@@ -20,6 +21,12 @@ on:
     branches:
       - master
       - 'release-*'
+      - branch-0.x
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+
 env:
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
@@ -33,8 +40,9 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Check Binary Files
         run: ./scripts/release/validate_source_binary_files.sh
       - name: Check Copyright
@@ -45,7 +53,7 @@ jobs:
       - name: RAT check
         run: ./scripts/release/validate_source_rat.sh
 
-  test-spark:
+  test-spark-java-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -74,42 +82,120 @@ jobs:
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
 
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
-      - name: UT - Common & Spark
+      - name: Java UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
-      - name: FT - Spark
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Java FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
+  test-spark-scala-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.0.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Scala UT - Common & Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
+        run:
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Scala FT - Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
+        run:
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
@@ -119,7 +205,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
-            flinkProfile: "flink1.17"
+            flinkProfile: "flink1.18"
 
     steps:
       - uses: actions/checkout@v3
@@ -127,25 +213,28 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Generate Maven Wrapper
+        run:
+          mvn -N io.takari:maven:wrapper
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
+          ./mvnw clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
+          ./mvnw test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
 
-  test-spark-java17:
+  test-spark-java17-java-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -163,8 +252,9 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -175,55 +265,208 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
-      - name: UT - Common & Spark
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: Java UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
-      - name: FT - Spark
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Java FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
-  test-flink:
+  test-spark-java17-scala-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - flinkProfile: "flink1.13"
-          - flinkProfile: "flink1.14"
-          - flinkProfile: "flink1.15"
-          - flinkProfile: "flink1.16"
-          - flinkProfile: "flink1.17"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Scala UT - Common & Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Scala FT - Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
+  test-spark-java11-17-java-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Quickstart Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: Java UT - Common & Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Java FT - Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
+  test-spark-java11-17-scala-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Scala UT - Common & Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Scala FT - Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
+  test-flink:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - flinkProfile: "flink1.14"
+          - flinkProfile: "flink1.15"
+          - flinkProfile: "flink1.16"
+          - flinkProfile: "flink1.17"
+          - flinkProfile: "flink1.18"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -234,9 +477,9 @@ jobs:
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '1.17') }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '1.18') }}
         run: |
-          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   docker-java17-test:
@@ -244,7 +487,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.17'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
 
@@ -254,14 +506,15 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         if: ${{ env.SPARK_PROFILE >= 'spark3.4' }} # Only support Spark 3.4 for now
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -272,28 +525,40 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.17'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
-          - flinkProfile: 'flink1.17'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.2'
-          - flinkProfile: 'flink1.16'
-            sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.2'
-          - flinkProfile: 'flink1.15'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.16'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.1'
-          - flinkProfile: 'flink1.14'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.2'
             sparkRuntime: 'spark3.2.3'
-          - flinkProfile: 'flink1.13'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.1'
             sparkRuntime: 'spark3.1.3'
-          - flinkProfile: 'flink1.14'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.0'
             sparkRuntime: 'spark3.0.2'
-          - flinkProfile: 'flink1.13'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.14'
             sparkProfile: 'spark2.4'
             sparkRuntime: 'spark2.4.8'
     steps:
@@ -302,105 +567,108 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: 'scala-2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run: |
-          mvn clean package -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
-          # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
-          sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-          mvn clean package -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
+          else
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+          fi
       - name: IT - Bundle Validation - OpenJDK 8
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: 'scala-2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         if: ${{ env.SPARK_PROFILE >= 'spark3.3' }} # Only Spark 3.3 and above support Java 17
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-  validate-release-candidate-bundles:
-    if: false
+  validate-bundles-java11:
     runs-on: ubuntu-latest
-    env:
-      HUDI_VERSION: 0.13.1-rcx
-      STAGING_REPO_NUM: 1123
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.16'
-            sparkProfile: 'spark3'
-            sparkRuntime: 'spark3.3.2'
-          - flinkProfile: 'flink1.15'
-            sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.1'
-          - flinkProfile: 'flink1.14'
-            sparkProfile: 'spark3.2'
-            sparkRuntime: 'spark3.2.3'
-          - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark3.1'
-            sparkRuntime: 'spark3.1.3'
-          - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark'
-            sparkRuntime: 'spark2.4.8'
-          - flinkProfile: 'flink1.13'
-            sparkProfile: 'spark2.4'
-            sparkRuntime: 'spark2.4.8'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 8
+      - name: Set up JDK 11
         uses: actions/setup-java@v3
         with:
-          java-version: '8'
-          distribution: 'adopt'
+          java-version: '11'
+          distribution: 'temurin'
           architecture: x64
-      - name: IT - Bundle Validation - OpenJDK 8
+          cache: maven
+      - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run: |
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk8 $STAGING_REPO_NUM
+          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
+          else
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true
+            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+          fi
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-        if: ${{ startsWith(env.SPARK_PROFILE, 'spark3') }} # Only Spark 3.x supports Java 11 as of now
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run: |
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk11 $STAGING_REPO_NUM
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-        if: ${{ endsWith(env.SPARK_PROFILE, '3.3') }} # Only Spark 3.3 supports Java 17 as of now
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run: |
-          ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   integration-tests:
     runs-on: ubuntu-latest
@@ -415,14 +683,15 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '8'
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
         run:
-          mvn clean install $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}

@@ -49,7 +49,7 @@ public class ClusteringUtil {
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtil.class);
 
   public static void validateClusteringScheduling(Configuration conf) {
-    if (OptionsResolver.isBucketIndexType(conf)) {
+    if (!OptionsResolver.isAppendMode(conf) && OptionsResolver.isBucketIndexType(conf)) {
       HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
       switch (bucketIndexEngineType) {
         case SIMPLE:
@@ -95,7 +95,8 @@ public class ClusteringUtil {
     inflightInstants.forEach(inflightInstant -> {
       LOG.info("Rollback the inflight clustering instant: " + inflightInstant + " for failover");
       table.rollbackInflightClustering(inflightInstant,
-          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          Option.empty());
       table.getMetaClient().reloadActiveTimeline();
     });
   }
@@ -109,10 +110,11 @@ public class ClusteringUtil {
    */
   public static void rollbackClustering(HoodieFlinkTable<?> table, HoodieFlinkWriteClient<?> writeClient, String instantTime) {
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(instantTime);
-    if (table.getMetaClient().reloadActiveTimeline().filterPendingReplaceTimeline().containsInstant(inflightInstant)) {
+    if (table.getMetaClient().reloadActiveTimeline().isPendingClusterInstant(instantTime)) {
       LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
       table.rollbackInflightClustering(inflightInstant,
-          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          Option.empty());
     }
   }
 

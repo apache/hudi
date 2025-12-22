@@ -31,6 +31,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * A {@link Transformer} to chain other {@link Transformer}s and apply sequentially.
@@ -38,8 +39,8 @@ import java.util.List;
  * if that column is not dropped in any of the transformations.
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
-  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Option<Schema> sourceSchemaOpt) {
-    super(configuredTransformers, sourceSchemaOpt);
+  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<Schema>> sourceSchemaSupplier) {
+    super(configuredTransformers, sourceSchemaSupplier);
   }
 
   public ErrorTableAwareChainedTransformer(List<Transformer> transformers) {

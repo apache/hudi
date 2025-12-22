@@ -18,6 +18,13 @@
 
 package org.apache.hudi.examples.quickstart;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
+import org.apache.hudi.storage.HoodieStorage;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.RowData;
@@ -33,13 +40,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 import org.apache.parquet.Strings;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -292,7 +293,7 @@ public class TestQuickstartData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param fs            The file system
+   * @param storage       {@link HoodieStorage} instance.
    * @param latestInstant The latest committed instant of current table
    * @param baseFile      The file base to check, should be a directory
    * @param expected      The expected results mapping, the key should be the partition path
@@ -300,7 +301,7 @@ public class TestQuickstartData {
    * @param schema        The read schema
    */
   public static void checkWrittenDataMOR(
-      FileSystem fs,
+      HoodieStorage storage,
       String latestInstant,
       File baseFile,
       Map<String, String> expected,
@@ -316,7 +317,7 @@ public class TestQuickstartData {
           file.getName().contains(".log.") && !file.getName().startsWith(".."));
       assertNotNull(dataFiles);
       HoodieMergedLogRecordScanner scanner = getScanner(
-          fs, baseFile.getPath(), Arrays.stream(dataFiles).map(File::getAbsolutePath)
+          storage, baseFile.getPath(), Arrays.stream(dataFiles).map(File::getAbsolutePath)
               .sorted(Comparator.naturalOrder()).collect(Collectors.toList()),
           schema, latestInstant);
       List<String> readBuffer = scanner.getRecords().values().stream()
@@ -342,18 +343,17 @@ public class TestQuickstartData {
    * Returns the scanner to read avro log files.
    */
   private static HoodieMergedLogRecordScanner getScanner(
-      FileSystem fs,
+      HoodieStorage storage,
       String basePath,
       List<String> logPaths,
       Schema readSchema,
       String instant) {
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(readSchema)
         .withLatestInstantTime(instant)
-        .withReadBlocksLazily(false)
         .withReverseReader(false)
         .withBufferSize(16 * 1024 * 1024)
         .withMaxMemorySizeInBytes(1024 * 1024L)

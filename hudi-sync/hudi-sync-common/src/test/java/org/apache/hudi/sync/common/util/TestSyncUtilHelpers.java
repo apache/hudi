@@ -18,8 +18,8 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
@@ -52,7 +52,7 @@ public class TestSyncUtilHelpers {
 
   @BeforeEach
   public void setUp() throws IOException {
-    fileSystem = FSUtils.getFs(BASE_PATH, new Configuration());
+    fileSystem = HadoopFSUtils.getFs(BASE_PATH, new Configuration());
     hadoopConf = fileSystem.getConf();
   }
 

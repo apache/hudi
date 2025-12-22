@@ -18,7 +18,9 @@
 
 package org.apache.hudi.metrics.datadog;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -43,7 +45,9 @@ import static org.mockito.Mockito.when;
 public class TestDatadogMetricsReporter {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
 
@@ -59,14 +63,15 @@ public class TestDatadogMetricsReporter {
 
   @Test
   public void instantiationShouldFailWhenNoApiKey() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("table1");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.DATADOG);
-    when(config.getDatadogApiKey()).thenReturn("");
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.DATADOG);
+    when(metricsConfig.getDatadogApiKey()).thenReturn("");
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
 
     Throwable t = assertThrows(IllegalStateException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(config);
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
     assertEquals("Datadog cannot be initialized: API key is null or empty.", t.getMessage());
@@ -74,14 +79,15 @@ public class TestDatadogMetricsReporter {
 
   @Test
   public void instantiationShouldFailWhenNoMetricPrefix() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("table1");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.DATADOG);
-    when(config.getDatadogApiKey()).thenReturn("foo");
-    when(config.getDatadogMetricPrefix()).thenReturn("");
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.DATADOG);
+    when(metricsConfig.getDatadogApiKey()).thenReturn("foo");
+    when(metricsConfig.getDatadogMetricPrefix()).thenReturn("");
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     Throwable t = assertThrows(IllegalStateException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(config);
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
     assertEquals("Datadog cannot be initialized: Metric prefix is null or empty.", t.getMessage());
@@ -89,20 +95,21 @@ public class TestDatadogMetricsReporter {
 
   @Test
   public void instantiationShouldSucceed() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("table1");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.DATADOG);
-    when(config.getDatadogApiSite()).thenReturn(ApiSite.EU);
-    when(config.getDatadogApiKey()).thenReturn("foo");
-    when(config.getDatadogApiKeySkipValidation()).thenReturn(true);
-    when(config.getDatadogMetricPrefix()).thenReturn("bar");
-    when(config.getDatadogMetricHost()).thenReturn("foo");
-    when(config.getDatadogMetricTags()).thenReturn(Arrays.asList("baz", "foo"));
-    when(config.getDatadogReportPeriodSeconds()).thenReturn(10);
-    when(config.getMetricReporterMetricsNamePrefix()).thenReturn("");
-    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.DATADOG);
+    when(metricsConfig.getDatadogApiSite()).thenReturn(ApiSite.EU);
+    when(metricsConfig.getDatadogApiKey()).thenReturn("foo");
+    when(metricsConfig.getDatadogApiKeySkipValidation()).thenReturn(true);
+    when(metricsConfig.getDatadogMetricPrefix()).thenReturn("bar");
+    when(metricsConfig.getDatadogMetricHost()).thenReturn("foo");
+    when(metricsConfig.getDatadogMetricTags()).thenReturn(Arrays.asList("baz", "foo"));
+    when(metricsConfig.getDatadogReportPeriodSeconds()).thenReturn(10);
+    when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
     assertDoesNotThrow(() -> {
-      hoodieMetrics = new HoodieMetrics(config);
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
   }

@@ -43,6 +43,9 @@ public class LockConfiguration implements Serializable {
 
   public static final String LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY = LOCK_PREFIX + "wait_time_ms";
 
+  public static final String LOCK_HEARTBEAT_INTERVAL_MS_KEY = LOCK_PREFIX + "heartbeat_interval_ms";
+  public static final int DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS = 60 * 1000;
+
   // configs for file system based locks. NOTE: This only works for DFS with atomic create/delete operation
   public static final String FILESYSTEM_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "filesystem.";
 

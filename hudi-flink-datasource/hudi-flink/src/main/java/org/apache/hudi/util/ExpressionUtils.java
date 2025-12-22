@@ -160,7 +160,7 @@ public class ExpressionUtils {
             .orElse(null);
       case DATE:
         return expr.getValueAs(LocalDate.class)
-            .map(LocalDate::toEpochDay)
+            .map(date -> (int) date.toEpochDay())
             .orElse(null);
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case BOOLEAN:
@@ -212,7 +212,7 @@ public class ExpressionUtils {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         return logicalTimestamp ? new Timestamp((long) val) : val;
       case DATE:
-        return LocalDate.ofEpochDay((long) val);
+        return LocalDate.ofEpochDay((int) val);
       default:
         return val;
     }

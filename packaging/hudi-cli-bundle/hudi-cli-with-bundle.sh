@@ -38,9 +38,9 @@ HUDI_CONF_DIR="${DIR}"/conf
 HUDI_AUX_LIB="${DIR}"/auxlib
 
 if [ ! -d $HUDI_AUX_LIB ]; then
-  echo "Downloading necessary auxiliary jars for Hudi CLI"
-  wget https://repo1.maven.org/maven2/org/glassfish/jakarta.el/$JAKARTA_EL_VERSION/jakarta.el-$JAKARTA_EL_VERSION.jar -P auxlib
-  wget https://repo1.maven.org/maven2/jakarta/el/jakarta.el-api/$JAKARTA_EL_VERSION/jakarta.el-api-$JAKARTA_EL_VERSION.jar -P auxlib
+  echo "Downloading necessary auxiliary jars for Hudi CLI to $HUDI_AUX_LIB"
+  wget https://repo1.maven.org/maven2/org/glassfish/jakarta.el/$JAKARTA_EL_VERSION/jakarta.el-$JAKARTA_EL_VERSION.jar -P $HUDI_AUX_LIB
+  wget https://repo1.maven.org/maven2/jakarta/el/jakarta.el-api/$JAKARTA_EL_VERSION/jakarta.el-api-$JAKARTA_EL_VERSION.jar -P $HUDI_AUX_LIB
 fi
 
 . "${DIR}"/conf/hudi-env.sh

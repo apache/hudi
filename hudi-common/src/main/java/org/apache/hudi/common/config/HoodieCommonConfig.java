@@ -38,6 +38,14 @@ import static org.apache.hudi.common.util.ConfigUtils.enumNames;
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
 
+  public static final ConfigProperty<String> BASE_PATH = ConfigProperty
+      .key("hoodie.base.path")
+      .noDefaultValue()
+      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
+          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
+          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
+          + "etc in .hoodie directory under this base path directory.");
+
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")
       .defaultValue(false)
@@ -64,20 +72,12 @@ public class HoodieCommonConfig extends HoodieConfig {
           + "This enables us, to always extend the table's schema during evolution and never lose the data (when, for "
           + "ex, existing column is being dropped in a new batch)");
 
-  public static final ConfigProperty<Boolean> MAKE_NEW_COLUMNS_NULLABLE = ConfigProperty
-      .key("hoodie.datasource.write.new.columns.nullable")
-      .defaultValue(false)
-      .markAdvanced()
-      .sinceVersion("0.14.0")
-      .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
-          + " operation will fail schema compatibility check. Set this option to true will make the newly added "
-          + " column nullable to successfully complete the write operation.");
-
   public static final ConfigProperty<String> SET_NULL_FOR_MISSING_COLUMNS = ConfigProperty
       .key("hoodie.write.set.null.for.missing.columns")
       .defaultValue("false")
       .markAdvanced()
-      .withDocumentation("When a non-nullable column is missing from incoming batch during a write operation, the write "
+      .sinceVersion("0.14.1")
+      .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation.");
 

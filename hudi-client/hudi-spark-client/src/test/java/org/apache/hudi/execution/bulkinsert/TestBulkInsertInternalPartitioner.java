@@ -220,7 +220,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
     String[] sortColumns = sortColumnString.split(",");
-    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
+    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, true, sortColumns);
 
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
@@ -236,11 +236,14 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
   }
 
-  private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(Schema schema, String[] sortColumns) {
+  private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(Schema schema, boolean prependPartitionPath, String[] sortColumns) {
     Comparator<HoodieRecord<? extends HoodieRecordPayload>> comparator = Comparator.comparing(record -> {
       try {
         GenericRecord genericRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
         List<Object> keys = new ArrayList<>();
+        if (prependPartitionPath) {
+          keys.add(record.getPartitionPath());
+        }
         for (String col : sortColumns) {
           keys.add(genericRecord.get(col));
         }

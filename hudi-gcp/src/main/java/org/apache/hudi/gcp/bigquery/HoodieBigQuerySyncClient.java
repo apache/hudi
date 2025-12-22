@@ -44,9 +44,11 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
+import com.google.cloud.bigquery.StandardTableDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +58,8 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BIG_
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
+
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER;
 
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
@@ -64,6 +68,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
   protected final BigQuerySyncConfig config;
   private final String projectId;
+  private final String billingProjectId;
   private final String bigLakeConnectionId;
   private final String datasetName;
   private final boolean requirePartitionFilter;
@@ -73,6 +78,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     super(config);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.billingProjectId = config.getString(BIGQUERY_SYNC_BILLING_PROJECT_ID);
     this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
@@ -84,6 +90,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     super(config);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.billingProjectId = config.getStringOrDefault(BIGQUERY_SYNC_BILLING_PROJECT_ID, this.projectId);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
     this.bigquery = bigquery;
@@ -129,7 +136,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(query)
           .setUseLegacySql(false)
           .build();
-      JobId jobId = JobId.newBuilder().setProject(projectId).setRandomJob().build();
+      JobId jobId = JobId.newBuilder().setProject(billingProjectId).setRandomJob().build();
       Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig).setJobId(jobId).build());
 
       queryJob = queryJob.waitFor();
@@ -182,28 +189,37 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     Table existingTable = bigquery.getTable(TableId.of(projectId, datasetName, tableName));
     ExternalTableDefinition definition = existingTable.getDefinition();
     Schema remoteTableSchema = definition.getSchema();
-    // Add the partition fields into the schema to avoid conflicts while updating
-    List<Field> updatedTableFields = remoteTableSchema.getFields().stream()
+    List<Field> finalTableFields = new ArrayList<>(schema.getFields());
+    // Add the partition fields into the schema to avoid conflicts while updating. And ensure the partition fields are at the end to
+    // avoid unnecessary updates.
+    List<Field> bqPartitionFields = remoteTableSchema.getFields().stream()
         .filter(field -> partitionFields.contains(field.getName()))
         .collect(Collectors.toList());
-    updatedTableFields.addAll(schema.getFields());
-    Schema finalSchema = Schema.of(updatedTableFields);
+    finalTableFields.addAll(bqPartitionFields);
+    Schema finalSchema = Schema.of(finalTableFields);
     boolean sameSchema = definition.getSchema() != null && definition.getSchema().equals(finalSchema);
     boolean samePartitionFilter = partitionFields.isEmpty()
         || (requirePartitionFilter == (definition.getHivePartitioningOptions().getRequirePartitionFilter() != null && definition.getHivePartitioningOptions().getRequirePartitionFilter()));
     if (sameSchema && samePartitionFilter) {
+      LOG.info("No table update is needed.");
       return; // No need to update schema.
     }
-    ExternalTableDefinition.Builder builder = definition.toBuilder();
-    builder.setSchema(finalSchema);
-    builder.setAutodetect(false);
-    if (definition.getHivePartitioningOptions() != null) {
-      builder.setHivePartitioningOptions(definition.getHivePartitioningOptions().toBuilder().setRequirePartitionFilter(requirePartitionFilter).build());
+    if (!StringUtils.isNullOrEmpty(bigLakeConnectionId)) {
+      Table updatedTable =
+              existingTable.toBuilder().setDefinition(StandardTableDefinition.of(finalSchema)).build();
+      updatedTable.update();
+    } else {
+      ExternalTableDefinition.Builder builder = definition.toBuilder();
+      builder.setSchema(finalSchema);
+      builder.setAutodetect(false);
+      if (definition.getHivePartitioningOptions() != null) {
+        builder.setHivePartitioningOptions(definition.getHivePartitioningOptions().toBuilder().setRequirePartitionFilter(requirePartitionFilter).build());
+      }
+      Table updatedTable = existingTable.toBuilder()
+              .setDefinition(builder.build())
+              .build();
+      bigquery.update(updatedTable);
     }
-    Table updatedTable = existingTable.toBuilder()
-        .setDefinition(builder.build())
-        .build();
-    bigquery.update(updatedTable);
   }
 
   public void createVersionsTable(String tableName, String sourceUri, String sourceUriPrefix, List<String> partitionFields) {

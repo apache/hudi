@@ -28,11 +28,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.fs.Path;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
@@ -48,6 +48,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.marker.MarkerOperation.ALL_MARKERS_URL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.APPEND_MARKERS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_AND_MERGE_MARKERS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
@@ -72,7 +73,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private static final TypeReference<Set<String>> SET_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
 
   public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
-    this(table.getMetaClient().getBasePath(),
+    this(table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
         table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
         table.getConfig().getViewStorageConfig().getRemoteViewServerPort(),
@@ -124,6 +125,19 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
+  public Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
+    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
+    try {
+      Set<String> markerPaths = executeRequestToTimelineServer(
+          APPEND_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
+      return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
+    } catch (IOException e) {
+      throw new HoodieRemoteException("Failed to get APPEND log file paths in "
+          + markerDirPath.toString(), e);
+    }
+  }
+
+  @Override
   public Set<String> allMarkerFilePaths() {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
@@ -135,26 +149,26 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+  protected Option<StoragePath> create(String partitionPath, String fileName, IOType type, boolean checkIfExists) {
     HoodieTimer timer = HoodieTimer.start();
-    String markerFileName = getMarkerFileName(dataFileName, type);
+    String markerFileName = getMarkerFileName(fileName, type);
 
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, false);
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
     LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
         + " in " + timer.endTimer() + " ms");
     if (success) {
-      return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+      return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));
     } else {
       return Option.empty();
     }
   }
 
   @Override
-  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
-                                                       HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
+  public Option<StoragePath> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
+                                                              HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    String markerFileName = getMarkerFileName(dataFileName, type);
+    String markerFileName = getMarkerFileName(fileName, type);
     Map<String, String> paramsMap = getConfigMap(partitionPath, markerFileName, true);
 
     boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
@@ -163,7 +177,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
         + " in " + timer.endTimer() + " ms");
 
     if (success) {
-      return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+      return Option.of(new StoragePath(FSUtils.constructAbsolutePath(markerDirPath, partitionPath), markerFileName));
     } else {
       // this failed may due to early conflict detection, so we need to throw out.
       throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));

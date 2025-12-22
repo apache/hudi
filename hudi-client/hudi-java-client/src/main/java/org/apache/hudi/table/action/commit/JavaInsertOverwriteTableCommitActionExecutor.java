@@ -51,7 +51,7 @@ public class JavaInsertOverwriteTableCommitActionExecutor<T>
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeResult) {
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context,
-        table.getMetaClient().getBasePath(), config.isMetadataTableEnabled(), config.shouldAssumeDatePartitioning());
+        table.getStorage(), table.getMetaClient().getBasePath(), config.isMetadataTableEnabled(), config.shouldAssumeDatePartitioning());
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       partitionToExistingFileIds = context.mapToPair(partitionPaths,

@@ -154,5 +154,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     if (metaStoreClient != null) {
       Hive.closeCurrent();
     }
+    if (hiveDriver != null) {
+      hiveDriver.close();
+    }
   }
 }

@@ -18,11 +18,12 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.storage.StoragePathInfo
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.FileStatus
-import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -72,14 +73,13 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
     }
   }
 
-  def splitFiles(
-      sparkSession: SparkSession,
-      file: FileStatus,
-      partitionValues: InternalRow): Seq[PartitionedFile] = {
+  def splitFiles(sparkSession: SparkSession,
+                 file: StoragePathInfo,
+                 partitionValues: InternalRow): Seq[PartitionedFile] = {
     val filePath = file.getPath
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-    (0L until file.getLen by maxSplitBytes).map { offset =>
-      val remaining = file.getLen - offset
+    (0L until file.getLength by maxSplitBytes).map { offset =>
+      val remaining = file.getLength - offset
       val size = if (remaining > maxSplitBytes) maxSplitBytes else remaining
       sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
         partitionValues, filePath, offset, size)

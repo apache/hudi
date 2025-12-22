@@ -17,17 +17,18 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.adapter.StateInitializationContextAdapter;
-
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.KeyGroupStatePartitionStreamProvider;
+import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StatePartitionStreamProvider;
+
+import java.util.OptionalLong;
 
 /**
  * A {@link FunctionInitializationContext} for testing purpose.
  */
-public class MockStateInitializationContext implements StateInitializationContextAdapter {
+public class MockStateInitializationContext implements StateInitializationContext {
 
   private final MockOperatorStateStore operatorStateStore;
 
@@ -58,5 +59,10 @@ public class MockStateInitializationContext implements StateInitializationContex
   @Override
   public Iterable<KeyGroupStatePartitionStreamProvider> getRawKeyedStateInputs() {
     return null;
+  }
+
+  @Override
+  public OptionalLong getRestoredCheckpointId() {
+    return OptionalLong.empty();
   }
 }

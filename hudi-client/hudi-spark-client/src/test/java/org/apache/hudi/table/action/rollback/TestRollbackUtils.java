@@ -18,34 +18,35 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestRollbackUtils {
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
-  private FileStatus generateFileStatus(String filePath) {
-    Path dataFile1Path = new Path(filePath);
-    return new FileStatus(1, true, 1, 1, 1, 1,
-        FsPermission.valueOf("-rw-rw-rw-"), "one", "one", null, dataFile1Path);
+  private StoragePathInfo generateFileStatus(String filePath) {
+    return new StoragePathInfo(new StoragePath(filePath), 1, true, (short) 2, 1000000L, 1);
   }
 
   @Test
@@ -65,14 +66,14 @@ public class TestRollbackUtils {
     String partitionPath1 = "/partitionPath1/";
     String partitionPath2 = "/partitionPath2/";
     //prepare HoodieRollbackStat for different partition
-    Map<FileStatus, Boolean> dataFilesOnlyStat1Files = new HashMap<>();
+    Map<StoragePathInfo, Boolean> dataFilesOnlyStat1Files = new HashMap<>();
     dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile1" + BASE_FILE_EXTENSION), true);
     dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile2" + BASE_FILE_EXTENSION), true);
     HoodieRollbackStat dataFilesOnlyStat1 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
         .withDeletedFileResults(dataFilesOnlyStat1Files).build();
 
-    Map<FileStatus, Boolean> dataFilesOnlyStat2Files = new HashMap<>();
+    Map<StoragePathInfo, Boolean> dataFilesOnlyStat2Files = new HashMap<>();
     dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile1" + BASE_FILE_EXTENSION), true);
     dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile2" + BASE_FILE_EXTENSION), true);
     HoodieRollbackStat dataFilesOnlyStat2 = HoodieRollbackStat.newBuilder()
@@ -85,14 +86,14 @@ public class TestRollbackUtils {
     }, "different partition rollbackstat merge will failed");
 
     //prepare HoodieRollbackStat for failed and block append
-    Map<FileStatus, Boolean> dataFilesOnlyStat3Files = new HashMap<>();
+    Map<StoragePathInfo, Boolean> dataFilesOnlyStat3Files = new HashMap<>();
     dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile1.log"), true);
     dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile3" + BASE_FILE_EXTENSION), false);
     HoodieRollbackStat dataFilesOnlyStat3 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
         .withDeletedFileResults(dataFilesOnlyStat3Files).build();
 
-    Map<FileStatus, Long> dataFilesOnlyStat4Files = new HashMap<>();
+    Map<StoragePathInfo, Long> dataFilesOnlyStat4Files = new HashMap<>();
     dataFilesOnlyStat4Files.put(generateFileStatus(partitionPath1 + "dataFile1.log"), 10L);
     HoodieRollbackStat dataFilesOnlyStat4 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
@@ -120,5 +121,39 @@ public class TestRollbackUtils {
         dataFilesOnlyStatMerge2.getSuccessDeleteFiles().stream().sorted().collect(Collectors.toList()));
     assertEquals(Collections.singletonMap(generateFileStatus(partitionPath1 + "dataFile1.log"), 10L),
         dataFilesOnlyStatMerge2.getCommandBlocksCount());
+  }
+
+  @Test
+  public void testMergeRollbackRequestSuccess() {
+    String partitionPath = "partition/path";
+    String fileId = "fileId";
+    String latestBaseInstant = "latestBaseInstant";
+    List<String> filesToBeDeleted1 = Arrays.asList("file1", "file2");
+    Map<String, Long> logBlocksToBeDeleted1 = new HashMap<>();
+    logBlocksToBeDeleted1.put("block1", 1L);
+
+    List<String> filesToBeDeleted2 = Arrays.asList("file3", "file4");
+    Map<String, Long> logBlocksToBeDeleted2 = new HashMap<>();
+    logBlocksToBeDeleted2.put("block2", 2L);
+
+    HoodieRollbackRequest request1 = new HoodieRollbackRequest(partitionPath, fileId, latestBaseInstant, filesToBeDeleted1, logBlocksToBeDeleted1);
+    HoodieRollbackRequest request2 = new HoodieRollbackRequest(partitionPath, fileId, latestBaseInstant, filesToBeDeleted2, logBlocksToBeDeleted2);
+
+    HoodieRollbackRequest mergedRequest = RollbackUtils.mergeRollbackRequest(request1, request2);
+
+    // Verify
+    assertEquals(partitionPath, mergedRequest.getPartitionPath());
+    assertEquals(fileId, mergedRequest.getFileId());
+    assertEquals(latestBaseInstant, mergedRequest.getLatestBaseInstant());
+    assertTrue(mergedRequest.getFilesToBeDeleted().containsAll(Arrays.asList("file1", "file2", "file3", "file4")));
+    assertEquals(2, mergedRequest.getLogBlocksToBeDeleted().size());
+    assertTrue(mergedRequest.getLogBlocksToBeDeleted().keySet().containsAll(Arrays.asList("block1", "block2")));
+  }
+
+  @Test
+  public void testMergeRollbackRequestWithMismatchArguments() {
+    HoodieRollbackRequest request1 = new HoodieRollbackRequest("partition/path", "fileId", "latestBaseInstant", null, null);
+    HoodieRollbackRequest request2 = new HoodieRollbackRequest("partition/path2", "fileId2", "latestBaseInstant2", null, null);
+    assertThrows(IllegalArgumentException.class, () -> RollbackUtils.mergeRollbackRequest(request1, request2));
   }
 }

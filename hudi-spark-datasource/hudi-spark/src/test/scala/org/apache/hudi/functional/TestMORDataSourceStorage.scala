@@ -20,12 +20,13 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 @Tag("functional")
 class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
@@ -71,9 +72,9 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
     }
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
-    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Bulk Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -93,11 +94,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     assertEquals(100, hudiRODF1.count()) // still 100, since we only updated
     val insertCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val insertCommitTimes = hudiRODF1.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
+    val insertCommitTimes = hudiRODF1.select("_hoodie_commit_time").distinct().collectAsList().asScala.map(r => r.getString(0)).toList
     assertEquals(List(insertCommitTime), insertCommitTimes)
 
     // Upsert operation without Hudi metadata columns
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -111,7 +112,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
 
-    val updateCommitTimes = hudiSnapshotDF2.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
+    val updateCommitTimes = hudiSnapshotDF2.select("_hoodie_commit_time").distinct().collectAsList().asScala.map(r => r.getString(0)).toList
     assertEquals(List(updateCommitTime), updateCommitTimes)
 
     // Upsert based on the written table with Hudi metadata columns
@@ -147,9 +148,9 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     var options: Map[String, String] = commonOpts
     options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
-    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+    val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Bulk Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -167,7 +168,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     // upsert
     for ( a <- 1 to 5) {
-      val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
+      val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
       val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
       inputDF2.write.format("org.apache.hudi")
         .options(options)
@@ -175,8 +176,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         .save(basePath)
     }
     // compaction should have been completed
-    val metaClient = HoodieTableMetaClient.builder.setConf(fs.getConf).setBasePath(basePath)
-      .setLoadActiveTimelineOnLoad(true).build
-    assertEquals(1, metaClient.getActiveTimeline.getCommitTimeline.countInstants())
+    val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf), basePath)
+    assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
   }
 }

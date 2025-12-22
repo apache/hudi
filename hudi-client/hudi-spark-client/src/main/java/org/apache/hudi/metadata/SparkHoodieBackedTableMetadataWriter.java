@@ -28,14 +28,17 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +68,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    *                                 attempting to bootstrap the table.
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
@@ -73,7 +76,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
@@ -82,12 +85,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
     return create(conf, writeConfig, context, Option.empty());
   }
 
-  SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
@@ -106,7 +109,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -139,6 +142,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
     writeClient.startCommitWithTime(instantTime, actionType);
     writeClient.deletePartitions(partitionsToDrop, instantTime);
+  }
+
+  @Override
+  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
   }
 
   @Override

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -36,10 +35,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.AvroRuntimeException;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.spark.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,8 +56,6 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
-
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * CLI command to display and trigger repair options.
@@ -96,8 +94,7 @@ public class RepairsCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), master, sparkMemory,
-        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.getTableMetaClient().getBasePath(),
-        String.valueOf(dryRun), dedupeType);
+        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.basePath, String.valueOf(dryRun), dedupeType);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -120,26 +117,26 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     String latestCommit =
-        client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+        client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
     List<String> partitionPaths =
-        FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs, client.getBasePath());
-    Path basePath = new Path(client.getBasePath());
+        FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.storage, HoodieCLI.basePath);
+    StoragePath basePath = client.getBasePath();
     String[][] rows = new String[partitionPaths.size()][];
 
     int ind = 0;
     for (String partition : partitionPaths) {
-      Path partitionPath = FSUtils.getPartitionPath(basePath, partition);
+      StoragePath partitionPath = FSUtils.constructAbsolutePath(basePath, partition);
       String[] row = new String[3];
       row[0] = partition;
       row[1] = "Yes";
       row[2] = "None";
-      if (!HoodiePartitionMetadata.hasPartitionMetadata(HoodieCLI.fs, partitionPath)) {
+      if (!HoodiePartitionMetadata.hasPartitionMetadata(HoodieCLI.storage, partitionPath)) {
         row[1] = "No";
         if (!dryRun) {
           HoodiePartitionMetadata partitionMetadata =
-              new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath,
+              new HoodiePartitionMetadata(HoodieCLI.storage, latestCommit, basePath, partitionPath,
                   client.getTableConfig().getPartitionMetafileFormat());
-          partitionMetadata.trySave(0);
+          partitionMetadata.trySave();
           row[2] = "Repaired";
         }
       }
@@ -163,13 +160,14 @@ public class RepairsCommand {
       newProps.load(fileInputStream);
     }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
-    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
-    HoodieTableConfig.create(client.getFs(), metaPathDir, newProps);
+    HoodieTableConfig.create(client.getStorage(), client.getMetaPath(), newProps);
     // reload new props as checksum would have been added
-    newProps = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
+    newProps =
+        HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
 
     TreeSet<String> allPropKeys = new TreeSet<>();
-    allPropKeys.addAll(newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));
+    allPropKeys.addAll(
+        newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));
     allPropKeys.addAll(oldProps.keySet());
 
     String[][] rows = new String[allPropKeys.size()][];
@@ -197,11 +195,13 @@ public class RepairsCommand {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
         LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-        HoodieActiveTimeline.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+        HoodieActiveTimeline.deleteInstantFile(client.getStorage(), client.getMetaPath(),
+            instant);
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
           LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-          HoodieActiveTimeline.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+          HoodieActiveTimeline.deleteInstantFile(client.getStorage(), client.getMetaPath(),
+              instant);
         } else {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }
@@ -225,16 +225,20 @@ public class RepairsCommand {
 
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, client.getBasePath(), false, false);
-    Path basePath = new Path(client.getBasePath());
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, client.getStorage(), client.getBasePath(), false, false);
+    StoragePath basePath = client.getBasePath();
 
     String[][] rows = new String[partitionPaths.size()][];
     int ind = 0;
     for (String partitionPath : partitionPaths) {
-      Path partition = FSUtils.getPartitionPath(client.getBasePath(), partitionPath);
-      Option<Path> textFormatFile = HoodiePartitionMetadata.textFormatMetaPathIfExists(HoodieCLI.fs, partition);
-      Option<Path> baseFormatFile = HoodiePartitionMetadata.baseFormatMetaPathIfExists(HoodieCLI.fs, partition);
-      String latestCommit = client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+      StoragePath partition =
+          FSUtils.constructAbsolutePath(client.getBasePath(), partitionPath);
+      Option<StoragePath> textFormatFile =
+          HoodiePartitionMetadata.textFormatMetaPathIfExists(HoodieCLI.storage, partition);
+      Option<StoragePath> baseFormatFile =
+          HoodiePartitionMetadata.baseFormatMetaPathIfExists(HoodieCLI.storage, partition);
+      String latestCommit =
+          client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
 
       String[] row = new String[] {
           partitionPath,
@@ -245,15 +249,16 @@ public class RepairsCommand {
 
       if (!dryRun) {
         if (!baseFormatFile.isPresent()) {
-          HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partition,
-              Option.of(client.getTableConfig().getBaseFileFormat()));
-          partitionMetadata.trySave(0);
+          HoodiePartitionMetadata partitionMetadata =
+              new HoodiePartitionMetadata(HoodieCLI.storage, latestCommit, basePath, partition,
+                  Option.of(client.getTableConfig().getBaseFileFormat()));
+          partitionMetadata.trySave();
         }
 
         // delete it, in case we failed midway last time.
         textFormatFile.ifPresent(path -> {
           try {
-            HoodieCLI.fs.delete(path, false);
+            HoodieCLI.storage.deleteFile(path);
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -267,7 +272,7 @@ public class RepairsCommand {
 
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(), "true");
-    HoodieTableConfig.update(HoodieCLI.fs, new Path(client.getMetaPath()), props);
+    HoodieTableConfig.update(HoodieCLI.storage, client.getMetaPath(), props);
 
     return HoodiePrintHelper.print(new String[] {
         HoodieTableHeaderFields.HEADER_PARTITION_PATH,
@@ -292,7 +297,7 @@ public class RepairsCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION.toString(), master, sparkMemory,
-        HoodieCLI.getTableMetaClient().getBasePathV2().toString());
+        HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -320,7 +325,7 @@ public class RepairsCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.RENAME_PARTITION.toString(), master, sparkMemory,
-        HoodieCLI.getTableMetaClient().getBasePathV2().toString(), oldPartition, newPartition);
+        HoodieCLI.basePath, oldPartition, newPartition);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

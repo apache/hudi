@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.DeletePartitionUtils;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDeletePartitionException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -70,25 +70,29 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       context.setJobStatus(this.getClass().getSimpleName(), "Gather all file ids from all deleting partitions.");
       Map<String, List<String>> partitionToReplaceFileIds =
           context.parallelize(partitions).distinct().collectAsList()
-              .stream().collect(Collectors.toMap(partitionPath -> partitionPath, this::getAllExistingFileIds));
+              .stream().collect(
+                  Collectors.toMap(partitionPath -> partitionPath, this::getAllExistingFileIds));
       HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
       result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
       result.setWriteStatuses(Collections.emptyList());
 
       // created requested
-      HoodieInstant dropPartitionsInstant = new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
-      if (!table.getMetaClient().getFs().exists(new Path(table.getMetaClient().getMetaPath(),
-          dropPartitionsInstant.getFileName()))) {
-        HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-            .setOperationType(WriteOperationType.DELETE_PARTITION.name())
-            .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-            .build();
+      HoodieInstant dropPartitionsInstant =
+          new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
+      if (!table.getStorage().exists(new StoragePath(
+          table.getMetaClient().getMetaPath(), dropPartitionsInstant.getFileName()))) {
+        HoodieRequestedReplaceMetadata requestedReplaceMetadata =
+            HoodieRequestedReplaceMetadata.newBuilder()
+                .setOperationType(WriteOperationType.DELETE_PARTITION.name())
+                .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
+                .build();
         table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
             TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
       }
 
-      this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
+      this.saveWorkloadProfileMetadataToInflight(
+          new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
       this.commitOnAutoCommit(result);
       return result;

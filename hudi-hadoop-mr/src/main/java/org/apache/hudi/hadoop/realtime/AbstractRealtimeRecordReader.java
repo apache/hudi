@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
@@ -85,12 +86,17 @@ public abstract class AbstractRealtimeRecordReader {
     LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     this.supportPayload = Boolean.parseBoolean(job.get("hoodie.support.payload", "true"));
     try {
-      metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
+      metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jobConf)).setBasePath(split.getBasePath()).build();
       if (metaClient.getTableConfig().getPreCombineField() != null) {
         this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+
+      // get timestamp columns
+      supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
+
       schemaEvolutionContext = new SchemaEvolutionContext(split, job, Option.of(metaClient));
       if (schemaEvolutionContext.internalSchemaOption.isPresent()) {
         schemaEvolutionContext.doEvolutionForRealtimeInputFormat(this);
@@ -161,9 +167,6 @@ public abstract class AbstractRealtimeRecordReader {
     readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
-
-    // get timestamp columns
-    supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
   }
 
   public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {
