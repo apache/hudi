@@ -89,7 +89,7 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_1ExtendedSqlParser(spark, delegate)
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema): Option[ParquetFileFormat] = {
     Some(new Spark31LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
