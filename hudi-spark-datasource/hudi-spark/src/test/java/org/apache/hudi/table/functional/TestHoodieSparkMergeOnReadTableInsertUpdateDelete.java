@@ -112,7 +112,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
@@ -174,7 +174,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
-    HoodieWriteConfig cfg = getConfigBuilder(false)
+    HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(2).withScheduleInlineCompaction(scheduleInlineCompaction).build())
         .build();
@@ -216,7 +216,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
-    HoodieWriteConfig cfg = getConfigBuilder(false)
+    HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(2).withScheduleInlineCompaction(scheduleInlineCompaction).build())
         .build();
@@ -274,7 +274,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {

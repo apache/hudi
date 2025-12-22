@@ -118,7 +118,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE, properties);
 
-    HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
+    HoodieWriteConfig cfg = getConfig(rollbackUsingMarkers);
     cfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
@@ -179,7 +179,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers, int tableVersion) throws Exception {
     // NOTE: First writer will have Metadata table DISABLED
     HoodieWriteConfig.Builder cfgBuilder =
-        getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
+        getConfigBuilder(rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
 
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -379,7 +379,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   void testReattemptRollback(boolean rollbackUsingMarkers, boolean partitionedTable) throws Exception {
 
     HoodieWriteConfig.Builder cfgBuilder =
-        getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
+        getConfigBuilder(rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
 
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     cfgBuilder = cfgBuilder.withWriteTableVersion(6);
@@ -491,7 +491,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   @Test
   void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
     boolean populateMetaFields = true;
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder()
         // Timeline-server-based markers are not used for multi-rollback tests
         .withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
@@ -678,7 +678,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   @Test
   void testRestoreWithCleanedUpCommits() throws Exception {
     boolean populateMetaFields = true;
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder()
         // Timeline-server-based markers are not used for multi-rollback tests
         .withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
@@ -728,7 +728,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
 
       // trigger clean. creating a new client with aggressive cleaner configs so that clean will kick in immediately.
-      cfgBuilder = getConfigBuilder(false)
+      cfgBuilder = getConfigBuilder()
           .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
           // Timeline-server-based markers are not used for multi-rollback tests
           .withMarkersType(MarkerType.DIRECT.name());
@@ -779,7 +779,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder()
         // Timeline-server-based markers are not used for multi-rollback tests
         .withMarkersType(MarkerType.DIRECT.name());
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -898,7 +898,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY).build();
+    HoodieWriteConfig config = getConfigBuilder(rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY).build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
@@ -991,7 +991,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY).build();
+    HoodieWriteConfig config = getConfigBuilder(rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY).build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
@@ -1143,7 +1143,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   private HoodieWriteConfig getWriteConfig(boolean autoCommit, boolean rollbackUsingMarkers) {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(autoCommit).withRollbackUsingMarkers(rollbackUsingMarkers)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withAutoClean(false)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)

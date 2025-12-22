@@ -56,7 +56,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
   @ValueSource(booleans = {false, true})
   public void testDeletePartitionAndArchive(boolean metadataEnabled) throws IOException {
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
-    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+    HoodieWriteConfig writeConfig = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())

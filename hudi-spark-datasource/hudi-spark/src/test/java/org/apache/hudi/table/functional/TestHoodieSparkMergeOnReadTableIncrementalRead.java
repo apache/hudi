@@ -88,7 +88,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
     Properties props = getPropertiesForKeyGen(true);
     props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
-    HoodieWriteConfig cfg = getConfigBuilder(true).build();
+    HoodieWriteConfig cfg = getConfigBuilder().build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       /*
