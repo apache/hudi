@@ -36,6 +36,8 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterFactory;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -43,8 +45,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -65,9 +65,8 @@ import scala.Tuple2;
 /**
  * The delta generator generates all types of workloads (insert, update) for the given configs.
  */
+@Slf4j
 public class DeltaGenerator implements Serializable {
-
-  private static Logger log = LoggerFactory.getLogger(DeltaGenerator.class);
 
   private DFSDeltaConfig deltaOutputConfig;
   private transient JavaSparkContext jsc;
@@ -75,6 +74,7 @@ public class DeltaGenerator implements Serializable {
   private String schemaStr;
   private List<String> recordRowKeyFieldNames;
   private List<String> partitionPathFieldNames;
+  @Getter
   private int batchId;
 
   public DeltaGenerator(DFSDeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
@@ -88,13 +88,13 @@ public class DeltaGenerator implements Serializable {
   }
 
   public Pair<Integer, JavaRDD<DeltaWriteStats>> writeRecords(JavaRDD<GenericRecord> records) {
-    if (deltaOutputConfig.shouldDeleteOldInputData() && batchId > 1) {
+    if (deltaOutputConfig.isShouldDeleteOldInputData() && batchId > 1) {
       Path oldInputDir = new Path(deltaOutputConfig.getDeltaBasePath(), Integer.toString(batchId - 1));
       try {
         FileSystem fs = HadoopFSUtils.getFs(oldInputDir.toString(), deltaOutputConfig.getConfiguration());
         fs.delete(oldInputDir, true);
       } catch (IOException e) {
-        log.error("Failed to delete older input data directory " + oldInputDir, e);
+        log.error("Failed to delete older input data directory {}", oldInputDir, e);
       }
     }
 
@@ -110,10 +110,6 @@ public class DeltaGenerator implements Serializable {
     }).flatMap(List::iterator);
     batchId++;
     return Pair.of(batchId, ws);
-  }
-
-  public int getBatchId() {
-    return batchId;
   }
 
   public JavaRDD<GenericRecord> generateInserts(Config operation) {
@@ -158,7 +154,7 @@ public class DeltaGenerator implements Serializable {
           adjustedRDD = deltaInputReader.read(config.getNumRecordsUpsert());
           adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsUpsert());
         } else {
-          if (((DFSDeltaConfig) deltaOutputConfig).shouldUseHudiToGenerateUpdates()) {
+          if (((DFSDeltaConfig) deltaOutputConfig).isHudiUpdatesEnabled()) {
             deltaInputReader =
                 new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDeltaBasePath(),
                     schemaStr);
@@ -180,7 +176,7 @@ public class DeltaGenerator implements Serializable {
         // persist this since we will make multiple passes over this
         int numPartition = Math.min(deltaOutputConfig.getInputParallelism(),
             Math.max(1, config.getNumUpsertPartitions()));
-        log.info("Repartitioning records into " + numPartition + " partitions for updates");
+        log.info("Repartitioning records into {} partitions for updates", numPartition);
         adjustedRDD = adjustedRDD.repartition(numPartition);
         log.info("Repartitioning records done for updates");
         UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
@@ -216,7 +212,7 @@ public class DeltaGenerator implements Serializable {
         adjustedRDD = deltaInputReader.read(config.getNumRecordsDelete());
         adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsDelete());
       } else {
-        if (((DFSDeltaConfig) deltaOutputConfig).shouldUseHudiToGenerateUpdates()) {
+        if (((DFSDeltaConfig) deltaOutputConfig).isHudiUpdatesEnabled()) {
           deltaInputReader =
               new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(),
                   schemaStr);
