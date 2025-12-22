@@ -21,9 +21,9 @@ package org.apache.hudi.io.lance;
 
 import com.lancedb.lance.file.LanceFileWriter;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.hudi.common.util.HoodieArrowAllocator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -49,6 +49,9 @@ import java.util.List;
  */
 @NotThreadSafe
 public abstract class HoodieBaseLanceWriter<R> implements Closeable {
+  /** Memory size for data write operations: 120MB */
+  private static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
+
   protected static final int DEFAULT_BATCH_SIZE = 1000;
   protected final HoodieStorage storage;
   protected final StoragePath path;
@@ -72,7 +75,8 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize, long maxFileSize) {
     this.storage = storage;
     this.path = path;
-    this.allocator = new RootAllocator(Long.MAX_VALUE);
+    this.allocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
     this.bufferedRecords = new ArrayList<>(batchSize);
     this.batchSize = batchSize;
     this.maxFileSize = maxFileSize;

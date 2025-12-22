@@ -20,7 +20,6 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.HoodieArrowAllocator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -59,8 +59,14 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
  * {@link HoodieSparkFileReader} implementation for Lance file format.
  */
 public class HoodieSparkLanceReader implements HoodieSparkFileReader {
-  // number of rows to read 
-  private static final int DEFAULT_BATCH_SIZE = 512; 
+  // Memory size for data read operations: 120MB
+  public static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
+
+  // Memory size for metadata operations: 8MB
+  private static final long LANCE_METADATA_ALLOCATOR_SIZE = 8 * 1024 * 1024;
+
+  // number of rows to read
+  private static final int DEFAULT_BATCH_SIZE = 512;
   private final StoragePath path;
 
   public HoodieSparkLanceReader(StoragePath path) {
@@ -129,7 +135,9 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * @throws IOException if reading fails
    */
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator() {
-    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+
+    BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
 
     try {
       LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
@@ -159,7 +167,8 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     // Convert HoodieSchema to Spark StructType
     StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 
-    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
 
     try {
       LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
@@ -183,7 +192,8 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   @Override
   public HoodieSchema getSchema() {
     // Read Arrow schema from Lance file and convert to Avro
-    try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       Schema arrowSchema = reader.schema();
       StructType structType = LanceArrowUtils.fromArrowSchema(arrowSchema);
@@ -200,7 +210,8 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public long getTotalRecords() {
-    try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       return reader.numRows();
     } catch (Exception e) {

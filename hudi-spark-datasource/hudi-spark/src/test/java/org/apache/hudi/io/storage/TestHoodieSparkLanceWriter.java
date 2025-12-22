@@ -20,7 +20,6 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.Float4Vector;
@@ -33,6 +32,7 @@ import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -109,7 +109,8 @@ public class TestHoodieSparkLanceWriter {
     // Verify using LanceFileReader
     assertTrue(storage.exists(path), "Lance file should exist");
 
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteRowWithMetadata", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -176,7 +177,8 @@ public class TestHoodieSparkLanceWriter {
     // Verify using LanceFileReader
     assertTrue(storage.exists(path));
 
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteRowWithoutMetadataPopulation", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -214,7 +216,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify file exists and has correct record count
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteRowSimple", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(1, reader.numRows());
     }
@@ -236,7 +239,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify all records were written
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(recordCount, reader.numRows(), "All records should be written");
     }
@@ -270,7 +274,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify all types were written correctly
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -309,7 +314,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify nulls are preserved
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -384,7 +390,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     assertTrue(storage.exists(path), "Lance file with struct type should exist");
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(rows.size(), reader.numRows(), "Row count should match");
       assertEquals(3, reader.schema().getFields().size(), "Should have 3 top-level fields (id, name, address)");
