@@ -20,7 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.util.AvroOrcUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 

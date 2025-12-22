@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -41,6 +42,7 @@ public class TestSparkDataSourceTableUtils {
         + "  ]\n"
         + "}";
     Schema avroSchema = new Schema.Parser().parse(avroSchemaJson);
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(avroSchema);
 
     List<String> partitionNames = Arrays.asList("partition_col");
     String sparkVersion = "3.3.0";
@@ -48,7 +50,7 @@ public class TestSparkDataSourceTableUtils {
 
     // Get Spark table properties with comments
     Map<String, String> properties = SparkDataSourceTableUtils.getSparkTableProperties(
-        partitionNames, sparkVersion, schemaLengthThreshold, avroSchema);
+        partitionNames, sparkVersion, schemaLengthThreshold, hoodieSchema);
 
     // Verify that properties contain the expected Spark DataSource settings
     assertTrue(properties.containsKey("spark.sql.sources.provider"),
@@ -80,6 +82,7 @@ public class TestSparkDataSourceTableUtils {
         + "  ]\n"
         + "}";
     Schema avroSchema = new Schema.Parser().parse(avroSchemaJson);
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(avroSchema);
 
     List<String> partitionNames = Arrays.asList();
     String sparkVersion = "3.3.0";
@@ -87,7 +90,7 @@ public class TestSparkDataSourceTableUtils {
 
     // Get Spark table properties with Avro schema but test the behavior without comments
     Map<String, String> properties = SparkDataSourceTableUtils.getSparkTableProperties(
-        partitionNames, sparkVersion, schemaLengthThreshold, avroSchema);
+        partitionNames, sparkVersion, schemaLengthThreshold, hoodieSchema);
 
     // Verify that properties are generated correctly
     assertTrue(properties.containsKey("spark.sql.sources.provider"),

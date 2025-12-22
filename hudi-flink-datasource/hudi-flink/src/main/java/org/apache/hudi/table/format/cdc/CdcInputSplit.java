@@ -22,6 +22,9 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Arrays;
 
 /**
@@ -30,6 +33,8 @@ import java.util.Arrays;
 public class CdcInputSplit extends MergeOnReadInputSplit {
   private static final long serialVersionUID = 1L;
 
+  @Getter
+  @Setter
   private HoodieCDCFileSplit[] changes;
 
   public CdcInputSplit(
@@ -40,14 +45,6 @@ public class CdcInputSplit extends MergeOnReadInputSplit {
       HoodieCDCFileSplit[] changes) {
     super(splitNum, null, Option.empty(), "", tablePath,
         maxCompactionMemoryInBytes, "", null, fileId);
-    this.changes = changes;
-  }
-
-  public HoodieCDCFileSplit[] getChanges() {
-    return changes;
-  }
-
-  public void setChanges(HoodieCDCFileSplit[] changes) {
     this.changes = changes;
   }
 

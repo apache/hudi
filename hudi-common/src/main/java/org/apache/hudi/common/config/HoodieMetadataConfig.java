@@ -116,6 +116,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
+  // Max number of seconds before compaction occurs
+  public static final ConfigProperty<String> COMPACT_TIME_DELTA_SECONDS = ConfigProperty
+      .key(METADATA_PREFIX + ".compact.max.delta.seconds")
+      .defaultValue(String.valueOf(2 * 60 * 60))
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a "
+      + "new one (for metadata table). "
+      + "This config takes effect only for the compaction triggering strategy based on the elapsed time, "
+      + "i.e., TIME_ELAPSED, NUM_AND_TIME, and NUM_OR_TIME.");
+
+  // Compaction trigger strategy
+  public static final ConfigProperty<String> COMPACT_TRIGGER_STRATEGY = ConfigProperty
+      .key(METADATA_PREFIX +  ".compact.trigger.strategy")
+      .defaultValue("NUM_COMMITS")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Controls how compaction scheduling is triggered for metadata table,"
+      + "by time or num delta commits or combination of both. ");
+
   public static final ConfigProperty<String> ENABLE_LOG_COMPACTION_ON_METADATA_TABLE = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.enable")
       .defaultValue("false")
@@ -322,9 +342,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("Maximum number of file groups to use for Partitioned Record Index.");
 
-  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
+  public static final ConfigProperty<Long> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.size")
-      .defaultValue(1024 * 1024 * 1024)
+      .defaultValue(1024 * 1024 * 1024L)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum size in bytes of a single file group. Large file group takes longer to compact.");
@@ -708,8 +728,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getFloat(RECORD_INDEX_GROWTH_FACTOR_PROP);
   }
 
-  public int getRecordIndexMaxFileGroupSizeBytes() {
-    return getInt(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP);
+  public long getRecordIndexMaxFileGroupSizeBytes() {
+    return getLong(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP);
   }
 
   public String getSplliableMapDir() {

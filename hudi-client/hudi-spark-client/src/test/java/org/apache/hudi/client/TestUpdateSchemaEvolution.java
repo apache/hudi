@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -127,7 +128,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
             .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
                 new StoragePath(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
-                mergeHandle.getWriterSchemaWithMetaFields());
+                mergeHandle.getWriterSchemaWithMetaFields().toAvroSchema());
         for (GenericRecord rec : oldRecords) {
           // TODO create hoodie record with rec can getRecordKey
           mergeHandle.write(new HoodieAvroIndexedRecord(rec));
@@ -231,7 +232,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
   }
 
   private HoodieWriteConfig makeHoodieClientConfig(String name) {
-    Schema schema = getSchemaFromResource(getClass(), name);
+    HoodieSchema schema = getSchemaFromResource(getClass(), name);
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())

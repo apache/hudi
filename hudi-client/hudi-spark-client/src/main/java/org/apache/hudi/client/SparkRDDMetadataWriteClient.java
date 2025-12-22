@@ -37,9 +37,8 @@ import org.apache.hudi.table.HoodieSparkMergeOnReadMetadataTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -50,9 +49,8 @@ import java.util.function.BiConsumer;
  *
  * @param <T>
  */
+@Slf4j
 public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkRDDMetadataWriteClient.class);
 
   // tracks the instants for which upsertPrepped is invoked.
   private Option<String> firstInstantOpt = Option.empty();

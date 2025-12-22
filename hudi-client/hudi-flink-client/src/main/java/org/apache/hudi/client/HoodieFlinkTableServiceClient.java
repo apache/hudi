@@ -48,16 +48,14 @@ import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.FlinkClientUtil;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.text.ParseException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkTableServiceClient.class);
 
   protected HoodieFlinkTableServiceClient(HoodieEngineContext context,
                                           HoodieWriteConfig clientConfig,
@@ -82,7 +80,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       writeTableMetadata(table, compactionCommitTime, metadata);
-      LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
+      log.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endStateChange(Option.of(compactionInstant));
@@ -100,7 +98,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
             + config.getBasePath() + " at time " + compactionCommitTime, e);
       }
     }
-    LOG.info("Compacted successfully on commit " + compactionCommitTime);
+    log.info("Compacted successfully on commit " + compactionCommitTime);
   }
 
   protected void completeClustering(
@@ -129,7 +127,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       writeTableMetadata(table, clusteringCommitTime, metadata);
 
-      LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
+      log.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
@@ -155,7 +153,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
             + config.getBasePath() + " at time " + clusteringCommitTime, e);
       }
     }
-    LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+    log.info("Clustering successfully on commit " + clusteringCommitTime);
   }
 
   @Override

@@ -26,8 +26,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
@@ -36,9 +35,8 @@ import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeart
 /**
  * Helper class to delete heartbeat for completed or failed instants with expired heartbeats.
  */
+@Slf4j
 public class HeartbeatUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HeartbeatUtils.class);
 
   /**
    * Deletes the heartbeat file for the specified instant.
@@ -56,12 +54,12 @@ public class HeartbeatUtils {
       String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
       deleted = storage.deleteFile(new StoragePath(heartbeatFolderPath, instantTime));
       if (!deleted) {
-        LOG.error("Failed to delete heartbeat for instant {}", instantTime);
+        log.error("Failed to delete heartbeat for instant {}", instantTime);
       } else {
-        LOG.info("Deleted the heartbeat for instant {}", instantTime);
+        log.info("Deleted the heartbeat for instant {}", instantTime);
       }
     } catch (IOException io) {
-      LOG.error("Unable to delete heartbeat for instant {}", instantTime, io);
+      log.error("Unable to delete heartbeat for instant {}", instantTime, io);
     }
     return deleted;
   }

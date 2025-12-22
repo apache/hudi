@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 
+import org.apache.avro.JsonProperties
 import org.apache.spark.sql.avro.SchemaConverters.SchemaType
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -54,6 +56,13 @@ class TestSchemaConverters {
     val secondConversion = stripMetadata(SchemaConverters.toSqlType(convertedAvroSchema).dataType)
 
     assertEquals(firstConversion, secondConversion)
+    // validate that the doc string and default null value are set
+    originalAvroSchema.getFields.forEach { field =>
+      val convertedField = convertedAvroSchema.getField(field.name())
+      assertEquals(field.doc(), convertedField.doc())
+      if (AvroSchemaUtils.isNullable(field.schema())) {
+        assertEquals(JsonProperties.NULL_VALUE, convertedField.defaultVal())
+      }
+    }
   }
-
 }

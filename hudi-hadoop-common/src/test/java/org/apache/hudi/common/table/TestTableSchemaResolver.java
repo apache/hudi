@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -62,6 +64,7 @@ import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.getDataBl
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,25 +84,25 @@ class TestTableSchemaResolver {
 
   @Test
   void testRecreateSchemaWhenDropPartitionColumns() {
-    Schema originSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema originSchema = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
 
     // case2
     String[] pts1 = new String[0];
-    Schema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts1));
+    HoodieSchema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts1));
     assertEquals(originSchema, s2);
 
     // case3: partition_path is in originSchema
     String[] pts2 = {"partition_path"};
-    Schema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts2));
+    HoodieSchema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts2));
     assertEquals(originSchema, s3);
 
     // case4: user_partition is not in originSchema
     String[] pts3 = {"user_partition"};
-    Schema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
+    HoodieSchema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, Option.of(pts3));
     assertNotEquals(originSchema, s4);
     assertTrue(s4.getFields().stream().anyMatch(f -> f.name().equals("user_partition")));
-    Schema.Field f = s4.getField("user_partition");
-    assertEquals(f.schema(), AvroSchemaUtils.createNullableSchema(Schema.Type.STRING));
+    HoodieSchemaField f = s4.getField("user_partition").get();
+    assertEquals(f.schema(), HoodieSchema.createNullable(HoodieSchemaType.STRING));
 
     // case5: user_partition is in originSchema, but partition_path is in originSchema
     String[] pts4 = {"user_partition", "partition_path"};
@@ -111,12 +114,48 @@ class TestTableSchemaResolver {
   }
 
   @Test
+  void testGetTableSchema() throws Exception {
+    // Setup: Create mock metaClient and configure behavior
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    HoodieSchema expectedSchema = getSimpleSchema();
+
+    // Mock table setup
+    when(metaClient.getTableConfig().populateMetaFields()).thenReturn(true);
+    when(metaClient.getTableConfig().getTableCreateSchema())
+        .thenReturn(Option.of(expectedSchema.toAvroSchema()));
+
+    when(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema())
+        .thenReturn(Option.empty());
+
+    // Create resolver and call both methods
+    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
+
+    // Test 1: getTableSchema() - should use table config's populateMetaFields (true)
+    Schema avroSchema = resolver.getTableAvroSchema();
+    HoodieSchema hoodieSchema = resolver.getTableSchema();
+    assertNotNull(hoodieSchema);
+    assertEquals(avroSchema, hoodieSchema.getAvroSchema());
+
+    // Test 2: getTableSchema(true) - explicitly include metadata fields
+    Schema avroSchemaWithMetadata = resolver.getTableAvroSchema(true);
+    HoodieSchema hoodieSchemaWithMetadata = resolver.getTableSchema(true);
+    assertNotNull(hoodieSchemaWithMetadata);
+    assertEquals(avroSchemaWithMetadata, hoodieSchemaWithMetadata.getAvroSchema());
+
+    // Test 3: getTableSchema(false) - explicitly exclude metadata fields
+    Schema avroSchemaWithoutMetadata = resolver.getTableAvroSchema(false);
+    HoodieSchema hoodieSchemaWithoutMetadata = resolver.getTableSchema(false);
+    assertNotNull(hoodieSchemaWithoutMetadata);
+    assertEquals(avroSchemaWithoutMetadata, hoodieSchemaWithoutMetadata.getAvroSchema());
+  }
+
+  @Test
   void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
     String testDir = initTestDir("read_schema_from_log_file");
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
-    Schema expectedSchema = getSimpleSchema();
-    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
-    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
+    HoodieSchema expectedSchema = getSimpleSchema();
+    StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
+    assertEquals(expectedSchema.toAvroSchema(), TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
         logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
   }
 

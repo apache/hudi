@@ -18,34 +18,64 @@
 
 package org.apache.hudi.sync.common.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.avro.Schema;
-
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class SparkDataSourceTableUtils {
   /**
-   * Get Spark Sql related table properties with Avro schema for nested comments.
+   * Get Spark Sql related table properties with Hoodie schema for comments.
    * @param partitionNames List of partition field names
    * @param sparkVersion Spark version
    * @param schemaLengthThreshold Schema length threshold
-   * @param avroSchema Avro schema with nested comments
+   * @param schema Hoodie schema with field docs
    * @return Map of Spark table properties
    */
   public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
-                                                            int schemaLengthThreshold, Schema avroSchema) {
+                                                            int schemaLengthThreshold, HoodieSchema schema) {
+    // Convert the schema and partition info used by spark sql to hive table properties.
+    // The following code refers to the spark code in
+    // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
+    List<HoodieSchemaField> partitionCols = new ArrayList<>();
+    List<HoodieSchemaField> dataCols = new ArrayList<>();
+    Map<String, HoodieSchemaField> column2Field = new HashMap<>();
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      column2Field.put(field.name(), field);
+    }
+    // Get partition columns and data columns.
+    for (String partitionName : partitionNames) {
+      // Default the unknown partition fields to be String.
+      // Keep the same logical with HiveSchemaUtil#getPartitionKeyType.
+      partitionCols.add(column2Field.getOrDefault(partitionName,
+          HoodieSchemaField.of(partitionName, HoodieSchema.create(HoodieSchemaType.STRING))));
+    }
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      if (!partitionNames.contains(field.name())) {
+        dataCols.add(field);
+      }
+    }
+
+    List<HoodieSchemaField> reOrderedFields = new ArrayList<>(dataCols.size() + partitionCols.size());
+    dataCols.forEach(field -> reOrderedFields.add(HoodieSchemaUtils.createNewSchemaField(field)));
+    partitionCols.forEach(field -> reOrderedFields.add(HoodieSchemaUtils.createNewSchemaField(field)));
+    HoodieSchema reOrderedSchema = HoodieSchema.createRecord(schema.getName(), null, null, reOrderedFields);
     Map<String, String> sparkProperties = new HashMap<>();
     sparkProperties.put("spark.sql.sources.provider", "hudi");
     if (!StringUtils.isNullOrEmpty(sparkVersion)) {
       sparkProperties.put("spark.sql.create.version", sparkVersion);
     }
-
-    // Convert schema using AvroToSparkJson with field reordering for Spark DataSource compatibility
-    String schemaString = AvroToSparkJson.convertToSparkSchemaJson(avroSchema, partitionNames);
+    // Split the schema string to multi-parts according the schemaLengthThreshold size.
+    String schemaString = SparkSchemaUtils.convertToSparkSchemaJson(reOrderedSchema);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
     sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
     // Add each part of schema string to sparkProperties

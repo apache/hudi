@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
@@ -73,7 +74,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
       logFilePath => {
         val statuses = storage.listDirectEntries(new StoragePath(logFilePath))
         val schema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath))
-        val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(statuses.get(0).getPath), schema)
+        val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(statuses.get(0).getPath), HoodieSchema.fromAvroSchema(schema))
 
         // read the avro blocks
         while (reader.hasNext) {

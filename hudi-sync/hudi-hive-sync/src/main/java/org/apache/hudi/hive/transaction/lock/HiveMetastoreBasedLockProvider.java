@@ -70,8 +70,8 @@ import static org.apache.hudi.common.lock.LockState.RELEASED;
 import static org.apache.hudi.common.lock.LockState.RELEASING;
 
 /**
- * A hivemetastore based lock. Default HiveMetastore Lock Manager uses zookeeper to provide locks, read here
- * {@link /cwiki.apache.org/confluence/display/Hive/Configuration+Properties#ConfigurationProperties-Locking}
+ * A hivemetastore based lock. Default HiveMetastore Lock Manager uses zookeeper to provide locks,
+ * <a href="https://cwiki.apache.org/confluence/display/Hive/Configuration+Properties#ConfigurationProperties-Locking">read here</a>
  * This {@link LockProvider} implementation allows to lock table operations
  * using hive metastore APIs. Users need to have a HiveMetastore & Zookeeper cluster deployed to be able to use this lock.
  *

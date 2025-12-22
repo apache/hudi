@@ -42,7 +42,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    *
    * @param records          Input Hoodie records.
    * @param outputPartitions Expected number of output partitions as a hint.
-   * @return
+   * @return Repartitioned records.
    */
   I repartitionRecords(I records, int outputPartitions);
 
@@ -56,7 +56,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    * By default, return a new file group id prefix, so that incoming records will route to a fresh new file group
    *
    * @param partitionId data partition
-   * @return
+   * @return File group id prefix.
    */
   default String getFileIdPfx(int partitionId) {
     return FSUtils.createNewFileIdPfx();
@@ -66,7 +66,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
    * Return write handle factory for the given partition.
    *
    * @param partitionId data partition
-   * @return
+   * @return {@link WriteHandleFactory}
    */
   default Option<WriteHandleFactory> getWriteHandleFactory(int partitionId) {
     return Option.empty();

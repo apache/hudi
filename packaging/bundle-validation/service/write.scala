@@ -17,7 +17,7 @@
  */
 
 import org.apache.hudi.QuickstartUtils._
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._

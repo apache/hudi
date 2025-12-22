@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -37,7 +38,6 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,7 +172,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     boolean tableExists = syncClient.tableExists(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = syncClient.getStorageSchema();
+    HoodieSchema schema = syncClient.getStorageSchema();
 
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
@@ -216,7 +216,7 @@ public class AdbSyncTool extends HoodieSyncTool {
    * @param schema                 The extracted schema
    */
   private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
-      boolean readAsOptimized, MessageType schema) {
+      boolean readAsOptimized, HoodieSchema schema) {
     // Append spark table properties & serde properties
     Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(ADB_SYNC_TABLE_PROPERTIES));
     Map<String, String> serdeProperties = ConfigUtils.toMap(config.getString(ADB_SYNC_SERDE_PROPERTIES));
@@ -224,8 +224,9 @@ public class AdbSyncTool extends HoodieSyncTool {
       try {
         // Always include metadata fields for ADB sync
         Schema avroSchema = new TableSchemaResolver(syncClient.getMetaClient()).getTableAvroSchema(true);
+        HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(avroSchema);
         Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-            config.getString(META_SYNC_SPARK_VERSION), config.getInt(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), avroSchema);
+            config.getString(META_SYNC_SPARK_VERSION), config.getInt(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), hoodieSchema);
         Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
         tableProperties.putAll(sparkTableProperties);
         serdeProperties.putAll(sparkSerdeProperties);

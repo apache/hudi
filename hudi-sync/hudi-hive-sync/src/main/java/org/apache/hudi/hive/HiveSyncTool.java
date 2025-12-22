@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -41,7 +42,6 @@ import com.beust.jcommander.JCommander;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +69,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getSchemaDifference;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
@@ -261,7 +260,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       return;
     }
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
+    HoodieSchema schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
 
     boolean schemaChanged;
     boolean propertiesChanged;
@@ -372,7 +371,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private void recreateAndSyncHiveTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
     LOG.info("recreating and syncing the table {}", tableName);
     Timer.Context timerContext = metrics.getRecreateAndSyncTimer();
-    MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
+    HoodieSchema schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
     try {
       createOrReplaceTable(tableName, useRealtimeInputFormat, readAsOptimized, schema);
       syncAllPartitions(tableName);
@@ -387,9 +386,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
   }
 
-  private void createOrReplaceTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized, MessageType schema) {
+  private void createOrReplaceTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized, HoodieSchema schema) {
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeInputFormat, config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT));
+    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeInputFormat);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
     Map<String, String> serdeProperties = getSerdeProperties(readAsOptimized);
@@ -398,14 +397,15 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties);
   }
 
-  private Map<String, String> getTableProperties(MessageType schema) {
+  private Map<String, String> getTableProperties(HoodieSchema schema) {
     Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_PROPERTIES));
     if (config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
       try {
         // Always include metadata fields for Hive sync
         Schema avroSchema = new TableSchemaResolver(syncClient.getMetaClient()).getTableAvroSchema(true);
+        HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(avroSchema);
         Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), avroSchema);
+            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), hoodieSchema);
         tableProperties.putAll(sparkTableProperties);
       } catch (Exception e) {
         throw new HoodieException("Failed to get Avro schema for Hive sync", e);
@@ -423,10 +423,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     return serdeProperties;
   }
 
-  private void syncFirstTime(String tableName, boolean useRealTimeInputFormat, boolean readAsOptimized, MessageType schema) {
+  private void syncFirstTime(String tableName, boolean useRealTimeInputFormat, boolean readAsOptimized, HoodieSchema schema) {
     LOG.info("Sync table {} for the first time.", tableName);
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat, config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT));
+    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
     Map<String, String> serdeProperties = getSerdeProperties(readAsOptimized);
@@ -439,7 +439,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties);
   }
 
-  private boolean syncSchema(String tableName, MessageType schema) {
+  private boolean syncSchema(String tableName, HoodieSchema schema) {
     boolean schemaChanged = false;
 
     // Check if the table schema has evolved
@@ -464,7 +464,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     return schemaChanged;
   }
 
-  private boolean syncProperties(String tableName, boolean useRealTimeInputFormat, boolean readAsOptimized, MessageType schema) {
+  private boolean syncProperties(String tableName, boolean useRealTimeInputFormat, boolean readAsOptimized, HoodieSchema schema) {
     boolean propertiesChanged = false;
 
     Map<String, String> serdeProperties = getSerdeProperties(readAsOptimized);

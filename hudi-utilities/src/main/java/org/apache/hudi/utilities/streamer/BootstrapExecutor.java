@@ -142,8 +142,8 @@ public class BootstrapExecutor implements Serializable {
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .withProps(props);
 
-    if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
-      builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
+    if (null != schemaProvider && null != schemaProvider.getTargetHoodieSchema()) {
+      builder = builder.withSchema(schemaProvider.getTargetHoodieSchema().toString());
     }
     this.bootstrapConfig = builder.build();
     LOG.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());

@@ -35,9 +35,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
@@ -47,9 +46,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 
+@Slf4j
 public class TransactionUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TransactionUtils.class);
 
   /**
    * Resolve any write conflicts when committing data.
@@ -91,7 +89,7 @@ public class TransactionUtils {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
-            LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
+            log.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
                 + otherOperation + ", attempting to resolve it...");
             resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
           }
@@ -99,7 +97,7 @@ public class TransactionUtils {
           throw new HoodieWriteConflictException("Unable to resolve conflict, if present", io);
         }
       });
-      LOG.info("Successfully resolved conflicts, if any");
+      log.info("Successfully resolved conflicts, if any");
 
       if (newTableSchema.isPresent()) {
         thisOperation.getCommitMetadataOption().get().addMetadata(

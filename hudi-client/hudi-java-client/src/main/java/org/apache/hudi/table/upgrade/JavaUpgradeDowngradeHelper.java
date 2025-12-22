@@ -27,16 +27,17 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /**
  * Java upgrade and downgrade helper
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class JavaUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   private static final JavaUpgradeDowngradeHelper SINGLETON_INSTANCE =
       new JavaUpgradeDowngradeHelper();
-
-  private JavaUpgradeDowngradeHelper() {
-  }
 
   public static JavaUpgradeDowngradeHelper getInstance() {
     return SINGLETON_INSTANCE;

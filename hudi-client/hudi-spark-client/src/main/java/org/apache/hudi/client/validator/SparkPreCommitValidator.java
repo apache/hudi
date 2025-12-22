@@ -34,11 +34,11 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -47,11 +47,13 @@ import java.util.stream.Collectors;
 /**
  * Validator can be configured pre-commit. 
  */
+@Slf4j
 public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(SparkPreCommitValidator.class);
 
   private final HoodieSparkTable<T> table;
+  @Getter
   private final HoodieEngineContext engineContext;
+  @Getter
   private final HoodieWriteConfig writeConfig;
   private final HoodieMetrics metrics;
 
@@ -82,7 +84,7 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
       validateRecordsBeforeAndAfter(before, after, getPartitionsModified(writeResult));
     } finally {
       long duration = timer.endTimer();
-      LOG.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());
+      log.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());
       publishRunStats(instantTime, duration);
     }
   }
@@ -113,21 +115,13 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     return this.table;
   }
 
-  public HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  public HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
-  }
-
   protected Dataset<Row> executeSqlQuery(SQLContext sqlContext,
                                          String sqlQuery,
                                          String tableName,
                                          String logLabel) {
     String queryWithTempTableName = sqlQuery.replaceAll(
         HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, tableName);
-    LOG.info("Running query ({}): {}", logLabel, queryWithTempTableName);
+    log.info("Running query ({}): {}", logLabel, queryWithTempTableName);
     return sqlContext.sql(queryWithTempTableName);
   }
 }

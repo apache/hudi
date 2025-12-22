@@ -220,7 +220,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val schemaUtil = new TableSchemaResolver(metaClient)
 
     val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
-      InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema))
+      InternalSchemaConverter.convert(schemaUtil.getTableSchema)
     }
 
     val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")

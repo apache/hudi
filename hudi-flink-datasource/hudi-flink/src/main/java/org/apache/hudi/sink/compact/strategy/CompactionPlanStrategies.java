@@ -24,8 +24,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.util.CompactionUtil;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,11 +37,9 @@ import java.util.stream.Collectors;
 /**
  * Factory clazz for CompactionPlanStrategy.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class CompactionPlanStrategies {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionPlanStrategies.class);
-
-  private CompactionPlanStrategies() {
-  }
 
   public static CompactionPlanStrategy getStrategy(FlinkCompactionConfig config) {
     switch (config.compactionPlanSelectStrategy.toLowerCase(Locale.ROOT)) {
@@ -49,7 +48,7 @@ public class CompactionPlanStrategies {
       case CompactionPlanStrategy.INSTANTS:
         return pendingCompactionTimeline -> {
           if (StringUtils.isNullOrEmpty(config.compactionPlanInstant)) {
-            LOG.warn("None instant is selected");
+            log.warn("None instant is selected");
             return Collections.emptyList();
           }
           List<String> instants = Arrays.asList(config.compactionPlanInstant.split(","));

@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -47,10 +47,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * HoodieLockException. Threads other than the current lock owner, will
  * block on lock() and return false on tryLock().
  */
+@Slf4j
 public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(InProcessLockProvider.class);
   private static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
+  @Getter
   private final ReentrantReadWriteLock lock;
   private final String basePath;
   private final long maxWaitTimeMillis;
@@ -66,12 +67,12 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   @Override
   public void lock() {
-    LOG.info(getLogMessage(LockState.ACQUIRING));
+    log.info(getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
       throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
     }
     lock.writeLock().lock();
-    LOG.info(getLogMessage(LockState.ACQUIRED));
+    log.info(getLogMessage(LockState.ACQUIRED));
   }
 
   @Override
@@ -81,7 +82,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
-    LOG.info(getLogMessage(LockState.ACQUIRING));
+    log.info(getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
       throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
     }
@@ -93,19 +94,19 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
       throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_ACQUIRE));
     }
 
-    LOG.info(getLogMessage(isLockAcquired ? LockState.ACQUIRED : LockState.FAILED_TO_ACQUIRE));
+    log.info(getLogMessage(isLockAcquired ? LockState.ACQUIRED : LockState.FAILED_TO_ACQUIRE));
     return isLockAcquired;
   }
 
   @Override
   public void unlock() {
-    LOG.info(getLogMessage(LockState.RELEASING));
+    log.info(getLogMessage(LockState.RELEASING));
     try {
       if (lock.isWriteLockedByCurrentThread()) {
         lock.writeLock().unlock();
-        LOG.info(getLogMessage(LockState.RELEASED));
+        log.info(getLogMessage(LockState.RELEASED));
       } else {
-        LOG.info("Cannot unlock because the current thread does not hold the lock.");
+        log.info("Cannot unlock because the current thread does not hold the lock.");
       }
     } catch (Exception e) {
       throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
@@ -113,16 +114,11 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   @Override
-  public ReentrantReadWriteLock getLock() {
-    return lock;
-  }
-
-  @Override
   public void close() {
     if (lock.isWriteLockedByCurrentThread()) {
       lock.writeLock().unlock();
     }
-    LOG.info(getLogMessage(LockState.ALREADY_RELEASED));
+    log.info(getLogMessage(LockState.ALREADY_RELEASED));
   }
 
   private String getLogMessage(LockState state) {

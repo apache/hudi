@@ -18,6 +18,9 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -72,24 +75,24 @@ import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConf
 public class ProtoConversionUtil {
 
   /**
-   * Creates an Avro {@link Schema} for the provided class. Assumes that the class is a protobuf {@link Message}.
+   * Creates a HoodieSchema for the provided class. Assumes that the class is a protobuf {@link Message}.
    * @param clazz The protobuf class
    * @param schemaConfig configuration used to determine how to handle particular cases when converting from the proto schema
-   * @return An Avro schema
+   * @return A HoodieSchema
    */
-  public static Schema getAvroSchemaForMessageClass(Class clazz, SchemaConfig schemaConfig) {
-
-    return new AvroSupport(schemaConfig).getSchema(clazz);
+  public static HoodieSchema getSchemaForMessageClass(Class clazz, SchemaConfig schemaConfig) {
+    Schema avroSchema = new AvroSupport(schemaConfig).getSchema(clazz);
+    return HoodieSchema.fromAvroSchema(avroSchema);
   }
 
   /**
-   * Creates an Avro {@link Schema} for the provided {@link Descriptors.Descriptor}.
+   * Creates a HoodieSchema for the provided {@link Descriptors.Descriptor}.
    * Intended for use when the descriptor is provided by an external registry.
    * @param descriptor The protobuf descriptor
    * @param schemaConfig configuration used to determine how to handle particular cases when converting from the proto schema
-   * @return An Avro schema
+   * @return A HoodieSchema
    */
-  public static Schema getAvroSchemaForMessageDescriptor(Descriptors.Descriptor descriptor, SchemaConfig schemaConfig) {
+  public static HoodieSchema getSchemaForMessageDescriptor(Descriptors.Descriptor descriptor, SchemaConfig schemaConfig) {
     return new AvroSupport(schemaConfig).getSchema(descriptor);
   }
 
@@ -99,7 +102,7 @@ public class ProtoConversionUtil {
    * @param message the source message to convert
    * @return an Avro GenericRecord
    */
-  public static GenericRecord convertToAvro(Schema schema, Message message) {
+  public static GenericRecord convertToAvro(HoodieSchema schema, Message message) {
     return AvroSupport.convert(schema, message);
   }
 
@@ -183,7 +186,7 @@ public class ProtoConversionUtil {
       this.timestampsAsRecords = schemaConfig.isTimestampsAsRecords();
     }
 
-    public static GenericRecord convert(Schema schema, Message message) {
+    public static GenericRecord convert(HoodieSchema schema, Message message) {
       return (GenericRecord) convertObject(schema, message);
     }
 
@@ -204,13 +207,13 @@ public class ProtoConversionUtil {
     }
 
     /**
-     * Translates a Proto Message descriptor into an Avro Schema.
-     * Does not cache since external system may evolve the schema and that can result in a stale version of the avro schema.
+     * Translates a Proto Message descriptor into a HoodieSchema.
+     * Does not cache since external system may evolve the schema and that can result in a stale version of the schema.
      * @param descriptor the descriptor for the proto message
-     * @return an avro schema
+     * @return a HoodieSchema
      */
-    Schema getSchema(Descriptors.Descriptor descriptor) {
-      return getMessageSchema(descriptor, new CopyOnWriteMap<>(), getNamespace(descriptor.getFullName()));
+    HoodieSchema getSchema(Descriptors.Descriptor descriptor) {
+      return HoodieSchema.fromAvroSchema(getMessageSchema(descriptor, new CopyOnWriteMap<>(), getNamespace(descriptor.getFullName())));
     }
 
     private Schema getEnumSchema(Descriptors.EnumDescriptor enumDescriptor) {
@@ -374,13 +377,13 @@ public class ProtoConversionUtil {
       });
     }
 
-    private static Object convertObject(Schema schema, Object value) {
+    private static Object convertObject(HoodieSchema schema, Object value) {
       if (value == null) {
         return null;
       }
       // if we've reached max recursion depth in the provided schema, write out message to bytes
       if (RECURSION_OVERFLOW_SCHEMA.getFullName().equals(schema.getFullName())) {
-        GenericData.Record overflowRecord = new GenericData.Record(schema);
+        GenericData.Record overflowRecord = new GenericData.Record(schema.toAvroSchema());
         Message messageValue = (Message) value;
         overflowRecord.put(OVERFLOW_DESCRIPTOR_FIELD_NAME, messageValue.getDescriptorForType().getFullName());
         overflowRecord.put(OVERFLOW_BYTES_FIELD_NAME, ByteBuffer.wrap(messageValue.toByteArray()));
@@ -390,7 +393,7 @@ public class ProtoConversionUtil {
       switch (schema.getType()) {
         case ARRAY:
           List<Object> arrayValue = (List<Object>) value;
-          List<Object> arrayCopy = new GenericData.Array<>(arrayValue.size(), schema);
+          List<Object> arrayCopy = new GenericData.Array<>(arrayValue.size(), schema.toAvroSchema());
           for (Object obj : arrayValue) {
             arrayCopy.add(convertObject(schema.getElementType(), obj));
           }
@@ -413,10 +416,11 @@ public class ProtoConversionUtil {
           byteBufferValue.position(start);
           return ByteBuffer.wrap(bytesCopy, 0, length);
         case ENUM:
-          return GenericData.get().createEnum(value.toString(), schema);
+          return GenericData.get().createEnum(value.toString(), schema.toAvroSchema());
+        case DECIMAL:
         case FIXED:
           if (value instanceof byte[]) {
-            return GenericData.get().createFixed(null, (byte[]) value, schema);
+            return GenericData.get().createFixed(null, (byte[]) value, schema.toAvroSchema());
           }
           Object unsignedLongValue = value;
           if (unsignedLongValue instanceof UInt64Value) {
@@ -427,7 +431,7 @@ public class ProtoConversionUtil {
             throw new HoodieException("Unexpected Message type when converting as an unsigned long: " + unsignedLongValue.getClass().getName());
           }
           // convert the long to its unsigned value
-          return DECIMAL_CONVERSION.toFixed(new BigDecimal(toUnsignedBigInteger((Long) unsignedLongValue)), schema, schema.getLogicalType());
+          return DECIMAL_CONVERSION.toFixed(new BigDecimal(toUnsignedBigInteger((Long) unsignedLongValue)), schema.toAvroSchema(), schema.toAvroSchema().getLogicalType());
         case BOOLEAN:
         case DOUBLE:
         case FLOAT:
@@ -436,11 +440,12 @@ public class ProtoConversionUtil {
             return getWrappedValue(value);
           }
           return value; // immutable
+        case TIMESTAMP:
         case LONG:
           Object tmpValue = value;
           if (value instanceof Message) {
             // check if this is a Timestamp
-            if (LogicalTypes.timestampMicros().equals(schema.getLogicalType())) {
+            if (schema.getType().equals(HoodieSchemaType.TIMESTAMP) && ((HoodieSchema.Timestamp) schema).getPrecision().equals(TimePrecision.MICROS)) {
               if (value instanceof Timestamp) {
                 return Timestamps.toMicros((Timestamp) value);
               } else if (value instanceof DynamicMessage) {
@@ -469,16 +474,16 @@ public class ProtoConversionUtil {
           Map<Object, Object> mapValue = (Map) value;
           Map<Object, Object> mapCopy = new HashMap<>(mapValue.size());
           for (Map.Entry<Object, Object> entry : mapValue.entrySet()) {
-            mapCopy.put(convertObject(STRING_SCHEMA, entry.getKey()), convertObject(schema.getValueType(), entry.getValue()));
+            mapCopy.put(convertObject(HoodieSchema.fromAvroSchema(STRING_SCHEMA), entry.getKey()), convertObject(schema.getValueType(), entry.getValue()));
           }
           return mapCopy;
         case NULL:
           return null;
         case RECORD:
-          GenericData.Record newRecord = new GenericData.Record(schema);
+          GenericData.Record newRecord = new GenericData.Record(schema.toAvroSchema());
           Message messageValue = (Message) value;
-          Descriptors.FieldDescriptor[] orderedFields = getOrderedFields(schema, messageValue);
-          for (Schema.Field field : schema.getFields()) {
+          Descriptors.FieldDescriptor[] orderedFields = getOrderedFields(schema.toAvroSchema(), messageValue);
+          for (Schema.Field field : schema.toAvroSchema().getFields()) {
             int position = field.pos();
             Descriptors.FieldDescriptor fieldDescriptor = orderedFields[position];
             Object convertedValue;
@@ -488,7 +493,7 @@ public class ProtoConversionUtil {
             if (fieldSchema.getType() == Schema.Type.UNION && (fieldDescriptor == null || (!fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)))) {
               convertedValue = null;
             } else {
-              convertedValue = convertObject(fieldSchema, fieldDescriptor == null ? field.defaultVal() : messageValue.getField(fieldDescriptor));
+              convertedValue = convertObject(HoodieSchema.fromAvroSchema(fieldSchema), fieldDescriptor == null ? field.defaultVal() : messageValue.getField(fieldDescriptor));
             }
             newRecord.put(position, convertedValue);
           }

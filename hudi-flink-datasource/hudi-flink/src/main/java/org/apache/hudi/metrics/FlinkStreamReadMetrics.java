@@ -22,9 +22,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.text.ParseException;
 import java.time.Duration;
@@ -33,9 +32,8 @@ import java.time.Instant;
 /**
  * Metrics for flink stream read.
  */
+@Slf4j
 public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkStreamReadMetrics.class);
 
   /**
    * The last issued instant in streaming read.
@@ -79,7 +77,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
       this.issuedInstant = instant.getEpochSecond();
       this.issuedInstantDelay = Duration.between(instant, Instant.now()).getSeconds();
     } catch (ParseException e) {
-      LOG.warn("Invalid input issued instant: {}", issuedInstant);
+      log.warn("Invalid input issued instant: {}", issuedInstant);
     }
   }
 
@@ -89,7 +87,7 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
       this.splitLatestCommit = instant.getEpochSecond();
       this.splitLatestCommitDelay = Duration.between(instant, Instant.now()).getSeconds();
     } catch (ParseException e) {
-      LOG.warn("Invalid input latest commit: {}", splitLatestCommit);
+      log.warn("Invalid input latest commit: {}", splitLatestCommit);
     }
   }
 

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -35,8 +36,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
 
 import java.io.Serializable;
 import java.util.ArrayDeque;
@@ -75,7 +74,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       HoodieLogBlock logBlock = currentInstantLogBlocks.pop();
       if (logBlock instanceof HoodieDataBlock) {
         HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
-        Pair<ClosableIterator<T>, Schema> iteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
+        Pair<ClosableIterator<T>, HoodieSchema> iteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
         if (recordIterator != null) {
           recordIterator.close();
         }

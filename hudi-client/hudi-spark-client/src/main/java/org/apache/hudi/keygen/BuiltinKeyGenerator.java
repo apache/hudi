@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils$;
@@ -35,8 +36,6 @@ import org.apache.spark.sql.types.DateType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -62,10 +61,9 @@ import static org.apache.hudi.common.util.CollectionUtils.tail;
  *
  * TODO rename to AvroFallbackBaseKeyGenerator
  */
+@Slf4j
 @ThreadSafe
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BuiltinKeyGenerator.class);
 
   protected static final String FIELDS_SEP = ",";
 
@@ -509,7 +507,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         if (returnNull) {
           return null;
         }
-        LOG.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
+        log.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
         throw new HoodieException("Failed to resolve nested field-paths", e);
       }
     }

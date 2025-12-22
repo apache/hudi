@@ -25,20 +25,19 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.HoodieFileMetadataMerger;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -54,9 +53,8 @@ import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSc
  * enabling highly efficient data consolidation.
  *
  */
+@Slf4j
 public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBinaryCopyHandle.class);
   protected final HoodieFileBinaryCopier writer;
   private final List<StoragePath> inputFiles;
   private final StoragePath path;
@@ -72,16 +70,16 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       try {
         ParquetUtils parquetUtils = new ParquetUtils();
         MessageType fileSchema = parquetUtils.readSchema(table.getStorage(), inputFiles.get(0));
-        LOG.info("Binary copy schema evolution disabled. Using schema from input file: " + inputFiles.get(0));
+        log.info("Binary copy schema evolution disabled. Using schema from input file: " + inputFiles.get(0));
         return fileSchema;
       } catch (Exception e) {
-        LOG.error("Failed to read schema from input file", e);
+        log.error("Failed to read schema from input file", e);
         throw new HoodieIOException("Failed to read schema from input file when schema evolution is disabled: " + inputFiles.get(0),
             e instanceof IOException ? (IOException) e : new IOException(e));
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields.toAvroSchema());
     }
   }
 
@@ -111,13 +109,13 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
   }
 
   public void write() {
-    LOG.info("Start to merge source files " + this.inputFiles + " into target file: " + this.path
+    log.info("Start to merge source files " + this.inputFiles + " into target file: " + this.path
         + ". Please pay attention that we will not rolling files based on max-file-size config during binary copy.");
     HoodieTimer timer = HoodieTimer.start();
     long records = 0;
     try {
       boolean schemaEvolutionEnabled = config.isBinaryCopySchemaEvolutionEnabled();
-      LOG.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
+      log.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
@@ -125,12 +123,12 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       this.recordsWritten = records;
       this.insertRecordsWritten = records;
     }
-    LOG.info("Finish rewriting " + this.path + ". Using " + timer.endTimer() + " mills");
+    log.info("Finish rewriting " + this.path + ". Using " + timer.endTimer() + " mills");
   }
 
   @Override
   public List<WriteStatus> close() {
-    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    log.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
       this.writer.close();
 
@@ -151,7 +149,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       runtimeStats.setTotalCreateTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
 
-      LOG.info(String.format("HoodieBinaryCopyHandle for partitionPath %s fileID %s, took %d ms.",
+      log.info(String.format("HoodieBinaryCopyHandle for partitionPath %s fileID %s, took %d ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
 

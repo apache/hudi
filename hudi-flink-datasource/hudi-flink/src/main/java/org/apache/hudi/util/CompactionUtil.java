@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,19 +34,16 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
 
 /**
  * Utilities for flink hudi compaction.
  */
+@Slf4j
 public class CompactionUtil {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionUtil.class);
 
   /**
    * Schedules a new compaction instant.
@@ -75,7 +73,7 @@ public class CompactionUtil {
    */
   public static void setAvroSchema(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchema(false);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
   }
 
@@ -87,7 +85,7 @@ public class CompactionUtil {
    */
   public static void setAvroSchema(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchema(false);
     writeConfig.setSchema(tableAvroSchema.toString());
   }
 
@@ -131,8 +129,8 @@ public class CompactionUtil {
    */
   public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
-    if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
+    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchemaFromDataFile());
+    if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
     }
   }
@@ -155,7 +153,7 @@ public class CompactionUtil {
   public static void rollbackCompaction(HoodieFlinkTable<?> table, String instantTime, TransactionManager transactionManager) {
     HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
-      LOG.warn("Failed to rollback compaction instant: [{}]", instantTime);
+      log.warn("Failed to rollback compaction instant: [{}]", instantTime);
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
     }
   }
@@ -171,7 +169,7 @@ public class CompactionUtil {
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
-      LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
+      log.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());
       table.getMetaClient().reloadActiveTimeline();
@@ -195,7 +193,7 @@ public class CompactionUtil {
       String currentTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
       int timeout = conf.get(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
-        LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
+        log.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
         try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
           table.rollbackInflightCompaction(instant, transactionManager);
         }

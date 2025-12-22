@@ -26,10 +26,8 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.MetricRegistry;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,9 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@Slf4j
 public class TestPrometheusReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestPrometheusReporter.class);
 
   @Mock
   HoodieWriteConfig writeConfig;
@@ -84,7 +81,7 @@ public class TestPrometheusReporter {
       try {
         reporter.stop();
       } catch (Exception e) {
-        LOG.debug("Exception during test cleanup: {}", e.getMessage());
+        log.debug("Exception during test cleanup: {}", e.getMessage());
       }
     }
     reportersToCleanup.clear();
@@ -195,9 +192,9 @@ public class TestPrometheusReporter {
             }
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            LOG.debug("Thread interrupted during concurrent test setup");
+            log.debug("Thread interrupted during concurrent test setup");
           } catch (Exception e) {
-            LOG.debug("Expected exception during concurrent PrometheusReporter test: {}", e.getMessage());
+            log.debug("Expected exception during concurrent PrometheusReporter test: {}", e.getMessage());
           } finally {
             completeLatch.countDown();
           }

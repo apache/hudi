@@ -51,9 +51,8 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -98,14 +97,14 @@ import java.util.Set;
  */
 @SuppressWarnings("Duplicates")
 @NotThreadSafe
+@Slf4j
 public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandle<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteMergeHandle.class);
 
   private final String[] orderingFields;
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
+  @Setter
   protected HoodieReaderContext<T> readerContext;
 
   protected long recordsWritten = 0;
@@ -181,9 +180,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
 
-          config, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), taskContextSupplier, getRecordType());
+          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
     } catch (IOException io) {
-      LOG.error("Error in update task at commit {}", instantTime, io);
+      log.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
           + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
@@ -201,9 +200,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     try {
       // Load the new records in a map
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
-      LOG.info("MaxMemoryPerPartitionMerge => {}", memoryForMerge);
+      log.info("MaxMemoryPerPartitionMerge => {}", memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator<>(), new HoodieRecordSizeEstimator<>(writeSchema),
+          new DefaultSizeEstimator<>(), new HoodieRecordSizeEstimator<>(writeSchema.toAvroSchema()),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
@@ -238,17 +237,13 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
     if (keyToNewRecords instanceof ExternalSpillableMap) {
       ExternalSpillableMap<String, HoodieRecord<T>> spillableMap = (ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords;
-      LOG.info("Number of entries in MemoryBasedMap => {}, Total size in bytes of MemoryBasedMap => {}, "
+      log.info("Number of entries in MemoryBasedMap => {}, Total size in bytes of MemoryBasedMap => {}, "
           + "Number of entries in BitCaskDiskMap => {}, Size of file spilled to disk => {}",
           spillableMap.getInMemoryMapNumEntries(), spillableMap.getCurrentInMemoryMapSize(), spillableMap.getDiskBasedMapNumEntries(), spillableMap.getSizeOfFileOnDiskInBytes());
     }
   }
 
-  public boolean isEmptyNewRecords() {
-    return keyToNewRecords.isEmpty();
-  }
-
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema) throws IOException {
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, HoodieSchema writerSchema) throws IOException {
     boolean isDelete = false;
     if (oldRecord.getData() != combineRecord.getData()) {
       // the incoming record is chosen
@@ -264,22 +259,22 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = getNewSchema();
+    HoodieSchema schema = getNewSchema();
     // just skip the ignored record
-    if (newRecord.shouldIgnore(schema, config.getProps())) {
+    if (newRecord.shouldIgnore(schema.toAvroSchema(), config.getProps())) {
       return;
     }
     writeInsertRecord(newRecord, schema, config.getProps());
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
+  protected void writeInsertRecord(HoodieRecord<T> newRecord, HoodieSchema schema, Properties prop)
       throws IOException {
     if (writeRecord(newRecord, null, newRecord, schema, prop, isDeleteRecord(newRecord))) {
       insertRecordsWritten++;
     }
   }
 
-  protected boolean writeRecord(HoodieRecord<T> newRecord, HoodieRecord combineRecord, Schema schema, Properties prop) throws IOException {
+  protected boolean writeRecord(HoodieRecord<T> newRecord, HoodieRecord combineRecord, HoodieSchema schema, Properties prop) throws IOException {
     return writeRecord(newRecord, null, combineRecord, schema, prop, false);
   }
 
@@ -309,7 +304,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   private boolean writeRecord(HoodieRecord<T> newRecord,
                               @Nullable HoodieRecord<T> oldRecord,
                               HoodieRecord combineRecord,
-                              Schema schema,
+                              HoodieSchema schema,
                               Properties props,
                               boolean isDelete) {
     Option<Map<String, String>> recordMetadata = getRecordMetadata(newRecord, schema, props);
@@ -347,7 +342,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       newRecord.deflate();
       return true;
     } catch (Exception e) {
-      LOG.error("Error writing record {}", newRecord, e);
+      log.error("Error writing record {}", newRecord, e);
       writeStatus.markFailure(newRecord, e, recordMetadata);
     }
     return false;
@@ -361,10 +356,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     // to avoid unnecessary rewrite. Even with metadata table(whereas the option 'hoodie.populate.meta.fields' is configured as false),
     // the record is deserialized with schema including metadata fields,
     // see HoodieMergeHelper#runMerge for more details.
-    Schema oldSchema = writeSchemaWithMetaFields;
-    Schema newSchema = getNewSchema();
+    HoodieSchema oldSchema = writeSchemaWithMetaFields;
+    HoodieSchema newSchema = getNewSchema();
     boolean copyOldRecord = true;
-    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
+    String key = oldRecord.getRecordKey(oldSchema.toAvroSchema(), keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
@@ -372,11 +367,12 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
         BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
-        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
+        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema,
+            readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
-        Schema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
+        HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
         HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
-        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
+        if (combinedRecord.shouldIgnore(combineRecordSchema.toAvroSchema(), props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
         } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
@@ -402,25 +398,25 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
             key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
-        LOG.debug("Old record is {}", oldRecord);
+        log.debug("Old record is {}", oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
     }
   }
 
-  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
+  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, HoodieSchema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
+      HoodieRecord populatedRecord = record.updateMetaField(schema.toAvroSchema(), HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
       //TODO boundary to follow up in later pr to use HoodieSchema directly
-      fileWriter.write(key.getRecordKey(), populatedRecord, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), props);
+      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       //TODO boundary to follow up in later pr to use HoodieSchema directly
-      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
-      fileWriter.writeWithMetadata(key, record, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), props);
+      record = record.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), new MetadataValues(), config.getProps());
+      fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields, props);
     }
   }
 
@@ -441,7 +437,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  private Schema getNewSchema() {
+  private HoodieSchema getNewSchema() {
     return preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
   }
 
@@ -482,7 +478,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
       performMergeDataValidationCheck(writeStatus);
 
-      LOG.info("MergeHandle for partitionPath {} fileID {}, took {} ms.", stat.getPartitionPath(),
+      log.info("MergeHandle for partitionPath {} fileID {}, took {} ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime());
 
       return Collections.singletonList(writeStatus);
@@ -512,13 +508,5 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
               baseFileToMerge.getCommitTime(), oldNumWrites));
     }
-  }
-
-  /**
-   * This is only for spark, the engine context fetched from a serialized hoodie table is always local,
-   * overrides it to spark specific reader context.
-   */
-  public void setReaderContext(HoodieReaderContext<T> readerContext) {
-    this.readerContext = readerContext;
   }
 }

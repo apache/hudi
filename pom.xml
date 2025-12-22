@@ -60,7 +60,6 @@
     <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
-    <module>hudi-flink-datasource/${hudi.flink.module}</module>
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
@@ -85,8 +84,9 @@
     <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
-    <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
-    <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
+    <!-- bump to 3.5.3 to fix MSHADE-461 -->
+    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
+    <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
@@ -94,7 +94,7 @@
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
 
-    <java.version>8</java.version>
+    <java.version>11</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
@@ -122,7 +122,7 @@
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.4</hive.version>
+    <hive.version>2.3.10</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
@@ -143,6 +143,7 @@
     <spark3.version>${spark35.version}</spark3.version>
     <spark4.version>4.0.1</spark4.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink2.1.version>2.1.1</flink2.1.version>
     <flink2.0.version>2.0.0</flink2.0.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
@@ -243,6 +244,7 @@
     <copy.files>false</copy.files>
     <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
     <jacoco.agent.dest.filename>jacoco.exec</jacoco.agent.dest.filename>
+    <lombok.version>1.18.36</lombok.version>
   </properties>
 
   <scm>
@@ -545,8 +547,30 @@
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
+            <source>${java.version}</source>
+            <target>${java.version}</target>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+            <args>
+              <arg>-nobootcp</arg>
+            </args>
           </configuration>
+          <executions>
+            <execution>
+              <id>scala-compile-first</id>
+              <phase>process-resources</phase>
+              <goals>
+                <goal>add-source</goal>
+                <goal>compile</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>scala-test-compile</id>
+              <phase>process-test-resources</phase>
+              <goals>
+                <goal>testCompile</goal>
+              </goals>
+            </execution>
+          </executions>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -1497,6 +1521,10 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.janino</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1551,6 +1579,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.janino</groupId>
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
@@ -1824,6 +1856,14 @@
         <version>${testcontainers.version}</version>
         <scope>test</scope>
       </dependency>
+
+      <!-- Lombok -->
+      <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>${lombok.version}</version>
+        <scope>provided</scope>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <repositories>
@@ -1891,7 +1931,10 @@
               </execution>
             </executions>
             <configuration>
+              <source>11</source>
               <doclint>none</doclint>
+              <failOnWarnings>false</failOnWarnings>
+              <failOnError>false</failOnError>
             </configuration>
           </plugin>
           <plugin>
@@ -2643,6 +2686,28 @@
     </profile>
 
     <profile>
+      <id>flink2.1</id>
+      <properties>
+        <flink.version>${flink2.1.version}</flink.version>
+        <hudi.flink.module>hudi-flink2.1.x</hudi.flink.module>
+        <flink.bundle.version>2.1</flink.bundle.version>
+        <!-- check kafka version -->
+        <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
+        <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
+      </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink2.1.x</module>
+      </modules>
+      <activation>
+        <property>
+          <name>flink2.1</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
       <id>flink2.0</id>
       <properties>
         <flink.version>${flink2.0.version}</flink.version>
@@ -2655,6 +2720,9 @@
         <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink2.0.x</module>
+      </modules>
       <activation>
         <property>
           <name>flink2.0</name>
@@ -2673,6 +2741,9 @@
         <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.20.x</module>
+      </modules>
       <activation>
         <activeByDefault>true</activeByDefault>
         <property>
@@ -2692,6 +2763,9 @@
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.19.x</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.19</name>
@@ -2710,6 +2784,9 @@
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.18.x</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.18</name>
@@ -2728,6 +2805,9 @@
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.17.x</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.17</name>

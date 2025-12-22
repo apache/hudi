@@ -33,8 +33,11 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -49,6 +52,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -62,6 +66,7 @@ import org.springframework.shell.Shell;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -72,6 +77,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -568,5 +574,69 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     String expected = String.format("Load sync state between %s and %s", tableName1, tableName2);
     assertEquals(expected, result.toString());
+  }
+
+  @Test
+  public void testInflightCommand() throws Exception {
+    generateData();
+    // Generate instant times using HoodieInstantTimeGenerator
+    String oldInstantTime1 = HoodieInstantTimeGenerator.formatDate(
+        new Date(System.currentTimeMillis() - 1000 * 60 * 60)); // 60 mins ago
+    String oldInstantTime2 = HoodieInstantTimeGenerator.formatDate(
+        new Date(System.currentTimeMillis() - 1000 * 60 * 45)); // 45 mins ago
+    String oldInstantTime3 = HoodieInstantTimeGenerator.formatDate(
+        new Date(System.currentTimeMillis() - 1000 * 60 * 5));  //  5 mins ago
+
+    // Reload meta client to pick up new instants
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+
+    // Create inflight commits
+    InstantFileNameGenerator v1InstantNameGenerator = new InstantFileNameGeneratorV1();
+    List<String> fileNames = Arrays.asList(
+        v1InstantNameGenerator.makeInflightCommitFileName(oldInstantTime1),
+        v1InstantNameGenerator.makeCommitFileName(
+            oldInstantTime2 + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        v1InstantNameGenerator.makeInflightCommitFileName(oldInstantTime3));
+    fileNames.forEach(name -> {
+      try {
+        Path filePath = new Path(basePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
+        HoodieTestDataGenerator.createEmptyFile(basePath(), filePath, storageConf());
+      } catch (IOException ignored) {
+        // Exception ignored.
+      }
+    });
+
+    // Reload meta client to pick up new instants
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+
+    Object lookupBackInZeroMinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 0");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackInZeroMinsResult));
+
+    // All three instants should be shown when duration is 0
+    String output = lookupBackInZeroMinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
+    assertTrue(output.contains(oldInstantTime3));
+
+    // Only one instants should be shown when duration is 15 since 2nd commit is a completed commit.
+    Object lookupBackIn15MinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 15");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn15MinsResult));
+    output = lookupBackIn15MinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
+
+    // Only one instant should be shown when duration is 50
+    Object lookupBackIn50MinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 50");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn50MinsResult));
+    output = lookupBackIn50MinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
+
+    // No instants should be shown when duration is > 60
+    Object lookupBackIn70MinsResult = shell.evaluate(() -> "commits show_infights --lookbackInMins 70");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(lookupBackIn70MinsResult));
+    output = lookupBackIn70MinsResult.toString();
+    assertTrue(output.contains(oldInstantTime1));
+    assertFalse(output.contains(oldInstantTime2));
   }
 }

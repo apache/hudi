@@ -45,6 +45,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.VarcharTypeInfo;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -68,8 +69,9 @@ public class HiveSchemaUtils {
     // need to refactor the partition key field positions: they are not always in the last
     allCols.addAll(hiveTable.getPartitionKeys());
 
-    String pkConstraintName = hiveTable.getParameters().get(TableOptionProperties.PK_CONSTRAINT_NAME);
-    String pkColumnStr = hiveTable.getParameters().get(FlinkOptions.RECORD_KEY_FIELD.key());
+    Map<String, String> parameters = hiveTable.getParameters();
+    String pkConstraintName = parameters.get(TableOptionProperties.PK_CONSTRAINT_NAME);
+    String pkColumnStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
     List<String> pkColumns = pkColumnStr == null ? new ArrayList<>() : StringUtils.split(pkColumnStr, ",");
 
     String[] colNames = new String[allCols.size()];
@@ -93,6 +95,10 @@ public class HiveSchemaUtils {
       builder.primaryKey(pkColumns);
     }
 
+    List<String> metaCols = TableOptionProperties.getMetadataColumns(parameters);
+    if (!metaCols.isEmpty()) {
+      metaCols.forEach(c -> builder.columnByMetadata(c, DataTypes.STRING(), null, true));
+    }
     return builder.build();
   }
 
