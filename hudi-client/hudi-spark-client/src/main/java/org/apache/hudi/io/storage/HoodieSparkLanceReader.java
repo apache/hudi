@@ -23,6 +23,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,7 +35,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
@@ -62,11 +62,9 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   // number of rows to read 
   private static final int DEFAULT_BATCH_SIZE = 512; 
   private final StoragePath path;
-  private final HoodieStorage storage;
 
-  public HoodieSparkLanceReader(HoodieStorage storage, StoragePath path) {
+  public HoodieSparkLanceReader(StoragePath path) {
     this.path = path;
-    this.storage = storage;
   }
 
   @Override
@@ -115,8 +113,6 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    //TODO to revisit adding support for when metadata fields are not persisted.
-
     // Get schema with only the record key field for efficient column pruning
     HoodieSchema recordKeySchema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(recordKeySchema);
@@ -139,7 +135,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
 
       // Get schema from Lance file and convert to Spark StructType
-      org.apache.arrow.vector.types.pojo.Schema arrowSchema = lanceReader.schema();
+      Schema arrowSchema = lanceReader.schema();
       StructType sparkSchema = LanceArrowUtils.fromArrowSchema(arrowSchema);
 
       ArrowReader arrowReader = lanceReader.readAll(null, null, DEFAULT_BATCH_SIZE);
@@ -169,7 +165,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
 
       // Build list of column names to project (read only requested columns)
-      List<String> columnNames = new ArrayList<>();
+      List<String> columnNames = new ArrayList<>(requestedSparkSchema.size());
       for (StructField field : requestedSparkSchema.fields()) {
         columnNames.add(field.name());
       }
@@ -189,7 +185,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     // Read Arrow schema from Lance file and convert to Avro
     try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
-      org.apache.arrow.vector.types.pojo.Schema arrowSchema = reader.schema();
+      Schema arrowSchema = reader.schema();
       StructType structType = LanceArrowUtils.fromArrowSchema(arrowSchema);
       return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", true);
     } catch (Exception e) {
@@ -220,7 +216,6 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     private final BufferAllocator allocator;
     private final LanceFileReader lanceReader;
     private final ArrowReader arrowReader;
-    private final StructType schema;
     private final UnsafeProjection projection;
     private ColumnarBatch currentBatch;
     private Iterator<InternalRow> rowIterator;
@@ -232,7 +227,6 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       this.allocator = allocator;
       this.lanceReader = lanceReader;
       this.arrowReader = arrowReader;
-      this.schema = schema;
       this.projection = UnsafeProjection.create(schema);
     }
 

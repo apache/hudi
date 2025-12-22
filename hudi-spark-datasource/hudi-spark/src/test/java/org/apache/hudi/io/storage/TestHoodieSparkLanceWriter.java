@@ -378,8 +378,8 @@ public class TestHoodieSparkLanceWriter {
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_struct.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
         path, schema, instantTime, taskContextSupplier, storage, false)) {
-      for (InternalRow row : rows) {
-        writer.writeRow("key" + rows.indexOf(row), row);
+      for (int i = 0; i < rows.size(); i++) {
+        writer.writeRow("key" + i, rows.get(i));
       }
     }
 
