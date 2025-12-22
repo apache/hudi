@@ -19,11 +19,10 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -104,8 +104,8 @@ public class HoodieStreamerUtils {
     boolean requiresPayload = isChangingRecords(cfg.operation) && !HoodieWriteConfig.isFileGroupReaderBasedMergeHandle(props);
 
     return avroRDDOptional.map(avroRDD -> {
-      SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetHoodieSchema().toAvroSchema());
-      SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
+      HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
+      HoodieSchema processedSchema = isDropPartitionColumns(props) ? HoodieSchemaUtils.removeMetadataFields(targetSchema) : targetSchema;
       JavaRDD<Either<HoodieRecord,String>> records;
       if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
         records = avroRDD.mapPartitions(
@@ -119,8 +119,7 @@ public class HoodieStreamerUtils {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
               }
               BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-              HoodieSchema processedHoodieSchema = HoodieSchema.fromAvroSchema(processedAvroSchema.get());
-              DeleteContext deleteContext = new DeleteContext(props, processedHoodieSchema).withReaderSchema(processedHoodieSchema);
+              DeleteContext deleteContext = new DeleteContext(props, processedSchema).withReaderSchema(processedSchema);
               return new CloseableMappingIterator<>(ClosableIterator.wrap(genericRecordIterator), genRec -> {
                 try {
                   if (shouldErrorTable) {
@@ -154,10 +153,10 @@ public class HoodieStreamerUtils {
             props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
           }
           BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-          StructType baseStructType = AvroConversionUtils.convertAvroSchemaToStructType(processedAvroSchema.get());
-          StructType targetStructType = isDropPartitionColumns(props) ? AvroConversionUtils
-              .convertAvroSchemaToStructType(HoodieAvroUtils.removeFields(processedAvroSchema.get(), partitionColumns)) : baseStructType;
-          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(HoodieSchema.fromAvroSchema(processedAvroSchema.get()), baseStructType);
+          StructType baseStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(processedSchema);
+          StructType targetStructType = isDropPartitionColumns(props) ? HoodieSchemaConversionUtils
+              .convertHoodieSchemaToStructType(HoodieSchemaUtils.removeFields(processedSchema, partitionColumns)) : baseStructType;
+          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedSchema, baseStructType);
 
           return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
             InternalRow row = (InternalRow) deserializer.deserialize(rec).get();
