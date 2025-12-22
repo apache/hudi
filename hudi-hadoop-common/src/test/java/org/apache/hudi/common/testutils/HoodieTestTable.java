@@ -151,6 +151,7 @@ public class HoodieTestTable implements AutoCloseable {
 
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
+
   private static final Random RANDOM = new Random();
 
   protected static HoodieTestTableState testTableState;
