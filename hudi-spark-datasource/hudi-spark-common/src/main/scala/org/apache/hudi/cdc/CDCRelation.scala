@@ -102,7 +102,8 @@ class CDCRelation(
       requiredSchema = tableStructSchema,
       filters = Nil,
       options = options,
-      hadoopConf = spark.sessionState.newHadoopConf()
+      hadoopConf = spark.sessionState.newHadoopConf(),
+      avroTableSchema = tableAvroSchema
     )
 
     val changes = cdcExtractor.extractCDCFileSplits().values().asScala.map { splits =>

@@ -39,7 +39,7 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
 
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     sparkAdapter
-      .createLegacyHoodieParquetFileFormat(true).get.supportBatch(sparkSession, schema)
+      .createLegacyHoodieParquetFileFormat(true, null).get.supportBatch(sparkSession, schema)
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -54,7 +54,7 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
 
     sparkAdapter
-      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, null).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
   }
 }
