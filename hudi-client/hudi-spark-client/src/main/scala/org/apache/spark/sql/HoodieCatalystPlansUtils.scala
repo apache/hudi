@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Join, LogicalPlan}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 
@@ -160,4 +160,16 @@ trait HoodieCatalystPlansUtils {
    * Add a project to use the table column names for INSERT INTO BY NAME with specified cols
    */
   def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan]
+
+  /**
+   * Decomposes [[UpdateAction]] into its arguments with accommodation for
+   * case class changes in Spark 4.1 which added a third parameter `fromStar`.
+   *
+   * Before Spark 4.1 (two arguments):
+   *   case class UpdateAction(condition: Option[Expression], assignments: Seq[Assignment])
+   *
+   * Since Spark 4.1 (three arguments):
+   *   case class UpdateAction(condition: Option[Expression], assignments: Seq[Assignment], fromStar: Boolean)
+   */
+  def unapplyUpdateAction(mergeAction: Any): Option[(Option[Expression], Seq[Assignment])]
 }

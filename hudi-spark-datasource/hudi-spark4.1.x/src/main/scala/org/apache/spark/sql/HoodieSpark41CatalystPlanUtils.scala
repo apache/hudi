@@ -139,4 +139,11 @@ object HoodieSpark41CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
         None
     }
   }
+
+  override def unapplyUpdateAction(mergeAction: Any): Option[(Option[Expression], Seq[Assignment])] = {
+    mergeAction match {
+      case UpdateAction(condition, assignments, _) => Some((condition, assignments))
+      case _ => None
+    }
+  }
 }

@@ -18,13 +18,15 @@
 package org.apache.spark.sql.hudi.streaming
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.SparkAdapterSupport
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
+import org.apache.spark.sql.execution.streaming.Offset
 
-case class HoodieSourceOffset(offsetCommitTime: String) extends Offset {
+case class HoodieSourceOffset(offsetCommitTime: String) extends Offset
+  with SparkAdapterSupport {
 
   override val json: String = {
     HoodieSourceOffset.toJson(this)
