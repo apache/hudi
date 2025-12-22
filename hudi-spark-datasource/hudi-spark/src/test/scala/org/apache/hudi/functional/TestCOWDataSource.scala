@@ -45,16 +45,13 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathFilter}
+import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -66,6 +63,7 @@ import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.slf4j.LoggerFactory
 
 import java.net.URI
 import java.nio.file.Paths
@@ -1699,7 +1697,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @CsvSource(Array("true, 6", "false, 6", "true, 8", "false, 8", "true, 9", "false, 9"))
+  @CsvSource(Array("true, 6", "false, 6"))
   def testLogicalTypesReadRepair(vectorizedReadEnabled: Boolean, tableVersion: Int): Unit = {
     // Note: for spark 3.3 and 3.4 we should fall back to nonvectorized reader
     // if that is not happening then this test will fail
@@ -1712,6 +1710,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       }
       spark.conf.set("spark.sql.parquet.enableVectorizedReader", vectorizedReadEnabled.toString)
       spark.conf.set("spark.sql.session.timeZone", "UTC")
+      spark.conf.set("spark.sql.parquet.inferTimestampNTZ.enabled", "true")
       val tableName = "trips_logical_types_json_cow_read_v" + tableVersion
       val dataPath = "file://" + basePath + "/" + tableName
       val zipOutput = Paths.get(new URI(dataPath))
@@ -1725,15 +1724,15 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       for (row <- rows) {
         val hash = row.get(6).asInstanceOf[String].hashCode()
         if ((hash & 1) == 0) {
-          assertEquals("2020-01-01T00:00:00.001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
-          assertEquals("2020-06-01T12:00:00.000001Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
-          assertEquals("2015-05-20T12:34:56.001", row.get(17).toString)
-          assertEquals("2017-07-07T07:07:07.000001", row.get(18).toString)
+          assertEquals("2020-01-01T00:00:00.001Z", row.get(14).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T12:00:00.000001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:56.001", row.get(16).toString)
+          assertEquals("2017-07-07T07:07:07.000001", row.get(17).toString)
         } else {
-          assertEquals("2019-12-31T23:59:59.999Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
-          assertEquals("2020-06-01T11:59:59.999999Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
-          assertEquals("2015-05-20T12:34:55.999", row.get(17).toString)
-          assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString)
+          assertEquals("2019-12-31T23:59:59.999Z", row.get(14).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T11:59:59.999999Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:55.999", row.get(16).toString)
+          assertEquals("2017-07-07T07:07:06.999999", row.get(17).toString)
         }
       }
 

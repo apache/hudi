@@ -18,11 +18,12 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
+import org.apache.avro.Schema
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -54,6 +55,15 @@ trait SparkAdapter extends Serializable {
   def isColumnarBatchRow(r: InternalRow): Boolean
 
   def isTimestampNTZType(dataType: DataType): Boolean
+
+  def getParquetReadSupport(messageSchema: org.apache.hudi.common.util.Option[MessageType]): org.apache.parquet.hadoop.api.ReadSupport[_]
+
+  def repairSchemaIfSpecified(shouldRepair: Boolean,
+                              fileSchema: MessageType,
+                              tableSchemaOpt: org.apache.hudi.common.util.Option[MessageType]): MessageType
+
+  def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  org.apache.hudi.common.util.collection.Pair[StructType, StructType]
 
   /**
    * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
@@ -172,7 +182,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create instance of [[ParquetFileFormat]]
    */
-  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema): Option[ParquetFileFormat]
 
   def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 

@@ -21,19 +21,21 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.avro.Schema
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
+import org.apache.spark.sql.{HoodieInternalRowUtils, HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.time.ZoneId
@@ -97,5 +99,23 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
     new ColumnarBatch(vectors, numRows)
+  }
+
+  override def repairSchemaIfSpecified(shouldRepair: Boolean,
+                              fileSchema: MessageType,
+                              tableSchemaOpt: org.apache.hudi.common.util.Option[MessageType]): MessageType = {
+    fileSchema
+  }
+
+  override def getParquetReadSupport(messageSchema: org.apache.hudi.common.util.Option[MessageType]): ParquetReadSupport = {
+    new ParquetReadSupport()
+  }
+
+  override def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  org.apache.hudi.common.util.collection.Pair[StructType, StructType] = {
+    org.apache.hudi.common.util.collection.Pair.of(
+      HoodieInternalRowUtils.getCachedSchema(readerSchema),
+      HoodieInternalRowUtils.getCachedSchema(requestedSchema)
+    )
   }
 }
