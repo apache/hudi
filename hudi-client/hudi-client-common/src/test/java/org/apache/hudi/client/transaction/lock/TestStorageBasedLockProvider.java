@@ -422,14 +422,91 @@ class TestStorageBasedLockProvider {
   }
 
   @Test
-  void testRenewLockWithFullyExpiredLock() {
-    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS, ownerId);
-    StorageLockFile nearExpiredLockFile = new StorageLockFile(data, "v1");
-    doReturn(nearExpiredLockFile).when(lockProvider).getLock();
-    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(nearExpiredLockFile))))
-        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, null));
+  void testRenewLockSelfHealSuccess() {
+    // S3 false negative: initial renewal gets 412, but lock is still ours
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    doReturn(lockFile).when(lockProvider).getLock();
+
+    // First renewal attempt gets 412
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+
+    // Verification shows lock is still ours with new etag
+    StorageLockFile verifiedLock = new StorageLockFile(data, "v2");
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(verifiedLock)));
+
+    // Retry with correct etag succeeds
+    StorageLockData renewedData = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile renewedLock = new StorageLockFile(renewedData, "v3");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(verifiedLock))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(renewedLock)));
+
+    assertTrue(lockProvider.renewLock());
+  }
+
+  @Test
+  void testRenewLockSelfHealFailureLockStolen() {
+    // Lock was actually stolen by another owner
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    doReturn(lockFile).when(lockProvider).getLock();
+
+    // Renewal gets 412
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+
+    // Verification shows different owner
+    StorageLockData stolenData = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner");
+    StorageLockFile stolenLock = new StorageLockFile(stolenData, "v2");
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(stolenLock)));
+
     assertFalse(lockProvider.renewLock());
-    verify(mockLogger).error("Owner {}: Unable to renew lock as it is acquired by others.", this.ownerId);
+  }
+
+  @Test
+  void testRenewLockSelfHealFailureCannotReadState() {
+    // Cannot read lock state for verification
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    doReturn(lockFile).when(lockProvider).getLock();
+
+    // Renewal gets 412
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+
+    // Cannot read current state
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.UNKNOWN_ERROR, Option.empty()));
+
+    // Should continue heartbeat (return true) to retry later
+    assertTrue(lockProvider.renewLock());
+  }
+
+  @Test
+  void testRenewLockSelfHealRetryAlsoFails() {
+    // Retry also gets 412, should continue heartbeat to try again
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    doReturn(lockFile).when(lockProvider).getLock();
+
+    // Initial renewal gets 412
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+
+    // Verification shows lock is still ours
+    StorageLockFile verifiedLock = new StorageLockFile(data, "v2");
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(verifiedLock)));
+
+    // Retry also gets 412
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(verifiedLock))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty()));
+
+    // Should continue heartbeat (return true) to retry later
+    assertTrue(lockProvider.renewLock());
   }
 
   @Test
