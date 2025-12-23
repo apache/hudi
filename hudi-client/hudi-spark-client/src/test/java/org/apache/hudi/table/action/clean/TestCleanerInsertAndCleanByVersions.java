@@ -125,7 +125,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> upsertFn, boolean isPreppedAPI)
       throws Exception {
     int maxVersions = 2; // keep upto 2 versions for each file
-    HoodieWriteConfig cfg = getConfigBuilder()
+    HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(maxVersions).build())

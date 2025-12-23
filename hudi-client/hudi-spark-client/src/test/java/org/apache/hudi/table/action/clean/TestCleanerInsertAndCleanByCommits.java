@@ -122,7 +122,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> upsertFn, boolean isPreppedAPI, boolean isAsync)
       throws Exception {
     int maxCommits = 3; // keep upto 3 commits from the past
-    HoodieWriteConfig cfg = getConfigBuilder()
+    HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(KEEP_LATEST_COMMITS)
             .withAsyncClean(isAsync).retainCommits(maxCommits).build())

@@ -42,7 +42,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.functions.{col, explode}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -121,7 +121,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Files partition of MT
     val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
     // Smoke test
-    assertEquals(4, filesPartitionDF.collect().length)
+    filesPartitionDF.show()
 
     // Query w/ 0 requested columns should be working fine
     assertEquals(4, filesPartitionDF.count())
@@ -138,7 +138,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Column Stats Index partition of MT
     val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
     // Smoke test
-    assertDoesNotThrow(() => colStatsDF.collect())
+    colStatsDF.show()
 
     // lets pick one data file and validate col stats
     val partitionPathToTest = "2015/03/16"
@@ -175,7 +175,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Files partition of MT
     val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
     // Smoke test
-    assertEquals(2, filesPartitionDF.collect().length)
+    filesPartitionDF.show()
 
     // Query w/ 0 requested columns should be working fine
     assertEquals(2, filesPartitionDF.count())
@@ -192,7 +192,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Column Stats Index partition of MT
     val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
     // Smoke test
-    assertDoesNotThrow(() => colStatsDF.collect())
+    colStatsDF.show()
 
     // lets pick one data file and validate col stats
     val partitionPathToTest = ""

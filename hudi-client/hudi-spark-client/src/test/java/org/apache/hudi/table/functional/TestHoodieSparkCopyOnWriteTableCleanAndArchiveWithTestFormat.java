@@ -60,7 +60,7 @@ public class TestHoodieSparkCopyOnWriteTableCleanAndArchiveWithTestFormat extend
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE, props);
-    HoodieWriteConfig writeConfig = getConfigBuilder()
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())

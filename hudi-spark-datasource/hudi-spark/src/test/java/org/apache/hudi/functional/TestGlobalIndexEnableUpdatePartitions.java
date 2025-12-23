@@ -387,7 +387,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     } else {
       metadataConfigBuilder.enable(false);
     }
-    return getConfigBuilder()
+    return getConfigBuilder(false)
         .withProperties(getKeyGenProps(payloadClass))
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)

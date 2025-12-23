@@ -169,7 +169,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         "true");
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
 
-    return getConfigBuilder()
+    return getConfigBuilder(true)
         .withPath(basePath())
         .withSchema(schema.toString())
         .withProps(properties)

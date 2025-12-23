@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -414,7 +413,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     HoodieTableMetaClient metaClient =
         getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), props);
 
-    HoodieWriteConfig writeConfig = getConfigBuilder()
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
         .withWriteTableVersion(fromVersion.versionCode())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -422,25 +421,24 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .withProps(props)
         .build();
 
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String partitionPath = "2021/09/11";
-      HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
+    String partitionPath = "2021/09/11";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});
 
-      String instant1 = getCommitTimeAtUTC(1);
-      List<HoodieRecord> records = dataGenerator.generateInserts(instant1, 100);
-      JavaRDD<HoodieRecord> dataset = jsc().parallelize(records, 2);
+    String instant1 = getCommitTimeAtUTC(1);
+    List<HoodieRecord> records = dataGenerator.generateInserts(instant1, 100);
+    JavaRDD<HoodieRecord> dataset = jsc().parallelize(records, 2);
 
-      WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
-      writeClient.commit(instant1, writeClient.insert(dataset, instant1));
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
+    writeClient.commit(instant1, writeClient.insert(dataset, instant1));
 
-      String instant2 = getCommitTimeAtUTC(5);
-      List<HoodieRecord> updates = dataGenerator.generateUpdates(instant2, 50);
-      JavaRDD<HoodieRecord> dataset2 = jsc().parallelize(updates, 2);
+    String instant2 = getCommitTimeAtUTC(5);
+    List<HoodieRecord> updates = dataGenerator.generateUpdates(instant2, 50);
+    JavaRDD<HoodieRecord> dataset2 = jsc().parallelize(updates, 2);
 
-      WriteClientTestUtils.startCommitWithTime(writeClient, instant2);
-      writeClient.commit(instant2, writeClient.upsert(dataset2, instant2));
-      metaClient.reloadTableConfig();
-    }
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant2);
+    writeClient.commit(instant2, writeClient.upsert(dataset2, instant2));
+    metaClient.reloadTableConfig();
 
     int compactionCountBefore = metaClient.getActiveTimeline()
         .filterCompletedOrMajorOrMinorCompactionInstants().countInstants();
@@ -748,14 +746,16 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("Validating log files {} rollback and compaction during {}", validationPhase, operation);
     
     // Get the latest completed commit to ensure we're looking at a consistent state
-    HoodieTimeline completedTimeline =
+    org.apache.hudi.common.table.timeline.HoodieTimeline completedTimeline = 
         metaClient.getCommitsTimeline().filterCompletedInstants();
     String latestCommit = completedTimeline.lastInstant()
         .map(instant -> instant.requestedTime())
         .orElse(null);
     
     // Get file system view to check for log files using the latest commit state
-    try (HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context(), metaClient, completedTimeline)) {
+    try (org.apache.hudi.common.table.view.HoodieTableFileSystemView fsView = 
+        org.apache.hudi.common.table.view.HoodieTableFileSystemView.fileListingBasedFileSystemView(
+            context(), metaClient, completedTimeline)) {
     
       // Get all partition paths using FSUtils
       List<String> partitionPaths = org.apache.hudi.common.fs.FSUtils.getAllPartitionPaths(

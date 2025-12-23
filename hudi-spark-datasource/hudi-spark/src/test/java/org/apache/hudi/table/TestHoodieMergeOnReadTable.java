@@ -127,7 +127,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   // Check if record level metadata is aggregated properly at the end of write.
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class).build();
+    HoodieWriteConfig cfg = getConfigBuilder(false).withWriteStatusClass(MetadataMergeWriteStatus.class).build();
 
     setUp(cfg.getProps());
 
@@ -156,7 +156,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testUpsertPartitioner(boolean populateMetaFields) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -243,7 +243,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
   @Test
   public void testUpsertPartitionerWithTableVersionSix() throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     cfgBuilder.withWriteTableVersion(6);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -362,7 +362,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   public void testLogFileCountsAfterCompaction(IndexType indexType) throws Exception {
     boolean populateMetaFields = true;
     // insert 100 records
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, indexType,
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, false, indexType,
         1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
@@ -476,7 +476,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         .withLogCompactionBlocksThreshold(1)
         .build();
     // insert 100 records
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder()
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .withCompactionConfig(compactionConfig);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
@@ -629,7 +629,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMetadataStatsOnCommit(Boolean rollbackUsingMarkers) throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder(IndexType.INMEMORY)
+    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
         .withAvroSchemaValidate(false)
         .withAllowAutoEvolutionColumnDrop(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
@@ -832,7 +832,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
    */
   @Test
   public void testHandleUpdateWithMultiplePartitions() throws Exception {
-    HoodieWriteConfig cfg = getConfig();
+    HoodieWriteConfig cfg = getConfig(true);
 
     setUp(cfg.getProps());
 

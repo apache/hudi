@@ -55,7 +55,7 @@ public class TestSparkMetadataTableFirstDeltaCommitActionExecutor extends SparkC
   public void testMetadataTableUpsertCommitActionExecutor() throws IOException {
 
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ);
-    HoodieWriteConfig writeConfig = getConfigBuilder().build();
+    HoodieWriteConfig writeConfig = getConfigBuilder(false).build();
     HoodieTable table = HoodieSparkTable.create(writeConfig, context(), metaClient);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();

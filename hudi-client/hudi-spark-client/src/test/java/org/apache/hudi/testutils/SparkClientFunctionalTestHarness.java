@@ -379,32 +379,32 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     }
   }
 
-  protected HoodieWriteConfig getConfig() {
-    return getConfigBuilder().build();
+  protected HoodieWriteConfig getConfig(Boolean autoCommit) {
+    return getConfigBuilder(autoCommit).build();
   }
 
-  protected HoodieWriteConfig getConfig(boolean rollbackUsingMarkers) {
-    return getConfigBuilder(rollbackUsingMarkers, HoodieIndex.IndexType.BLOOM).build();
+  protected HoodieWriteConfig getConfig(Boolean autoCommit, Boolean rollbackUsingMarkers) {
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, HoodieIndex.IndexType.BLOOM).build();
   }
 
-  protected HoodieWriteConfig.Builder getConfigBuilder() {
-    return getConfigBuilder(HoodieIndex.IndexType.SIMPLE);
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
+    return getConfigBuilder(autoCommit, HoodieIndex.IndexType.BLOOM);
   }
 
-  protected HoodieWriteConfig.Builder getConfigBuilder(HoodieIndex.IndexType indexType) {
-    return getConfigBuilder(false, indexType);
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, HoodieIndex.IndexType indexType) {
+    return getConfigBuilder(autoCommit, false, indexType);
   }
 
-  protected HoodieWriteConfig.Builder getConfigBuilder(long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
-    return getConfigBuilder(false, HoodieIndex.IndexType.SIMPLE, compactionSmallFileSize, clusteringConfig);
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
+    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig);
   }
 
-  protected HoodieWriteConfig.Builder getConfigBuilder(boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
-    return getConfigBuilder(rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
   }
 
-  protected HoodieWriteConfig.Builder getConfigBuilder(boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
-                                                       long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
+      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
@@ -421,8 +421,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
-            .build())
-        .withMarkersTimelineServerBasedBatchIntervalMs(10);
+            .build());
   }
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
