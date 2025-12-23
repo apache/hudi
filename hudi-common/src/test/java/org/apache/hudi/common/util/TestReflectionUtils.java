@@ -32,6 +32,8 @@ import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
 import static org.apache.hudi.common.util.ReflectionUtils.isSubClass;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests {@link ReflectionUtils}
@@ -56,5 +58,34 @@ public class TestReflectionUtils {
     assertFalse(getMethod(HoodieStorage.class,
         "listDirectEntries", StoragePathFilter.class).isPresent());
     assertFalse(getMethod(HoodieStorage.class, "nonExistentMethod").isPresent());
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspath() {
+    long classCount = ReflectionUtils.getTopLevelClassesInClasspath(ReflectionUtils.class).count();
+    assertTrue(classCount > 0, "Should find at least one class in the package");
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspathContainsExpectedClasses() {
+    java.util.List<String> classes = ReflectionUtils.getTopLevelClassesInClasspath(ReflectionUtils.class)
+        .collect(java.util.stream.Collectors.toList());
+
+    assertTrue(classes.stream().anyMatch(c -> c.contains("ReflectionUtils")),
+        "Should contain ReflectionUtils class");
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspathWithArrayClass() {
+    java.util.stream.Stream<String> stream = ReflectionUtils.getTopLevelClassesInClasspath(String[].class);
+    assertNotNull(stream, "Should return a non-null stream");
+    assertEquals(0, stream.count(), "Should return an empty stream for array classes");
+  }
+
+  @Test
+  void testGetTopLevelClassesInClasspathWithPrimitiveArrayClass() {
+    java.util.stream.Stream<String> stream = ReflectionUtils.getTopLevelClassesInClasspath(int[].class);
+    assertNotNull(stream, "Should return a non-null stream");
+    assertEquals(0, stream.count(), "Should return an empty stream for primitive array classes");
   }
 }
