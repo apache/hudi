@@ -58,7 +58,7 @@ import scala.collection.mutable.ArrayBuffer
  * Here we only do the parser for the extended sql syntax. e.g MergeInto. For
  * other sql syntax we use the delegate sql parser which is the SparkSqlParser.
  */
-class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface)
+class HoodieSpark4_1ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface)
   extends HoodieSqlBaseBaseVisitor[AnyRef] with Logging {
 
   protected def typedVisit[T](ctx: ParseTree): T = {

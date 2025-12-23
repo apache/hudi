@@ -37,12 +37,12 @@ import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator, SparkColumnarFileReader}
-import org.apache.spark.sql.execution.datasources.parquet.Spark40ParquetReader.repairFooterSchema
+import org.apache.spark.sql.execution.datasources.parquet.Spark41ParquetReader.repairFooterSchema
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
-class Spark40ParquetReader(enableVectorizedReader: Boolean,
+class Spark41ParquetReader(enableVectorizedReader: Boolean,
                            datetimeRebaseModeInRead: String,
                            int96RebaseModeInRead: String,
                            enableParquetFilterPushDown: Boolean,
@@ -246,7 +246,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark40ParquetReader extends SparkParquetReaderBuilder {
+object Spark41ParquetReader extends SparkParquetReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -285,7 +285,7 @@ object Spark40ParquetReader extends SparkParquetReaderBuilder {
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new Spark40ParquetReader(
+    new Spark41ParquetReader(
       enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,

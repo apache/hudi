@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hudi.{DefaultSource, EmptyRelation, HoodieBaseRelation}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
-import org.apache.spark.sql.{AnalysisException, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.{ResolveInsertionBase, TableOutputResolver}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -28,7 +28,6 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.errors.DataTypeErrors.toSQLId
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation, PreprocessTableInsertion}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
@@ -55,12 +54,12 @@ case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
 
     // NOTE: Unfortunately, [[InsertIntoStatement]] is implemented in a way that doesn't expose
     //       target relation as a child (even though there's no good reason for that)
-    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), _, _, _, _, _, _) =>
+    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _, _), _, _, _, _, _, _) =>
       iis.copy(table = convertToV1(rv2, v2Table))
 
     case _ =>
       plan.resolveOperatorsDown {
-        case rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _) => convertToV1(rv2, v2Table)
+        case rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _, _) => convertToV1(rv2, v2Table)
       }
   }
 

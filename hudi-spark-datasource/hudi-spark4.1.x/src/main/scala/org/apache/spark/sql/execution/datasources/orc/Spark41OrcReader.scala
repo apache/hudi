@@ -28,7 +28,7 @@ import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-class Spark40OrcReader(enableVectorizedReader: Boolean,
+class Spark41OrcReader(enableVectorizedReader: Boolean,
                        memoryMode: MemoryMode,
                        dataSchema: StructType,
                        orcFilterPushDown: Boolean,
@@ -62,7 +62,7 @@ object Spark40OrcReader {
             sqlConf: SQLConf,
             options: Map[String, String],
             hadoopConf: Configuration,
-            dataSchema: StructType): Spark40OrcReader = {
+            dataSchema: StructType): Spark41OrcReader = {
     //set hadoopconf
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
     hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
@@ -81,7 +81,7 @@ object Spark40OrcReader {
               "To workaround this issue, set spark.sql.orc.enableVectorizedReader=false."))
         .equals("true")
 
-    new Spark40OrcReader(
+    new Spark41OrcReader(
       enableVectorizedReader = enableVectorizedReader && vectorized,
       memoryMode = memoryMode,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,

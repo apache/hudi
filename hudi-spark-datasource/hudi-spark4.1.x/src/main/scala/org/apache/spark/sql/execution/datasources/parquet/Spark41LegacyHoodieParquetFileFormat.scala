@@ -48,7 +48,7 @@ import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.WholeStageCodegenExec
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
-import org.apache.spark.sql.execution.datasources.parquet.Spark40LegacyHoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.parquet.Spark41LegacyHoodieParquetFileFormat._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
@@ -66,7 +66,7 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
  *   <li>Schema on-read</li>
  * </ol>
  */
-class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+class Spark41LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
@@ -390,7 +390,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
   }
 }
 
-object Spark40LegacyHoodieParquetFileFormat {
+object Spark41LegacyHoodieParquetFileFormat {
 
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
     val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)

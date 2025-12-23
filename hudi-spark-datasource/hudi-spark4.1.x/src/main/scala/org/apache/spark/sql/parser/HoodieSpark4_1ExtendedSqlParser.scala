@@ -38,7 +38,7 @@ import java.util.Locale
 
 import scala.jdk.CollectionConverters._
 
-class HoodieSpark4_0ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
+class HoodieSpark4_1ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
   extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sessionState.conf
