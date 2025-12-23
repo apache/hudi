@@ -487,7 +487,7 @@ This is done to ensure that the compaction and cleaning services are not execute
 
 We have introduced the Consistent Hashing Index since [0.13.0 release](/releases/release-0.13.0#consistent-hashing-index). In comparison to the static hashing index ([Bucket Index](/releases/release-0.11.0#bucket-index)), the consistent hashing index offers dynamic scalability of data buckets for the writer. 
 You can find the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-42/rfc-42.md) for the design of this feature.
-In the 0.13.X release, the Consistent Hashing Index is supported only for Spark engine. And since [release 0.14.0](/releases/release-0.14.0#consistent-hashing-index-support), the index is supported for Flink engine.
+In the 0.13.X release, the Consistent Hashing Index is supported only for Spark engine. And since [release 0.14.0](/releases/release-0.14#consistent-hashing-index-support), the index is supported for Flink engine.
 
 To utilize this feature, configure the option `index.type` as `BUCKET` and set `hoodie.index.bucket.engine` to `CONSISTENT_HASHING`.
 When enabling the consistent hashing index, it's important to enable clustering scheduling within the writer. During this process, the writer will perform dual writes for both the old and new data buckets while the clustering is pending. Although the dual write does not impact correctness, it is strongly recommended to execute clustering as quickly as possible.
@@ -544,7 +544,7 @@ select * from t1 limit 20;
 ```
 
 :::caution
-Consistent Hashing Index is supported for Flink engine since [release 0.14.0](/releases/release-0.14.0#consistent-hashing-index-support) and currently there are some limitations to use it as of 0.14.0:
+Consistent Hashing Index is supported for Flink engine since [release 0.14.0](/releases/release-0.14#consistent-hashing-index-support) and currently there are some limitations to use it as of 0.14.0:
 
 - This index is supported only for MOR table. This limitation also exists even if using Spark engine.
 - It does not work with metadata table enabled. This limitation also exists even if using Spark engine.

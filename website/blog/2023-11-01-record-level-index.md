@@ -22,7 +22,7 @@ or traffic patterns, where a specific index may be more suitable for simpler ope
 Users often face trade-offs when selecting index types for different tables, since there hasn't been
 a generally performant index capable of facilitating both writes and reads with minimal operational overhead.
 
-Starting from [Hudi 0.14.0](https://hudi.apache.org/releases/release-0.14.0), we are thrilled to announce a 
+Starting from [Hudi 0.14.0](https://hudi.apache.org/releases/release-0.14#release-0140), we are thrilled to announce a 
 general purpose index for Apache Hudi - the Record Level Index (RLI). This innovation not only dramatically boosts
 write efficiency but also improves read efficiency for relevant queries. Integrated seamlessly within the table storage layer,
 RLI can easily work without any additional operational efforts.

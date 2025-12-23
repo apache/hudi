@@ -20,7 +20,7 @@ Another very common scenario is multiple stream sources joined together to suppl
 stream is taking records with partial table schema fields. Common and strong demand for multi-stream concurrent ingestion has always been there. 
 The Hudi community has collected so many feedbacks from users ever since the day Hudi supported streaming ingestion and processing.
 
-Starting from [Hudi 1.0.0](https://hudi.apache.org/releases/release-1.0.0), we are thrilled to announce a new general-purpose 
+Starting from [Hudi 1.0.0](https://hudi.apache.org/releases/release-1.1#release-100), we are thrilled to announce a new general-purpose 
 concurrency model for Apache Hudi - the Non-blocking Concurrency Control (NBCC)- aimed at the stream processing or high-contention/frequent writing scenarios. 
 In contrast to [Optimistic Concurrency Control](/blog/2021/12/16/lakehouse-concurrency-control-are-we-too-optimistic/), where writers abort the transaction 
 if there is a hint of contention, this innovation allows multiple streaming writes to the same Hudi table without any overhead of conflict resolution, while 
