@@ -19,9 +19,11 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
+
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -29,6 +31,7 @@ import org.apache.spark.sql.SparkSession;
 /**
  * A SparkSQL query node in the DAG of operations for a workflow.
  */
+@Slf4j
 public class SparkSQLQueryNode extends DagNode<Boolean> {
 
   HiveServiceProvider hiveServiceProvider;
