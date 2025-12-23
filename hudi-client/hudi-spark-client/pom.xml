@@ -100,6 +100,12 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Lance Spark for Arrow conversion -->
+    <dependency>
+      <groupId>com.lancedb</groupId>
+      <artifactId>${lance.spark.artifact}</artifactId>
+    </dependency>
+
     <!-- Used for adding kryo serializers for protobuf -->
     <dependency>
       <groupId>com.twitter</groupId>

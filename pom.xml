@@ -240,6 +240,11 @@
     <springboot.version>2.7.10</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.10.7</snappy.version>
+    <arrow.version>18.3.0</arrow.version>
+    <lance.version>0.39.0</lance.version>
+    <lance.spark.connector.version>0.0.15</lance.spark.connector.version>
+    <lance.spark.artifact>lance-spark-3.5_${scala.binary.version}</lance.spark.artifact>
+    <lance.skip.tests>false</lance.skip.tests>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
     <copy.files>false</copy.files>
     <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
@@ -922,7 +927,29 @@
         <version>${orc.spark.version}</version>
         <scope>compile</scope>
       </dependency>
-
+      <!-- Lance Core SDK -->
+      <dependency>
+        <groupId>com.lancedb</groupId>
+        <artifactId>lance-core</artifactId>
+        <version>${lance.version}</version>
+      </dependency>
+      <!-- Lance Spark for Arrow conversion -->
+      <dependency>
+        <groupId>com.lancedb</groupId>
+        <artifactId>${lance.spark.artifact}</artifactId>
+        <version>${lance.spark.connector.version}</version>
+      </dependency>
+      <!-- Apache Arrow -->
+      <dependency>
+        <groupId>org.apache.arrow</groupId>
+        <artifactId>arrow-vector</artifactId>
+        <version>${arrow.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.arrow</groupId>
+        <artifactId>arrow-memory-netty</artifactId>
+        <version>${arrow.version}</version>
+      </dependency>
       <!-- RoaringBitmap -->
       <dependency>
         <groupId>org.roaringbitmap</groupId>
@@ -2489,6 +2516,9 @@
         <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <kafka.version>2.8.1</kafka.version>
+        <!-- Lance: Skip tests for Spark 3.3 due to lack of support -->
+        <lance.spark.artifact>lance-spark-base_${scala.binary.version}</lance.spark.artifact>
+        <lance.skip.tests>true</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2530,6 +2560,9 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>3.3.2</kafka.version>
+        <!-- Lance: Use Spark 3.4-specific artifact -->
+        <lance.spark.artifact>lance-spark-3.4_${scala.binary.version}</lance.spark.artifact>
+        <lance.skip.tests>false</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2581,6 +2614,9 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>3.4.1</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Lance: Use Spark 3.5-specific artifact -->
+        <lance.spark.artifact>lance-spark-3.5_${scala.binary.version}</lance.spark.artifact>
+        <lance.skip.tests>false</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2640,6 +2676,9 @@
         <hadoop.version>3.4.0</hadoop.version>
         <kafka.version>3.8.0</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Lance: Use Spark 4.0-specific artifact (Scala 2.13 only) -->
+        <lance.spark.artifact>lance-spark-4.0_2.13</lance.spark.artifact>
+        <lance.skip.tests>false</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
