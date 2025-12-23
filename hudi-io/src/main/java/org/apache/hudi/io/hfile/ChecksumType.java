@@ -19,10 +19,16 @@
 
 package org.apache.hudi.io.hfile;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Type of checksum used to validate the integrity of data block.
  * It determines the number of bytes used for checksum.
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Getter
 public enum ChecksumType {
 
   NULL((byte) 0) {
@@ -54,14 +60,6 @@ public enum ChecksumType {
 
   /** returns the name of this checksum type */
   public abstract String getName();
-
-  private ChecksumType(final byte c) {
-    this.code = c;
-  }
-
-  public byte getCode() {
-    return this.code;
-  }
 
   /**
    * Use designated byte value to indicate checksum type.

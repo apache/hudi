@@ -20,8 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,9 +40,8 @@ import java.util.stream.Stream;
 /**
  * A utility class for reflection.
  */
+@Slf4j
 public class ReflectionUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ReflectionUtils.class);
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new ConcurrentHashMap<>();
 
@@ -107,9 +105,9 @@ public class ReflectionUtils {
     } catch (NoSuchMethodException e) {
       String message = "Unable to instantiate class " + clazz;
       if (silenceWarning) {
-        LOG.debug(message, e);
+        log.debug(message, e);
       } else {
-        LOG.warn(message, e);
+        log.warn(message, e);
       }
       return false;
     }
@@ -138,7 +136,7 @@ public class ReflectionUtils {
     try {
       resources = classLoader.getResources(path);
     } catch (IOException e) {
-      LOG.error("Unable to fetch Resources in package " + e.getMessage());
+      log.error("Unable to fetch Resources in package " + e.getMessage());
     }
     List<File> directories = new ArrayList<>();
     while (Objects.requireNonNull(resources).hasMoreElements()) {
@@ -146,7 +144,7 @@ public class ReflectionUtils {
       try {
         directories.add(new File(resource.toURI()));
       } catch (URISyntaxException e) {
-        LOG.error("Unable to get " + e.getMessage());
+        log.error("Unable to get " + e.getMessage());
       }
     }
     List<String> classes = new ArrayList<>();

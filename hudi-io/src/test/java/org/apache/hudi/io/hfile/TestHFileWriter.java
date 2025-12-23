@@ -19,14 +19,13 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -52,8 +51,8 @@ import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 class TestHFileWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
 
@@ -72,7 +71,7 @@ class TestHFileWriter {
     validateHFileStructure();
     // 4. Validate consistency with HFileReader.
     validateConsistencyWithHFileReader();
-    LOG.info("All validations passed!");
+    log.info("All validations passed!");
   }
 
   @Test
