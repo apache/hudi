@@ -712,11 +712,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                    List<HoodieRecord> expectedHoodieUnmergedRecords,
                                                    String[] orderingFields) throws Exception {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
-    Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    expectedHoodieRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieRecords, metaClient, avroSchema);
-    expectedHoodieUnmergedRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieUnmergedRecords, metaClient, avroSchema);
-    List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, avroSchema, orderingFields);
-    List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, avroSchema, orderingFields);
+    HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema();
+    expectedHoodieRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieRecords, metaClient, schema.toAvroSchema());
+    expectedHoodieUnmergedRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieUnmergedRecords, metaClient, schema.toAvroSchema());
+    List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, schema.toAvroSchema(), orderingFields);
+    List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, schema.toAvroSchema(), orderingFields);
     validateOutputFromFileGroupReaderWithExistingRecords(
         storageConf, tablePath, containsBaseFile, expectedLogFileNum, recordMergeMode,
         expectedRecords, expectedUnmergedRecords);

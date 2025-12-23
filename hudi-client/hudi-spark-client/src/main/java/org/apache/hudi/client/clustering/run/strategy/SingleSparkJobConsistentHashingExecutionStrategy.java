@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyConcatenatingIterator;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -83,7 +82,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
 
   @Override
   protected List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
-                                                        boolean preserveHoodieMetadata, SerializableSchema schema, TaskContextSupplier taskContextSupplier, String instantTime) {
+                                                        boolean preserveHoodieMetadata, HoodieSchema schema, TaskContextSupplier taskContextSupplier, String instantTime) {
     // deal with split / merge operations
     ValidationUtils.checkArgument(clusteringGroup.getNumOutputGroups() >= 1, "Number of output groups should be at least 1");
     if (clusteringGroup.getNumOutputGroups() == 1) {

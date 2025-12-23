@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -41,7 +42,6 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -96,7 +96,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     assertTrue(readerContext.getNeedsBootstrapMerge());
     HoodieSchema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
-    Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
+    Pair<List<HoodieSchemaField>, List<HoodieSchemaField>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Collections.singletonList(getField("_hoodie_record_key")), bootstrapFields.getLeft());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider")), bootstrapFields.getRight());
   }

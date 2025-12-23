@@ -44,7 +44,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -293,7 +292,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   /**
-   * Get {@link Schema.Field} from {@link Schema} by field name.
+   * Get {@link HoodieSchemaField} from {@link HoodieSchema} by field name.
    */
   private static HoodieSchemaField getField(HoodieSchema schema, String fieldName) {
     Option<HoodieSchemaField> foundFieldOpt = findNestedField(schema, fieldName);
