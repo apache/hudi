@@ -130,8 +130,12 @@ public class ReflectionUtils {
    * @return Stream of Class names in package
    */
   public static Stream<String> getTopLevelClassesInClasspath(Class<?> clazz) {
+    Package pkg = clazz.getPackage();
+    if (pkg == null) {
+      return Stream.empty();
+    }
+    String packageName = pkg.getName();
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    String packageName = clazz.getPackage().getName();
     String path = packageName.replace('.', '/');
 
     try {
