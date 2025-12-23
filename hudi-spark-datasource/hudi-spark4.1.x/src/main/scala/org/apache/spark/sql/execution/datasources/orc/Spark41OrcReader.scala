@@ -48,7 +48,7 @@ class Spark41OrcReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark40OrcReader {
+object Spark41OrcReader {
   /**
    * Get ORC file reader
    *
