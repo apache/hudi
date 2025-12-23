@@ -44,7 +44,6 @@ import com.codahale.metrics.UniformReservoir;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +61,9 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -229,9 +230,9 @@ public class TableSizeStats implements Serializable {
       System.exit(1);
     }
 
-    SparkConf sparkConf = UtilHelpers.buildSparkConf("Table-Size-Stats", cfg.sparkMaster);
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Map<String, String> sparkConfigMap = new HashMap<>();
+    sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Table-Size-Stats", cfg.sparkMaster, sparkConfigMap);
 
     try {
       TableSizeStats tableSizeStats = new TableSizeStats(jsc, cfg);
