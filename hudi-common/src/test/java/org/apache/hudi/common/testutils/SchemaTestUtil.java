@@ -31,6 +31,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -67,15 +68,13 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudo
 /**
  * A utility class for testing schema.
  */
+@NoArgsConstructor
 public final class SchemaTestUtil {
 
   private static final String RESOURCE_SAMPLE_DATA = "/sample.data";
   private static final MercifulJsonConverter CONVERTER = new MercifulJsonConverter();
 
   private final Random random = new Random(0xDEED);
-
-  public SchemaTestUtil() {
-  }
 
   public static HoodieSchema getSimpleSchema() throws IOException {
     return new HoodieSchema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));

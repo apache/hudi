@@ -36,6 +36,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.util.FlinkClientUtil;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
@@ -50,9 +52,8 @@ import java.util.List;
 /**
  * Utilities for format.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FormatUtils {
-  private FormatUtils() {
-  }
 
   public static GenericRecord buildAvroRecordBySchema(
       IndexedRecord record,

@@ -35,6 +35,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -45,8 +46,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -65,8 +64,9 @@ import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
 /**
  * Utility functions related to accessing the file storage on Hadoop.
  */
+@Slf4j
 public class HadoopFSUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HadoopFSUtils.class);
+
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
 
@@ -74,7 +74,7 @@ public class HadoopFSUtils {
     // look for all properties, prefixed to be picked up
     for (Map.Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
-        LOG.info("Picking up value for hoodie env var : {}", prop.getKey());
+        log.info("Picking up value for hoodie env var : {}", prop.getKey());
         conf.set(prop.getKey().replace(HOODIE_ENV_PROPS_PREFIX, "").replaceAll("_DOT_", "."), prop.getValue());
       }
     }
@@ -141,10 +141,10 @@ public class HadoopFSUtils {
     File localFile = new File(path);
     if (!providedPath.isAbsolute() && localFile.exists()) {
       Path resolvedPath = new Path("file://" + localFile.getAbsolutePath());
-      LOG.info("Resolving file {} to be a local file.", path);
+      log.info("Resolving file {} to be a local file.", path);
       return resolvedPath;
     }
-    LOG.info("Resolving file {} to be a remote file.", path);
+    log.info("Resolving file {} to be a remote file.", path);
     return providedPath;
   }
 
@@ -471,11 +471,11 @@ public class HadoopFSUtils {
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
-    LOG.info("Recover lease on dfs file {}", p);
+    log.info("Recover lease on dfs file {}", p);
     // initiate the recovery
     boolean recovered = false;
     for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
-      LOG.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
+      log.info("Attempt {} to recover lease on dfs file {}", nbAttempt, p);
       recovered = dfs.recoverLease(p);
       if (recovered) {
         break;

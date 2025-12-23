@@ -18,15 +18,15 @@
 
 package org.apache.hudi.utilities.transform;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -52,7 +52,7 @@ public class ChainedTransformer implements Transformer {
   private static final String ID_TRANSFORMER_CLASS_NAME_DELIMITER = ":";
 
   protected final List<TransformerInfo> transformers;
-  private final Supplier<Option<Schema>> sourceSchemaSupplier;
+  private final Supplier<Option<HoodieSchema>> sourceSchemaSupplier;
 
   public ChainedTransformer(List<Transformer> transformersList) {
     this.transformers = new ArrayList<>(transformersList.size());
@@ -69,7 +69,7 @@ public class ChainedTransformer implements Transformer {
    * @param sourceSchemaSupplier              Supplies the schema (if schema provider is present) for the dataset the transform is applied to
    * @param configuredTransformers            List of configured transformer class names.
    */
-  public ChainedTransformer(List<String> configuredTransformers, Supplier<Option<Schema>> sourceSchemaSupplier) {
+  public ChainedTransformer(List<String> configuredTransformers, Supplier<Option<HoodieSchema>> sourceSchemaSupplier) {
     this.transformers = new ArrayList<>(configuredTransformers.size());
     this.sourceSchemaSupplier = sourceSchemaSupplier;
 
@@ -121,12 +121,12 @@ public class ChainedTransformer implements Transformer {
 
   private StructType getExpectedTransformedSchema(TransformerInfo transformerInfo, JavaSparkContext jsc, SparkSession sparkSession,
                                                   Option<StructType> incomingStructOpt, Option<Dataset<Row>> rowDatasetOpt, TypedProperties properties) {
-    Option<Schema> sourceSchemaOpt = sourceSchemaSupplier.get();
+    Option<HoodieSchema> sourceSchemaOpt = sourceSchemaSupplier.get();
     if (!sourceSchemaOpt.isPresent() && !rowDatasetOpt.isPresent()) {
       throw new HoodieTransformPlanException("Either source schema or source dataset should be available to fetch the schema");
     }
     StructType incomingStruct = incomingStructOpt
-        .orElseGet(() -> sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
+        .orElseGet(() -> sourceSchemaOpt.isPresent() ? HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
     return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
   }
 

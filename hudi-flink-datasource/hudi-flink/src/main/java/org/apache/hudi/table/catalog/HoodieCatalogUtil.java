@@ -35,6 +35,7 @@ import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.table.catalog.AbstractCatalog;
@@ -50,8 +51,6 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -77,8 +76,8 @@ import static org.apache.hudi.table.catalog.CatalogOptions.HIVE_SITE_FILE;
 /**
  * Utilities for Hoodie Catalog.
  */
+@Slf4j
 public class HoodieCatalogUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCatalogUtil.class);
 
   /**
    * Returns a new {@code HiveConf}.
@@ -96,7 +95,7 @@ public class HoodieCatalogUtil {
     HiveConf.setLoadHiveServer2Config(false);
     HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
 
-    LOG.info("Setting hive conf dir as {}", hiveConfDir);
+    log.info("Setting hive conf dir as {}", hiveConfDir);
 
     if (hiveConfDir != null) {
       Path hiveSite = new Path(hiveConfDir, HIVE_SITE_FILE);
@@ -117,7 +116,7 @@ public class HoodieCatalogUtil {
       URL hiveSite =
           Thread.currentThread().getContextClassLoader().getResource(HIVE_SITE_FILE);
       if (hiveSite != null) {
-        LOG.info("Found {} in classpath: {}", HIVE_SITE_FILE, hiveSite);
+        log.info("Found {} in classpath: {}", HIVE_SITE_FILE, hiveSite);
         hiveConf.addResource(hiveSite);
       }
     }

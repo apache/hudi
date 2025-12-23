@@ -32,10 +32,9 @@ import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -55,8 +54,8 @@ import java.util.stream.Collectors;
  * <p>It also inherits the {@link CleanFunction} cleaning ability. This is needed because
  * the SQL API does not allow multiple sinks in one table sink provider.
  */
+@Slf4j
 public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionCommitSink.class);
 
   /**
    * Config options.
@@ -111,7 +110,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     if (event.isFailed()
         || (event.getWriteStatuses() != null
         && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
-      LOG.warn("Received abnormal CompactionCommitEvent of instant {}, task ID is {},"
+      log.warn("Received abnormal CompactionCommitEvent of instant {}, task ID is {},"
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
@@ -166,7 +165,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       doCommit(instant, events);
     } catch (Throwable throwable) {
       // make it fail-safe
-      LOG.error("Error while committing compaction instant: " + instant, throwable);
+      log.error("Error while committing compaction instant: " + instant, throwable);
       this.compactionMetrics.markCompactionRolledBack();
     } finally {
       // reset the status
@@ -185,7 +184,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
     if (numErrorRecords > 0 && !this.conf.get(FlinkOptions.IGNORE_FAILED)) {
       // handle failure case
-      LOG.error("Got {} error records during compaction of instant {},\n"
+      log.error("Got {} error records during compaction of instant {},\n"
           + "option '{}' is configured as false,"
           + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
       CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());

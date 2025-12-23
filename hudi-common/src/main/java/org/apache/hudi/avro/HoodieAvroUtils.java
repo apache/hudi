@@ -90,17 +90,12 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.ARRAY;
 import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -126,7 +121,7 @@ public class HoodieAvroUtils {
   private static final Properties PROPERTIES = new Properties();
 
   // All metadata fields are optional strings.
-  public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
+  public static final Schema METADATA_FIELD_SCHEMA = AvroSchemaUtils.createNullableSchema(Schema.Type.STRING);
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
@@ -320,7 +315,7 @@ public class HoodieAvroUtils {
         parentFields.add(newField);
       }
     }
-    return createNewSchemaFromFieldsWithReference(schema, parentFields);
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, parentFields);
   }
 
   /**
@@ -399,7 +394,7 @@ public class HoodieAvroUtils {
         .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList());
 
-    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
@@ -418,7 +413,7 @@ public class HoodieAvroUtils {
           }
         })
         .collect(Collectors.toList());
-    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
+    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   private static Schema initRecordKeySchema() {
@@ -810,7 +805,7 @@ public class HoodieAvroUtils {
       Object val = valueNode.get(part);
 
       if (i == parts.length - 1) {
-        return getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
+        return AvroSchemaUtils.getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
       } else {
         if (!(val instanceof GenericRecord)) {
           throw new HoodieException("Cannot find a record at part value :" + part);
@@ -836,11 +831,11 @@ public class HoodieAvroUtils {
       String part = parts[i];
       try {
         // Resolve nullable/union schema to the actual schema
-        currentSchema = getNonNullTypeFromUnion(currentSchema.getField(part).schema());
+        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema.getField(part).schema());
 
         if (i == parts.length - 1) {
           // Return the schema for the final part
-          return getNonNullTypeFromUnion(currentSchema);
+          return AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
         }
       } catch (Exception e) {
         throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
@@ -877,11 +872,11 @@ public class HoodieAvroUtils {
     if (fieldSchema == null) {
       return fieldValue;
     } else if (fieldValue == null) {
-      checkState(isNullable(fieldSchema));
+      checkState(AvroSchemaUtils.isNullable(fieldSchema));
       return null;
     }
 
-    return convertValueForAvroLogicalTypes(getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
+    return convertValueForAvroLogicalTypes(AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
   }
 
   /**
@@ -1115,7 +1110,7 @@ public class HoodieAvroUtils {
             newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
           } else if (newField.defaultVal() instanceof JsonProperties.Null) {
             newRecord.put(i, null);
-          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
+          } else if (!AvroSchemaUtils.isNullable(newField.schema()) && newField.defaultVal() == null) {
             throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
           } else {
             newRecord.put(i, newField.defaultVal());
@@ -1372,74 +1367,6 @@ public class HoodieAvroUtils {
   public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
     return new BigDecimal(new BigInteger(value),
         scale, new MathContext(precision, RoundingMode.HALF_UP));
-  }
-
-  public static boolean hasDecimalField(Schema schema) {
-    return hasDecimalWithCondition(schema, unused -> true);
-  }
-
-  /**
-   * Checks whether the provided schema contains a decimal with a precision less than or equal to 18,
-   * which allows the decimal to be stored as int/long instead of a fixed size byte array in
-   * <a href="https://github.com/apache/parquet-format/blob/master/LogicalTypes.md">parquet logical types</a>
-   * @param schema the input schema to search
-   * @return true if the schema contains a small precision decimal field and false otherwise
-   */
-  public static boolean hasSmallPrecisionDecimalField(Schema schema) {
-    return hasDecimalWithCondition(schema, HoodieAvroUtils::isSmallPrecisionDecimalField);
-  }
-
-  private static boolean hasDecimalWithCondition(Schema schema, Function<Decimal, Boolean> condition) {
-    switch (schema.getType()) {
-      case RECORD:
-        for (Field field : schema.getFields()) {
-          if (hasDecimalWithCondition(field.schema(), condition)) {
-            return true;
-          }
-        }
-        return false;
-      case ARRAY:
-        return hasDecimalWithCondition(schema.getElementType(), condition);
-      case MAP:
-        return hasDecimalWithCondition(schema.getValueType(), condition);
-      case UNION:
-        return hasDecimalWithCondition(getActualSchemaFromUnion(schema, null), condition);
-      default:
-        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          Decimal decimal = (Decimal) schema.getLogicalType();
-          return condition.apply(decimal);
-        } else {
-          return false;
-        }
-    }
-  }
-
-  private static boolean isSmallPrecisionDecimalField(Decimal decimal) {
-    return decimal.getPrecision() <= 18;
-  }
-
-  /**
-   * Checks whether the provided schema contains a list or map field.
-   * @param schema input
-   * @return true if a list or map is present, false otherwise
-   */
-  public static boolean hasListOrMapField(Schema schema) {
-    switch (schema.getType()) {
-      case RECORD:
-        for (Field field : schema.getFields()) {
-          if (hasListOrMapField(field.schema())) {
-            return true;
-          }
-        }
-        return false;
-      case ARRAY:
-      case MAP:
-        return true;
-      case UNION:
-        return hasListOrMapField(getActualSchemaFromUnion(schema, null));
-      default:
-        return false;
-    }
   }
 
   /**

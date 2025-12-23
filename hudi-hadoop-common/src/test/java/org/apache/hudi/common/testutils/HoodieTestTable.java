@@ -61,24 +61,26 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -144,12 +146,11 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 /**
  * Test Hoodie Table for testing only.
  */
+@Slf4j
 public class HoodieTestTable implements AutoCloseable {
 
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTestTable.class);
   private static final Random RANDOM = new Random();
 
   protected static HoodieTestTableState testTableState;
@@ -160,6 +161,7 @@ public class HoodieTestTable implements AutoCloseable {
   protected final FileSystem fs;
   protected HoodieTableMetaClient metaClient;
   protected String currentInstantTime;
+  @Getter
   private boolean isNonPartitioned = false;
   protected Option<HoodieEngineContext> context;
   protected final InstantGenerator instantGenerator = new DefaultInstantGenerator();
@@ -189,10 +191,6 @@ public class HoodieTestTable implements AutoCloseable {
 
   public void setNonPartitioned() {
     this.isNonPartitioned = true;
-  }
-
-  public boolean isNonPartitioned() {
-    return this.isNonPartitioned;
   }
 
   public static String makeNewCommitTime(int sequence, String instantFormat) {
@@ -1500,7 +1498,9 @@ public class HoodieTestTable implements AutoCloseable {
     }
   }
 
+  @NoArgsConstructor(access = AccessLevel.PACKAGE)
   static class HoodieTestTableState {
+
     /**
      * Map<commitTime, Map<partitionPath, List<filesToDelete>>>
      * Used in building CLEAN metadata.
@@ -1516,9 +1516,6 @@ public class HoodieTestTable implements AutoCloseable {
      * Used to build commit metadata for log files for several write operations.
      */
     Map<String, Map<String, List<Pair<String, Integer[]>>>> commitsToPartitionToLogFileInfoStats = new HashMap<>();
-
-    HoodieTestTableState() {
-    }
 
     static HoodieTestTableState of() {
       return new HoodieTestTableState();

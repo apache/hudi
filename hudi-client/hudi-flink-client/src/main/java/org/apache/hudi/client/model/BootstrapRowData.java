@@ -26,6 +26,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.types.RowKind;
+import org.apache.flink.types.variant.Variant;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -146,5 +147,9 @@ public class BootstrapRowData implements RowData {
       return (T) partitionOrdinalToValues.get(pos);
     }
     return getter.apply(pos);
+  }
+
+  public Variant getVariant(int i) {
+    throw new UnsupportedOperationException("Variant is not supported yet.");
   }
 }

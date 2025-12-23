@@ -30,10 +30,11 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -54,12 +55,9 @@ import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.co
 /**
  * Utils for Avro Schema.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class AvroSchemaUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaUtils.class);
-
-  private AvroSchemaUtils() {
-  }
 
   /**
    * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details
@@ -383,7 +381,7 @@ public class AvroSchemaUtils {
     try {
       schemaProps = schema.getObjectProps();
     } catch (Exception e) {
-      LOG.warn("Error while getting object properties from schema: {}", schema, e);
+      log.warn("Error while getting object properties from schema: {}", schema, e);
     }
     for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
       newSchema.addProp(prop.getKey(), prop.getValue());

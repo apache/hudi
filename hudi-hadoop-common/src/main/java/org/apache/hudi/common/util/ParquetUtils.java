@@ -41,6 +41,7 @@ import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -61,8 +62,6 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -94,9 +93,8 @@ import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_
 /**
  * Utility functions involving with parquet.
  */
+@Slf4j
 public class ParquetUtils extends FileFormatUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ParquetUtils.class);
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -258,7 +256,7 @@ public class ParquetUtils extends FileFormatUtils {
       MessageType schema = parquetUtils.readSchema(storage, parquetFilePath);
       return schema.hashCode();
     } catch (Exception e) {
-      LOG.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
+      log.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
       return 0;
     }
   }

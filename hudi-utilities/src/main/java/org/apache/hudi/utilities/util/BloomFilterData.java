@@ -19,7 +19,7 @@
 
 package org.apache.hudi.utilities.util;
 
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
@@ -44,7 +44,7 @@ public class BloomFilterData implements Comparable<BloomFilterData> {
   }
 
   @Override
-  public int compareTo(@NotNull BloomFilterData o) {
+  public int compareTo(@Nonnull BloomFilterData o) {
     return this.toString().compareTo(o.toString());
   }
 

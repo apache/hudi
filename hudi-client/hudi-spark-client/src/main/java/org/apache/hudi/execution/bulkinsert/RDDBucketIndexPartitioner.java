@@ -63,7 +63,7 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    *
    * @param records
    * @param partitioner a default partition that accepts `HoodieKey` as the partition key
-   * @return
+   * @return Partitioned {@link HoodieRecord}s.
    */
 
   public JavaRDD<HoodieRecord<T>> doPartition(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
@@ -83,7 +83,7 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    *
    * @param records
    * @param partitioner
-   * @return
+   * @return Partitioned {@link HoodieRecord}s.
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndCustomColumnSort(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     final String[] sortColumns = sortColumnNames;
@@ -115,7 +115,7 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    *
    * @param records
    * @param partitioner
-   * @return
+   * @return Partitioned {@link HoodieRecord}s.
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndSortByRecordKey(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     if (table.getConfig().getBulkInsertSortMode() == BulkInsertSortMode.GLOBAL_SORT) {

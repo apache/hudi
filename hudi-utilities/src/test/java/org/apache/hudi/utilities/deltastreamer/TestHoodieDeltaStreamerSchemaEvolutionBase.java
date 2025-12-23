@@ -19,8 +19,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -226,11 +226,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected void addData(Dataset<Row> df, Boolean isFirst) {
     if (useSchemaProvider) {
-      TestSchemaProvider.sourceSchema = HoodieSchema.fromAvroSchema(
-          AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE));
+      TestSchemaProvider.sourceSchema =
+          HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
       if (withErrorTable && isFirst) {
-        TestSchemaProvider.setTargetSchema(HoodieSchema.fromAvroSchema(
-            AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk")));
+        TestSchemaProvider.setTargetSchema(
+            HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
       }
     }
     if (useKafkaSource) {

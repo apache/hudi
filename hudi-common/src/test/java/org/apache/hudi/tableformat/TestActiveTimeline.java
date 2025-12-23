@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.NoArgsConstructor;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,7 @@ import java.util.stream.Stream;
 /**
  * An active timeline for test table format which merges timeline assuming test-format as the source of truth.
  */
+@NoArgsConstructor
 public class TestActiveTimeline extends ActiveTimelineV2 {
 
   public TestActiveTimeline(
@@ -53,10 +56,6 @@ public class TestActiveTimeline extends ActiveTimelineV2 {
         metaClient,
         Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE),
         applyLayoutFilters);
-  }
-
-  public TestActiveTimeline() {
-
   }
 
   @Override

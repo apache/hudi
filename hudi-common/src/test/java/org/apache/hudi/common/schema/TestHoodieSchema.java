@@ -430,8 +430,8 @@ public class TestHoodieSchema {
   public void testBuilderPattern() {
     // Test the new Builder pattern
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID"),
-        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name")
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name", null)
     );
 
     HoodieSchema recordSchema = new HoodieSchema.Builder(HoodieSchemaType.RECORD)
@@ -531,8 +531,8 @@ public class TestHoodieSchema {
   @Test
   public void testCreateRecordWithErrorFlag() {
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID"),
-        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name")
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name", null)
     );
 
     HoodieSchema recordSchema = HoodieSchema.createRecord("ErrorRecord", "Error record", "com.example", true, fields);
@@ -548,7 +548,7 @@ public class TestHoodieSchema {
   @Test
   public void testMutableOperations() {
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "ID")
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "ID", null)
     );
 
     HoodieSchema recordSchema = HoodieSchema.createRecord("TestRecord", "com.example", "Test record", fields);

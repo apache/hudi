@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -45,6 +44,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -275,7 +275,20 @@ public class HoodieCDCLogger implements Closeable {
   }
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
-    return record == null ? null : HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema.toAvroSchema(), Collections.emptyMap());
+    return record == null ? null : getRecordWithoutMetadata(record);
+  }
+
+  private GenericRecord getRecordWithoutMetadata(GenericRecord record) {
+    Schema avroSchema = dataSchema.getAvroSchema();
+    if (record.getSchema().getFields().size() == avroSchema.getFields().size()) {
+      return record;
+    } else {
+      GenericData.Record rec = new GenericData.Record(avroSchema);
+      for (Schema.Field field : avroSchema.getFields()) {
+        rec.put(field.pos(), record.get(field.name()));
+      }
+      return rec;
+    }
   }
 
   // -------------------------------------------------------------------------

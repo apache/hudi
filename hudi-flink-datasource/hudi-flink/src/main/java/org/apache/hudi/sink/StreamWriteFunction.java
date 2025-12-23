@@ -49,6 +49,7 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -58,8 +59,6 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -109,11 +108,10 @@ import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldName
  *
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlinkInternalRow> {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(StreamWriteFunction.class);
 
   /**
    * Write buffer as buckets for a checkpoint. The key is bucket ID.
@@ -246,7 +244,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         readerContext.getPayloadClasses(writeClient.getConfig().getProps()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
-    LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
+    log.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 
   /**
@@ -273,7 +271,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
       return bucket.writeRow(record.getRowData());
     } catch (MemoryPagesExhaustedException e) {
-      LOG.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
+      log.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
       return false;
     }
   }
@@ -308,7 +306,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         this.tracer.countDown(bucketToFlush.getBufferSize());
         disposeBucket(bucketToFlush);
       } else {
-        LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
+        log.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
       // 2.2 try to write row again
       success = doBufferRecord(bucketID, record);
@@ -362,7 +360,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
-      LOG.info("No inflight instant when flushing data, skip.");
+      log.info("No inflight instant when flushing data, skip.");
       return false;
     }
 
@@ -402,7 +400,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
             }
           });
     } else {
-      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
+      log.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
     }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -492,7 +490,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
     default List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant) {
       if (!records.hasNext()) {
-        LOG.info("Empty records with bucket info => {}.", bucketInfo);
+        log.info("Empty records with bucket info => {}.", bucketInfo);
         return Collections.emptyList();
       }
       return doWrite(records, bucketInfo, instant);

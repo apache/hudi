@@ -23,6 +23,8 @@ import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.util.MinimalPrettyPrinter;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Encoder;
@@ -61,6 +63,8 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
   private static final String LINE_SEPARATOR = System.getProperty("line.separator");
   final Parser parser;
   private JsonGenerator out;
+  @Getter
+  @Setter
   private boolean includeNamespace = true;
 
   /**
@@ -112,14 +116,6 @@ public class JsonEncoder extends ParsingEncoder implements Parser.ActionHandler 
     pp.setRootValueSeparator(LINE_SEPARATOR);
     g.setPrettyPrinter(pp);
     return g;
-  }
-
-  public boolean isIncludeNamespace() {
-    return includeNamespace;
-  }
-
-  public void setIncludeNamespace(final boolean includeNamespace) {
-    this.includeNamespace = includeNamespace;
   }
 
   /**

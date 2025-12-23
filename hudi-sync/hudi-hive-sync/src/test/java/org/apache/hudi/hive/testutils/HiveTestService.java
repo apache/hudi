@@ -243,7 +243,7 @@ public class HiveTestService {
     }
 
     @Override
-    public TTransport getTransport(TTransport trans) {
+    public TTransport getTransport(TTransport trans) throws TTransportException {
       return childTransFactory.getTransport(parentTransFactory.getTransport(trans));
     }
   }
@@ -259,8 +259,8 @@ public class HiveTestService {
     }
 
     @Override
-    protected TSocket acceptImpl() throws TTransportException {
-      TSocket ts = super.acceptImpl();
+    public TSocket accept() throws TTransportException {
+      TSocket ts = super.accept();
       try {
         ts.getSocket().setKeepAlive(true);
       } catch (SocketException e) {

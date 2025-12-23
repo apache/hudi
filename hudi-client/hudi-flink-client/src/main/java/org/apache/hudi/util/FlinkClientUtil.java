@@ -23,18 +23,27 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ConfigurationUtils;
+import org.apache.flink.configuration.GlobalConfiguration;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Map;
 
 /**
  * Utilities for Hoodie Flink client.
  */
 public class FlinkClientUtil {
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkClientUtil.class);
+  public static String FLINK_HADOOP_CONFIG_PREFIX = "flink.hadoop";
+  public static String FLINK_CONF_DIR = "FLINK_CONF_DIR";
 
   /**
    * Creates the meta client.
@@ -60,6 +69,20 @@ public class FlinkClientUtil {
     if (hadoopConf == null) {
       hadoopConf = new org.apache.hadoop.conf.Configuration();
     }
+
+    String confDir = System.getenv(FLINK_CONF_DIR);
+    if (!StringUtils.isNullOrEmpty(confDir)) {
+      LOG.info("Flink conf dir: {}", confDir);
+      try {
+        Configuration configuration = GlobalConfiguration.loadConfiguration(confDir);
+        for (Map.Entry<String, String> kv : ConfigurationUtils.getPrefixedKeyValuePairs(FLINK_HADOOP_CONFIG_PREFIX, configuration).entrySet()) {
+          hadoopConf.set(kv.getKey(), kv.getValue());
+        }
+      } catch (Exception e) {
+        LOG.warn("Fail to load flink configuration from path {}", confDir, e);
+      }
+    }
+
     return hadoopConf;
   }
 

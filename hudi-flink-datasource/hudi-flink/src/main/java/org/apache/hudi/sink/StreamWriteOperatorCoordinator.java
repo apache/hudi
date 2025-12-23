@@ -50,6 +50,9 @@ import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -58,8 +61,6 @@ import org.apache.flink.runtime.operators.coordination.CoordinationRequestHandle
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -110,9 +111,9 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  * @see StreamWriteFunction         for the data inputs checkpointing and semantics
  * @see AbstractStreamWriteFunction for the bootstrap event sending workflow
  */
+@Slf4j
 public class StreamWriteOperatorCoordinator
     implements OperatorCoordinator, CoordinationRequestHandler {
-  private static final Logger LOG = LoggerFactory.getLogger(StreamWriteOperatorCoordinator.class);
 
   /**
    * Config options.
@@ -225,11 +226,11 @@ public class StreamWriteOperatorCoordinator
       this.writeClient.tryUpgrade(instant, this.metaClient);
       initMetadataTable(this.writeClient);
       // start the executor
-      this.executor = NonThrownExecutor.builder(LOG)
+      this.executor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("meta-event-handle"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .waitForTasksFinish(true).build();
-      this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
+      this.instantRequestExecutor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
@@ -243,7 +244,7 @@ public class StreamWriteOperatorCoordinator
       }
       restoreEvents();
     } catch (Throwable throwable) {
-      LOG.error("Failed to start operator coordinator.", throwable);
+      log.error("Failed to start operator coordinator.", throwable);
       context.failJob(throwable);
     }
   }
@@ -408,7 +409,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void initHiveSync() {
-    this.hiveSyncExecutor = NonThrownExecutor.builder(LOG)
+    this.hiveSyncExecutor = NonThrownExecutor.builder(log)
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
@@ -423,7 +424,7 @@ public class StreamWriteOperatorCoordinator
   private void syncHive() {
     if (tableState.syncHive) {
       doSyncHive();
-      LOG.info("Sync hive metadata for instant {} success!", this.instant);
+      log.info("Sync hive metadata for instant {} success!", this.instant);
     }
   }
 
@@ -474,7 +475,7 @@ public class StreamWriteOperatorCoordinator
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     this.writeClient.setWriteTimer(tableState.commitAction);
-    LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
+    log.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.get(FlinkOptions.TABLE_NAME), conf.get(FlinkOptions.TABLE_TYPE));
     return this.instant;
   }
@@ -494,7 +495,7 @@ public class StreamWriteOperatorCoordinator
    */
   private void recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
     if (!completedTimeline.containsInstant(instant)) {
-      LOG.info("Recommit instant {}", instant);
+      log.info("Recommit instant {}", instant);
       // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired;
       // The following up checkpoints would recommit the instant.
       if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
@@ -599,7 +600,7 @@ public class StreamWriteOperatorCoordinator
       StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
 
       if (hasErrors) {
-        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
+        log.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
             totalErrorRecords, totalRecords);
       }
 
@@ -610,24 +611,24 @@ public class StreamWriteOperatorCoordinator
           tableState.commitAction, partitionToReplacedFileIds);
       if (success) {
         this.eventBuffers.reset(checkpointId);
-        LOG.info("Commit instant [{}] success!", instant);
+        log.info("Commit instant [{}] success!", instant);
       } else {
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
       }
     } else {
-      if (LOG.isErrorEnabled()) {
-        LOG.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
-        LOG.error("The first 10 files with write errors:");
+      if (log.isErrorEnabled()) {
+        log.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+        log.error("The first 10 files with write errors:");
         writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
           if (ws.getGlobalError() != null) {
-            LOG.error("Global error for partition path {} and fileID {}: {}",
+            log.error("Global error for partition path {} and fileID {}: {}",
                 ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
           }
           if (!ws.getErrors().isEmpty()) {
-            LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
+            log.error("The first 100 records-level errors for partition path {} and fileID {}:",
                 ws.getPartitionPath(), ws.getFileId());
             ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
-                LOG.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
+                log.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
           }
         });
       }
@@ -686,19 +687,11 @@ public class StreamWriteOperatorCoordinator
   /**
    * Provider for {@link StreamWriteOperatorCoordinator}.
    */
+  @AllArgsConstructor
   public static class Provider implements OperatorCoordinator.Provider {
+    @Getter
     private final OperatorID operatorId;
     private final Configuration conf;
-
-    public Provider(OperatorID operatorId, Configuration conf) {
-      this.operatorId = operatorId;
-      this.conf = conf;
-    }
-
-    @Override
-    public OperatorID getOperatorId() {
-      return this.operatorId;
-    }
 
     @Override
     public OperatorCoordinator create(Context context) {

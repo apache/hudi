@@ -970,8 +970,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> getArgsForLogicalPlanSizeValidation() {
     return Stream.of(
-        Arguments.of(1, 3072L, true),
-        Arguments.of(20, 3072L, false),
+        Arguments.of(1, 2000L, true),
+        Arguments.of(20, 2000L, false),
         Arguments.of(20, 20 * 1024L * 1024L, true)
     );
   }

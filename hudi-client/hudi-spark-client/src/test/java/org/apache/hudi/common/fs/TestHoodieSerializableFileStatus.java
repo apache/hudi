@@ -73,14 +73,14 @@ public class TestHoodieSerializableFileStatus extends HoodieSparkClientTestHarne
           }, 5);
         },
         "Serialization is supposed to fail!");
-    Assertions.assertTrue(e.getMessage().contains("com.esotericsoftware.kryo.KryoException: java.util.ConcurrentModificationException"));
+    Assertions.assertTrue(e.getMessage().contains("com.esotericsoftware.kryo.KryoException: java.lang.IllegalArgumentException: Unable to create serializer"));
   }
 
   @Test
   public void testHoodieFileStatusSerialization() {
-    List<HoodieSerializableFileStatus> statuses = engineContext.flatMap(testPaths, path -> {
+    Assertions.assertDoesNotThrow(() -> engineContext.flatMap(testPaths, path -> {
       FileSystem fileSystem = new NonSerializableFileSystem();
       return Arrays.stream(HoodieSerializableFileStatus.fromFileStatuses(fileSystem.listStatus(path)));
-    }, 5);
+    }, 5));
   }
 }

@@ -18,31 +18,23 @@
 
 package org.apache.hudi.sink.event;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 /**
  * An operator event to mark successful instant commit.
  */
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
 public class CommitAckEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
   private long checkpointId;
-
-  public CommitAckEvent(long checkpointId) {
-    this.checkpointId = checkpointId;
-  }
-
-  // default constructor for efficient serialization
-  public CommitAckEvent() {
-  }
-
-  public long getCheckpointId() {
-    return checkpointId;
-  }
-
-  public void setCheckpointId(long checkpointId) {
-    this.checkpointId = checkpointId;
-  }
 
   public static CommitAckEvent getInstance(long checkpointId) {
     return new CommitAckEvent(checkpointId);

@@ -21,13 +21,14 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -62,14 +63,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   a union</li>
  * </ol>
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class AvroSchemaCompatibility {
-  private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaCompatibility.class);
-
-  /**
-   * Utility class cannot be instantiated.
-   */
-  private AvroSchemaCompatibility() {
-  }
 
   /**
    * Message to annotate reader/writer schema pairs that are compatible.
@@ -267,7 +263,7 @@ public class AvroSchemaCompatibility {
     private SchemaCompatibilityResult getCompatibility(final Schema reader,
                                                        final Schema writer,
                                                        final Deque<LocationInfo> locations) {
-      LOG.debug("Checking compatibility of reader {} with writer {}", reader, writer);
+      log.debug("Checking compatibility of reader {} with writer {}", reader, writer);
       final ReaderWriter pair = new ReaderWriter(reader, writer);
       SchemaCompatibilityResult result = mMemoizeMap.get(pair);
       if (result != null) {
@@ -772,6 +768,7 @@ public class AvroSchemaCompatibility {
           mIncompatibilities);
     }
   }
+
   // -----------------------------------------------------------------------------------------------
 
   public static final class Incompatibility {
@@ -923,6 +920,7 @@ public class AvroSchemaCompatibility {
           getLocation(), mMessage, mReaderFragment, mWriterFragment);
     }
   }
+
   // -----------------------------------------------------------------------------------------------
 
   /**

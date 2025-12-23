@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
@@ -488,7 +487,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val t = assertThrows(classOf[Throwable]) {
       writeToHudi(optsForBatch2, inputDF)
     }
-    assertTrue(getRootCause(t).getMessage.contains("Config conflict"))
+    assertTrue(HoodieTestUtils.getRootCause(t).getMessage.contains("Config conflict"))
   }
 
   @ParameterizedTest
@@ -1313,7 +1312,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .save(basePath)
     }
 
-    assertEquals("Single partition-path field is expected; provided (driver,rider)", getRootCause(t).getMessage)
+    assertEquals("Single partition-path field is expected; provided (driver,rider)",
+      HoodieTestUtils.getRootCause(t).getMessage)
   }
 
   @ParameterizedTest

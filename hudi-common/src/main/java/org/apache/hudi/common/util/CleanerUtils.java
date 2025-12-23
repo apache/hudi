@@ -190,7 +190,7 @@ public class CleanerUtils {
   /**
    * Convert list of cleanFileInfo instances to list of avro-generated HoodieCleanFileInfo instances.
    * @param cleanFileInfoList
-   * @return
+   * @return {@link List} of {@link HoodieCleanFileInfo}
    */
   public static List<HoodieCleanFileInfo> convertToHoodieCleanFileInfoList(List<CleanFileInfo> cleanFileInfoList) {
     return cleanFileInfoList.stream().map(CleanFileInfo::toHoodieFileCleanInfo).collect(Collectors.toList());

@@ -22,6 +22,9 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -33,8 +36,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde.serdeConstants;
@@ -55,7 +58,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
@@ -64,20 +66,29 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 public abstract class AbstractRealtimeRecordReader {
   private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
+  @Getter
   protected final RealtimeSplit split;
+  @Getter
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
   protected TypedProperties payloadProps = new TypedProperties();
   // Schema handles
-  private Schema readerSchema;
-  private Schema writerSchema;
-  private Schema hiveSchema;
+  @Getter
+  @Setter
+  private HoodieSchema readerSchema;
+  @Getter
+  @Setter
+  private HoodieSchema writerSchema;
+  @Getter
+  @Setter
+  private HoodieSchema hiveSchema;
   private final HoodieTableMetaClient metaClient;
   protected SchemaEvolutionContext schemaEvolutionContext;
   // support merge operation
   protected boolean supportPayload;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
+  @Getter
   private final boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
@@ -156,18 +167,18 @@ public abstract class AbstractRealtimeRecordReader {
    */
   private void init() throws Exception {
     LOG.info("Getting writer schema from table avro schema ");
-    writerSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    writerSchema = new TableSchemaResolver(metaClient).getTableSchema();
 
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     List<String> partitioningFields =
-        partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
+        !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
             : new ArrayList<>();
     writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
     List<String> projectionFields = HoodieRealtimeRecordReaderUtils.orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, EMPTY_STRING),
         jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, EMPTY_STRING), partitioningFields);
 
-    Map<String, Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
+    Map<String, HoodieSchemaField> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
     hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap, jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS, EMPTY_STRING));
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
@@ -177,16 +188,16 @@ public abstract class AbstractRealtimeRecordReader {
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
-  public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {
+  public HoodieSchema constructHiveOrderedSchema(HoodieSchema writerSchema, Map<String, HoodieSchemaField> schemaFieldsMap, String hiveColumnString) {
     String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
     LOG.info("Hive Columns : " + hiveColumnString);
-    List<Field> hiveSchemaFields = new ArrayList<>();
+    List<HoodieSchemaField> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
-      Field field = schemaFieldsMap.get(columnName.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(columnName.toLowerCase());
 
       if (field != null) {
-        hiveSchemaFields.add(createNewSchemaField(field));
+        hiveSchemaFields.add(HoodieSchemaUtils.createNewSchemaField(field));
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
@@ -194,50 +205,13 @@ public abstract class AbstractRealtimeRecordReader {
       }
     }
 
-    Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
-        writerSchema.isError());
-    hiveSchema.setFields(hiveSchemaFields);
+    HoodieSchema hiveSchema = HoodieSchema.createRecord(writerSchema.getName(), writerSchema.getDoc().orElse(null),
+        writerSchema.getNamespace().orElse(null), writerSchema.isError(), hiveSchemaFields);
     LOG.debug("HIVE Schema is :{}", hiveSchema);
     return hiveSchema;
   }
 
-  protected Schema getLogScannerReaderSchema() {
+  protected HoodieSchema getLogScannerReaderSchema() {
     return usesCustomPayload ? writerSchema : readerSchema;
-  }
-
-  public Schema getReaderSchema() {
-    return readerSchema;
-  }
-
-  public Schema getWriterSchema() {
-    return writerSchema;
-  }
-
-  public Schema getHiveSchema() {
-    return hiveSchema;
-  }
-
-  public boolean isSupportTimestamp() {
-    return supportTimestamp;
-  }
-
-  public RealtimeSplit getSplit() {
-    return split;
-  }
-
-  public JobConf getJobConf() {
-    return jobConf;
-  }
-
-  public void setReaderSchema(Schema readerSchema) {
-    this.readerSchema = readerSchema;
-  }
-
-  public void setWriterSchema(Schema writerSchema) {
-    this.writerSchema = writerSchema;
-  }
-
-  public void setHiveSchema(Schema hiveSchema) {
-    this.hiveSchema = hiveSchema;
   }
 }

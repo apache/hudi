@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.{AvroConversionUtils, HoodieSparkUtils}
+import org.apache.hudi.{AvroConversionUtils, HoodieSchemaConversionUtils, HoodieSparkUtils}
 
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -55,9 +55,9 @@ object AvroSerDerBenchmark extends HoodieBenchmarkBase {
     val benchmark = new HoodieBenchmark(s"perf avro serializer for hoodie", 50000000)
     benchmark.addCase("serialize internalRow to avro Record") { _ =>
       val df = getDataFrame(50000000)
-      val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, "record", "my")
-      spark.sparkContext.getConf.registerAvroSchemas(avroSchema)
-      HoodieSparkUtils.createRdd(df,"record", "my", Some(avroSchema)).foreach(f => f)
+      val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema, "record", "my")
+      spark.sparkContext.getConf.registerAvroSchemas(schema.toAvroSchema)
+      HoodieSparkUtils.createRdd(df,"record", "my", Some(schema)).foreach(f => f)
     }
     benchmark.run()
   }
@@ -73,11 +73,11 @@ object AvroSerDerBenchmark extends HoodieBenchmarkBase {
     val benchmark = new HoodieBenchmark(s"perf avro deserializer for hoodie", 10000000)
     val df = getDataFrame(10000000)
     val sparkSchema = df.schema
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, "record", "my")
-    val testRdd = HoodieSparkUtils.createRdd(df,"record", "my", Some(avroSchema))
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema, "record", "my")
+    val testRdd = HoodieSparkUtils.createRdd(df,"record", "my", Some(schema))
     testRdd.cache()
     testRdd.foreach(f => f)
-    spark.sparkContext.getConf.registerAvroSchemas(avroSchema)
+    spark.sparkContext.getConf.registerAvroSchemas(schema.toAvroSchema)
     benchmark.addCase("deserialize avro Record to internalRow") { _ =>
       testRdd.mapPartitions { iter =>
         val schema = AvroConversionUtils.convertStructTypeToAvroSchema(sparkSchema, "record", "my")

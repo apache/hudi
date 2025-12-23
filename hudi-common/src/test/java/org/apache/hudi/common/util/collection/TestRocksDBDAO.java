@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
+import lombok.Value;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -274,52 +275,12 @@ public class TestRocksDBDAO {
   /**
    * A payload definition for {@link TestRocksDBDAO}.
    */
+  @Value
   public static class Payload<T> implements Serializable {
 
-    private final String prefix;
-    private final T key;
-    private final String val;
-    private final String family;
-
-    public Payload(String prefix, T key, String val, String family) {
-      this.prefix = prefix;
-      this.key = key;
-      this.val = val;
-      this.family = family;
-    }
-
-    public String getPrefix() {
-      return prefix;
-    }
-
-    public T getKey() {
-      return key;
-    }
-
-    public String getVal() {
-      return val;
-    }
-
-    public String getFamily() {
-      return family;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      Payload payload = (Payload) o;
-      return Objects.equals(prefix, payload.prefix) && Objects.equals(key, payload.key)
-          && Objects.equals(val, payload.val) && Objects.equals(family, payload.family);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(prefix, key, val, family);
-    }
+    String prefix;
+    T key;
+    String val;
+    String family;
   }
 }

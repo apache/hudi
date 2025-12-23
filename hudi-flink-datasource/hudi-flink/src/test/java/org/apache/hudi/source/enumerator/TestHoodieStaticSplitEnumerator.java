@@ -23,6 +23,7 @@ import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SplitRequestEvent;
 
+import lombok.Getter;
 import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
@@ -230,7 +231,9 @@ public class TestHoodieStaticSplitEnumerator {
    */
   private static class MockSplitEnumeratorContext implements SplitEnumeratorContext<HoodieSourceSplit> {
     private final Map<Integer, ReaderInfo> registeredReaders = new HashMap<>();
+    @Getter
     private final Map<Integer, List<HoodieSourceSplit>> assignedSplits = new HashMap<>();
+    @Getter
     private final List<Integer> noMoreSplitsSignaled = new ArrayList<>();
     private final List<Runnable> coordinatorThreadTasks = new ArrayList<>();
 
@@ -240,14 +243,6 @@ public class TestHoodieStaticSplitEnumerator {
 
     public void unregisterReader(int subtaskId) {
       registeredReaders.remove(subtaskId);
-    }
-
-    public Map<Integer, List<HoodieSourceSplit>> getAssignedSplits() {
-      return assignedSplits;
-    }
-
-    public List<Integer> getNoMoreSplitsSignaled() {
-      return noMoreSplitsSignaled;
     }
 
     @Override

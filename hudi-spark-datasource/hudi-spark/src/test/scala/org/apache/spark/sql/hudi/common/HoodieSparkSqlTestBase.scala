@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
@@ -219,7 +218,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       runnable.run()
     } catch {
-      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(HoodieTestUtils.getRootCause(e), errorMsg) =>
         hasException = true
 
       case f: Throwable =>
@@ -233,7 +232,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(HoodieTestUtils.getRootCause(e), errorMsg) =>
         hasException = true
 
       case f: Throwable =>
@@ -247,11 +246,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable if getRootCause(e).getMessage.matches(errorMsgRegex) =>
+      case e: Throwable if HoodieTestUtils.getRootCause(e).getMessage.matches(errorMsgRegex) =>
         hasException = true
 
       case f: Throwable =>
-        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
+        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + HoodieTestUtils.getRootCause(f).getMessage, f)
     }
     assertResult(true)(hasException)
   }

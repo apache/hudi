@@ -45,9 +45,9 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
+import javax.annotation.Nonnull;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -164,7 +164,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     };
   }
 
-  private static @NotNull String getLockServiceClassName(String scheme) {
+  private static @Nonnull String getLockServiceClassName(String scheme) {
     Option<StorageSchemes> schemeOptional = StorageSchemes.getStorageLockImplementationIfExists(scheme);
     if (schemeOptional.isPresent()) {
       return schemeOptional.get().getStorageLockClass();

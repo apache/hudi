@@ -18,13 +18,13 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
@@ -53,7 +53,7 @@ public class TestGenericRddTransform extends SparkClientFunctionalTestHarness {
     StructType structType = new StructType(new StructField[] {
         new StructField("id", DataTypes.StringType, false, Metadata.empty()),
         new StructField("null_check_col", DataTypes.StringType, false, Metadata.empty())});
-    Schema nonNullSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structType,"record","record");
+    HoodieSchema nonNullSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType,"record","record");
     Tuple2<RDD<GenericRecord>, RDD<String>> failSafeRdds = HoodieSparkUtils.safeCreateRDD(ds, "record",
         "record",false, Option.of(nonNullSchema));
     assertEquals(5, failSafeRdds._1.count());

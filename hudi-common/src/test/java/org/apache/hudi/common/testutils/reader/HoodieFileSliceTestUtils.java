@@ -372,7 +372,7 @@ public class HoodieFileSliceTestUtils {
           logFilePlan.getInstantTime(),
           i,
           blockType,
-          logFilePlan.getWritePositions(),
+          logFilePlan.isWritePositions(),
           keyToPositionMap));
     }
 

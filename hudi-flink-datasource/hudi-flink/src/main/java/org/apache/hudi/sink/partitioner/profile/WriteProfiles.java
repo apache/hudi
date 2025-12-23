@@ -34,10 +34,11 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -51,13 +52,11 @@ import java.util.Map;
 /**
  * Factory for {@link WriteProfile}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class WriteProfiles {
-  private static final Logger LOG = LoggerFactory.getLogger(WriteProfiles.class);
 
   private static final Map<String, WriteProfile> PROFILES = new HashMap<>();
-
-  private WriteProfiles() {
-  }
 
   public static synchronized WriteProfile singleton(
       boolean ignoreSmallFiles,
@@ -175,10 +174,10 @@ public class WriteProfiles {
       return Option.of(timeline.readCommitMetadata(instant));
     } catch (FileNotFoundException fe) {
       // make this fail safe.
-      LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.requestedTime());
+      log.warn("Instant {} was deleted by the cleaner, ignore", instant.requestedTime());
       return Option.empty();
     } catch (Throwable throwable) {
-      LOG.error("Get write metadata for table {} with instant {} and path: {} error",
+      log.error("Get write metadata for table {} with instant {} and path: {} error",
           tableName, instant.requestedTime(), basePath);
       return Option.empty();
     }
@@ -201,7 +200,7 @@ public class WriteProfiles {
     try {
       return TimelineUtils.getCommitMetadata(instant, timeline);
     } catch (IOException e) {
-      LOG.error("Get write metadata for table {} with instant {} and path: {} error",
+      log.error("Get write metadata for table {} with instant {} and path: {} error",
           tableName, instant.requestedTime(), basePath);
       throw new HoodieException(e);
     }

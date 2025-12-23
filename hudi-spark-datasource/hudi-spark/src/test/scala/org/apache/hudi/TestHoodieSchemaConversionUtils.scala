@@ -21,11 +21,15 @@ package org.apache.hudi
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
+import org.apache.avro.generic.GenericData
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.scalatest.{FunSuite, Matchers}
 
-import java.util.Arrays
+import java.nio.ByteBuffer
+import java.util.{Arrays, Objects}
 
 class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
 
@@ -546,5 +550,65 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
 
     val mapType = alignedStruct.fields(1).dataType.asInstanceOf[MapType]
     assert(mapType.valueContainsNull) // Aligned to nullable values
+  }
+
+  test("test createGenericRecordToInternalRowConverter with binary") {
+    val hoodieSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
+      + ":[{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null}]}")
+    val avroSchema = hoodieSchema.toAvroSchema
+    val sparkSchema = StructType(List(StructField("col9", BinaryType, nullable = true)))
+
+    // Create test record using Avro schema
+    val avroRecord = new GenericData.Record(avroSchema)
+    val bb = ByteBuffer.wrap(Array[Byte](97, 48, 53))
+    avroRecord.put("col9", bb)
+
+    // Test the HoodieSchema-based converter
+    val row1 = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(hoodieSchema, sparkSchema).apply(avroRecord).get
+    val row2 = HoodieSchemaConversionUtils.createGenericRecordToInternalRowConverter(hoodieSchema, sparkSchema).apply(avroRecord).get
+
+    internalRowCompare(row1, row2, sparkSchema)
+  }
+
+  private def internalRowCompare(expected: Any, actual: Any, schema: DataType): Unit = {
+    schema match {
+      case StructType(fields) =>
+        val expectedRow = expected.asInstanceOf[InternalRow]
+        val actualRow = actual.asInstanceOf[InternalRow]
+        fields.zipWithIndex.foreach { case (field, i) =>
+          internalRowCompare(expectedRow.get(i, field.dataType), actualRow.get(i, field.dataType), field.dataType)
+        }
+      case ArrayType(elementType, _) =>
+        val expectedArray = expected.asInstanceOf[ArrayData].toSeq[Any](elementType)
+        val actualArray = actual.asInstanceOf[ArrayData].toSeq[Any](elementType)
+        if (expectedArray.size != actualArray.size) {
+          throw new AssertionError()
+        } else {
+          expectedArray.zip(actualArray).foreach { case (e1, e2) => internalRowCompare(e1, e2, elementType) }
+        }
+      case MapType(keyType, valueType, _) =>
+        val expectedKeyArray = expected.asInstanceOf[MapData].keyArray()
+        val expectedValueArray = expected.asInstanceOf[MapData].valueArray()
+        val actualKeyArray = actual.asInstanceOf[MapData].keyArray()
+        val actualValueArray = actual.asInstanceOf[MapData].valueArray()
+        internalRowCompare(expectedKeyArray, actualKeyArray, ArrayType(keyType))
+        internalRowCompare(expectedValueArray, actualValueArray, ArrayType(valueType))
+      case StringType =>
+        if (checkNull(expected, actual) || !expected.toString.equals(actual.toString)) {
+          throw new AssertionError(String.format("%s is not equals %s", expected.toString, actual.toString))
+        }
+      case BinaryType =>
+        if (checkNull(expected, actual) || !expected.asInstanceOf[Array[Byte]].sameElements(actual.asInstanceOf[Array[Byte]])) {
+          throw new AssertionError(String.format("%s is not equals %s", expected.toString, actual.toString))
+        }
+      case _ =>
+        if (!Objects.equals(expected, actual)) {
+          throw new AssertionError(String.format("%s is not equals %s", expected.toString, actual.toString))
+        }
+    }
+  }
+
+  private def checkNull(left: Any, right: Any): Boolean = {
+    (left == null && right != null) || (left != null && right == null)
   }
 }

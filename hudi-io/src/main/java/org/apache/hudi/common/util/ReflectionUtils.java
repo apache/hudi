@@ -81,7 +81,7 @@ public class ReflectionUtils {
    *
    * @param clazz               Class name.
    * @param constructorArgTypes Argument types of the constructor.
-   * @return
+   * @return {@code true} if the clazz has the target constructor, {@code false} otherwise.
    */
   public static boolean hasConstructor(String clazz, Class<?>[] constructorArgTypes) {
     return hasConstructor(clazz, constructorArgTypes, true);

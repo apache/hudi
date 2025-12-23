@@ -281,7 +281,7 @@ public class CompactionUtils {
   /**
    * Return all pending compaction instant times.
    *
-   * @return
+   * @return {@link List} of {@link HoodieInstant}s that are pending compaction.
    */
   public static List<HoodieInstant> getPendingCompactionInstantTimes(HoodieTableMetaClient metaClient) {
     return metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants();

@@ -28,6 +28,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.ContentSummary;
@@ -70,7 +72,9 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
  * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in the file system to
  * support getting the written size to each of the open streams.
  */
+@NoArgsConstructor
 public class HoodieWrapperFileSystem extends FileSystem {
+
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
   private static final String TMP_PATH_POSTFIX = ".tmp";
@@ -94,7 +98,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
 
   private final ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
+  @Getter
   private FileSystem fileSystem;
+  @Getter
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
@@ -134,9 +140,6 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
 
     return executeFuncWithTimeMetrics(metricName, p, func);
-  }
-
-  public HoodieWrapperFileSystem() {
   }
 
   public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard) {
@@ -196,11 +199,6 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
     // fileSystem.setConf(conf);
-  }
-
-  @Override
-  public URI getUri() {
-    return uri;
   }
 
   @Override
@@ -1009,9 +1007,5 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // When the file is first written, we do not have a track of it
     throw new IllegalArgumentException(
         file + " does not have a open stream. Cannot get the bytes written on the stream");
-  }
-
-  public FileSystem getFileSystem() {
-    return fileSystem;
   }
 }

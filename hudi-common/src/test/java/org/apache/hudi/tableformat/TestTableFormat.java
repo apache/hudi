@@ -28,6 +28,8 @@ import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.metadata.TableMetadataFactory;
 
+import lombok.NoArgsConstructor;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -39,12 +41,10 @@ import java.util.function.Supplier;
  * Test implementation of HoodieTableFormat that records all Hoodie instants in memory.
  * Used for functional testing of HoodieTableFormat.
  */
+@NoArgsConstructor
 public class TestTableFormat implements HoodieTableFormat {
 
   private static final Map<String, List<HoodieInstant>> RECORDED_INSTANTS = new ConcurrentHashMap<>();
-  
-  public TestTableFormat() {
-  }
 
   public static List<HoodieInstant> getRecordedInstants(String basePath) {
     return RECORDED_INSTANTS.getOrDefault(basePath, Collections.emptyList());

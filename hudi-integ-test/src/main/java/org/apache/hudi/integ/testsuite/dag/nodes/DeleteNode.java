@@ -24,11 +24,13 @@ import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
  * Delete node to assist in issuing deletes.
  */
+@Slf4j
 public class DeleteNode extends InsertNode {
 
   public DeleteNode(Config config) {

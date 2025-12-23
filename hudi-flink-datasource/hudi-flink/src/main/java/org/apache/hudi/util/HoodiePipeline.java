@@ -24,6 +24,9 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTableFactory;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -43,8 +46,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContext;
 import org.apache.flink.table.utils.EncodingUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,9 +73,8 @@ import java.util.stream.Collectors;
  *        .sink(input, false);
  *  </pre>
  */
+@Slf4j
 public class HoodiePipeline {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodiePipeline.class);
 
   /**
    * Returns the builder for hoodie pipeline construction.
@@ -265,21 +265,11 @@ public class HoodiePipeline {
   /***
    *  A POJO that contains tableId and resolvedCatalogTable.
    */
+  @AllArgsConstructor
+  @Getter
   public static class TableDescriptor {
+
     private final ObjectIdentifier tableId;
     private final ResolvedCatalogTable resolvedCatalogTable;
-
-    public TableDescriptor(ObjectIdentifier tableId, ResolvedCatalogTable resolvedCatalogTable) {
-      this.tableId = tableId;
-      this.resolvedCatalogTable = resolvedCatalogTable;
-    }
-
-    public ObjectIdentifier getTableId() {
-      return tableId;
-    }
-
-    public ResolvedCatalogTable getResolvedCatalogTable() {
-      return resolvedCatalogTable;
-    }
   }
 }

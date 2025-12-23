@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieSparkUtils.{getCatalystRowSerDe, sparkAdapter}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
@@ -50,7 +51,7 @@ object AvroConversionUtils {
    * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[InternalRow]])
    */
   def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] = {
-    val deserializer = sparkAdapter.createAvroDeserializer(rootAvroType, rootCatalystType)
+    val deserializer = sparkAdapter.createAvroDeserializer(HoodieSchema.fromAvroSchema(rootAvroType), rootCatalystType)
     record => deserializer
       .deserialize(record)
       .map(_.asInstanceOf[InternalRow])
@@ -66,7 +67,7 @@ object AvroConversionUtils {
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
     val loader: java.util.function.Function[Tuple3[StructType, Schema, Boolean], Function1[InternalRow, GenericRecord]] = key => {
-      val serializer = sparkAdapter.createAvroSerializer(key._1, key._2, key._3)
+      val serializer = sparkAdapter.createAvroSerializer(key._1, HoodieSchema.fromAvroSchema(key._2), key._3)
       row => {
         try {
           serializer

@@ -19,6 +19,8 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
+
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
@@ -29,17 +31,17 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -50,8 +52,8 @@ import java.util.List;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
-  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunction.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -141,11 +143,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     } else {
       writeStatus = Collections.emptyList();
       this.currentInstant = instantToWrite(false);
-      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
+      log.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
 
+    recordWriteFailure(writeMetrics, writeStatus);
     StreamerUtil.validateWriteStatus(config, currentInstant, writeStatus);
-
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .checkpointId(this.checkpointId)
@@ -166,5 +168,27 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     writeMetrics = new FlinkStreamWriteMetrics(metrics);
     writeMetrics.registerMetrics();
+  }
+
+  /**
+   * Update metrics and log for errors in write status.
+   *
+   * @param writeMetrics FlinkStreamWriteMetrics
+   * @param writeStatus write status from write handler
+   */
+  @VisibleForTesting
+  static void recordWriteFailure(FlinkStreamWriteMetrics writeMetrics, List<WriteStatus> writeStatus) {
+    Map.Entry<HoodieKey, Throwable> firstFailure = null;
+    for (WriteStatus status : writeStatus) {
+      writeMetrics.increaseNumOfRecordWriteFailure(status.getTotalErrorRecords());
+      if (firstFailure == null && !status.getErrors().isEmpty()) {
+        firstFailure = status.getErrors().entrySet().stream().findFirst().get();
+      }
+    }
+
+    // Only print the first record failure to prevent logs occupy too much disk in worst case.
+    if (firstFailure != null) {
+      log.error("The first record with written failure {}", firstFailure.getKey().getRecordKey(), firstFailure.getValue());
+    }
   }
 }

@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Wrapper class for Avro Schema.Field that provides Hudi-specific field functionality
@@ -123,18 +124,6 @@ public class HoodieSchemaField implements Serializable {
    */
   public static HoodieSchemaField of(String name, HoodieSchema schema) {
     return of(name, schema, null, null);
-  }
-
-  /**
-   * Creates a new HoodieSchemaField with the specified name, schema, and doc.
-   *
-   * @param name   the name of the field
-   * @param schema the schema of the field
-   * @param doc    the documentation string
-   * @return new HoodieSchemaField instance
-   */
-  public static HoodieSchemaField of(String name, HoodieSchema schema, String doc) {
-    return of(name, schema, doc, null);
   }
 
   /**
@@ -247,6 +236,10 @@ public class HoodieSchemaField implements Serializable {
   public void addProp(String key, Object value) {
     ValidationUtils.checkArgument(key != null && !key.isEmpty(), "Property key cannot be null or empty");
     avroField.addProp(key, value);
+  }
+
+  public Set<String> aliases() {
+    return avroField.aliases();
   }
 
   /**

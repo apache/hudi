@@ -23,9 +23,8 @@ import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieTableType}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.TimelineUtils
-import org.apache.hudi.common.testutils.HoodieTestTable
+import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.HoodieTimeTravelException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -367,7 +366,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
           .select("id", "name", "value", "version")
           .take(1)
       }
-      assertTrue(getRootCause(e1).getMessage.contains("Cleaner cleaned up the timestamp of interest. Please ensure sufficient commits are retained with cleaner for Timestamp as of query to work"))
+      assertTrue(HoodieTestUtils.getRootCause(e1).getMessage.contains("Cleaner cleaned up the timestamp of interest. Please ensure sufficient commits are retained with cleaner for Timestamp as of query to work"))
     }
 
     // add more writes so that first commit goes into archived timeline.
@@ -392,6 +391,6 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
         .select("id", "name", "value", "version")
         .take(1)
     }
-    assertTrue(getRootCause(e2).getMessage.contains(expectedErrorMsg))
+    assertTrue(HoodieTestUtils.getRootCause(e2).getMessage.contains(expectedErrorMsg))
   }
 }
