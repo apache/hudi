@@ -150,8 +150,7 @@ public class HiveTypeUtils {
                                           Set<HoodieSchema> seenSchemas) throws AvroSerdeException {
     // For bytes type, it can be mapped to decimal.
     HoodieSchemaType type = schema.getType();
-    if (type == DECIMAL && AvroSerDe.DECIMAL_TYPE_NAME
-        .equalsIgnoreCase((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+    if (type == DECIMAL) {
       HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
       int precision = decimalSchema.getPrecision();
       int scale = decimalSchema.getScale();
@@ -185,33 +184,32 @@ public class HiveTypeUtils {
       return TypeInfoFactory.getVarcharTypeInfo(maxLength);
     }
 
-    if (type == DATE
-        && AvroSerDe.DATE_TYPE_NAME.equals(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+    if (type == DATE) {
       return TypeInfoFactory.dateTypeInfo;
     }
 
     if (type == TIMESTAMP) {
-      String avroLogicalType = (String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE);
-      switch (avroLogicalType) {
-        case AvroSerDe.TIMESTAMP_TYPE_NAME:
-          // case of timestamp-millis:
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
+      switch (timestampSchema.getPrecision()) {
+        case MILLIS:
+          // Only millis precision is supported natively by Hive, check AvroSerDe for full support matrix by Hive
           return TypeInfoFactory.timestampTypeInfo;
-        case "timestamp-micros":
+        case MICROS:
           return TypeInfoFactory.longTypeInfo;
         default:
-          throw new AvroSerdeException("Unsupported logical type found when evaluating TIMESTAMP type: " + avroLogicalType);
+          throw new IllegalArgumentException("Unsupported timestamp precision for Timestamp schema: " + timestampSchema.getPrecision());
       }
     }
 
     if (type == TIME) {
-      String avroLogicalType = (String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE);
-      switch ((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE)) {
-        case "time-millis":
+      HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
+      switch (timeSchema.getPrecision()) {
+        case MILLIS:
           return TypeInfoFactory.intTypeInfo;
-        case "time-micros":
+        case MICROS:
           return TypeInfoFactory.longTypeInfo;
         default:
-          throw new AvroSerdeException("Unsupported logical type found when evaluating TIME type: " + avroLogicalType);
+          throw new IllegalArgumentException("Unsupported time precision for Time schema: " + timeSchema.getPrecision());
       }
     }
 
