@@ -21,12 +21,13 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
@@ -180,7 +181,7 @@ public class ColumnStatsIndexHelper {
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path -> {
-                      HoodieStorage storage = new HoodieHadoopStorage(path, serializableConfiguration.value());
+                      HoodieStorage storage = HoodieStorageUtils.getStorage(path, HadoopFSUtils.getStorageConf(serializableConfiguration.value()));
                           return utils.readColumnStatsFromMetadata(
                                   storage,
                                   new StoragePath(path),

@@ -44,7 +44,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -275,7 +276,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return hoodieRollbackRequests;
   }
 
-  @NotNull
+  @Nonnull
   private List<HoodieRollbackRequest> getHoodieRollbackRequests(String partitionPath, List<StoragePath> filesToDeletedStatus) {
     return filesToDeletedStatus.stream()
         .map(pathInfo -> {
@@ -370,7 +371,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return fullPaths.stream().map(StoragePath::new);
   }
 
-  @NotNull
+  @Nonnull
   private static StoragePathFilter getPathFilter(String basefileExtension, String commit) {
     return (path) -> {
       if (path.toString().endsWith(basefileExtension)) {

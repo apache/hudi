@@ -24,9 +24,8 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,9 +46,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 /**
  * Schema Utilities.
  */
+@Slf4j
 public class HiveSchemaUtil {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HiveSchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   public static final String BOOLEAN_TYPE_NAME = "boolean";
@@ -77,7 +76,7 @@ public class HiveSchemaUtil {
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to convert schema to hive schema", e);
     }
-    LOG.debug("Getting schema difference for {} \r\n\r\n{}", tableSchema, newTableSchema);
+    log.debug("Getting schema difference for {} \r\n\r\n{}", tableSchema, newTableSchema);
 
     SchemaDifference.Builder schemaDiffBuilder = SchemaDifference.newBuilder(storageSchema, tableSchema);
     Set<String> tableColumns = new HashSet<>();
@@ -96,7 +95,7 @@ public class HiveSchemaUtil {
             continue;
           }
           // We will log this and continue. Hive schema is a superset of all schemas
-          LOG.info("Ignoring table column {} as its not present in the table schema", fieldName);
+          log.info("Ignoring table column {} as its not present in the table schema", fieldName);
           continue;
         }
         tableColumnType = tableColumnType.replaceAll("\\s+", "");
@@ -118,7 +117,7 @@ public class HiveSchemaUtil {
       }
     }
     SchemaDifference result = schemaDiffBuilder.build();
-    LOG.debug("Difference between schemas: {}", result);
+    log.debug("Difference between schemas: {}", result);
     return result;
   }
 

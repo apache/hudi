@@ -24,10 +24,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,9 +38,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Slf4j
 public class TestInProcessLockProvider {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestInProcessLockProvider.class);
   private final StorageConfiguration<?> storageConf = getDefaultStorageConf();
   private final LockConfiguration lockConfiguration1;
   private final LockConfiguration lockConfiguration2;
@@ -74,9 +73,9 @@ public class TestInProcessLockProvider {
 
     // Writer 1
     assertDoesNotThrow(() -> {
-      LOG.info("Writer 1 tries to acquire the lock.");
+      log.info("Writer 1 tries to acquire the lock.");
       lockProvider1.lock();
-      LOG.info("Writer 1 acquires the lock.");
+      log.info("Writer 1 acquires the lock.");
     });
     // Writer 2 thread in parallel, should block
     // and later acquire the lock once it is released
@@ -84,10 +83,10 @@ public class TestInProcessLockProvider {
       InProcessLockProvider lockProvider2 = new InProcessLockProvider(lockConfiguration1, storageConf);
       lockProviderList.add(lockProvider2);
       assertDoesNotThrow(() -> {
-        LOG.info("Writer 2 tries to acquire the lock.");
+        log.info("Writer 2 tries to acquire the lock.");
         writer2TryLock.set(true);
         lockProvider2.lock();
-        LOG.info("Writer 2 acquires the lock.");
+        log.info("Writer 2 acquires the lock.");
       });
       writer2Locked.set(true);
 
@@ -101,10 +100,10 @@ public class TestInProcessLockProvider {
 
       assertDoesNotThrow(() -> {
         lockProvider2.unlock();
-        LOG.info("Writer 2 releases the lock.");
+        log.info("Writer 2 releases the lock.");
       });
       lockProvider2.close();
-      LOG.info("Writer 2 closes the lock provider.");
+      log.info("Writer 2 closes the lock provider.");
       writer2Completed.set(true);
     });
 
@@ -126,18 +125,18 @@ public class TestInProcessLockProvider {
             + lockProvider3.getLock());
       }
       assertDoesNotThrow(() -> {
-        LOG.info("Writer 3 tries to acquire the lock.");
+        log.info("Writer 3 tries to acquire the lock.");
         writer3TryLock.set(true);
         lockProvider3.lock();
-        LOG.info("Writer 3 acquires the lock.");
+        log.info("Writer 3 acquires the lock.");
       });
 
       assertDoesNotThrow(() -> {
         lockProvider3.unlock();
-        LOG.info("Writer 3 releases the lock.");
+        log.info("Writer 3 releases the lock.");
       });
       lockProvider3.close();
-      LOG.info("Writer 3 closes the lock provider.");
+      log.info("Writer 3 closes the lock provider.");
       writer3Completed.set(true);
     });
 
@@ -150,9 +149,9 @@ public class TestInProcessLockProvider {
 
     assertDoesNotThrow(() -> {
       lockProvider1.unlock();
-      LOG.info("Writer 1 releases the lock.");
+      log.info("Writer 1 releases the lock.");
       lockProvider1.close();
-      LOG.info("Writer 1 closes the lock provider.");
+      log.info("Writer 1 closes the lock provider.");
       writer1Completed.set(true);
     });
 

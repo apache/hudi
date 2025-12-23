@@ -144,7 +144,7 @@ public class EmbeddedTimelineService {
   }
 
   private void startServer(TimelineServiceCreator timelineServiceCreator) throws IOException {
-    TimelineService.Config.Builder timelineServiceConfBuilder = TimelineService.Config.builder()
+    TimelineService.Config.ConfigBuilder timelineServiceConfBuilder = TimelineService.Config.builder()
         .serverPort(writeConfig.getEmbeddedTimelineServerPort())
         .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
         .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
@@ -165,7 +165,7 @@ public class EmbeddedTimelineService {
           .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
           .asyncConflictDetectorInitialDelayMs(writeConfig.getAsyncConflictDetectorInitialDelayMs())
           .asyncConflictDetectorPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
-          .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(
+          .maxAllowableHeartbeatIntervalInMs(
               writeConfig.getHoodieClientHeartbeatIntervalInMs()
                   * writeConfig.getHoodieClientHeartbeatTolerableMisses());
     }

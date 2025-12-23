@@ -621,12 +621,6 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
-    fileGroups.forEach(g -> log.info(g.toString()));
-    fileGroups.forEach(g -> g.getAllBaseFiles()
-        .forEach(b -> log.info(b.toString())));
-    fileGroups.forEach(g -> g.getAllFileSlices()
-        .forEach(s -> log.info(s.toString())));
-
     long numFiles = fileGroups.stream()
         .mapToLong(g -> g.getAllBaseFiles().count()
             + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())

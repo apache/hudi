@@ -113,7 +113,7 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
     // Mock ParquetUtils to return file schema
     try (MockedConstruction<ParquetUtils> parquetUtilsConstruction = mockConstruction(ParquetUtils.class, 
         (mock, context) -> {
-          when(mock.readSchema(eq(storage), eq(inputFiles.get(0)))).thenReturn(fileSchema);
+          when(mock.readMessageType(eq(storage), eq(inputFiles.get(0)))).thenReturn(fileSchema);
         })) {
       
       // When: Creating HoodieBinaryCopyHandle (we can't instantiate directly due to complex dependencies,
@@ -201,7 +201,7 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
             throw new IOException("Simulated file read error");
           }
           ParquetUtils parquetUtils = new ParquetUtils();
-          MessageType fileSchema = parquetUtils.readSchema(table.getStorage(), inputFiles.get(0));
+          MessageType fileSchema = parquetUtils.readMessageType(table.getStorage(), inputFiles.get(0));
           return fileSchema;
         } catch (Exception e) {
           throw new HoodieIOException("Failed to read schema from input file when schema evolution is disabled: " + inputFiles.get(0),

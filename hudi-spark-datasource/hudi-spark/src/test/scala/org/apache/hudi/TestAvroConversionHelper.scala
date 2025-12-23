@@ -18,7 +18,8 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
+import org.apache.hudi.common.schema.HoodieSchema
+
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.scalatest.{FunSuite, Matchers}
@@ -41,11 +42,11 @@ class TestAvroConversionHelper extends FunSuite with Matchers {
   val dateInputData = Seq(7, 365, 0)
 
   test("Logical type: date") {
-    val schema = new Schema.Parser().parse(dateSchema)
-    val convertor = AvroConversionUtils.createConverterToRow(schema, AvroConversionUtils.convertAvroSchemaToStructType(schema))
+    val schema = HoodieSchema.parse(dateSchema)
+    val convertor = AvroConversionUtils.createConverterToRow(schema.toAvroSchema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
 
     val dateOutputData = dateInputData.map(x => {
-      val record = new GenericData.Record(schema) {{ put("date", x) }}
+      val record = new GenericData.Record(schema.toAvroSchema) {{ put("date", x) }}
       convertor(record).asInstanceOf[GenericRow].get(0)
     })
 

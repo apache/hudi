@@ -911,5 +911,52 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Query CoW table with splitable file format") {
+    withTable(generateTableName) { tableName =>
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           |) using hudi
+           | tblproperties (
+           |  type = 'cow'
+           | )
+           | partitioned by (dt)
+          """.stripMargin
+      )
+
+      withSQLConf("hoodie.datasource.overwrite.mode" -> "dynamic") {
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName partition(dt) values
+             | (0, 'a0', 10, 1000, '2023-12-06'),
+             | (1, 'a1', 10, 1000, '2023-12-06'),
+             | (2, 'a2', 11, 1000, '2023-12-06'),
+             | (3, 'a3', 10, 1000, '2023-12-06')
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(0, "a0", 10.0, 1000, "2023-12-06"),
+          Seq(1, "a1", 10.0, 1000, "2023-12-06"),
+          Seq(2, "a2", 11.0, 1000, "2023-12-06"),
+          Seq(3, "a3", 10.0, 1000, "2023-12-06")
+        )
+      }
+
+      // force split file by setting small
+      withSQLConf(s"${SQLConf.FILES_MAX_PARTITION_BYTES.key}" -> "10240") {
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(0, "a0", 10.0, 1000, "2023-12-06"),
+          Seq(1, "a1", 10.0, 1000, "2023-12-06"),
+          Seq(2, "a2", 11.0, 1000, "2023-12-06"),
+          Seq(3, "a3", 10.0, 1000, "2023-12-06")
+        )
+      }
+    }
+  }
+
 }
 

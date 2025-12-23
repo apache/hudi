@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+import lombok.Getter;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
@@ -28,6 +29,7 @@ import java.util.List;
 /**
  * Statistics for merge on read table source.
  */
+@Getter
 public class MergeOnReadTableState implements Serializable {
 
   private static final long serialVersionUID = 1L;
@@ -37,7 +39,6 @@ public class MergeOnReadTableState implements Serializable {
   private final String avroSchema;
   private final String requiredAvroSchema;
   private final List<MergeOnReadInputSplit> inputSplits;
-  private final String[] pkFields;
   private final int operationPos;
 
   public MergeOnReadTableState(
@@ -45,39 +46,13 @@ public class MergeOnReadTableState implements Serializable {
       RowType requiredRowType,
       String avroSchema,
       String requiredAvroSchema,
-      List<MergeOnReadInputSplit> inputSplits,
-      String[] pkFields) {
+      List<MergeOnReadInputSplit> inputSplits) {
     this.rowType = rowType;
     this.requiredRowType = requiredRowType;
     this.avroSchema = avroSchema;
     this.requiredAvroSchema = requiredAvroSchema;
     this.inputSplits = inputSplits;
-    this.pkFields = pkFields;
     this.operationPos = rowType.getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
-  }
-
-  public RowType getRowType() {
-    return rowType;
-  }
-
-  public RowType getRequiredRowType() {
-    return requiredRowType;
-  }
-
-  public String getAvroSchema() {
-    return avroSchema;
-  }
-
-  public String getRequiredAvroSchema() {
-    return requiredAvroSchema;
-  }
-
-  public List<MergeOnReadInputSplit> getInputSplits() {
-    return inputSplits;
-  }
-
-  public int getOperationPos() {
-    return operationPos;
   }
 
   public int[] getRequiredPositions() {

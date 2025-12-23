@@ -17,24 +17,22 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.Schema
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
-import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters, HoodieSparkSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -106,9 +104,9 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
-                              schema: Schema,
+                              schema: HoodieSchema,
                               parameters: java.util.Map[String, String]): BaseRelation = {
-    val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
+    val dataSchema = Option(schema).map(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, parameters.asScala.toMap)
   }
 

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
+import org.apache.hudi.{DataSourceOptionsHelper, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -211,10 +212,12 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       // Save all the table config to the hoodie.properties.
       val properties = TypedProperties.fromMap(tableConfigs.asJava)
 
+      val databaseFromIdentifier = table.identifier.database.getOrElse(
+        spark.sessionState.catalog.getCurrentDatabase)
       val catalogDatabaseName = formatName(spark,
-        table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
+        if (StringUtils.isNullOrEmpty(databaseFromIdentifier)) "default" else databaseFromIdentifier)
 
-      val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
+      val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
         SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)

@@ -204,8 +204,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     val holder = new testRecordLevelIndexHolder
     testRecordLevelIndex(testCase.tableType, testCase.streamingWriteEnabled, holder)
     val writeConfig = getWriteConfig(holder.options)
-    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-      .rollback(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    writeClient.rollback(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
+    writeClient.close()
     val metadata = metadataWriter(writeConfig).getTableMetadata
     try {
       val partition0Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition0"))
@@ -232,6 +233,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals("compaction", metaClient.getActiveTimeline.lastInstant().get().getAction)
     metadata = metadataWriter(writeConfig).getTableMetadata
     doAllAssertions(holder, metadata)
+    writeClient.close()
   }
 
   @ParameterizedTest
@@ -252,10 +254,11 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals("replacecommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
     metadata = metadataWriter(writeConfig).getTableMetadata
     doAllAssertions(holder, metadata)
+    writeClient.close()
   }
 
   private def validateDFWithLocations(df: Array[Row], locations: Map[String, HoodieRecordGlobalLocation],
-                                       partition: String): Unit = {
+                                      partition: String): Unit = {
     var count: Int = 0
     for (row <- df) {
       val recordKey = row.getString(2)
@@ -391,8 +394,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
           .mapAsJavaMapConverter(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestTableSchemaFromCommitMetadata.get().toString)).asJava))
         .withPath(basePath)
         .build()
-      new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-        .rollback(lastInstant.requestedTime())
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      writeClient.rollback(lastInstant.requestedTime())
+      writeClient.close()
     }
 
     if (compact) {
@@ -406,6 +410,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       writeClient.compact(timeOpt.get())
       metaClient.reloadActiveTimeline()
       assertEquals("compaction", metaClient.getActiveTimeline.lastInstant().get().getAction)
+      writeClient.close()
     }
 
     if (cluster) {
@@ -418,6 +423,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       writeClient.cluster(timeOpt.get())
       metaClient.reloadActiveTimeline()
       assertEquals("replacecommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
+      writeClient.close()
     }
 
     //init mdt

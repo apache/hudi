@@ -23,14 +23,14 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
-import org.apache.avro.Schema
+import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
@@ -94,13 +94,13 @@ trait SparkAdapter extends Serializable {
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
    * Spark's [[InternalRow]] into Avro payloads
    */
-  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer
+  def createAvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer
 
   /**
    * Creates instance of [[HoodieAvroDeserializer]] providing for ability to deserialize
    * Avro payloads into Spark's [[InternalRow]]
    */
-  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
+  def createAvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer
 
   /**
    * Create the hoodie's extended spark sql parser.
@@ -165,7 +165,7 @@ trait SparkAdapter extends Serializable {
    */
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
-                     schema: Schema,
+                     schema: HoodieSchema,
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
@@ -213,6 +213,20 @@ trait SparkAdapter extends Serializable {
                           options: Map[String, String],
                           hadoopConf: Configuration,
                           dataSchema: StructType): SparkColumnarFileReader
+
+  /**
+   * Get Lance file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return Lance file reader
+   */
+  def createLanceFileReader(vectorized: Boolean,
+                            sqlConf: SQLConf,
+                            options: Map[String, String],
+                            hadoopConf: Configuration): SparkColumnarFileReader
 
   /**
    * use new qe execute

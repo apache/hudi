@@ -23,6 +23,7 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleSchemaConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -36,7 +37,6 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Map;
@@ -78,7 +78,7 @@ public class TransactionUtils {
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation =
           getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      Option<Schema> newTableSchema = resolveSchemaConflictIfNeeded(table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
+      Option<HoodieSchema> newTableSchema = resolveSchemaConflictIfNeeded(table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
 
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
               table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
@@ -117,7 +117,7 @@ public class TransactionUtils {
    * @param currentTxnOwnerInstant       current instant
    * @return new table schema after successful schema resolution; empty if nothing to be resolved.
    */
-  public static Option<Schema> resolveSchemaConflictIfNeeded(final HoodieTable table,
+  public static Option<HoodieSchema> resolveSchemaConflictIfNeeded(final HoodieTable table,
                                                              final HoodieWriteConfig config,
                                                              final Option<HoodieInstant> lastCompletedTxnOwnerInstant,
                                                              final Option<HoodieInstant> currentTxnOwnerInstant) {

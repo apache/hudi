@@ -48,7 +48,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import lombok.AccessLevel;
 import lombok.Getter;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -88,7 +87,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
    * file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    */
-  public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime);
+  public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final HoodieSchema schema, final String instantTime);
 
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     TypedProperties props = getReaderProperties(maxMemory);

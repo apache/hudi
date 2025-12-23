@@ -49,12 +49,11 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -70,13 +69,12 @@ import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString
 /**
  * Utilities used throughout the data source.
  */
+@Slf4j
 public class DataSourceUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DataSourceUtils.class);
 
   public static String getTablePath(HoodieStorage storage,
                                     List<StoragePath> userProvidedPaths) throws IOException {
-    LOG.info("Getting table path..");
+    log.info("Getting table path..");
     for (StoragePath path : userProvidedPaths) {
       try {
         Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, path);
@@ -84,7 +82,7 @@ public class DataSourceUtils {
           return tablePath.get().toString();
         }
       } catch (HoodieException he) {
-        LOG.warn("Error trying to get table path from {}", path.toString(), he);
+        log.warn("Error trying to get table path from {}", path.toString(), he);
       }
     }
 
@@ -335,17 +333,17 @@ public class DataSourceUtils {
             totalErroredRecords,
             errorCount);
 
-        LOG.error(errorSummary);
+        log.error(errorSummary);
 
-        if (LOG.isTraceEnabled()) {
-          LOG.trace("Printing out the top 100 errors");
+        if (log.isTraceEnabled()) {
+          log.trace("Printing out the top 100 errors");
 
           HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(WriteStatus::hasErrors)
               .take(100)
               .forEach(ws -> {
-                LOG.trace("Global error:", ws.getGlobalError());
+                log.trace("Global error:", ws.getGlobalError());
                 if (!ws.getErrors().isEmpty()) {
-                  ws.getErrors().forEach((k, v) -> LOG.trace("Error for key {}: {}", k, v));
+                  ws.getErrors().forEach((k, v) -> log.trace("Error for key {}: {}", k, v));
                 }
               });
         }

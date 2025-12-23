@@ -32,9 +32,9 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -54,9 +54,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 /**
  * Base test class for IT Test helps to run command and generate data.
  */
+@Slf4j
 public abstract class ITTestBase {
 
-  public static final Logger LOG = LoggerFactory.getLogger(ITTestBase.class);
   protected static final String SPARK_WORKER_CONTAINER = "/spark-worker-1";
   protected static final String ADHOC_1_CONTAINER = "/adhoc-1";
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
@@ -142,18 +142,18 @@ public abstract class ITTestBase {
     DockerCmdExecFactory dockerCmdExecFactory = new JerseyDockerCmdExecFactory().withConnectTimeout(10000)
         .withMaxTotalConnections(100).withMaxPerRouteConnections(50);
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
-    LOG.info("Start waiting for all the containers and services to be ready");
+    log.info("Start waiting for all the containers and services to be ready");
     long currTs = System.currentTimeMillis();
     await().atMost(300, SECONDS).until(this::servicesUp);
-    LOG.info(String.format("Waiting for all the containers and services finishes in %d ms",
-        System.currentTimeMillis() - currTs));
+    log.info("Waiting for all the containers and services finishes in {} ms",
+        System.currentTimeMillis() - currTs);
   }
 
   private boolean servicesUp() {
     List<Container> containerList = dockerClient.listContainersCmd().exec();
     for (Container c : containerList) {
       if (!c.getState().equalsIgnoreCase("running")) {
-        LOG.info("Container : " + Arrays.toString(c.getNames()) + "not in running state,  Curr State :" + c.getState());
+        log.info("Container : {} not in running state,  Curr State : {}", Arrays.toString(c.getNames()), c.getState());
         return false;
       }
     }
@@ -229,19 +229,19 @@ public abstract class ITTestBase {
     if (!completed) {
       callback.getStderr().flush();
       callback.getStdout().flush();
-      LOG.error("\n\n ###### Timed Out Command : " + Arrays.asList(command));
-      LOG.error("\n\n ###### Stderr of timed-out command #######\n" + callback.getStderr().toString());
-      LOG.error("\n\n ###### stdout of timed-out command #######\n" + callback.getStdout().toString());
+      log.error("\n\n ###### Timed Out Command : {}", Arrays.asList(command));
+      log.error("\n\n ###### Stderr of timed-out command #######\n {}", callback.getStderr());
+      log.error("\n\n ###### stdout of timed-out command #######\n {}", callback.getStdout());
       throw new TimeoutException("Command " + command + " has been running for more than 9 minutes. "
           + "Killing and failing !!");
     }
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
-    LOG.info("Exit code for command : " + exitCode);
+    log.info("Exit code for command : {}", exitCode);
 
     if (exitCode != 0) {
-      LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+      log.error("\n\n ###### Stdout #######\n {}", callback.getStdout().toString());
     }
-    LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
+    log.error("\n\n ###### Stderr #######\n {}", callback.getStderr().toString());
 
     if (checkIfSucceed) {
       if (expectedToSucceed) {
@@ -268,9 +268,9 @@ public abstract class ITTestBase {
   protected TestExecStartResultCallback executeCommandStringInDocker(
       String containerName, String cmd, boolean checkIfSucceed, boolean expectedToSucceed)
       throws Exception {
-    LOG.info("\n\n#################################################################################################");
-    LOG.info("Container : " + containerName + ", Running command :" + cmd);
-    LOG.info("\n#################################################################################################");
+    log.info("\n\n#################################################################################################");
+    log.info("Container : {}, Running command : {}", containerName, cmd);
+    log.info("\n#################################################################################################");
 
     String[] cmdSplits = singleSpace(cmd).split(" ");
     return executeCommandInDocker(containerName, cmdSplits, checkIfSucceed, expectedToSucceed);
@@ -278,9 +278,9 @@ public abstract class ITTestBase {
 
   protected Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
 
-    LOG.info("\n\n#################################################################################################");
-    LOG.info("Running hive command :" + hiveCommand);
-    LOG.info("\n#################################################################################################");
+    log.info("\n\n#################################################################################################");
+    log.info("Running hive command : {}", hiveCommand);
+    log.info("\n#################################################################################################");
 
     String[] hiveCmd = getHiveConsoleCommand(hiveCommand);
     Map<String, String> env = Collections.singletonMap("AUX_CLASSPATH", "file://" + HUDI_HADOOP_BUNDLE);
@@ -341,12 +341,10 @@ public abstract class ITTestBase {
           executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", false).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
-      LOG.info("Hive log saved up at  : " + filePath);
-      LOG.info("<===========  Full hive log ===============>\n"
-          + "\n" + hiveLogStr
-          + "\n <==========================================>");
+      log.info("Hive log saved up at  : {}", filePath);
+      log.info("<===========  Full hive log ===============>\n\n{}\n <==========================================>", hiveLogStr);
     } catch (Exception e) {
-      LOG.error("Unable to save up logs..", e);
+      log.error("Unable to save up logs..", e);
     }
   }
 
@@ -377,6 +375,7 @@ public abstract class ITTestBase {
     assertEquals(times, count, "Did not find output the expected number of times.");
   }
 
+  @Getter
   public class TestExecStartResultCallback extends ExecStartResultCallback {
 
     // Storing the reference in subclass to expose to clients
@@ -392,21 +391,13 @@ public abstract class ITTestBase {
     @Override
     public void onComplete() {
       super.onComplete();
-      LOG.info("onComplete called");
+      log.info("onComplete called");
       try {
         stderr.flush();
         stdout.flush();
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-    }
-
-    public ByteArrayOutputStream getStdout() {
-      return stdout;
-    }
-
-    public ByteArrayOutputStream getStderr() {
-      return stderr;
     }
   }
 }

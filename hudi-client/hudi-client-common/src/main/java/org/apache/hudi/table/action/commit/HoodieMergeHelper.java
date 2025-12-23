@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -47,8 +48,6 @@ import org.apache.hudi.util.ExecutorFactory;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
 
 import java.io.IOException;
 import java.util.List;
@@ -56,8 +55,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @Slf4j
@@ -96,7 +93,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
     boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
-        && isStrictProjectionOf(readerSchema.toAvroSchema(), writerSchema.toAvroSchema());
+        && HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
     boolean shouldRewriteInWriterSchema = !isPureProjection
@@ -134,7 +131,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         if (schemaEvolutionTransformerOpt.isPresent()) {
           newRecord = schemaEvolutionTransformerOpt.get().apply(record);
         } else if (shouldRewriteInWriterSchema) {
-          newRecord = record.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), writeConfig.getProps(), writerSchema.toAvroSchema());
+          newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
         } else {
           newRecord = record;
         }
@@ -201,15 +198,15 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           .collect(Collectors.toList());
       InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
           true, false, false).mergeSchema();
-      Schema newWriterSchema = InternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName()).getAvroSchema();
-      Schema writeSchemaFromFile = InternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName()).getAvroSchema();
-      boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
-          || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+      HoodieSchema newWriterSchema = InternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName());
+      HoodieSchema writeSchemaFromFile = InternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName());
+      boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size() || HoodieSchemaCompatibility.areSchemasCompatible(newWriterSchema,
+              writeSchemaFromFile);
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
-              recordSchema.toAvroSchema(),
+              recordSchema,
               writeConfig.getProps(),
               newWriterSchema, renameCols);
         });

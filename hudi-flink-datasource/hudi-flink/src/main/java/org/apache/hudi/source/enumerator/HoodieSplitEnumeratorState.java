@@ -18,7 +18,10 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
+
+import lombok.Value;
 
 import java.io.Serializable;
 import java.util.Collection;
@@ -26,14 +29,10 @@ import java.util.Collection;
 /**
  * State of Hoodie split enumerator. Mainly include the states of pending splits of split provider.
  */
+@Value
 public class HoodieSplitEnumeratorState implements Serializable {
-  private final Collection<HoodieSourceSplitState> pendingSplitStates;
 
-  public HoodieSplitEnumeratorState(Collection<HoodieSourceSplitState> pendingSplitStates) {
-    this.pendingSplitStates = pendingSplitStates;
-  }
-
-  public Collection<HoodieSourceSplitState> getPendingSplitStates() {
-    return pendingSplitStates;
-  }
+  Collection<HoodieSourceSplitState> pendingSplitStates;
+  Option<String> lastEnumeratedInstant;
+  Option<String> lastEnumeratedInstantOffset;
 }

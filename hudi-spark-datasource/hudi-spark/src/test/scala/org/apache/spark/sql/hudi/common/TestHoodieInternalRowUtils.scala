@@ -311,8 +311,8 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newHoodieSchema.toAvroSchema, new HashMap[String, String])
     assert(GenericData.get.validate(newHoodieSchema.toAvroSchema, newRecord))
     // Convert avro to internalRow
-    val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(avroSchema)
-    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newHoodieSchema.toAvroSchema)
+    val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(avroSchema))
+    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newHoodieSchema)
     val row = AvroConversionUtils.createAvroToInternalRowConverter(avroSchema, structTypeSchema).apply(avroRecord).get
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newHoodieSchema.toAvroSchema, newStructTypeSchema)
       .apply(newRecord).get
@@ -367,8 +367,8 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     // test the correctly of rewrite
     assert(GenericData.get.validate(newAvroSchema, newAvroRecord))
     // Convert avro to internalRow
-    val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(schema)
-    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(newAvroSchema)
+    val structTypeSchema = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(schema))
+    val newStructTypeSchema = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(newAvroSchema))
     val row = AvroConversionUtils.createAvroToInternalRowConverter(schema, structTypeSchema).apply(avroRecord).get
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema).apply(newAvroRecord).get
 

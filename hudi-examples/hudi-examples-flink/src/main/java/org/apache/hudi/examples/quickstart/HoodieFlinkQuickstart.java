@@ -42,7 +42,8 @@ import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.types.Row;
-import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nonnull;
 
 import java.util.Collection;
 import java.util.List;
@@ -151,7 +152,7 @@ public final class HoodieFlinkQuickstart {
     streamTableEnv.executeSql(createSource);
   }
 
-  @NotNull List<Row> insertData() throws InterruptedException, TableNotExistException {
+  @Nonnull List<Row> insertData() throws InterruptedException, TableNotExistException {
     // insert data
     String insertInto = String.format("insert into %s select * from source", tableName);
     execInsertSql(streamTableEnv, insertInto);
@@ -164,7 +165,7 @@ public final class HoodieFlinkQuickstart {
     return execSelectSql(streamTableEnv, String.format("select * from %s", tableName), 10);
   }
 
-  @NotNull List<Row> updateData() throws InterruptedException, TableNotExistException {
+  @Nonnull List<Row> updateData() throws InterruptedException, TableNotExistException {
     // update data
     String insertInto = String.format("insert into %s select * from source", tableName);
     execInsertSql(getStreamTableEnv(), insertInto);

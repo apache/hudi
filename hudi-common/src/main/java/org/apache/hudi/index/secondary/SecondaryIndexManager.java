@@ -26,9 +26,10 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -41,13 +42,11 @@ import java.util.stream.Collectors;
 /**
  * Manages secondary index.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class SecondaryIndexManager {
-  private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexManager.class);
 
   private static volatile SecondaryIndexManager _instance;
-
-  private SecondaryIndexManager() {
-  }
 
   public static SecondaryIndexManager getInstance() {
     if (_instance == null) {
@@ -124,7 +123,7 @@ public class SecondaryIndexManager {
         SecondaryIndexUtils.toJsonString(newSecondaryIndexes));
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
 
-    LOG.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
+    log.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
 
     // TODO: build index
   }
@@ -160,7 +159,7 @@ public class SecondaryIndexManager {
           CollectionUtils.createSet(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key()));
     }
 
-    LOG.info("Success to delete secondary index metadata: {}", indexName);
+    log.info("Success to delete secondary index metadata: {}", indexName);
 
     // TODO: drop index data
   }

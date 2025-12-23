@@ -268,7 +268,7 @@ public class ClusteringUtils {
    * Get Clustering plan from timeline.
    * @param timeline
    * @param pendingReplaceInstant
-   * @return
+   * @return {@link Option} of {@link Pair} of {@link HoodieInstant} and {@link HoodieClusteringPlan}
    */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant, InstantGenerator factory) {
     try {

@@ -22,11 +22,14 @@ import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hadoop.conf.Configuration;
 
 /**
  * Configuration to hold details about a DFS based output type, implements {@link DeltaConfig}.
  */
+@Getter
 public class DFSDeltaConfig extends DeltaConfig {
 
   // The base path where the generated data should be written to. This data will in turn be used to write into a hudi
@@ -37,60 +40,25 @@ public class DFSDeltaConfig extends DeltaConfig {
   // Maximum file size for the files generated
   private final Long maxFileSize;
   // The current batch id
+  @Setter
   private Integer batchId;
   // Parallelism to use when generating input data
   private int inputParallelism;
   // Whether to delete older input data once it has been ingested
-  private boolean deleteOldInputData;
-  private boolean useHudiToGenerateUpdates;
+  private boolean oldInputDataDeleted;
+  private boolean hudiUpdatesEnabled;
 
   public DFSDeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
                         StorageConfiguration<Configuration> storageConf,
                         String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
-                        int inputParallelism, boolean deleteOldInputData, boolean useHudiToGenerateUpdates) {
+                        int inputParallelism, boolean oldInputDataDeleted, boolean hudiUpdatesEnabled) {
     super(deltaOutputMode, deltaInputType, storageConf);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
     this.maxFileSize = maxFileSize;
     this.datasetOutputPath = targetBasePath;
     this.inputParallelism = inputParallelism;
-    this.deleteOldInputData = deleteOldInputData;
-    this.useHudiToGenerateUpdates = useHudiToGenerateUpdates;
-  }
-
-  public String getDeltaBasePath() {
-    return deltaBasePath;
-  }
-
-  public String getDatasetOutputPath() {
-    return datasetOutputPath;
-  }
-
-  public String getSchemaStr() {
-    return schemaStr;
-  }
-
-  public Long getMaxFileSize() {
-    return maxFileSize;
-  }
-
-  public Integer getBatchId() {
-    return batchId;
-  }
-
-  public void setBatchId(Integer batchId) {
-    this.batchId = batchId;
-  }
-
-  public int getInputParallelism() {
-    return inputParallelism;
-  }
-
-  public boolean shouldDeleteOldInputData() {
-    return deleteOldInputData;
-  }
-
-  public boolean shouldUseHudiToGenerateUpdates() {
-    return useHudiToGenerateUpdates;
+    this.oldInputDataDeleted = oldInputDataDeleted;
+    this.hudiUpdatesEnabled = hudiUpdatesEnabled;
   }
 }

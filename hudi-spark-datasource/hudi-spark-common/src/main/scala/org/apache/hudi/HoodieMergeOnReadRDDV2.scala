@@ -39,7 +39,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
@@ -166,7 +165,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, fullPartitionPath)
 
         if (metaClient.isMetadataTable) {
-          val requestedSchema = HoodieSchema.parse(requiredSchema.avroSchemaStr)
+          val requestedSchema = requiredSchema.schema
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
           val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
           val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.newBuilder()
@@ -177,11 +176,11 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
             .withProps(properties)
-            .withDataSchema(HoodieSchema.parse(tableSchema.avroSchemaStr))
+            .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
-          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema.toAvroSchema)
+          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
@@ -193,8 +192,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
             .withProps(properties)
-            .withDataSchema(HoodieSchema.parse(tableSchema.avroSchemaStr))
-            .withRequestedSchema(HoodieSchema.parse(requiredSchema.avroSchemaStr))
+            .withDataSchema(tableSchema.schema)
+            .withRequestedSchema(requiredSchema.schema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)
@@ -235,7 +234,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
   }
 
   private def convertAvroToRowIterator(closeableFileGroupRecordIterator: ClosableIterator[IndexedRecord],
-                                       requestedSchema: Schema): Iterator[InternalRow] = {
+                                       requestedSchema: HoodieSchema): Iterator[InternalRow] = {
     val converter = sparkAdapter.createAvroDeserializer(requestedSchema, requiredSchema.structTypeSchema)
     val projection = UnsafeProjection.create(requiredSchema.structTypeSchema)
     new Iterator[InternalRow] with Closeable {

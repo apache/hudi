@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -61,7 +62,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -291,9 +291,9 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
     table.getMetaClient().reloadActiveTimeline();
 
-    Option<Schema> schema;
+    Option<HoodieSchema> schema;
     try {
-      schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaIfPresent(false);
+      schema = new TableSchemaResolver(table.getMetaClient()).getTableSchemaIfPresent(false);
     } catch (Exception ex) {
       throw new HoodieSchemaException(ex);
     }

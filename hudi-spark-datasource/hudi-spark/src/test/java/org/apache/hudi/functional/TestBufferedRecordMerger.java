@@ -19,15 +19,14 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DefaultSparkRecordMerger;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -67,13 +67,14 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -930,7 +931,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Override
     public Object getValue(InternalRow record, HoodieSchema schema, String fieldName) {
-      return getFieldValueFromInternalRow(record, schema.toAvroSchema(), fieldName);
+      return getFieldValueFromInternalRow(record, schema, fieldName);
     }
 
     @Override
@@ -949,7 +950,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
       HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
       InternalRow row = bufferedRecord.getRecord();
-      StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema());
+      StructType sparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
       return new HoodieSparkRecord(hoodieKey, row, sparkSchema, false);
     }
 

@@ -20,9 +20,11 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -37,13 +39,13 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.io.util.FileIOUtils.readAsByteArray;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_FILE_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_EOF;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.apache.hudi.io.hfile.HFileUtils.getValue;
+import static org.apache.hudi.io.util.FileIOUtils.readAsByteArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -985,36 +987,13 @@ public class TestHFileReader {
     }
   }
 
+  @AllArgsConstructor
+  @Getter
   static class KeyLookUpInfo {
+
     private final String lookUpKey;
     private final int expectedSeekToResult;
     private final String expectedKey;
     private final String expectedValue;
-
-    public KeyLookUpInfo(String lookUpKey,
-                         int expectedSeekToResult,
-                         String expectedKey,
-                         String expectedValue) {
-      this.lookUpKey = lookUpKey;
-      this.expectedSeekToResult = expectedSeekToResult;
-      this.expectedKey = expectedKey;
-      this.expectedValue = expectedValue;
-    }
-
-    public String getLookUpKey() {
-      return lookUpKey;
-    }
-
-    public int getExpectedSeekToResult() {
-      return expectedSeekToResult;
-    }
-
-    public String getExpectedKey() {
-      return expectedKey;
-    }
-
-    public String getExpectedValue() {
-      return expectedValue;
-    }
   }
 }

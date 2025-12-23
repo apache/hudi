@@ -22,13 +22,13 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -40,7 +40,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -77,7 +76,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(
       HoodieClusteringPlan clusteringPlan,
-      Schema schema,
+      HoodieSchema schema,
       String instantTime) {
 
     List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups()
@@ -95,8 +94,6 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
 
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     TaskContextSupplier taskContextSupplier = getEngineContext().getTaskContextSupplier();
-    SerializableSchema serializableSchema = new SerializableSchema(schema);
-    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
     JavaRDD<ClusteringGroupInfo> groupInfoJavaRDD = engineContext.parallelize(clusteringGroupInfos, clusteringGroupInfos.size());
     log.info("number of partitions for clustering " + groupInfoJavaRDD.getNumPartitions());
     JavaRDD<WriteStatus> writeStatusRDD = groupInfoJavaRDD
@@ -106,9 +103,6 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
               .flatMap(clusteringOp ->
                   runClusteringForGroup(
                       clusteringOp,
-                      clusteringPlan.getStrategy().getStrategyParams(),
-                      shouldPreserveMetadata,
-                      serializableSchema,
                       taskContextSupplier,
                       instantTime))
               .iterator();
@@ -122,9 +116,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
   /**
    * Submit job to execute clustering for the group.
    */
-  private Stream<WriteStatus> runClusteringForGroup(ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
-                                                    boolean preserveHoodieMetadata, SerializableSchema schema,
-                                                    TaskContextSupplier taskContextSupplier, String instantTime) {
+  private Stream<WriteStatus> runClusteringForGroup(ClusteringGroupInfo clusteringOps, TaskContextSupplier taskContextSupplier, String instantTime) {
     List<WriteStatus> statuses = new ArrayList<>();
     List<HoodieFileGroupId> inputFileIds = clusteringOps.getOperations()
         .stream()

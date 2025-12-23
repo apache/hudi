@@ -99,9 +99,8 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
 
       @Override
       public String next() {
-        // TODO boundary for now
         HoodieRecord<T> skeletonRecord = skeletonIterator.next();
-        return skeletonRecord.getRecordKey(schema.getAvroSchema(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        return skeletonRecord.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       }
     };
   }

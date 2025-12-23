@@ -39,10 +39,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -316,14 +312,6 @@
         </exclusion>
       </exclusions>
     </dependency>
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-streaming-kafka-0-10_${scala.binary.version}</artifactId>
-      <version>${spark.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
 
     <!-- Dropwizard Metrics -->
     <dependency>
@@ -520,6 +508,18 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Testcontainers -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>kafka</artifactId>
+      <scope>test</scope>
+    </dependency>
+
     <!-- AWS Services -->
     <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->
     <dependency>
@@ -546,6 +546,12 @@
       <groupId>javax.validation</groupId>
       <artifactId>validation-api</artifactId>
       <version>2.0.1.Final</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${thrift.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

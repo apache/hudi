@@ -71,8 +71,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -259,7 +257,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         FileSlice fileSlice2 = new FileSlice(p, instant2, fileId1);
         fileSlice2.setBaseFile(baseFile1);
         StoragePath storagePath2 = new StoragePath(partitionMetadataPath.getParent(), hoodieTestTable.getLogFileNameById(fileId1, 1));
-        writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS,
+        writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HOODIE_SCHEMA, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS,
             dataGen.generateInsertsForPartition(instant2, 10, p), 1, metaClient.getStorage(), new Properties(), fileId1, instant2);
         fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
         partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
@@ -336,8 +334,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         HoodieRecord.HoodieRecordType.AVRO);
     for (HoodieRecord record : records) {
       writer.writeWithMetadata(record.getKey(),
-              //TODO boundary to revisit in follow up to use HoodieSchema directly
-              record.rewriteRecordWithNewSchema(AVRO_SCHEMA, CollectionUtils.emptyProps(), AVRO_SCHEMA_WITH_METADATA_FIELDS),
+              record.rewriteRecordWithNewSchema(HOODIE_SCHEMA, CollectionUtils.emptyProps(), HOODIE_SCHEMA_WITH_METADATA_FIELDS),
               HOODIE_SCHEMA_WITH_METADATA_FIELDS);
     }
     writer.close();

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -56,7 +56,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -344,7 +343,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, HoodieSchema writerSchema, TypedProperties props) {
     try {
-      return record.toIndexedRecord(writerSchema.toAvroSchema(), props).map(HoodieAvroIndexedRecord::getData);
+      return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
     } catch (IOException e) {
       log.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
@@ -354,10 +353,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, HoodieSchema schema, Properties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     if (isTrackingEventTimeWatermark) {
-      Object eventTime = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
+      Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
       if (eventTime != null) {
         // Append event_time.
-        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema.toAvroSchema(), eventTimeFieldName);
+        Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTime = record.convertColumnValueForLogicalType(
             field.get().schema(), eventTime, keepConsistentLogicalTimestamp);

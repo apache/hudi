@@ -1739,6 +1739,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.TIMELINE_COMPACTION_BATCH_SIZE);
   }
 
+  public long getTimelineCompactionTargetFileMaxBytes() {
+    return getLong(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES);
+  }
+
   public int getParquetSmallFileLimit() {
     return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
   }
@@ -2616,6 +2620,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getMetadataCompactDeltaCommitMax() {
     return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
+  }
+
+  public String getMetadataCompactionTriggerStrategy() {
+    return getString(HoodieMetadataConfig.COMPACT_TRIGGER_STRATEGY);
+  }
+
+  public int getMetadataMaxDeltaSecondsBeforeCompaction() {
+    return getInt(HoodieMetadataConfig.COMPACT_TIME_DELTA_SECONDS);
   }
 
   public boolean isMetadataAsyncIndex() {

@@ -294,7 +294,7 @@ public class MarkerUtils {
    * Because we don't want to let pending compaction block common writer.
    *
    * @param instants
-   * @return
+   * @return {@link List} of candidate instant paths.
    */
   public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline,
                                                   List<StoragePath> instants, String currentInstantTime,

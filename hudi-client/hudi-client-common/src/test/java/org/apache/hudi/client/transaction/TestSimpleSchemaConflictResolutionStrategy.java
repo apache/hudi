@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -43,7 +44,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
 import org.apache.hudi.table.TestBaseHoodieTable;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
@@ -137,9 +137,9 @@ public class TestSimpleSchemaConflictResolutionStrategy {
   @Test
   void testNoConflictFirstCommit() throws Exception {
     setupInstants(null, null, SCHEMA1, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, Option.empty(), nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
+    assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
   @Test
@@ -152,9 +152,9 @@ public class TestSimpleSchemaConflictResolutionStrategy {
   @Test
   void testNullTypeWriterSchema() throws Exception {
     setupInstants(SCHEMA1, SCHEMA1, NULL_SCHEMA, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
+    assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
   @Test
@@ -167,41 +167,41 @@ public class TestSimpleSchemaConflictResolutionStrategy {
   @Test
   void testConflictSecondCommitSameSchema() throws Exception {
     setupInstants(null, SCHEMA1, SCHEMA1, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, Option.empty(), nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
+    assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
   @Test
   void testNoConflictSameSchema() throws Exception {
     setupInstants(SCHEMA1, SCHEMA1, SCHEMA1, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
+    assertEquals(HoodieSchema.parse(SCHEMA1), result);
   }
 
   @Test
   void testNoConflictBackwardsCompatible1() throws Exception {
     setupInstants(SCHEMA1, SCHEMA2, SCHEMA1, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA2), result);
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
   }
 
   @Test
   void testNoConflictBackwardsCompatible2() throws Exception {
     setupInstants(SCHEMA1, SCHEMA1, SCHEMA2, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA2), result);
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
   }
 
   @Test
   void testNoConflictConcurrentEvolutionSameSchema() throws Exception {
     setupInstants(SCHEMA1, SCHEMA2, SCHEMA2, true, false);
-    Schema result = strategy.resolveConcurrentSchemaEvolution(
+    HoodieSchema result = strategy.resolveConcurrentSchemaEvolution(
         table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
-    assertEquals(new Schema.Parser().parse(SCHEMA2), result);
+    assertEquals(HoodieSchema.parse(SCHEMA2), result);
   }
 
   @Test

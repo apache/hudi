@@ -25,7 +25,7 @@ public interface InstantFileNameParser extends Serializable {
   /**
    * Extract timestamp from instant file name
    * @param fileName
-   * @return
+   * @return {@link String} timestamp
    * @throws IllegalArgumentException
    */
   String extractTimestamp(String fileName) throws IllegalArgumentException;
@@ -33,7 +33,7 @@ public interface InstantFileNameParser extends Serializable {
   /**
    * Extract File extension from instant file name
    * @param fileName
-   * @return
+   * @return {@link String} file extension
    */
   String getTimelineFileExtension(String fileName);
 }

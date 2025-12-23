@@ -64,7 +64,7 @@ public class TestOrcReaderIterator {
   public void testOrcIteratorReadData() throws Exception {
     final Configuration conf = new Configuration();
     HoodieSchema schema = getSchemaFromResource(TestOrcReaderIterator.class, "/simple-test.avsc");
-    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema.toAvroSchema());
+    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
     OrcFile.WriterOptions options = OrcFile.writerOptions(conf).setSchema(orcSchema).compress(CompressionKind.ZLIB);
     try (Writer writer = OrcFile.createWriter(filePath, options)) {
       VectorizedRowBatch batch = orcSchema.createRowBatch();
@@ -84,7 +84,7 @@ public class TestOrcReaderIterator {
 
     Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
     RecordReader recordReader = reader.rows(new Reader.Options(conf).schema(orcSchema));
-    try (ClosableIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, schema.toAvroSchema(), orcSchema)) {
+    try (ClosableIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, schema, orcSchema)) {
       int recordCount = 0;
       while (iterator.hasNext()) {
         GenericRecord record = iterator.next();

@@ -21,8 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.SeekableDataInputStream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -32,9 +31,8 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * Uses a shared static cache across all instances to maximize cache hits when multiple readers access the same file.
  */
+@Slf4j
 public class CachingHFileReaderImpl extends HFileReaderImpl {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CachingHFileReaderImpl.class);
 
   private static volatile HFileBlockCache GLOBAL_BLOCK_CACHE;
   // Store first config values to check against cache config
@@ -59,7 +57,7 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
     if (GLOBAL_BLOCK_CACHE == null) {
       synchronized (CACHE_LOCK) {
         if (GLOBAL_BLOCK_CACHE == null) {
-          LOG.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
+          log.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
               cacheSize, cacheTtlMinutes);
           // Store the config used for initialization
           INITIAL_CACHE_SIZE = cacheSize;
@@ -70,7 +68,7 @@ public class CachingHFileReaderImpl extends HFileReaderImpl {
               TimeUnit.MINUTES);
         } else if (!INITIAL_CACHE_SIZE.equals(cacheSize) || !INITIAL_CACHE_TTL.equals(cacheTtlMinutes)) {
           // Log a warning if a different config is provided after initialization
-          LOG.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
+          log.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
                   + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
               INITIAL_CACHE_SIZE, INITIAL_CACHE_TTL,
               cacheSize, cacheTtlMinutes);

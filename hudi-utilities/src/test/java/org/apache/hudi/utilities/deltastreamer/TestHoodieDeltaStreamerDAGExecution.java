@@ -95,11 +95,13 @@ public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTest
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     testNum++;
+    deltaStreamer.shutdownGracefully();
 
     if (shouldGenerateUpdates) {
       prepareParquetDFSUpdates(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null, dataGenerator, "001");
       HoodieDeltaStreamer updateDs = new HoodieDeltaStreamer(config, jsc);
       updateDs.sync();
+      updateDs.shutdownGracefully();
     }
   }
 

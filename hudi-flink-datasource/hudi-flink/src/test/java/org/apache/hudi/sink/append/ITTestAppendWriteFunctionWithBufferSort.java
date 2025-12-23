@@ -33,6 +33,7 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link AppendWriteFunctionWithBufferSort}.
@@ -125,7 +127,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     // enlarge the wirte buffer record size
     this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 10000L);
     // use a very small buffer memory size here
-    this.conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.1D);
+    this.conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 400.1D);
 
     // Create test data that exceeds buffer size
     List<RowData> inputData = new ArrayList<>();
@@ -173,6 +175,117 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
             result.stream().map(TestData::filterOutVariablesWithoutHudiMetadata).collect(Collectors.toList());
 
     assertArrayEquals(expected.toArray(), filteredResult.toArray());
+  }
+
+  @Test
+  public void testMultipleCheckpoints() throws Exception {
+    List<RowData> batch1 = Arrays.asList(
+        createRowData("uuid1", "Charlie", 35, "1970-01-01 00:00:01.123", "p1"),
+        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1")
+    );
+
+    List<RowData> batch2 = Arrays.asList(
+        createRowData("uuid3", "Bob", 30, "1970-01-01 00:00:01.125", "p1"),
+        createRowData("uuid4", "Diana", 28, "1970-01-01 00:00:01.126", "p1")
+    );
+
+    TestHarness testHarness = TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf);
+
+    testHarness.consume(batch1).checkpoint(1);
+    testHarness.consume(batch2).checkpoint(2);
+    testHarness.endInput();
+
+    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
+    assertEquals(4, actualData.size());
+  }
+
+  @Test
+  public void testLargeDatasetWithMultipleFlushes() throws Exception {
+    this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 50L);
+
+    List<RowData> inputData = new ArrayList<>();
+    for (int i = 0; i < 500; i++) {
+      inputData.add(createRowData("uuid" + i, "Name" + (i % 10), i % 100, "1970-01-01 00:00:01.123", "p" + (i % 3)));
+    }
+
+    TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf)
+        .consume(inputData)
+        .endInput();
+
+    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 3);
+    assertEquals(500, actualData.size());
+  }
+
+  @Test
+  public void testSortStabilityWithDuplicateKeys() throws Exception {
+    List<RowData> inputData = Arrays.asList(
+        createRowData("uuid1", "Alice", 25, "1970-01-01 00:00:01.123", "p1"),
+        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1"),
+        createRowData("uuid3", "Alice", 25, "1970-01-01 00:00:01.125", "p1"),
+        createRowData("uuid4", "Bob", 30, "1970-01-01 00:00:01.126", "p1")
+    );
+
+    TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf)
+        .consume(inputData)
+        .endInput();
+
+    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
+    assertEquals(4, actualData.size());
+
+    List<String> filteredResult = actualData.stream()
+        .map(TestData::filterOutVariablesWithoutHudiMetadata)
+        .collect(Collectors.toList());
+
+    assertTrue(filteredResult.get(0).contains("Alice"));
+    assertTrue(filteredResult.get(1).contains("Alice"));
+    assertTrue(filteredResult.get(2).contains("Alice"));
+    assertTrue(filteredResult.get(3).contains("Bob"));
+  }
+
+  @Test
+  public void testDifferentPartitions() throws Exception {
+    List<RowData> inputData = Arrays.asList(
+        createRowData("uuid1", "Alice", 25, "1970-01-01 00:00:01.123", "p1"),
+        createRowData("uuid2", "Bob", 30, "1970-01-01 00:00:01.124", "p2"),
+        createRowData("uuid3", "Charlie", 35, "1970-01-01 00:00:01.125", "p3"),
+        createRowData("uuid4", "Diana", 28, "1970-01-01 00:00:01.126", "p1")
+    );
+
+    TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf)
+        .consume(inputData)
+        .endInput();
+
+    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 3);
+    assertEquals(4, actualData.size());
+  }
+
+  @Test
+  public void testConcurrentWriteScenario() throws Exception {
+    this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 20L);
+
+    List<RowData> inputData = new ArrayList<>();
+    for (int i = 0; i < 200; i++) {
+      inputData.add(createRowData("uuid" + i, "Name" + (i % 5), i % 50, "1970-01-01 00:00:01.123", "p1"));
+    }
+
+    TestHarness testHarness = TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf);
+
+    for (int i = 0; i < inputData.size(); i += 10) {
+      List<RowData> batch = inputData.subList(i, Math.min(i + 10, inputData.size()));
+      testHarness.consume(batch);
+      if (i % 50 == 0) {
+        testHarness.checkpoint(i / 50 + 1);
+      }
+    }
+    testHarness.endInput();
+
+    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
+    assertEquals(200, actualData.size());
   }
 
   private GenericRowData createRowData(String uuid, String name, int age, String timestamp, String partition) {

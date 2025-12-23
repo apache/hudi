@@ -90,7 +90,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Map<Integer, Object> partitionValuesByIndex = partitionFieldAndValues.stream()
         .collect(Collectors.toMap(pair -> to.getField(pair.getKey()).orElseThrow(() -> new IllegalArgumentException("Missing field: " + pair.getKey())).pos(), Pair::getRight));
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from.toAvroSchema()), getCachedSchema(to.toAvroSchema()), Collections.emptyMap(), partitionValuesByIndex);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), Collections.emptyMap(), partitionValuesByIndex);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 

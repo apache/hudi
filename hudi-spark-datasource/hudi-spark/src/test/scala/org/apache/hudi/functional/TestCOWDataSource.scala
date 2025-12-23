@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils, QuickstartUtils, ScalaAssertionSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSchemaConversionUtils, HoodieSparkUtils, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
@@ -488,7 +487,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val t = assertThrows(classOf[Throwable]) {
       writeToHudi(optsForBatch2, inputDF)
     }
-    assertTrue(getRootCause(t).getMessage.contains("Config conflict"))
+    assertTrue(HoodieTestUtils.getRootCause(t).getMessage.contains("Config conflict"))
   }
 
   @ParameterizedTest
@@ -697,12 +696,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val tableMetaClient = createMetaClient(spark, basePath)
     assertFalse(tableMetaClient.getArchivedTimeline.empty())
 
-    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
+    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableSchema(false)
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(CommonOptionUtils.commonOpts(HoodieWriteConfig.TBL_NAME.key))
     spark.sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
-    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, structName, nameSpace)
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, structName, nameSpace)
     assertTrue(actualSchema != null)
     assertEquals(schema, actualSchema)
   }
@@ -1313,7 +1312,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .save(basePath)
     }
 
-    assertEquals("Single partition-path field is expected; provided (driver,rider)", getRootCause(t).getMessage)
+    assertEquals("Single partition-path field is expected; provided (driver,rider)",
+      HoodieTestUtils.getRootCause(t).getMessage)
   }
 
   @ParameterizedTest

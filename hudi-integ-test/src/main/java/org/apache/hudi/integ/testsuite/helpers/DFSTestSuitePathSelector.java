@@ -25,17 +25,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,9 +46,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.
  */
+@Slf4j
 public class DFSTestSuitePathSelector extends DFSPathSelector {
-
-  private static volatile Logger log = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
 
   public DFSTestSuitePathSelector(TypedProperties props, Configuration hadoopConf) {
     super(props, hadoopConf);
@@ -85,8 +82,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       if (correctBatchIdDueToRollback.isPresent() && Integer.parseInt(correctBatchIdDueToRollback.get()) > nextBatchId) {
         nextBatchId = Integer.parseInt(correctBatchIdDueToRollback.get());
       }
-      log.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpoint + " sourceLimit: " + sourceLimit
-          + " lastBatchId: " + lastBatchId + " nextBatchId: " + nextBatchId);
+      log.info("Using DFSTestSuitePathSelector, checkpoint: {} sourceLimit: {} lastBatchId: {} nextBatchId: {}", lastCheckpoint, sourceLimit, lastBatchId, nextBatchId);
       for (FileStatus fileStatus : fileStatuses) {
         if (!fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
             .anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {

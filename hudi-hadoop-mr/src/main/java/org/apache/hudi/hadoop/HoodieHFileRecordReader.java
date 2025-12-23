@@ -32,7 +32,6 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
@@ -54,7 +53,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   private final ArrayWritable valueObj;
   private HoodieFileReader reader;
   private ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator;
-  private final Schema schema;
+  private final HoodieSchema schema;
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
@@ -64,15 +63,14 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, storageConf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
 
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
-    schema = reader.getSchema().getAvroSchema();
+    schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);
   }
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     if (recordIterator == null) {
-      recordIterator = reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema));
+      recordIterator = reader.getRecordIterator(schema);
     }
 
     if (!recordIterator.hasNext()) {
@@ -80,7 +78,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     }
 
     IndexedRecord record = recordIterator.next().getData();
-    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, schema);
+    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, schema.toAvroSchema());
     value.set(aWritable.get());
     count++;
     return true;

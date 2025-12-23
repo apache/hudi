@@ -35,10 +35,11 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 
+import lombok.Getter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.Preconditions;
 
@@ -63,6 +64,7 @@ public class InternalSchemaManager implements Serializable {
   public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
       TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
 
+  @Getter
   private final InternalSchema querySchema;
   private final String validCommits;
   private final String tablePath;
@@ -99,10 +101,6 @@ public class InternalSchemaManager implements Serializable {
     this.tableConfig = tableConfig;
   }
 
-  public InternalSchema getQuerySchema() {
-    return querySchema;
-  }
-
   /**
    * Attempts to merge the file and query schema to produce a mergeSchema, prioritising the use of fileSchema types.
    * An emptySchema is returned if:
@@ -121,7 +119,7 @@ public class InternalSchemaManager implements Serializable {
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(fileName));
     InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
         commitInstantTime, tablePath,
-        new HoodieHadoopStorage(tablePath, storageConf),
+        HoodieStorageUtils.getStorage(tablePath, storageConf),
         validCommits, layout, tableConfig);
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();

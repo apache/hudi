@@ -44,7 +44,8 @@ import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
 import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.jetbrains.annotations.Nullable;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 import java.util.Map;

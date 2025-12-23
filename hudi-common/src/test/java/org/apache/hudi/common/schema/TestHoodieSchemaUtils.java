@@ -19,9 +19,11 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -40,6 +46,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -94,12 +101,26 @@ public class TestHoodieSchemaUtils {
       + "{\"name\":\"localTimestampMicrosField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}"
       + "]}";
 
+  private static final String SCHEMA_WITH_NON_NULLABLE_FIELD =
+      "{\"type\": \"record\",\"name\": \"testrec3\",\"fields\": [ "
+          + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+          + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+          + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"},"
+          + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null},"
+          + "{\"name\": \"non_nullable_field_wo_default\",\"type\": \"string\"},"
+          + "{\"name\": \"non_nullable_field_with_default\",\"type\": \"string\", \"default\": \"dummy\"}]}";
+
   private static String SCHEMA_WITH_NESTED_FIELD_LARGE_STR = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
       + "{\"name\":\"nested_field\",\"type\":[\"null\"," + SCHEMA_WITH_AVRO_TYPES_STR + "],\"default\":null},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+
+  private static final String SCHEMA_WITH_DECIMAL_FIELD = "{\"type\":\"record\",\"name\":\"record\",\"fields\":["
+      + "{\"name\":\"key_col\",\"type\":[\"null\",\"int\"],\"default\":null},"
+      + "{\"name\":\"decimal_col\",\"type\":[\"null\","
+      + "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":8,\"scale\":4}],\"default\":null}]}";
 
   private static HoodieSchema SCHEMA_WITH_NESTED_FIELD_LARGE = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
 
@@ -128,7 +149,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testCreateHoodieWriteSchemaValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema(null, true));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema((String) null, true));
 
     // Should throw on empty schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema("", true));
@@ -1424,5 +1445,318 @@ public class TestHoodieSchemaUtils {
     HoodieSchema projectedSchema = HoodieSchemaUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
     assertEquals(expectedSchema, projectedSchema);
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(projectedSchema, expectedSchema, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullSchema() {
+    // Test with null schema - should return value unchanged
+    String testValue = "test_value";
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(null, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NullableSchema() {
+    // Test with null value and nullable schema - should return null
+    HoodieSchema nullableIntSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableIntSchema, null, false);
+    assertNull(result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NonNullableSchema() {
+    // Test with null value and non-nullable schema - should throw exception
+    HoodieSchema nonNullableSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertThrows(IllegalStateException.class, () ->
+        HoodieSchemaUtils.convertValueForSpecificDataTypes(nonNullableSchema, null, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DateLogicalType() {
+    // Create date schema
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+
+    // Test value: epoch days for 2023-01-01
+    int epochDays = 19358;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(dateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Enabled() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+
+    // Test value: milliseconds for 2023-01-01 00:00:00
+    long millis = 1672560000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(millis), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Disabled() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+    long millis = 1672560000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, false);
+    assertEquals(millis, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMicros_Enabled() {
+    // Create timestamp-micros schema
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
+
+    // Test value: microseconds for 2023-01-01 00:00:00
+    long micros = 1672560000000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMicrosSchema, micros, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(micros / 1000), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DecimalBytes() {
+    // Create decimal schema with precision=10, scale=2
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+
+    // Create test value: 1234.56
+    BigDecimal expectedDecimal = new BigDecimal("1234.56");
+    ByteBuffer byteBuffer = ByteBuffer.wrap(expectedDecimal.unscaledValue().toByteArray());
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(decimalSchema, byteBuffer, false);
+    assertNotNull(result);
+    assertTrue(result instanceof BigDecimal);
+    assertEquals(expectedDecimal, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NonLogicalType() {
+    // Test with non-logical type (plain string) - should return unchanged
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    String testValue = "test_string";
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(stringSchema, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_UnionWithNull() {
+    // Test with union type containing null
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+    HoodieSchema nullableDateSchema = HoodieSchema.createNullable(dateSchema);
+
+    // Test with non-null value
+    int epochDays = 19358; // 2023-01-01
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableDateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  void testHasDecimalField() {
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(EVOLVED_SCHEMA)));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieTestDataGenerator.HOODIE_SCHEMA));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieTestDataGenerator.HOODIE_TRIP_ENCODED_DECIMAL_SCHEMA));
+    HoodieSchema recordWithMapAndArray = HoodieSchema.createRecord("recordWithMapAndArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(recordWithMapAndArray));
+    HoodieSchema recordWithDecMapAndArray = HoodieSchema.createRecord("recordWithDecMapAndArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.createDecimal(10, 6)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithDecMapAndArray));
+    HoodieSchema recordWithMapAndDecArray = HoodieSchema.createRecord("recordWithMapAndDecArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.createDecimal(10, 6)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithMapAndDecArray));
+  }
+
+  @Test
+  void testHasSmallPrecisionDecimalField() {
+    assertTrue(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR)));
+    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNonUnionSchema() {
+    // Non-union schemas should be returned as-is
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(stringSchema, "any");
+
+    assertSame(stringSchema, result);
+  }
+
+  @Test
+  void testResolveUnionSchemaWithSimpleNullableUnion() {
+    // Simple nullable union: ["null", "string"] should return the non-null type efficiently
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
+
+    assertEquals(HoodieSchemaType.STRING, result.getType());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithSimpleNullableRecord() {
+    // Test with nullable record type
+    HoodieSchema personSchema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema nullablePerson = HoodieSchema.createNullable(personSchema);
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullablePerson, "Person");
+
+    assertEquals(HoodieSchemaType.RECORD, result.getType());
+    assertEquals("Person", result.getName());
+    assertFalse(result.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithComplexUnionMatchingFullName() {
+    // Complex union with 3+ types, matching by fullName
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"PersonRecord\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"CompanyRecord\",\"fields\":[{\"name\":\"companyName\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve to PersonRecord
+    HoodieSchema personResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "PersonRecord");
+    assertEquals(HoodieSchemaType.RECORD, personResult.getType());
+    assertEquals("PersonRecord", personResult.getName());
+    assertFalse(personResult.isNullable());
+    assertTrue(personResult.getField("name").isPresent());
+
+    // Resolve to CompanyRecord
+    HoodieSchema companyResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "CompanyRecord");
+    assertEquals(HoodieSchemaType.RECORD, companyResult.getType());
+    assertEquals("CompanyRecord", companyResult.getName());
+    assertFalse(companyResult.isNullable());
+    assertTrue(companyResult.getField("companyName").isPresent());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNonNullableTwoTypeUnion() {
+    // Union of two non-nullable types should use the complex resolution path
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":["
+        + "    {\"type\":\"record\",\"name\":\"TypeA\",\"fields\":[{\"name\":\"fieldA\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"TypeB\",\"fields\":[{\"name\":\"fieldB\",\"type\":\"int\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve to TypeA
+    HoodieSchema typeAResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "TypeA");
+    assertEquals(HoodieSchemaType.RECORD, typeAResult.getType());
+    assertEquals("TypeA", typeAResult.getName());
+    assertFalse(typeAResult.isNullable());
+
+    // Resolve to TypeB
+    HoodieSchema typeBResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "TypeB");
+    assertEquals(HoodieSchemaType.RECORD, typeBResult.getType());
+    assertEquals("TypeB", typeBResult.getName());
+    assertFalse(typeAResult.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaThrowsExceptionWhenNoMatch() {
+    // Complex union where the requested fullName doesn't match any type
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"PersonRecord\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"CompanyRecord\",\"fields\":[{\"name\":\"companyName\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Try to resolve to a type that doesn't exist in the union
+    HoodieSchemaException exception = assertThrows(
+        HoodieSchemaException.class,
+        () -> HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "AnimalRecord")
+    );
+
+    assertTrue(exception.getMessage().contains("Unsupported UNION type"));
+    assertTrue(exception.getMessage().contains("Only UNION of a null type and a non-null type is supported"));
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNamespacedRecords() {
+    // Test with fully qualified names (with namespace)
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"namespace\":\"com.example\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"Company\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve using fully qualified name
+    HoodieSchema personResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "com.example.model.Person");
+    assertEquals(HoodieSchemaType.RECORD, personResult.getType());
+    assertEquals("Person", personResult.getName());
+    assertFalse(personResult.isNullable());
+    assertEquals("com.example.model", personResult.getNamespace().get());
+
+    // Resolve Company
+    HoodieSchema companyResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "com.example.model.Company");
+    assertEquals(HoodieSchemaType.RECORD, companyResult.getType());
+    assertEquals("Company", companyResult.getName());
+    assertFalse(companyResult.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithPrimitiveTypes() {
+    // Test union containing primitive types (although less common)
+    // Union of null and string, but passed through the full name matching path
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // For simple 2-element nullable union, should use fast path
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
+    assertEquals(HoodieSchemaType.STRING, result.getType());
   }
 }

@@ -21,27 +21,26 @@ package org.apache.hudi.sync.datahub;
 
 import datahub.client.Callback;
 import datahub.client.MetadataWriteResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Handle responses to requests to Datahub Metastore. Just logs them.
  */
+@Slf4j
 public class DataHubResponseLogger implements Callback {
-  private static final Logger LOG = LoggerFactory.getLogger(DataHubResponseLogger.class);
 
   @Override
   public void onCompletion(MetadataWriteResponse response) {
-    LOG.info("Completed DataHub RestEmitter request. Status: {}", (response.isSuccess() ? " succeeded" : " failed"));
+    log.info("Completed DataHub RestEmitter request. Status: {}", (response.isSuccess() ? " succeeded" : " failed"));
     if (!response.isSuccess()) {
-      LOG.error("Request failed. {}", response);
+      log.error("Request failed. {}", response);
     }
-    LOG.debug("Response details: {}", response);
+    log.debug("Response details: {}", response);
   }
 
   @Override
   public void onFailure(Throwable e) {
-    LOG.error("Error during Datahub RestEmitter request", e);
+    log.error("Error during Datahub RestEmitter request", e);
   }
 
 }

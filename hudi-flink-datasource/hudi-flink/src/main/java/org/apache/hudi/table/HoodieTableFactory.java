@@ -36,6 +36,7 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
@@ -49,8 +50,6 @@ import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -73,8 +72,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * Hoodie data source/sink factory.
  */
+@Slf4j
 public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTableSinkFactory {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFactory.class);
 
   public static final String FACTORY_ID = "hudi";
 
@@ -127,7 +126,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
-              LOG.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",
+              log.error("Table type conflict : {} in {} and {} in table options. Update your config to match the table type in hoodie.properties.",
                   tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE, conf.get(FlinkOptions.TABLE_TYPE));
               conf.set(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
             }
@@ -227,7 +226,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           });
     }
     if (schema.getPrimaryKey().isPresent() && conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()))   {
-      LOG.warn("PRIMARY KEY syntax and option '{}' was used. Value of the PRIMARY KEY will be used and option will be ignored!", FlinkOptions.RECORD_KEY_FIELD.key());
+      log.warn("PRIMARY KEY syntax and option '{}' was used. Value of the PRIMARY KEY will be used and option will be ignored!", FlinkOptions.RECORD_KEY_FIELD.key());
     }
   }
 
@@ -301,7 +300,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       final String partitionField = partitions[0];
       if (partitionField.isEmpty()) {
         conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
-        LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
+        log.info("Table option [{}] is reset to {} because this is a non-partitioned table",
             FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
         return;
       }
@@ -329,7 +328,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     }
 
     conf.set(FlinkOptions.KEYGEN_CLASS_NAME, TimestampBasedAvroKeyGenerator.class.getName());
-    LOG.info("Table option [{}] is reset to {} because datetime partitioning turns on",
+    log.info("Table option [{}] is reset to {} because datetime partitioning turns on",
         FlinkOptions.KEYGEN_CLASS_NAME.key(), TimestampBasedAvroKeyGenerator.class.getName());
     if (DataTypeUtils.isTimestampType(fieldType)) {
       int precision = DataTypeUtils.precision(fieldType.getLogicalType());
@@ -364,7 +363,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     int commitsToRetain = conf.get(FlinkOptions.CLEAN_RETAIN_COMMITS);
     int minCommitsToKeep = conf.get(FlinkOptions.ARCHIVE_MIN_COMMITS);
     if (commitsToRetain >= minCommitsToKeep) {
-      LOG.info("Table option [{}] is reset to {} to be greater than {}={},\n"
+      log.info("Table option [{}] is reset to {} to be greater than {}={},\n"
               + "to avoid risk of missing data from few instants in incremental pull",
           FlinkOptions.ARCHIVE_MIN_COMMITS.key(), commitsToRetain + 10,
           FlinkOptions.CLEAN_RETAIN_COMMITS.key(), commitsToRetain);

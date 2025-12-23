@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -118,7 +118,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
       throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf);
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, storageConf);
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(

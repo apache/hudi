@@ -101,7 +101,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
     List<TypeInfo> columnTypes;
     try {
-      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema.toAvroSchema());
+      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema);
     } catch (AvroSerdeException e) {
       throw new HoodieAvroSchemaException(String.format("Failed to generate hive column types from schema: %s, due to %s", dataSchema, e));
     }
@@ -134,8 +134,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Read file schema and repair logical types if needed
     HoodieSchema fileSchema;
     if (isParquetOrOrc) {
-      Schema avroFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
-      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(avroFileSchema, dataSchema.toAvroSchema());
+      HoodieSchema rawFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readSchema(storage, filePath);
+      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(rawFileSchema.toAvroSchema(), dataSchema.toAvroSchema());
       fileSchema = HoodieSchema.fromAvroSchema(repairedAvroSchema);
     } else {
       fileSchema = dataSchema;

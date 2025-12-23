@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -123,7 +124,8 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   @Test
   public void testAvroRecordsFieldConversion() {
 
-    Schema avroSchema = new Schema.Parser().parse(avroSchemaString);
+    HoodieSchema schema = HoodieSchema.parse(avroSchemaString);
+    Schema avroSchema = schema.toAvroSchema();
     GenericRecord record = new GenericData.Record(avroSchema);
     record.put("event_date1", 18000);
     record.put("event_date2", 18001);

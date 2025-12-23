@@ -132,6 +132,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
     Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
         updateStrategy.handleUpdate(inputRecords);
+    context.clearJobStatus();
 
     Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
     if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
@@ -195,6 +196,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
+    context.clearJobStatus();
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     if (sourceReadAndIndexTimer.isPresent()) {
@@ -212,6 +214,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+    context.clearJobStatus();
     log.debug("Input workload profile :{}", workloadProfile);
     return workloadProfile;
   }
@@ -336,6 +339,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
     commit(result, result.getWriteStats().isPresent()
         ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+    context.clearJobStatus();
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {

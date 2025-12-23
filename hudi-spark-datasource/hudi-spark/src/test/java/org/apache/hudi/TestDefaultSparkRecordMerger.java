@@ -74,8 +74,7 @@ class TestDefaultSparkRecordMerger {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
     Row newValue = getSpecificValue(key, "002", 2L, "file2", 2, "2");
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE));
+    HoodieSchema schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
     BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
 
@@ -100,8 +99,7 @@ class TestDefaultSparkRecordMerger {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 3, "1");
     Row newValue = getSpecificValue(key, "002", 2L, "file2", 2, "2");
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE));
+    HoodieSchema schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
     BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
 
@@ -123,8 +121,7 @@ class TestDefaultSparkRecordMerger {
   void testMergerWithNewRecordAsDelete() throws IOException {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE));
+    HoodieSchema schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
     BufferedRecord<InternalRow> newRecord = BufferedRecords.createDelete(key.getRecordKey(), OrderingValues.getDefault());
 
@@ -143,8 +140,7 @@ class TestDefaultSparkRecordMerger {
   void testMergerWithOldRecordAsDelete() throws IOException {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row newValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE));
+    HoodieSchema schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     BufferedRecord<InternalRow> oldRecord = BufferedRecords.createDelete(key.getRecordKey(), OrderingValues.getDefault());
     BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
 

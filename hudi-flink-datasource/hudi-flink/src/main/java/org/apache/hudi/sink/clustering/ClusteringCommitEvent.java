@@ -20,12 +20,21 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.client.WriteStatus;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.List;
 
 /**
  * Represents a commit event from the clustering task {@link ClusteringOperator}.
  */
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
 public class ClusteringCommitEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -46,46 +55,8 @@ public class ClusteringCommitEvent implements Serializable {
    */
   private int taskID;
 
-  public ClusteringCommitEvent() {
-  }
-
   public ClusteringCommitEvent(String instant, String fileIds, int taskID) {
     this(instant, fileIds, null, taskID);
-  }
-
-  public ClusteringCommitEvent(String instant, String filedIds, List<WriteStatus> writeStatuses, int taskID) {
-    this.instant = instant;
-    this.fileIds = filedIds;
-    this.writeStatuses = writeStatuses;
-    this.taskID = taskID;
-  }
-
-  public void setInstant(String instant) {
-    this.instant = instant;
-  }
-
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
-  }
-
-  public String getInstant() {
-    return instant;
-  }
-
-  public String getFileIds() {
-    return fileIds;
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  public int getTaskID() {
-    return taskID;
   }
 
   public boolean isFailed() {

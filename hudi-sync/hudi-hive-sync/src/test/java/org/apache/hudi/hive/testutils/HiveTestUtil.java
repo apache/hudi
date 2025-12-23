@@ -49,7 +49,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -59,12 +58,14 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,8 +79,6 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.junit.platform.commons.JUnitException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -117,9 +116,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Slf4j
 @SuppressWarnings("SameParameterValue")
 public class HiveTestUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HiveTestUtil.class);
 
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
@@ -134,8 +133,10 @@ public class HiveTestUtil {
   private static HiveServer2 hiveServer;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
+  @Getter
   public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
+  @Getter
   private static Set<String> createdTablesSet = new HashSet<>();
 
   public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws Exception {
@@ -169,7 +170,9 @@ public class HiveTestUtil {
     }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
-    storage = new HoodieHadoopStorage(fileSystem);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(fileSystem.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fileSystem.getConf()));
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     if (ddlExecutor != null) {
@@ -199,10 +202,6 @@ public class HiveTestUtil {
 
   public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
-  }
-
-  public static HiveSyncConfig getHiveSyncConfig() {
-    return hiveSyncConfig;
   }
 
   public static void shutdown() {
@@ -270,7 +269,7 @@ public class HiveTestUtil {
     }
 
     if (!failedReleases.isEmpty()) {
-      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
+      log.error("Exception happened during releasing: {}", String.join(",", failedReleases));
     }
   }
 
@@ -329,7 +328,7 @@ public class HiveTestUtil {
           storage.deleteFile(path);
         }
       } catch (IOException e) {
-        LOG.warn("Error deleting file: ", e);
+        log.warn("Error deleting file: ", e);
       }
     });
   }
@@ -401,7 +400,7 @@ public class HiveTestUtil {
     Path filePath = new Path(partPath.toString() + "/"
         + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
     HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
-    generateParquetDataWithSchema(filePath, schema.toAvroSchema());
+    generateParquetDataWithSchema(filePath, schema);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId(fileId);
     writeStat.setPath(filePath.toString());
@@ -642,7 +641,7 @@ public class HiveTestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema.toAvroSchema(), Option.of(filter), new Properties());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -665,7 +664,7 @@ public class HiveTestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema.toAvroSchema(), Option.of(filter), new Properties());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -681,9 +680,9 @@ public class HiveTestUtil {
     writer.close();
   }
 
-  private static void generateParquetDataWithSchema(Path filePath, Schema schema)
+  private static void generateParquetDataWithSchema(Path filePath, HoodieSchema schema)
       throws IOException {
-    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
+    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
@@ -691,7 +690,7 @@ public class HiveTestUtil {
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
 
-    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(HoodieSchema.fromAvroSchema(schema));
+    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(schema);
     testRecords.forEach(s -> {
       try {
         writer.write(s);
@@ -814,9 +813,5 @@ public class HiveTestUtil {
         writer.get().writeToStream(fsout);
       }
     }
-  }
-
-  public static Set<String> getCreatedTablesSet() {
-    return createdTablesSet;
   }
 }

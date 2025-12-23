@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.PartitionStatsIndexSupport;
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -67,7 +67,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -83,6 +82,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -1032,7 +1032,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
-        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema().toAvroSchema()),
+        HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(metadataTableBasedContext.getSchema()),
         metadataTableBasedContext.getSchema(),
         metadataTableBasedContext.getMetadataConfig(),
         metaClientOpt.get(), false);

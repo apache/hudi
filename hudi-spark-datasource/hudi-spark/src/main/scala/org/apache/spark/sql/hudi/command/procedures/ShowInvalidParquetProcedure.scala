@@ -23,7 +23,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieTableMetadata, NativeTableMetadataFactory}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.HoodieStorageUtils
 
 import collection.JavaConverters._
 import org.apache.hadoop.fs.Path
@@ -66,7 +66,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
 
     validateFilter(filter, outputType)
     val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
-    val storage = new HoodieHadoopStorage(srcPath, storageConf)
+    val storage = HoodieStorageUtils.getStorage(srcPath, storageConf)
     val metadataConfig = HoodieMetadataConfig.newBuilder.enable(false).build
     val metadata = NativeTableMetadataFactory.getInstance().create(new HoodieSparkEngineContext(jsc), storage, metadataConfig, srcPath)
     val partitionPaths: java.util.List[String] = metadata.getPartitionPathWithPathPrefixes(partitions.split(",").toList.asJava)

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -114,7 +115,6 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
@@ -341,15 +341,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
     if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
       InternalSchema internalSchema;
-      Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
+      HoodieSchema schema = HoodieSchemaUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
       if (historySchemaStr.isEmpty()) {
-        internalSchema = SerDeHelper.fromJson(config.getInternalSchema()).orElseGet(() -> InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(avroSchema)));
+        internalSchema = SerDeHelper.fromJson(config.getInternalSchema()).orElseGet(() -> InternalSchemaConverter.convert(schema));
         internalSchema.setSchemaId(Long.parseLong(instantTime));
       } else {
         internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
             SerDeHelper.parseSchemas(historySchemaStr));
       }
-      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(avroSchema, internalSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema.toAvroSchema(), internalSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
       if (evolvedSchema.equals(internalSchema)) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
         //TODO save history schema by metaTable
@@ -361,7 +361,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
       }
       // update SCHEMA_KEY
-      metadata.addMetadata(SCHEMA_KEY, InternalSchemaConverter.convert(evolvedSchema, avroSchema.getFullName()).toString());
+      metadata.addMetadata(SCHEMA_KEY, InternalSchemaConverter.convert(evolvedSchema, schema.getFullName()).toString());
     }
   }
 
@@ -1657,7 +1657,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
-    Schema schema = InternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName())).toAvroSchema();
+    Schema schema = InternalSchemaConverter.convert(newSchema, AvroSchemaUtils.getAvroRecordQualifiedName(config.getTableName())).toAvroSchema();
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = startCommit(commitActionType, metaClient);
     config.setSchema(schema.toString());

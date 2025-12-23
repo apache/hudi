@@ -337,14 +337,14 @@ public class TestHoodieAvroDataBlock {
     Set<String> keys = new Random()
         .ints(records.size() / 4, 0, records.size())
         .mapToObj(records::get)
-        .map(r -> r.getRecordKey(SCHEMA.toAvroSchema(), RECORD_KEY_FIELD))
+        .map(r -> r.getRecordKey(SCHEMA, RECORD_KEY_FIELD))
         .collect(Collectors.toSet());
 
     // simulate KeyFilter matching logic
     return records.stream()
         .filter(r -> fullKey
-            ? keys.contains(r.getRecordKey(SCHEMA.toAvroSchema(), RECORD_KEY_FIELD))
-            : keys.stream().anyMatch(r.getRecordKey(SCHEMA.toAvroSchema(), RECORD_KEY_FIELD)::startsWith))
+            ? keys.contains(r.getRecordKey(SCHEMA, RECORD_KEY_FIELD))
+            : keys.stream().anyMatch(r.getRecordKey(SCHEMA, RECORD_KEY_FIELD)::startsWith))
         .collect(Collectors.toList());
   }
 

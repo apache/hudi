@@ -38,6 +38,7 @@ import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
@@ -50,8 +51,6 @@ import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -61,9 +60,9 @@ import java.util.function.Supplier;
  * Operator to execute the actual compaction task assigned by the compaction plan task.
  * In order to execute scalable, the input should shuffle by the compact event {@link CompactionPlanEvent}.
  */
+@Slf4j
 public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     implements OneInputStreamOperator<CompactionPlanEvent, CompactionCommitEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactOperator.class);
 
   /**
    * Config options.
@@ -149,7 +148,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.flinkTable = this.writeClient.getHoodieTable();
     if (this.asyncCompaction) {
-      this.executor = NonThrownExecutor.builder(LOG).build();
+      this.executor = NonThrownExecutor.builder(log).build();
     }
     this.collector = new StreamRecordCollector<>(output);
     registerMetrics();
@@ -170,7 +169,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
-      LOG.info("Execute compaction for instant {} from task {}", instantTime, taskID);
+      log.info("Execute compaction for instant {} from task {}", instantTime, taskID);
       doCompaction(instantTime, compactionOperation, collector, writeClient.getConfig(), needReloadMetaClient);
     }
   }

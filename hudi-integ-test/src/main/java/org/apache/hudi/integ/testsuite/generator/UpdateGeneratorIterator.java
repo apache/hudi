@@ -20,8 +20,6 @@ package org.apache.hudi.integ.testsuite.generator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Iterator;
@@ -32,8 +30,6 @@ import java.util.Set;
  * A lazy update payload generator to generate {@link GenericRecord}s lazily.
  */
 public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
-
-  private static Logger LOG = LoggerFactory.getLogger(UpdateGeneratorIterator.class);
 
   // Use the full payload generator as default
   private GenericRecordFullPayloadGenerator generator;

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
@@ -137,8 +137,8 @@ public class SparkValidatorUtils {
       try {
         return sqlContext.createDataFrame(
             sqlContext.emptyDataFrame().rdd(),
-            AvroConversionUtils.convertAvroSchemaToStructType(
-                new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema()));
+            HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
+                new TableSchemaResolver(table.getMetaClient()).getTableSchema()));
       } catch (Exception e) {
         LOG.warn("Cannot get table schema from before state.", e);
         LOG.warn("Using the schema from after state (current transaction) to create the empty Spark dataframe: {}", newStructTypeSchema);

@@ -20,7 +20,6 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.HoodieCDCFileIndex
-import org.apache.hudi.common.HoodieSchemaNotFoundException
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
@@ -28,11 +27,10 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, WRITE_TABLE_VERSION}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieSchemaNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
@@ -233,7 +231,7 @@ class DefaultSource extends RelationProvider
     val storageConf = HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf())
     val tablePath: StoragePath = {
       val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-      val fs = new HoodieHadoopStorage(path, storageConf)
+      val fs = HoodieStorageUtils.getStorage(path, storageConf)
       TablePathUtils.getTablePath(fs, path).get()
     }
     val metaClient = HoodieTableMetaClient.builder()
@@ -392,8 +390,8 @@ object DefaultSource {
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)
       try {
-        val avroSchema = schemaResolver.getTableAvroSchema
-        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+        val schema = schemaResolver.getTableSchema
+        HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
       } catch {
         case _: Exception =>
           if (schema.isEmpty || schema.get == null) {

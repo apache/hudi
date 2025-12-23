@@ -18,16 +18,15 @@
 
 package org.apache.hudi.avro.processors;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
-
-import org.apache.avro.Schema;
 
 import java.io.Serializable;
 
 public abstract class JsonFieldProcessor implements Serializable {
 
-  public Object convertField(Object value, String name, Schema schema) {
+  public Object convertField(Object value, String name, HoodieSchema schema) {
     Pair<Boolean, Object> res = convert(value, name, schema);
     if (!res.getLeft()) {
       throw new HoodieJsonToAvroConversionException("failed to convert json to avro");
@@ -35,5 +34,5 @@ public abstract class JsonFieldProcessor implements Serializable {
     return res.getRight();
   }
 
-  public abstract Pair<Boolean, Object> convert(Object value, String name, Schema schema);
+  public abstract Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema);
 }

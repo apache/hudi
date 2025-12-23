@@ -20,19 +20,24 @@ package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.connector.source.SourceSplit;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Hoodie SourceSplit implementation for source V2.
+ * Hoodie SourceSplit implementation for source V2. It has the same semantic to the {@link org.apache.hudi.table.format.mor.MergeOnReadInputSplit}.
  */
+@Getter
 public class HoodieSourceSplit implements SourceSplit, Serializable {
+  public static AtomicInteger SPLIT_COUNTER = new AtomicInteger(0);
   private static final long serialVersionUID = 1L;
-
   private static final long NUM_NO_CONSUMPTION = 0L;
 
   // the split number
@@ -43,9 +48,12 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   private final Option<List<String>> logPaths;
   // the base table path
   private final String tablePath;
+  // partition path
+  private final String partitionPath;
   // source merge type
   private final String mergeType;
   // file id of file splice
+  @Setter
   protected String fileId;
 
   // for streaming reader to record the consumed offset,
@@ -54,23 +62,23 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
 
   // for failure recovering
   private int fileOffset;
-  private long recordOffset;
 
   public HoodieSourceSplit(
       int splitNum,
       @Nullable String basePath,
       Option<List<String>> logPaths,
       String tablePath,
+      String partitionPath,
       String mergeType,
       String fileId) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
     this.tablePath = tablePath;
+    this.partitionPath = partitionPath;
     this.mergeType = mergeType;
     this.fileId = fileId;
     this.fileOffset = 0;
-    this.recordOffset = 0L;
   }
 
   @Override
@@ -78,53 +86,37 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     return toString();
   }
 
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public Option<String> getBasePath() {
-    return basePath;
-  }
-
-  public Option<List<String>> getLogPaths() {
-    return logPaths;
-  }
-
-  public String getTablePath() {
-    return tablePath;
-  }
-
-  public String getMergeType() {
-    return mergeType;
-  }
-
   public void consume() {
     this.consumed += 1L;
-  }
-
-  public long getConsumed() {
-    return consumed;
   }
 
   public boolean isConsumed() {
     return this.consumed != NUM_NO_CONSUMPTION;
   }
 
-  public int getFileOffset() {
-    return fileOffset;
-  }
-
-  public long getRecordOffset() {
-    return recordOffset;
-  }
-
   public void updatePosition(int newFileOffset, long newRecordOffset) {
     fileOffset = newFileOffset;
-    recordOffset = newRecordOffset;
+    consumed = newRecordOffset;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    HoodieSourceSplit that = (HoodieSourceSplit) o;
+    return splitNum == that.splitNum && consumed == that.consumed && fileOffset == that.fileOffset && Objects.equals(basePath, that.basePath)
+        && Objects.equals(logPaths, that.logPaths) && Objects.equals(tablePath, that.tablePath) && Objects.equals(partitionPath, that.partitionPath)
+        && Objects.equals(mergeType, that.mergeType) && Objects.equals(fileId, that.fileId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, fileId, consumed, fileOffset);
   }
 
   @Override
@@ -134,6 +126,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
         + ", basePath=" + basePath
         + ", logPaths=" + logPaths
         + ", tablePath='" + tablePath + '\''
+        + ", partitionPath='" + partitionPath + '\''
         + ", mergeType='" + mergeType + '\''
         + '}';
   }

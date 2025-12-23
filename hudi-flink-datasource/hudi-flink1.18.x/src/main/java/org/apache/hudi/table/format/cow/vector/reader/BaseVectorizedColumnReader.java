@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -35,8 +36,6 @@ import org.apache.parquet.column.values.ValuesReader;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridDecoder;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.parquet.schema.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -48,9 +47,8 @@ import static org.apache.parquet.column.ValuesType.VALUES;
 /**
  * Abstract {@link ColumnReader}. part of the code is referred from Apache Hive and Apache Parquet.
  */
+@Slf4j
 public abstract class BaseVectorizedColumnReader implements ColumnReader<WritableColumnVector> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseVectorizedColumnReader.class);
 
   protected boolean isUtcTimestamp;
 
@@ -207,13 +205,13 @@ public abstract class BaseVectorizedColumnReader implements ColumnReader<Writabl
     this.definitionLevelColumn = new ValuesReaderIntIterator(dlReader);
     try {
       BytesInput bytes = page.getBytes();
-      LOG.debug("page size {} bytes and {} records", bytes.size(), pageValueCount);
+      log.debug("page size {} bytes and {} records", bytes.size(), pageValueCount);
       ByteBufferInputStream in = bytes.toInputStream();
-      LOG.debug("reading repetition levels at {}", in.position());
+      log.debug("reading repetition levels at {}", in.position());
       rlReader.initFromPage(pageValueCount, in);
-      LOG.debug("reading definition levels at {}", in.position());
+      log.debug("reading definition levels at {}", in.position());
       dlReader.initFromPage(pageValueCount, in);
-      LOG.debug("reading data at {}", in.position());
+      log.debug("reading data at {}", in.position());
       initDataReader(page.getValueEncoding(), in, page.getValueCount());
     } catch (IOException e) {
       throw new ParquetDecodingException(
@@ -228,7 +226,7 @@ public abstract class BaseVectorizedColumnReader implements ColumnReader<Writabl
     this.definitionLevelColumn =
         newRLEIterator(descriptor.getMaxDefinitionLevel(), page.getDefinitionLevels());
     try {
-      LOG.debug(
+      log.debug(
           "page data size "
               + page.getData().size()
               + " bytes and "

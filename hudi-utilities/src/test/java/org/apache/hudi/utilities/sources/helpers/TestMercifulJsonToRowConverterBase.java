@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -686,7 +686,7 @@ public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonCon
   }
 
   private void validateSchemaCompatibility(List<Row> rows, HoodieSchema schema) {
-    StructType rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema());
+    StructType rowSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
     Dataset<Row> dataset = spark.createDataFrame(rows, rowSchema);
     assertDoesNotThrow(dataset::collect, "Schema validation and dataset creation should not throw any exceptions.");
   }

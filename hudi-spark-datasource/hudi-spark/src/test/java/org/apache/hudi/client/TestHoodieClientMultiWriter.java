@@ -24,7 +24,6 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
-import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -60,6 +61,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
+import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -70,7 +72,6 @@ import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionS
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
-import org.apache.avro.Schema;
 import org.apache.curator.test.TestingServer;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
@@ -410,8 +411,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Validate table schema in the end.
     TableSchemaResolver r = new TableSchemaResolver(metaClient);
-    Schema s = r.getTableAvroSchema(false);
-    assertEquals(s, new Schema.Parser().parse(expectedTableSchemaAfterResolution));
+    HoodieSchema s = r.getTableSchema(false);
+    assertEquals(s, HoodieSchema.parse(expectedTableSchemaAfterResolution));
 
     FileIOUtils.deleteDirectory(new File(basePath));
     client1.close();
@@ -457,7 +458,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       setUpMORTestTable();
     }
 
-    int heartBeatIntervalForCommit4 = 10 * 1000;
+    int heartBeatIntervalForCommit4 = 3 * 1000;
 
     HoodieWriteConfig writeConfig;
     TestingServer server = null;
@@ -703,19 +704,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create the first commit
     SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
-    createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
+    String firstCommitTime = InProcessTimeGenerator.createNewInstantTime();
+    createCommitWithInsertsForPartition(cfg, client, "000", firstCommitTime, 100, "2016/03/01");
     client.close();
     int numConcurrentWriters = 5;
     ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
 
     List<Future<?>> futures = new ArrayList<>(numConcurrentWriters);
     for (int loop = 0; loop < numConcurrentWriters; loop++) {
-      String newCommitTime = "00" + (loop + 2);
       String partition = "2016/03/0" + (loop + 2);
       futures.add(executors.submit(() -> {
         try {
           SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
-          createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+          createCommitWithInsertsForPartition(cfg, writeClient, "001", InProcessTimeGenerator.createNewInstantTime(), 100, partition);
           writeClient.close();
         } catch (Exception e) {
           throw new RuntimeException(e);

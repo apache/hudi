@@ -91,7 +91,7 @@ public class WriteStatus implements Serializable {
   public WriteStatus() {
     this.failureFraction = 0.0d;
     this.trackSuccessRecords = false;
-    this.random = null;
+    this.random = new Random(RANDOM_SEED);
     this.isMetadataTable = false;
   }
 

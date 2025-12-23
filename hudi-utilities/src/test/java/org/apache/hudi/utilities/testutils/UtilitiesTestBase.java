@@ -22,6 +22,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -31,13 +33,15 @@ import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TestAvroOrcUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -155,7 +159,9 @@ public class UtilitiesTestBase {
       fs = FileSystem.getLocal(hadoopConf);
       basePath = sharedTempDir.toUri().toString();
     }
-    storage = new HoodieHadoopStorage(fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(basePath)),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
 
     hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {
@@ -528,8 +534,9 @@ public class UtilitiesTestBase {
         final TypeDescription type = orcSchema.getChildren().get(c);
 
         Object fieldValue = record.get(thisField);
-        Schema.Field avroField = record.getSchema().getField(thisField);
-        AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+        HoodieSchemaField field = HoodieSchema.fromAvroSchema(record.getSchema()).getField(thisField)
+            .orElseThrow(() -> new HoodieSchemaException("Could not find field: " + thisField));
+        AvroOrcUtils.addToVector(type, colVector, field.schema(), fieldValue, batch.size);
       }
     }
   }

@@ -21,14 +21,13 @@ package org.apache.hudi.client.transaction;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
 
 /**
  * Strategy interface for schema conflict resolution with multiple writers.
@@ -50,14 +49,14 @@ public interface SchemaConflictResolutionStrategy {
    * @throws HoodieWriteConflictException if schema conflicts cannot be resolved.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<Schema> resolveConcurrentSchemaEvolution(
+  Option<HoodieSchema> resolveConcurrentSchemaEvolution(
       HoodieTable table,
       HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       Option<HoodieInstant> currTxnOwnerInstant);
 
   static void throwConcurrentSchemaEvolutionException(
-      Option<Schema> tableSchemaAtTxnStart, Option<Schema> tableSchemaAtTxnValidation, Schema writerSchemaOfTxn,
+      Option<HoodieSchema> tableSchemaAtTxnStart, Option<HoodieSchema> tableSchemaAtTxnValidation, HoodieSchema writerSchemaOfTxn,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       Option<HoodieInstant> currTxnOwnerInstant) throws HoodieWriteConflictException {
     String errMsg = String.format(

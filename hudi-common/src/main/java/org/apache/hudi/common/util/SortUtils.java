@@ -23,8 +23,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.FlatLists;
 
-import org.apache.avro.Schema;
-
 import java.util.function.Function;
 
 /**
@@ -58,7 +56,7 @@ public class SortUtils {
   public static FlatLists.ComparableList<Comparable<HoodieRecord>> getComparableSortColumns(
       HoodieRecord record,
       String[] sortColumnNames,
-      Schema schema,
+      HoodieSchema schema,
       boolean suffixRecordKey,
       boolean consistentLogicalTimestampEnabled
   ) {
@@ -97,7 +95,7 @@ public class SortUtils {
       Function<Object[], Object[]> wrapUTF8StringFunc
   ) {
     if (record.getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
-      Object[] columnValues = record.getColumnValues(schema.toAvroSchema(), sortColumnNames, consistentLogicalTimestampEnabled);
+      Object[] columnValues = record.getColumnValues(schema, sortColumnNames, consistentLogicalTimestampEnabled);
       if (suffixRecordKey) {
         return FlatLists.ofComparableArray(wrapUTF8StringFunc.apply(
             prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues)));
@@ -106,7 +104,7 @@ public class SortUtils {
     } else if (record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO) {
       return FlatLists.ofComparableArray(wrapUTF8StringFunc.apply(
           HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(
-              record, sortColumnNames, schema.toAvroSchema(), suffixRecordKey, consistentLogicalTimestampEnabled
+              record, sortColumnNames, schema, suffixRecordKey, consistentLogicalTimestampEnabled
           )));
     }
     throw new IllegalArgumentException("Invalid recordType" + record.getRecordType());
