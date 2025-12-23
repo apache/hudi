@@ -27,6 +27,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
@@ -489,7 +490,7 @@ public class TestHiveAvroSerializer {
   }
 
   @Test
-  public void testGenerateColumnTypesForDecimalBackedByBytes() throws Exception {
+  public void testGenerateColumnTypesForDecimalBackedByBytes() throws AvroSerdeException {
     // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 152-162 for decimal backed by bytes
     String schemaWithDecimalBytes = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -507,7 +508,7 @@ public class TestHiveAvroSerializer {
   }
 
   @Test
-  public void testGenerateColumnTypesForDecimalBackedByFixed() throws Exception {
+  public void testGenerateColumnTypesForDecimalBackedByFixed() throws AvroSerdeException {
     // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 152-162 for decimal backed by fixed
     String schemaWithDecimalFixed = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -526,7 +527,7 @@ public class TestHiveAvroSerializer {
   }
 
   @Test
-  public void testGenerateColumnTypesForDate() throws Exception {
+  public void testGenerateColumnTypesForDate() throws AvroSerdeException {
     // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 187-189 for date
     String schemaWithDate = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -544,7 +545,7 @@ public class TestHiveAvroSerializer {
   }
 
   @Test
-  public void testGenerateColumnTypesForTimestampMillis() throws Exception {
+  public void testGenerateColumnTypesForTimestampMillis() throws AvroSerdeException {
     // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 192-194 for timestamp-millis
     String schemaWithTimestampMillis = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -562,7 +563,7 @@ public class TestHiveAvroSerializer {
   }
 
   @Test
-  public void testGenerateColumnTypesForTimestampMicros() {
+  public void testGenerateColumnTypesForTimestampMicros() throws AvroSerdeException {
     // Test timestamp-micros - AvroSerDe.TIMESTAMP_TYPE_NAME is only "timestamp-millis", NOT "timestamp-micros"
     String schemaWithTimestampMicros = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -571,14 +572,14 @@ public class TestHiveAvroSerializer {
 
     HoodieSchema schema = HoodieSchema.parse(schemaWithTimestampMicros);
 
-    // HiveTypeUtils.generateColumnTypes throws an exception for timestamp-micros since it's not supported by AvroSerDe
-    assertThrows(Exception.class, () -> {
-      HiveTypeUtils.generateColumnTypes(schema);
-    });
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be bigint type
+    assertEquals(TypeInfoFactory.longTypeInfo, columnTypes.get(1));
   }
 
   @Test
-  public void testGenerateColumnTypesForTimeMillis() {
+  public void testGenerateColumnTypesForTimeMillis() throws AvroSerdeException {
     // Test time-millis logical type - there's no specific branch for TIME type in HiveTypeUtils
     String schemaWithTimeMillis = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -586,13 +587,15 @@ public class TestHiveAvroSerializer {
         + "]}";
 
     HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMillis);
-
-    // HiveTypeUtils.generateColumnTypes throws an exception for time-millis since it's not supported by AvroSerDe
-    assertThrows(Exception.class, () -> HiveTypeUtils.generateColumnTypes(schema));
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    System.out.println(columnTypes);
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be int type
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(1));
   }
 
   @Test
-  public void testGenerateColumnTypesForTimeMicros() {
+  public void testGenerateColumnTypesForTimeMicros() throws AvroSerdeException {
     // Test time-micros logical type
     String schemaWithTimeMicros = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"int\"},"
@@ -600,8 +603,9 @@ public class TestHiveAvroSerializer {
         + "]}";
 
     HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMicros);
-
-    // HiveTypeUtils.generateColumnTypes throws an exception for time-micros since it's not supported by AvroSerDe
-    assertThrows(Exception.class, () -> HiveTypeUtils.generateColumnTypes(schema));
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be bigint type
+    assertEquals(TypeInfoFactory.longTypeInfo, columnTypes.get(1));
   }
 }

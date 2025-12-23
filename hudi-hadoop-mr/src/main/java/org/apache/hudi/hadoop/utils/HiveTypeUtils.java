@@ -53,6 +53,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaType.MAP;
 import static org.apache.hudi.common.schema.HoodieSchemaType.NULL;
 import static org.apache.hudi.common.schema.HoodieSchemaType.RECORD;
 import static org.apache.hudi.common.schema.HoodieSchemaType.STRING;
+import static org.apache.hudi.common.schema.HoodieSchemaType.TIME;
 import static org.apache.hudi.common.schema.HoodieSchemaType.TIMESTAMP;
 import static org.apache.hudi.common.schema.HoodieSchemaType.UNION;
 
@@ -185,13 +186,33 @@ public class HiveTypeUtils {
     }
 
     if (type == DATE
-        && AvroSerDe.DATE_TYPE_NAME.equals((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
+        && AvroSerDe.DATE_TYPE_NAME.equals(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       return TypeInfoFactory.dateTypeInfo;
     }
 
-    if (type == TIMESTAMP
-        && AvroSerDe.TIMESTAMP_TYPE_NAME.equals((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
-      return TypeInfoFactory.timestampTypeInfo;
+    if (type == TIMESTAMP) {
+      String avroLogicalType = (String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE);
+      switch (avroLogicalType) {
+        case AvroSerDe.TIMESTAMP_TYPE_NAME:
+          // case of timestamp-millis:
+          return TypeInfoFactory.timestampTypeInfo;
+        case "timestamp-micros":
+          return TypeInfoFactory.longTypeInfo;
+        default:
+          throw new AvroSerdeException("Unsupported logical type found when evaluating TIMESTAMP type: " + avroLogicalType);
+      }
+    }
+
+    if (type == TIME) {
+      String avroLogicalType = (String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE);
+      switch ((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE)) {
+        case "time-millis":
+          return TypeInfoFactory.intTypeInfo;
+        case "time-micros":
+          return TypeInfoFactory.longTypeInfo;
+        default:
+          throw new AvroSerdeException("Unsupported logical type found when evaluating TIME type: " + avroLogicalType);
+      }
     }
 
     return typeInfoCache.retrieve(schema, seenSchemas);
