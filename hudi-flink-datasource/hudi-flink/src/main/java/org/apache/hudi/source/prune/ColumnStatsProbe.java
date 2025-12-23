@@ -22,6 +22,9 @@ import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.types.logical.DecimalType;
@@ -41,16 +44,13 @@ import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 /**
  * Utility for filtering the column stats metadata payloads.
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Getter
 public class ColumnStatsProbe implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final String[] referencedCols;
   private final List<ExpressionEvaluators.Evaluator> evaluators;
-
-  private ColumnStatsProbe(String[] referencedCols, List<ExpressionEvaluators.Evaluator> evaluators) {
-    this.referencedCols = referencedCols;
-    this.evaluators = evaluators;
-  }
 
   /**
    * Filters the index row with specific data filters and query fields.
@@ -67,14 +67,6 @@ public class ColumnStatsProbe implements Serializable {
       }
     }
     return true;
-  }
-
-  public String[] getReferencedCols() {
-    return referencedCols;
-  }
-
-  public List<ExpressionEvaluators.Evaluator> getEvaluators() {
-    return evaluators;
   }
 
   @Nullable

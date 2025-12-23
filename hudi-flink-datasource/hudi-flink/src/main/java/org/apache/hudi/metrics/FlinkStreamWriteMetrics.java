@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 
 import com.codahale.metrics.SlidingWindowReservoir;
+import lombok.Setter;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
 import org.apache.flink.dropwizard.metrics.DropwizardMeterWrapper;
 import org.apache.flink.metrics.Histogram;
@@ -49,6 +50,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   /**
    * Current write buffer size in StreamWriteFunction.
    */
+  @Setter
   private long writeBufferedSize;
 
   /**
@@ -116,10 +118,6 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
 
     metricGroup.histogram("handleCreationCosts", handleCreationCosts);
     metricGroup.histogram("fileFlushCost", fileFlushCost);
-  }
-
-  public void setWriteBufferedSize(long writeBufferedSize) {
-    this.writeBufferedSize = writeBufferedSize;
   }
 
   public void startDataFlush() {

@@ -58,7 +58,6 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   protected final BufferAllocator allocator;
   protected final List<R> bufferedRecords;
   protected final int batchSize;
-  protected final long maxFileSize;
   protected long writtenRecordCount = 0;
   protected VectorSchemaRoot root;
 
@@ -70,16 +69,14 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * @param storage HoodieStorage instance
    * @param path Path where Lance file will be written
    * @param batchSize Number of records to buffer before flushing to Lance
-   * @param maxFileSize Maximum file size in bytes before rolling over to new file
    */
-  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize, long maxFileSize) {
+  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize) {
     this.storage = storage;
     this.path = path;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
     this.bufferedRecords = new ArrayList<>(batchSize);
     this.batchSize = batchSize;
-    this.maxFileSize = maxFileSize;
   }
 
   /**
@@ -134,53 +131,34 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
 
     // 1. Flush remaining records
     try {
+      // Flush any remaining buffered records
       if (!bufferedRecords.isEmpty()) {
         flushBatch();
       }
-    } catch (Exception e) {
-      primaryException = e;
-    }
 
-    // 2. Close Lance Writer
-    if (writer != null) {
-      try {
+      // Ensure writer is initialized even if no data was written
+      // This creates an empty Lance file with just schema metadata
+      if (writer == null && root == null) {
+        initializeWriter();
+        root = VectorSchemaRoot.create(getArrowSchema(), allocator);
+        root.setRowCount(0);
+        writer.write(root);
+      }
+
+      // Close Lance writer
+      if (writer != null) {
         writer.close();
-      } catch (Exception e) {
-        if (primaryException == null) {
-          primaryException = e;
-        } else {
-          primaryException.addSuppressed(e);
-        }
       }
-    }
 
-    // 3. Close VectorSchemaRoot
-    if (root != null) {
-      try {
+      // Close VectorSchemaRoot
+      if (root != null) {
         root.close();
-      } catch (Exception e) {
-        if (primaryException == null) {
-          primaryException = e;
-        } else {
-          primaryException.addSuppressed(e);
-        }
       }
-    }
-
-    // 4. Always close allocator last
-    try {
-      allocator.close();
     } catch (Exception e) {
-      if (primaryException == null) {
-        primaryException = e;
-      } else {
-        primaryException.addSuppressed(e);
-      }
-    }
-
-    // Final check: if anything failed, wrap and throw
-    if (primaryException != null) {
-      throw new HoodieException("Failed to close Lance writer: " + path, primaryException);
+      throw new HoodieException("Failed to close Lance writer: " + path, e);
+    } finally {
+      // Always close allocator
+      allocator.close();
     }
   }
 

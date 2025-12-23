@@ -28,12 +28,11 @@ import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -66,9 +65,8 @@ import java.util.Map;
  * hoodie.table.name=hudi_tbl
  */
 
+@Slf4j
 public class SparkDataSourceContinuousIngestTool {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkDataSourceContinuousIngestTool.class);
 
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
@@ -99,7 +97,7 @@ public class SparkDataSourceContinuousIngestTool {
     try {
       new SparkDataSourceContinuousIngestTool(jsc, cfg).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run Continuous Ingestion for spark datasource " + cfg.basePath, throwable);
+      log.error("Fail to run Continuous Ingestion for spark datasource {}", cfg.basePath, throwable);
     } finally {
       jsc.stop();
     }

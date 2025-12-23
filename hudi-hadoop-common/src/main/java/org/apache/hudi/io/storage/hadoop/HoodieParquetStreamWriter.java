@@ -55,7 +55,7 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
         .withRowGroupSize(parquetConfig.getBlockSize())
         .withPageSize(parquetConfig.getPageSize())
         .withDictionaryPageSize(parquetConfig.getPageSize())
-        .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
+        .withDictionaryEncoding(parquetConfig.isDictionaryEnabled())
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
         .withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class))
         .build();

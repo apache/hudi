@@ -31,11 +31,14 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import lombok.extern.slf4j.Slf4j;
+
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A rollback node in the DAG helps to perform rollback operations.
  */
+@Slf4j
 public class RollbackNode extends DagNode<Option<HoodieInstant>> {
 
   public RollbackNode(Config config) {
@@ -52,7 +55,7 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     int numRollbacks = config.getNumRollbacks();
-    log.info(String.format("Executing rollback node %s with %d rollbacks", this.getName(), numRollbacks));
+    log.info("Executing rollback node {} with {} rollbacks", this.getName(), numRollbacks);
     // Can only be done with an instantiation of a new WriteClient hence cannot be done during DeltaStreamer
     // testing for now
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()

@@ -19,7 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
@@ -40,7 +40,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.avro.SchemaConverters;
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -110,7 +110,7 @@ public class TestSourceFormatAdapter {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
     typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
-    setupJsonSource(rdd, HoodieSchema.fromAvroSchema(SchemaConverters.toAvroType(sanitizedSchema, false, "record", "")));
+    setupJsonSource(rdd, HoodieSparkSchemaConverters.toHoodieType(sanitizedSchema, false, "record", ""));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
   }
@@ -122,8 +122,8 @@ public class TestSourceFormatAdapter {
     assertEquals(2, ds.collectAsList().size());
     assertEquals(sanitizedSchema, ds.schema());
     if (inputBatch.getSchemaProvider() instanceof RowBasedSchemaProvider) {
-      assertEquals(HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sanitizedSchema,
-          "hoodie_source", "hoodie.source")), inputBatch.getSchemaProvider().getSourceHoodieSchema());
+      assertEquals(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sanitizedSchema,
+          "hoodie_source", "hoodie.source"), inputBatch.getSchemaProvider().getSourceHoodieSchema());
     }
     assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
   }

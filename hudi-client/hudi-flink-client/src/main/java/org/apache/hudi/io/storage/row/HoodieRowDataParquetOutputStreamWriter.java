@@ -64,7 +64,7 @@ public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFile
     parquetWriterbuilder.withRowGroupSize(parquetConfig.getBlockSize());
     parquetWriterbuilder.withPageSize(parquetConfig.getPageSize());
     parquetWriterbuilder.withDictionaryPageSize(parquetConfig.getPageSize());
-    parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
+    parquetWriterbuilder.withDictionaryEncoding(parquetConfig.isDictionaryEnabled());
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
     parquetWriterbuilder.withConf(parquetConfig.getStorageConf().unwrapAs(Configuration.class));
     this.writer = parquetWriterbuilder.build();

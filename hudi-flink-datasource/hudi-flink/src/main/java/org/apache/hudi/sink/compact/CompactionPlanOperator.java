@@ -32,6 +32,7 @@ import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
@@ -44,8 +45,6 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -59,9 +58,9 @@ import static java.util.stream.Collectors.toList;
  *
  * <p>It should be singleton to avoid conflicts.
  */
+@Slf4j
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
     implements OneInputStreamOperator<RowData, CompactionPlanEvent>, BoundedOneInput {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionPlanOperator.class);
 
   /**
    * Config options.
@@ -132,7 +131,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       scheduleCompaction(table, checkpointId);
     } catch (Throwable throwable) {
       // make it fail-safe
-      LOG.error("Error while scheduling compaction plan for checkpoint: " + checkpointId, throwable);
+      log.error("Error while scheduling compaction plan for checkpoint: " + checkpointId, throwable);
     }
   }
 
@@ -148,7 +147,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
     if (!firstRequested.isPresent()) {
       // do nothing.
-      LOG.info("No compaction plan for checkpoint " + checkpointId);
+      log.info("No compaction plan for checkpoint " + checkpointId);
       return;
     }
 
@@ -162,7 +161,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       // do nothing.
-      LOG.info("Empty compaction plan for instant " + compactionInstantTime);
+      log.info("Empty compaction plan for instant " + compactionInstantTime);
     } else {
       HoodieInstant instant = table.getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
@@ -171,7 +170,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-      LOG.info("Execute compaction plan for instant {} as {} file groups", compactionInstantTime, operations.size());
+      log.info("Execute compaction plan for instant {} as {} file groups", compactionInstantTime, operations.size());
       WriteMarkersFactory
           .get(table.getConfig().getMarkersType(), table, compactionInstantTime)
           .deleteMarkerDir(table.getContext(), table.getConfig().getMarkersDeleteParallelism());

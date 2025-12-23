@@ -21,11 +21,10 @@ package org.apache.parquet.avro;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Parquet-Java AvroSchemaConverter doesn't support local timestamp types until version 1.14
@@ -37,15 +36,15 @@ import org.slf4j.LoggerFactory;
  * library AvroSchemaConverter in this case.
  *
  */
+@Slf4j
 public abstract class HoodieAvroParquetSchemaConverter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroParquetSchemaConverter.class);
   public static HoodieAvroParquetSchemaConverter getAvroSchemaConverter(Configuration configuration) {
     try {
       return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass(AvroSchemaConverterWithTimestampNTZ.class.getName(),
           new Class<?>[] {Configuration.class}, configuration);
     } catch (Throwable t) {
-      LOG.debug("Failed to load AvroSchemaConverterWithTimestampNTZ, using NativeAvroSchemaConverter instead", t);
+      log.debug("Failed to load AvroSchemaConverterWithTimestampNTZ, using NativeAvroSchemaConverter instead", t);
       return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass(NativeAvroSchemaConverter.class.getName(),
           new Class<?>[] {Configuration.class}, configuration);
     }

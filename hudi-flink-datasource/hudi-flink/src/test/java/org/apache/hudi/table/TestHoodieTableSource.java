@@ -34,6 +34,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
@@ -55,8 +56,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -84,8 +83,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for HoodieTableSource.
  */
+@Slf4j
 public class TestHoodieTableSource {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableSource.class);
 
   private Configuration conf;
 

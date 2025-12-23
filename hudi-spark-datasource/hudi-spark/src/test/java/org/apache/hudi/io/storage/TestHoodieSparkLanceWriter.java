@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.Float4Vector;
@@ -347,8 +348,16 @@ public class TestHoodieSparkLanceWriter {
       // Close without writing any rows
     }
 
-    // Lance doesn't create a file if no data is written
-    assertFalse(storage.exists(path), "Lance file should not exist when no data is written");
+    // Should create a empty lance file with just schema even if no data is written
+    assertTrue(storage.exists(path), "Lance file should exist even when no data is written");
+
+    // Verify the empty file has valid structure with correct schema
+    try (BufferAllocator allocator = new RootAllocator();
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+      assertEquals(0, reader.numRows(), "Empty file should have 0 rows");
+      assertEquals(1, reader.schema().getFields().size(), "Should have 1 field");
+      assertEquals("id", reader.schema().getFields().get(0).getName(), "Field name should be 'id'");
+    }
   }
 
   @Test
@@ -417,6 +426,40 @@ public class TestHoodieSparkLanceWriter {
         .add("id", DataTypes.IntegerType, false)
         .add("name", DataTypes.StringType, true)
         .add("age", DataTypes.LongType, true);
+  }
+
+  private InternalRow createRowWithMetaFields(Object... userValues) {
+    // Create row with PLACEHOLDER meta fields (will be updated by writer) + user data
+    Object[] allValues = new Object[5 + userValues.length];
+
+    // Meta fields - use empty strings as placeholders
+    allValues[0] = UTF8String.fromString(""); // commit_time
+    allValues[1] = UTF8String.fromString(""); // commit_seqno
+    allValues[2] = UTF8String.fromString(""); // record_key
+    allValues[3] = UTF8String.fromString(""); // partition_path
+    allValues[4] = UTF8String.fromString(""); // file_name
+
+    // Copy user values
+    for (int i = 0; i < userValues.length; i++) {
+      allValues[5 + i] = processValue(userValues[i]);
+    }
+
+    return new GenericInternalRow(allValues);
+  }
+
+  private InternalRow createRow(Object... values) {
+    Object[] processedValues = new Object[values.length];
+    for (int i = 0; i < values.length; i++) {
+      processedValues[i] = processValue(values[i]);
+    }
+    return new GenericInternalRow(processedValues);
+  }
+
+  private Object processValue(Object value) {
+    if (value instanceof String) {
+      return UTF8String.fromString((String) value);
+    }
+    return value;
   }
 
   private boolean hasField(VectorSchemaRoot root, String fieldName) {

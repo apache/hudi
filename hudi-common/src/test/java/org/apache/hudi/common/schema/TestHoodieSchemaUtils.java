@@ -19,6 +19,7 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -99,12 +100,26 @@ public class TestHoodieSchemaUtils {
       + "{\"name\":\"localTimestampMicrosField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}"
       + "]}";
 
+  private static final String SCHEMA_WITH_NON_NULLABLE_FIELD =
+      "{\"type\": \"record\",\"name\": \"testrec3\",\"fields\": [ "
+          + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+          + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+          + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"},"
+          + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null},"
+          + "{\"name\": \"non_nullable_field_wo_default\",\"type\": \"string\"},"
+          + "{\"name\": \"non_nullable_field_with_default\",\"type\": \"string\", \"default\": \"dummy\"}]}";
+
   private static String SCHEMA_WITH_NESTED_FIELD_LARGE_STR = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
       + "{\"name\":\"nested_field\",\"type\":[\"null\"," + SCHEMA_WITH_AVRO_TYPES_STR + "],\"default\":null},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+
+  private static final String SCHEMA_WITH_DECIMAL_FIELD = "{\"type\":\"record\",\"name\":\"record\",\"fields\":["
+      + "{\"name\":\"key_col\",\"type\":[\"null\",\"int\"],\"default\":null},"
+      + "{\"name\":\"decimal_col\",\"type\":[\"null\","
+      + "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":8,\"scale\":4}],\"default\":null}]}";
 
   private static HoodieSchema SCHEMA_WITH_NESTED_FIELD_LARGE = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
 
@@ -1538,5 +1553,39 @@ public class TestHoodieSchemaUtils {
     assertNotNull(result);
     assertTrue(result instanceof LocalDate);
     assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  void testHasDecimalField() {
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(EVOLVED_SCHEMA)));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieTestDataGenerator.HOODIE_SCHEMA));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieTestDataGenerator.HOODIE_TRIP_ENCODED_DECIMAL_SCHEMA));
+    HoodieSchema recordWithMapAndArray = HoodieSchema.createRecord("recordWithMapAndArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(recordWithMapAndArray));
+    HoodieSchema recordWithDecMapAndArray = HoodieSchema.createRecord("recordWithDecMapAndArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.createDecimal(10, 6)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithDecMapAndArray));
+    HoodieSchema recordWithMapAndDecArray = HoodieSchema.createRecord("recordWithMapAndDecArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.createDecimal(10, 6)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithMapAndDecArray));
+  }
+
+  @Test
+  void testHasSmallPrecisionDecimalField() {
+    assertTrue(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR)));
+    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
   }
 }

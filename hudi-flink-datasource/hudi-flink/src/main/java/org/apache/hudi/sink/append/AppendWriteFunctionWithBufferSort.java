@@ -27,6 +27,7 @@ import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.sort.QuickSort;
 import org.apache.flink.table.data.RowData;
@@ -38,9 +39,6 @@ import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -58,8 +56,8 @@ import java.util.stream.Collectors;
  * @param <T> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunctionWithBufferSort.class);
   private final long writeBufferSize;
   private transient BinaryInMemorySortBuffer buffer;
 
@@ -85,7 +83,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
             memorySegmentPool,
             keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
             recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
-    LOG.info("{} is initialized successfully.", getClass().getSimpleName());
+    log.info("{} is initialized successfully.", getClass().getSimpleName());
   }
 
   @Override

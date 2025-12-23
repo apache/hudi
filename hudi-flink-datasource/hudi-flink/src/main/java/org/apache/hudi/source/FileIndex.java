@@ -35,11 +35,12 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -59,10 +60,9 @@ import java.util.stream.Collectors;
  *
  * <p>It caches the partition paths to avoid redundant look up.
  */
+@Slf4j
 public class FileIndex implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(FileIndex.class);
 
   private final StoragePath path;
   private final boolean tableExists;
@@ -264,14 +264,14 @@ public class FileIndex implements Serializable, AutoCloseable {
       if (metadataConfig.isEnabled()) {
         return true;
       } else {
-        LOG.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping or enable the metadata table.");
+        log.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping or enable the metadata table.");
       }
     }
     return false;
   }
 
   private void logPruningMsg(int numTotalFileSlices, int numLeftFileSlices, String action) {
-    LOG.info("\n"
+    log.info("\n"
         + "------------------------------------------------------------\n"
         + "---------- action:        {}\n"
         + "---------- total file slices:   {}\n"
@@ -299,6 +299,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   /**
    * Builder for {@link FileIndex}.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class Builder {
     private StoragePath path;
     private Configuration conf;
@@ -307,9 +308,6 @@ public class FileIndex implements Serializable, AutoCloseable {
     private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
     private Function<String, Integer> partitionBucketIdFunc;
-
-    private Builder() {
-    }
 
     public Builder path(StoragePath path) {
       this.path = path;
