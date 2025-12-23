@@ -418,20 +418,115 @@ public final class HoodieSchemaUtils {
           .map(field -> Pair.of(prefix + fieldName, field));
     } else {
       // Recursive case: nested field
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-
       int dotIndex = fieldName.indexOf(".");
       String rootFieldName = fieldName.substring(0, dotIndex);
       String remainingPath = fieldName.substring(dotIndex + 1);
 
-      return nonNullableSchema.getField(rootFieldName)
-          .flatMap(rootField -> getNestedFieldInternal(
-              rootField.schema(),
-              remainingPath,
-              prefix + rootFieldName + "."
-          ));
+      // Handle RECORD types - standard field navigation
+      if (nonNullableSchema.getType() == HoodieSchemaType.RECORD) {
+        return nonNullableSchema.getField(rootFieldName)
+            .flatMap(rootField -> getNestedFieldInternal(
+                rootField.schema(),
+                remainingPath,
+                prefix + rootFieldName + "."
+            ));
+      }
+
+      // Handle ARRAY types - expect ".list.element" pattern
+      if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY && "list".equals(rootFieldName)) {
+        if (!remainingPath.startsWith("element")) {
+          return Option.empty();  // Invalid path for ARRAY
+        }
+
+        // Skip "element" and get remaining path
+        String pathAfterElement = remainingPath.substring("element".length());
+        if (!pathAfterElement.isEmpty() && !pathAfterElement.startsWith(".")) {
+          return Option.empty();  // Invalid format
+        }
+        if (pathAfterElement.startsWith(".")) {
+          pathAfterElement = pathAfterElement.substring(1);
+        }
+
+        HoodieSchema elementSchema = nonNullableSchema.getElementType();
+        if (pathAfterElement.isEmpty()) {
+          // We've reached the end - return synthetic field for element
+          HoodieSchemaField syntheticField = HoodieSchemaField.of(
+              "element",
+              elementSchema,
+              null,  // doc
+              null   // defaultVal
+          );
+          return Option.of(Pair.of(prefix + rootFieldName + ".element", syntheticField));
+        } else {
+          // Continue navigating into element schema
+          return getNestedFieldInternal(
+              elementSchema,
+              pathAfterElement,
+              prefix + rootFieldName + ".element."
+          );
+        }
+      }
+
+      // Handle MAP types - expect ".key_value.key" or ".key_value.value" pattern
+      if (nonNullableSchema.getType() == HoodieSchemaType.MAP && "key_value".equals(rootFieldName)) {
+        if (remainingPath.startsWith("key")) {
+          // Skip "key" and get remaining path
+          String pathAfterKey = remainingPath.substring("key".length());
+          if (!pathAfterKey.isEmpty() && !pathAfterKey.startsWith(".")) {
+            return Option.empty();  // Invalid format
+          }
+          if (pathAfterKey.startsWith(".")) {
+            pathAfterKey = pathAfterKey.substring(1);
+          }
+
+          if (pathAfterKey.isEmpty()) {
+            // We've reached the end - return synthetic field for key (always STRING)
+            HoodieSchema keySchema = nonNullableSchema.getKeyType();
+            HoodieSchemaField syntheticField = HoodieSchemaField.of(
+                "key",
+                keySchema,
+                null,  // doc
+                null   // defaultVal
+            );
+            return Option.of(Pair.of(prefix + rootFieldName + ".key", syntheticField));
+          } else {
+            // Keys are primitives, cannot navigate further
+            return Option.empty();
+          }
+        } else if (remainingPath.startsWith("value")) {
+          // Skip "value" and get remaining path
+          String pathAfterValue = remainingPath.substring("value".length());
+          if (!pathAfterValue.isEmpty() && !pathAfterValue.startsWith(".")) {
+            return Option.empty();  // Invalid format
+          }
+          if (pathAfterValue.startsWith(".")) {
+            pathAfterValue = pathAfterValue.substring(1);
+          }
+
+          HoodieSchema valueSchema = nonNullableSchema.getValueType();
+          if (pathAfterValue.isEmpty()) {
+            // We've reached the end - return synthetic field for value
+            HoodieSchemaField syntheticField = HoodieSchemaField.of(
+                "value",
+                valueSchema,
+                null,  // doc
+                null   // defaultVal
+            );
+            return Option.of(Pair.of(prefix + rootFieldName + ".value", syntheticField));
+          } else {
+            // Continue navigating into value schema
+            return getNestedFieldInternal(
+                valueSchema,
+                pathAfterValue,
+                prefix + rootFieldName + ".value."
+            );
+          }
+        }
+        // Invalid MAP path
+        return Option.empty();
+      }
+      // For all other types (primitives, etc.), cannot navigate
+      return Option.empty();
     }
   }
 
