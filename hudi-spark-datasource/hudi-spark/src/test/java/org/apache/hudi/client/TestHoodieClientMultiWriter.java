@@ -457,7 +457,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       setUpMORTestTable();
     }
 
-    int heartBeatIntervalForCommit4 = 5 * 1000;
+    int heartBeatIntervalForCommit4 = 3 * 1000;
 
     HoodieWriteConfig writeConfig;
     TestingServer server = null;
