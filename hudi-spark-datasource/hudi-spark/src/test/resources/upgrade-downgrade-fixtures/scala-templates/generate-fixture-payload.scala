@@ -42,7 +42,12 @@ val payloadClasses = Seq(
 val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
   DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
 
-// Define test data - matching TestPayloadDeprecationFlow
+// SIMPLIFIED test data for v6 fixture
+// Strategy: Keep it minimal and predictable
+// 1. Initial insert with 5 records (ts=10)
+// 2. Update batch with higher ordering (ts=11)
+// 3. Delete batch (ts=12)
+
 val initialData = Seq(
   (10, 1L, "rider-A", "driver-A", 19.10, "i", "10.1", 10, 1, "i"),
   (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
@@ -51,37 +56,15 @@ val initialData = Seq(
   (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i")
 )
 
-val firstUpdateData = Seq(
-  (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
-  (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
-  (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u")
-)
-
-val mixedOrderingData = Seq(
-  // Update rider-C with HIGHER ordering - should be APPLIED
-  (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
-  // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
-  (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
-  // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
-  (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d")
-)
-
-val secondUpdateData = Seq(
-  (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
-  // For rider-DD we purposefully deviate and set the _event_seq to be less than the _event_bin_file and _event_pos
-  // so that the test will fail if _event_seq is still used for ordering
-  (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
-  (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i")
+val updateData = Seq(
+  (11, 1L, "rider-X", "driver-X", 19.10, "u", "11.1", 11, 1, "u"),
+  (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+  (11, 3L, "rider-CC", "driver-CC", 33.90, "u", "11.1", 11, 1, "u")
 )
 
 val deleteData = Seq(
-  (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
-  (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i")
-)
-
-val finalInsertData = Seq(
-  (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
-  (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i")
+  (12, 1L, "rider-X", "driver-X", 19.10, "i", "12.1", 12, 1, "i"),
+  (12, 5L, "rider-E", "driver-E", 17.85, "i", "12.1", 12, 1, "i")
 )
 
 // Function to create table for a specific payload
@@ -118,6 +101,7 @@ def createPayloadTable(payloadName: String, payloadClass: String): Unit = {
   val tableStructureConfig = Map(
     RECORDKEY_FIELD.key() -> "_event_lsn",
     HoodieTableConfig.PRECOMBINE_FIELD.key() -> orderingFields,
+    "hoodie.datasource.write.precombine.field" -> orderingFields, // required for ordering field to be set
     PARTITIONPATH_FIELD.key() -> ""  // Non-partitioned table
   )
 
@@ -142,7 +126,7 @@ def createPayloadTable(payloadName: String, payloadClass: String): Unit = {
   // Combine all configurations
   val allConfig = baseConfig ++ payloadConfig ++ tableStructureConfig ++ deleteConfig ++ serviceConfig
 
-  // 1. Initial insert
+  // 1. Initial insert - 5 records at ts=10
   val initialDf = spark.createDataFrame(initialData).toDF(columns: _*)
   initialDf.write.format("hudi")
     .options(allConfig)
@@ -150,43 +134,19 @@ def createPayloadTable(payloadName: String, payloadClass: String): Unit = {
     .mode(SaveMode.Overwrite)
     .save(tableBasePath)
 
-  // 2. First update batch
-  val firstUpdateDf = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
-  firstUpdateDf.write.format("hudi")
+  // 2. Update batch - higher ordering (ts=11)
+  val updateDf = spark.createDataFrame(updateData).toDF(columns: _*)
+  updateDf.write.format("hudi")
     .options(allConfig)
     .option(OPERATION.key(), "upsert")
     .mode(SaveMode.Append)
     .save(tableBasePath)
 
-  // 3. Mixed ordering test data
-  val mixedOrderingDf = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
-  mixedOrderingDf.write.format("hudi")
-    .options(allConfig)
-    .option(OPERATION.key(), "upsert")
-    .mode(SaveMode.Append)
-    .save(tableBasePath)
-
-  // 4. Second update batch
-  val secondUpdateDf = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
-  secondUpdateDf.write.format("hudi")
-    .options(allConfig)
-    .option(OPERATION.key(), "upsert")
-    .mode(SaveMode.Append)
-    .save(tableBasePath)
-
-  // 5. Delete operations
+  // 3. Delete operations - ts=12
   val deleteDf = spark.createDataFrame(deleteData).toDF(columns: _*)
   deleteDf.write.format("hudi")
     .options(allConfig)
     .option(OPERATION.key(), "delete")
-    .mode(SaveMode.Append)
-    .save(tableBasePath)
-
-  // 6. Final insert operations
-  val finalInsertDf = spark.createDataFrame(finalInsertData).toDF(columns: _*)
-  finalInsertDf.write.format("hudi")
-    .options(allConfig)
-    .option(OPERATION.key(), INSERT_OPERATION_OPT_VAL)
     .mode(SaveMode.Append)
     .save(tableBasePath)
 

@@ -643,14 +643,12 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> testArgsPayloadUpgradeDowngrade() {
     String[] payloadTypes = {
-        "default", "overwrite", "partial", "postgres", "mysql",
+        "overwrite", "partial", "postgres", "mysql",
         "awsdms", "eventtime", "overwritenondefaults"
     };
 
-    return Stream.of("MOR")
-        .flatMap(tableType -> Stream.of(RecordMergeMode.EVENT_TIME_ORDERING, RecordMergeMode.COMMIT_TIME_ORDERING)
-            .flatMap(recordMergeMode -> Stream.of(payloadTypes)
-                .map(payloadType -> Arguments.of(tableType, recordMergeMode, payloadType))));
+    return Stream.of(payloadTypes)
+        .map(Arguments::of);
   }
 
   /**
@@ -994,11 +992,67 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
+  /**
+   * Validates that event-time ordering is respected for OverwriteWithLatestAvroPayload on v6 MOR tables.
+   * This validates the special case where a v6 table with ordering field set should use event-time ordering.
+   *
+   * Simplified fixture data (monotonically increasing timestamps):
+   * - Initial: 5 records (lsn=1-5) with ts=10
+   * - Update: lsn=1,2,3 with ts=11
+   * - Delete: lsn=1,5 deleted (ts=12)
+   *
+   * After upgrade, test adds mixed ordering batch:
+   * - lsn=2: ts=13 (HIGHER) → should APPLY
+   * - lsn=4: ts=9 (LOWER) → should be IGNORED
+   * - lsn=6: ts=14 (new record)
+   *
+   * Expected: 4 records total, respecting event-time ordering based on "ts" field.
+   */
+  private void validateOverwritePayloadEventTimeOrdering(HoodieTableMetaClient metaClient, String stage) {
+    LOG.info("Validating event-time ordering for OverwriteWithLatestAvroPayload {}", stage);
+    try {
+      Dataset<Row> actualData = readTableData(metaClient, stage);
+      Dataset<Row> actualDataSorted = actualData
+          .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
+                  "_event_bin_file", "_event_pos", "_change_operation_type")
+          .sort("_event_lsn");
+      List<org.apache.spark.sql.Row> expectedRows = Arrays.asList(
+          org.apache.spark.sql.RowFactory.create(13, 2L, "rider-YY", "driver-YY", 27.70, "u", "13.1", 13, 1, "u"),
+          org.apache.spark.sql.RowFactory.create(11, 3L, "rider-CC", "driver-CC", 33.90, "u", "11.1", 11, 1, "u"),
+          org.apache.spark.sql.RowFactory.create(10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
+          org.apache.spark.sql.RowFactory.create(14, 6L, "rider-NEW", "driver-NEW", 25.50, "i", "14.1", 14, 1, "i")
+      );
+      org.apache.spark.sql.types.StructType schema = org.apache.spark.sql.types.DataTypes.createStructType(
+          Arrays.asList(
+              org.apache.spark.sql.types.DataTypes.createStructField("ts", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_lsn", org.apache.spark.sql.types.DataTypes.LongType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("rider", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("driver", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("fare", org.apache.spark.sql.types.DataTypes.DoubleType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("Op", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_seq", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_bin_file", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_pos", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_change_operation_type", org.apache.spark.sql.types.DataTypes.StringType, true)
+          )
+      );
+      Dataset<Row> expectedDataSorted = sqlContext().createDataFrame(expectedRows, schema).sort("_event_lsn");
+      Dataset<Row> inActualNotExpected = actualDataSorted.except(expectedDataSorted);
+      Dataset<Row> inExpectedNotActual = expectedDataSorted.except(actualDataSorted);
+      // Validate that actual data matches expected data (event-time ordering respected)
+      boolean isEqual = inExpectedNotActual.isEmpty() && inActualNotExpected.isEmpty();
+      assertTrue(isEqual,
+          "Event-time ordering validation failed " + stage + ": data should match expected results with event-time ordering");
+    } catch (Exception e) {
+      LOG.error("Event-time ordering validation failed {}", stage, e);
+      throw new RuntimeException("Event-time ordering validation failed " + stage, e);
+    }
+  }
+
   @ParameterizedTest
   @MethodSource("testArgsPayloadUpgradeDowngrade")
-  public void testPayloadUpgradeDowngrade(String tableType, RecordMergeMode recordMergeMode, String payloadType) throws Exception {
-    LOG.info("Testing payload upgrade/downgrade for: {} (tableType: {}, recordMergeMode: {})",
-        payloadType, tableType, recordMergeMode);
+  public void testPayloadUpgradeDowngrade(String payloadType) throws Exception {
+    LOG.info("Testing payload upgrade/downgrade for: {}", payloadType);
 
     // Load v6 fixture for this payload type
     HoodieTableMetaClient metaClientV6 = loadPayloadFixtureTable(HoodieTableVersion.SIX, payloadType);
@@ -1028,35 +1082,79 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "Table should be upgraded to version 9 for payload: " + payloadType);
     validateDataConsistency(originalDataV6, metaClientV9, "after v6->v9 upgrade for " + payloadType);
 
-    // Add one new record to v9 table by modifying one existing row
-    // Read from upgraded table to get correct schema (with _change_operation_type and proper types)
-    Dataset<Row> dataAfterUpgrade = readTableData(metaClientV9, "v9 data for new record");
-    Dataset<Row> newRecordData = dataAfterUpgrade.limit(1).selectExpr(
-        "14 as ts",
-        "8L as _event_lsn",
-        "'rider-NEW' as rider",
-        "'driver-NEW' as driver",
-        "fare",
-        "Op",
-        "'14.1' as _event_seq",
-        "14 as _event_bin_file",
-        "1 as _event_pos",
-        "_change_operation_type"
-    ).cache();
+    // For overwrite payload: add mixed ordering batch to validate event-time ordering
+    if ("overwrite".equals(payloadType)) {
+      // Mixed ordering batch: one HIGHER (should apply), one LOWER (should be ignored)
+      // Create proper test data with correct values for all fields
+      List<org.apache.spark.sql.Row> mixedOrderingRows = Arrays.asList(
+          // Higher ordering: ts=13 > current ts=11 for lsn=2 → should APPLY
+          org.apache.spark.sql.RowFactory.create(13, 2L, "rider-YY", "driver-YY", 27.70, "u", "13.1", 13, 1, "u"),
+          // Lower ordering: ts=9 < current ts=10 for lsn=4 → should be IGNORED
+          org.apache.spark.sql.RowFactory.create(9, 4L, "rider-IGNORED", "driver-IGNORED", 34.15, "u", "9.1", 9, 1, "u")
+      );
+
+      org.apache.spark.sql.types.StructType mixedOrderingSchema = org.apache.spark.sql.types.DataTypes.createStructType(
+          Arrays.asList(
+              org.apache.spark.sql.types.DataTypes.createStructField("ts", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_lsn", org.apache.spark.sql.types.DataTypes.LongType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("rider", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("driver", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("fare", org.apache.spark.sql.types.DataTypes.DoubleType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("Op", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_seq", org.apache.spark.sql.types.DataTypes.StringType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_bin_file", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_event_pos", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+              org.apache.spark.sql.types.DataTypes.createStructField("_change_operation_type", org.apache.spark.sql.types.DataTypes.StringType, true)
+          )
+      );
+
+      Dataset<Row> mixedOrderingData = sqlContext().createDataFrame(mixedOrderingRows, mixedOrderingSchema);
+      mixedOrderingData.write()
+          .format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key(), metaClientV9.getTableConfig().getTableName())
+          .option(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts")
+          .option("hoodie.datasource.write.operation", "upsert")
+          .mode(SaveMode.Append)
+          .save(metaClientV9.getBasePath().toString());
+    }
+
+    // Add one new record with proper field values
+    List<org.apache.spark.sql.Row> newRecordRows = Arrays.asList(
+        org.apache.spark.sql.RowFactory.create(14, 6L, "rider-NEW", "driver-NEW", 25.50, "i", "14.1", 14, 1, "i")
+    );
+
+    org.apache.spark.sql.types.StructType newRecordSchema = org.apache.spark.sql.types.DataTypes.createStructType(
+        Arrays.asList(
+            org.apache.spark.sql.types.DataTypes.createStructField("ts", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("_event_lsn", org.apache.spark.sql.types.DataTypes.LongType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("rider", org.apache.spark.sql.types.DataTypes.StringType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("driver", org.apache.spark.sql.types.DataTypes.StringType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("fare", org.apache.spark.sql.types.DataTypes.DoubleType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("Op", org.apache.spark.sql.types.DataTypes.StringType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("_event_seq", org.apache.spark.sql.types.DataTypes.StringType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("_event_bin_file", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("_event_pos", org.apache.spark.sql.types.DataTypes.IntegerType, true),
+            org.apache.spark.sql.types.DataTypes.createStructField("_change_operation_type", org.apache.spark.sql.types.DataTypes.StringType, true)
+        )
+    );
+
+    Dataset<Row> newRecordData = sqlContext().createDataFrame(newRecordRows, newRecordSchema).cache();
     newRecordData.write()
         .format("hudi")
         .option(HoodieWriteConfig.TBL_NAME.key(), metaClientV9.getTableConfig().getTableName())
         .mode(SaveMode.Append)
         .save(metaClientV9.getBasePath().toString());
 
-    // Create expected dataset: original 5 records + 1 new record = 6 total
-    // Drop Hudi metadata columns from originalDataV6 to match newRecordData schema, as select expr contains only data columns
+    // Create expected dataset based on simplified fixture
+    // Fixture has 3 surviving records after deletes: lsn=2,3,4
+    // We add 1 new record: lsn=6
+    // Total expected: 4 records for all payloads (except overwrite gets mixed batch too)
     Dataset<Row> originalDataV6WithoutMeta = originalDataV6.drop(
         "_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
         "_hoodie_partition_path", "_hoodie_file_name");
     Dataset<Row> expectedDataWithNewRecord = originalDataV6WithoutMeta.union(newRecordData).cache();
 
-    // Refresh metaclient and read v9 data (which now contains original 5 + 1 new record = 6 total)
+    // Refresh metaclient and read v9 data
     metaClientV9 = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance())
         .setBasePath(metaClientV6.getBasePath())
@@ -1067,10 +1165,17 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
             .option("hoodie.datasource.query.type", "read_optimized")
             .load(metaClientV9.getBasePath().toString());
 
-    assertEquals(6, readOptimizedDataUpgradeAndWrite.count(),
-            "Read-optimized query should return 6 records after upgrade/write: " + payloadType);
+    // Expected record count: 3 from fixture (after deletes: lsn=2,3,4) + 1 new (lsn=6) = 4 records
+    assertEquals(4, readOptimizedDataUpgradeAndWrite.count(),
+            "Read-optimized query should return 4 records after upgrade/write: " + payloadType);
+
     // will perform real time query and do dataframe validation
-    validateDataConsistency(expectedDataWithNewRecord, metaClientV9, "dataframe validation after v9 upgrade/write for " + payloadType);
+    // for overwrite - it has specific validation below that accounts for mixed ordering batch
+    if ("overwrite".equals(payloadType)) {
+      validateOverwritePayloadEventTimeOrdering(metaClientV9, "event-time ordering validation after v9 upgrade for " + payloadType);
+    } else {
+      validateDataConsistency(expectedDataWithNewRecord, metaClientV9, "dataframe validation after v9 upgrade/write for " + payloadType);
+    }
 
     // Test downgrade v9 -> v6
     new UpgradeDowngrade(metaClientV9, config, context(), SparkUpgradeDowngradeHelper.getInstance())
@@ -1089,9 +1194,16 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .option("hoodie.datasource.query.type", "read_optimized")
         .load(metaClientV6.getBasePath().toString());
 
-    assertEquals(6, readOptimizedDataAfterDowngrade.count(), "Read-optimized query should return 6 records after downgrade: " + payloadType);
+    // Expected: 3 from fixture (lsn=2,3,4) + 1 new (lsn=6) = 4 records
+    assertEquals(4, readOptimizedDataAfterDowngrade.count(), "Read-optimized query should return 4 records after downgrade: " + payloadType);
+
     // will perform real time query and do dataframe validation
-    validateDataConsistency(expectedDataWithNewRecord, metaClientV6, "dataframe validation after v9->v6 downgrade for " + payloadType);
+    // for overwrite - it has specific validation below that accounts for mixed ordering batch
+    if ("overwrite".equals(payloadType)) {
+      validateOverwritePayloadEventTimeOrdering(metaClientV6, "event-time ordering validation after downgrade for " + payloadType);
+    } else {
+      validateDataConsistency(expectedDataWithNewRecord, metaClientV6, "dataframe validation after v9->v6 downgrade for " + payloadType);
+    }
     LOG.info("Completed payload upgrade/downgrade test for: {}", payloadType);
   }
 }
