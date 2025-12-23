@@ -45,20 +45,20 @@ public class DFSDeltaConfig extends DeltaConfig {
   // Parallelism to use when generating input data
   private int inputParallelism;
   // Whether to delete older input data once it has been ingested
-  private boolean shouldDeleteOldInputData;
+  private boolean oldInputDataDeleted;
   private boolean hudiUpdatesEnabled;
 
   public DFSDeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
                         StorageConfiguration<Configuration> storageConf,
                         String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
-                        int inputParallelism, boolean shouldDeleteOldInputData, boolean hudiUpdatesEnabled) {
+                        int inputParallelism, boolean oldInputDataDeleted, boolean hudiUpdatesEnabled) {
     super(deltaOutputMode, deltaInputType, storageConf);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
     this.maxFileSize = maxFileSize;
     this.datasetOutputPath = targetBasePath;
     this.inputParallelism = inputParallelism;
-    this.shouldDeleteOldInputData = shouldDeleteOldInputData;
+    this.oldInputDataDeleted = oldInputDataDeleted;
     this.hudiUpdatesEnabled = hudiUpdatesEnabled;
   }
 }

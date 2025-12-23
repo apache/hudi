@@ -88,7 +88,7 @@ public class DeltaGenerator implements Serializable {
   }
 
   public Pair<Integer, JavaRDD<DeltaWriteStats>> writeRecords(JavaRDD<GenericRecord> records) {
-    if (deltaOutputConfig.isShouldDeleteOldInputData() && batchId > 1) {
+    if (deltaOutputConfig.isOldInputDataDeleted() && batchId > 1) {
       Path oldInputDir = new Path(deltaOutputConfig.getDeltaBasePath(), Integer.toString(batchId - 1));
       try {
         FileSystem fs = HadoopFSUtils.getFs(oldInputDir.toString(), deltaOutputConfig.getConfiguration());
