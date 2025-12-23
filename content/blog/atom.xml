@@ -125,9 +125,7 @@
 <li class="">Building custom transformations for flexible schema evolution</li>
 <li class="">Centralizing configuration management for operational simplicity</li>
 </ul>
-<blockquote>
-<p>"I'm looking forward to more contributing to the community." – Amarjeet Singh, Senior Data Engineer at Zupee</p>
-</blockquote>]]></content>
+<p>Watch the <a href="https://www.youtube.com/watch?v=Mpj8hnaZbe0" target="_blank" rel="noopener noreferrer" class="">full presentation on YouTube</a>. Ready to optimize your own data platform? Get started with <a href="https://hudi.apache.org/docs/quick-start-guide" target="_blank" rel="noopener noreferrer" class="">Hudi</a> and explore <a href="https://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a> for your ingestion needs.</p>]]></content>
         <author>
             <name>The Hudi Community</name>
         </author>
