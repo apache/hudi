@@ -38,7 +38,6 @@ import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.orc.Spark41OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark41LegacyHoodieParquetFileFormat, Spark41ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -200,7 +199,7 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
   }
 
   override def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
-    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+    SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE)
   }
 
   override def isLegacyBehaviorPolicy(value: Object): Boolean = {
