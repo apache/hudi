@@ -46,6 +46,7 @@ import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.functions.FunctionIdentifier;
 import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.fs.Path;
 import org.hamcrest.CoreMatchers;
@@ -185,6 +186,41 @@ public class TestHoodieTableSource {
     HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);
     hoodieTableSource.applyFilters(filters);
     assertEquals(expectedPartitions, hoodieTableSource.getReadPartitions());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"uuid", "uuid,age"})
+  void testDataSkippingWithPartialIndexedColumns(String colStatsColumns) throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), colStatsColumns);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieTableSource hoodieTableSource = createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA_WITH_META_COLUMNS);
+    CallExpression filter1 =
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                new ValueLiteralExpression("id5", DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN()
+        );
+    CallExpression filter2 =
+        CallExpression.permanent(
+            FunctionIdentifier.of("greaterThan"),
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("age", DataTypes.INT(), 0, 2),
+                new ValueLiteralExpression(25, DataTypes.INT().notNull())),
+            DataTypes.BOOLEAN()
+        );
+    hoodieTableSource.applyFilters(Arrays.asList(filter1, filter2));
+    List<FileSlice> fileSlices = hoodieTableSource.getBaseFileOnlyFileSlices();
+    // if column `age` is not indexed, the filter `age` > 25 will not be used to prune file slice, thus the expected slice number is 2
+    int expectSliceNumber = colStatsColumns.equals("uuid") ? 2 : 1;
+    assertThat("the number of file slices should be " + expectSliceNumber, fileSlices.size(), CoreMatchers.is(expectSliceNumber));
   }
 
   @Test
