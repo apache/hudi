@@ -144,21 +144,49 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
         root.setRowCount(0);
         writer.write(root);
       }
-
-      // Close Lance writer
-      if (writer != null) {
-        writer.close();
-      }
-
-      // Close VectorSchemaRoot
-      if (root != null) {
-        root.close();
-      }
     } catch (Exception e) {
-      throw new HoodieException("Failed to close Lance writer: " + path, e);
-    } finally {
-      // Always close allocator
+      primaryException = e;
+    }
+
+    // Close Lance writer
+    if (writer != null) {
+      try {
+        writer.close();
+      } catch (Exception e) {
+        if (primaryException == null) {
+          primaryException = e;
+        } else {
+          primaryException.addSuppressed(e);
+        }
+      }
+    }
+
+    // Close VectorSchemaRoot
+    if (root != null) {
+      try {
+        root.close();
+      } catch (Exception e) {
+        if (primaryException == null) {
+          primaryException = e;
+        } else {
+          primaryException.addSuppressed(e);
+        }
+      }
+    }
+
+    // Always close allocator
+    try {
       allocator.close();
+    } catch (Exception e) {
+      if (primaryException == null) {
+        primaryException = e;
+      } else {
+        primaryException.addSuppressed(e);
+      }
+    }
+
+    if (primaryException != null) {
+      throw new HoodieException("Failed to close Lance writer: " + path, primaryException);
     }
   }
 

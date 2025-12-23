@@ -79,7 +79,7 @@ public class LanceTestUtils {
    * @param value Value to process
    * @return Processed value suitable for InternalRow
    */
-  private static Object processValue(Object value) {
+  protected static Object processValue(Object value) {
     if (value instanceof String) {
       return UTF8String.fromString((String) value);
     }
