@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -43,6 +44,7 @@ import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
@@ -313,9 +315,7 @@ public class ITTestHoodieFlinkCompactor {
     HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf);
     asyncCompactionService.start(null);
 
-    // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(10);
-
+    TestUtils.waitUntil(() -> TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath(), HoodieTimeline.COMMIT_ACTION) != null, 20);
     asyncCompactionService.shutDown();
 
     TestData.checkWrittenDataCOW(tempFile, EXPECTED2);

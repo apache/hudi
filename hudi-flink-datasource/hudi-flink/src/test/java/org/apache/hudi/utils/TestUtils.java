@@ -44,6 +44,8 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -156,5 +158,15 @@ public class TestUtils {
     java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);
     Files.move(sourcePath, newFilePath);
     return newCompletionTime;
+  }
+
+  public static boolean waitUntil(BooleanSupplier condition, int timeoutSeconds) throws InterruptedException {
+    for (int i = 0; i < timeoutSeconds; i++) {
+      if (condition.getAsBoolean()) {
+        return true;
+      }
+      TimeUnit.SECONDS.sleep(1);
+    }
+    return false;
   }
 }
