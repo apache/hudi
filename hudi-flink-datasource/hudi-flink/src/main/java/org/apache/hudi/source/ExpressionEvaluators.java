@@ -31,7 +31,8 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nonnull;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -221,7 +222,7 @@ public class ExpressionEvaluators {
       }
     }
 
-    protected abstract boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type);
+    protected abstract boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type);
   }
 
   /**
@@ -235,7 +236,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null || maxVal == null) {
@@ -263,7 +264,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null || maxVal == null) {
@@ -322,7 +323,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    public boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    public boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       if (minVal == null) {
         return false;
@@ -342,7 +343,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object maxVal = columnStats.getMaxVal();
       if (maxVal == null) {
         return false;
@@ -362,7 +363,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       if (minVal == null) {
         return false;
@@ -382,7 +383,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object maxVal = columnStats.getMaxVal();
       if (maxVal == null) {
         return false;
@@ -553,7 +554,7 @@ public class ExpressionEvaluators {
     return vals.toArray();
   }
 
-  private static int compare(@NotNull Object val1, @NotNull Object val2, LogicalType logicalType) {
+  private static int compare(@Nonnull Object val1, @Nonnull Object val2, LogicalType logicalType) {
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIME_WITHOUT_TIME_ZONE:
@@ -580,7 +581,7 @@ public class ExpressionEvaluators {
     }
   }
 
-  private static BigDecimal getBigDecimal(@NotNull Object value) {
+  private static BigDecimal getBigDecimal(@Nonnull Object value) {
     if (value instanceof BigDecimal) {
       return (BigDecimal) value;
     } else if (value instanceof Double) {
