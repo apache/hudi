@@ -345,7 +345,6 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
             .enable(useFileListingMetadata)
             .enableMetrics(enableMetrics)
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
-            .withMetadataIndexColumnStats(false) // Test uses TestTable which does not write real files
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.INMEMORY.name()).build())

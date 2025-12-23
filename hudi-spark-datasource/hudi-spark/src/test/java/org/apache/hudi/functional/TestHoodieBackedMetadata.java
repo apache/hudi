@@ -251,7 +251,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // bootstrap with few commits
     doPreBootstrapOperations(testTable);
 
-    writeConfig = getWriteConfig(true, true);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetadataIndexColumnStats(false) // No real files written so avoid stats
+            .build())
+        .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
@@ -576,6 +581,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
+            .withMetadataIndexColumnStats(false)
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -3111,6 +3117,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
                     .enableMetrics(false)
                     .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits - 1)
                     .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
+                    .withMetadataIndexColumnStats(false) // no real files so avoid reading column stats
                     .build())
             .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
