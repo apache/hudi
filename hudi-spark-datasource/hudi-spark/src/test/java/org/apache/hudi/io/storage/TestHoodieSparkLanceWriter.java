@@ -339,8 +339,16 @@ public class TestHoodieSparkLanceWriter {
       // Close without writing any rows
     }
 
-    // Lance doesn't create a file if no data is written
-    assertFalse(storage.exists(path), "Lance file should not exist when no data is written");
+    // Should create a empty lance file with just schema even if no data is written
+    assertTrue(storage.exists(path), "Lance file should exist even when no data is written");
+
+    // Verify the empty file has valid structure with correct schema
+    try (BufferAllocator allocator = new RootAllocator();
+         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
+      assertEquals(0, reader.numRows(), "Empty file should have 0 rows");
+      assertEquals(1, reader.schema().getFields().size(), "Should have 1 field");
+      assertEquals("id", reader.schema().getFields().get(0).getName(), "Field name should be 'id'");
+    }
   }
 
   @Test

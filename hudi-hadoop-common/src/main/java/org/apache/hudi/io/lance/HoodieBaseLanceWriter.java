@@ -55,7 +55,6 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   protected final BufferAllocator allocator;
   protected final List<R> bufferedRecords;
   protected final int batchSize;
-  protected final long maxFileSize;
   protected long writtenRecordCount = 0;
   protected VectorSchemaRoot root;
 
@@ -67,15 +66,13 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * @param storage HoodieStorage instance
    * @param path Path where Lance file will be written
    * @param batchSize Number of records to buffer before flushing to Lance
-   * @param maxFileSize Maximum file size in bytes before rolling over to new file
    */
-  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize, long maxFileSize) {
+  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize) {
     this.storage = storage;
     this.path = path;
     this.allocator = new RootAllocator(Long.MAX_VALUE);
     this.bufferedRecords = new ArrayList<>(batchSize);
     this.batchSize = batchSize;
-    this.maxFileSize = maxFileSize;
   }
 
   /**
@@ -130,6 +127,15 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
       // Flush any remaining buffered records
       if (!bufferedRecords.isEmpty()) {
         flushBatch();
+      }
+
+      // Ensure writer is initialized even if no data was written
+      // This creates an empty Lance file with just schema metadata
+      if (writer == null && root == null) {
+        initializeWriter();
+        root = VectorSchemaRoot.create(getArrowSchema(), allocator);
+        root.setRowCount(0);
+        writer.write(root);
       }
 
       // Close Lance writer

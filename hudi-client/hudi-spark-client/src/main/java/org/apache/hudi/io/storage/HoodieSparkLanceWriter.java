@@ -51,7 +51,6 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECO
  */
 public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> implements HoodieSparkFileWriter {
 
-  private static final long DEFAULT_MAX_FILE_SIZE = 120 * 1024 * 1024; // 120MB
   private static final String DEFAULT_TIMEZONE = "UTC";
 
   private final StructType sparkSchema;
@@ -79,7 +78,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> i
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
                                 boolean populateMetaFields) throws IOException {
-    super(storage, file, DEFAULT_BATCH_SIZE, DEFAULT_MAX_FILE_SIZE);
+    super(storage, file, DEFAULT_BATCH_SIZE);
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
@@ -128,7 +127,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> i
    * @return true if writer can accept more records, false if file size limit reached
    */
   public boolean canWrite() {
-    //TODO will need to implement proper way to compute this
+    //TODO https://github.com/apache/hudi/issues/17684
     return true;
   }
 
