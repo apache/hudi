@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -1759,33 +1758,5 @@ public class TestHoodieSchemaUtils {
     // For simple 2-element nullable union, should use fast path
     HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
     assertEquals(HoodieSchemaType.STRING, result.getType());
-  }
-
-  @Test
-  void testResolveUnionSchemaConsistencyWithOriginalAvroImpl() {
-    // Verify that HoodieSchemaUtils.resolveUnionSchema produces equivalent results to the original AvroSchemaUtils.resolveUnionSchema
-    String unionSchemaJson = "{"
-        + "\"type\":\"record\","
-        + "\"name\":\"TestRecord\","
-        + "\"fields\":[{"
-        + "  \"name\":\"unionField\","
-        + "  \"type\":[\"null\","
-        + "    {\"type\":\"record\",\"name\":\"TypeA\",\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]},"
-        + "    {\"type\":\"record\",\"name\":\"TypeB\",\"fields\":[{\"name\":\"b\",\"type\":\"string\"}]}"
-        + "  ]"
-        + "}]}";
-
-    Schema avroSchema = new Schema.Parser().parse(unionSchemaJson);
-    HoodieSchema hoodieSchema = HoodieSchema.parse(unionSchemaJson);
-
-    Schema avroFieldSchema = avroSchema.getField("unionField").schema();
-    HoodieSchema hoodieFieldSchema = hoodieSchema.getField("unionField").get().schema();
-
-    // Resolve using both implementations
-    Schema avroResult = AvroSchemaUtils.resolveUnionSchema(avroFieldSchema, "TypeA");
-    HoodieSchema hoodieResult = HoodieSchemaUtils.resolveUnionSchema(hoodieFieldSchema, "TypeA");
-
-    // Should produce equivalent schemas
-    assertEquals(avroResult, hoodieResult.toAvroSchema());
   }
 }
