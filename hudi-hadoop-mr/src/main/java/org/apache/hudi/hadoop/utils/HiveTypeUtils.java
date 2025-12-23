@@ -53,6 +53,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaType.MAP;
 import static org.apache.hudi.common.schema.HoodieSchemaType.NULL;
 import static org.apache.hudi.common.schema.HoodieSchemaType.RECORD;
 import static org.apache.hudi.common.schema.HoodieSchemaType.STRING;
+import static org.apache.hudi.common.schema.HoodieSchemaType.TIMESTAMP;
 import static org.apache.hudi.common.schema.HoodieSchemaType.UNION;
 
 /**
@@ -135,6 +136,7 @@ public class HiveTypeUtils {
       return generateTypeInfoWorker(s, seenSchemas);
     }
   };
+
   /**
    * Convert an Avro Schema into an equivalent Hive TypeInfo.
    * @param schema to record. Must be of record type.
@@ -187,7 +189,7 @@ public class HiveTypeUtils {
       return TypeInfoFactory.dateTypeInfo;
     }
 
-    if (type == LONG
+    if (type == TIMESTAMP
         && AvroSerDe.TIMESTAMP_TYPE_NAME.equals((String) schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       return TypeInfoFactory.timestampTypeInfo;
     }

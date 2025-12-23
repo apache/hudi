@@ -1786,6 +1786,6 @@ public class TestHoodieSchemaUtils {
     HoodieSchema hoodieResult = HoodieSchemaUtils.resolveUnionSchema(hoodieFieldSchema, "TypeA");
 
     // Should produce equivalent schemas
-    assertEquals(avroResult.toString(), hoodieResult.toString());
+    assertEquals(avroResult, hoodieResult.toAvroSchema());
   }
 }
