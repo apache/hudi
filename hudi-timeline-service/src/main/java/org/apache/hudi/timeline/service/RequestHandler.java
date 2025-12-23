@@ -53,9 +53,10 @@ import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
@@ -590,7 +591,7 @@ public class RequestHandler {
     }
 
     @Override
-    public void handle(@NotNull Context context) throws Exception {
+    public void handle(@Nonnull Context context) throws Exception {
       ugi.doAs((PrivilegedExceptionAction<Void>) () -> {
         boolean success = true;
         long beginTs = System.currentTimeMillis();

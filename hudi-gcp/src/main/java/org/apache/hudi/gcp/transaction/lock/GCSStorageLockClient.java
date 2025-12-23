@@ -36,9 +36,9 @@ import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageException;
 import com.google.cloud.storage.StorageOptions;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
+import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
@@ -204,7 +204,7 @@ public class GCSStorageLockClient implements StorageLockClient {
     }
   }
 
-  private @NotNull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
+  private @Nonnull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
     try (InputStream inputStream = Channels.newInputStream(blob.reader())) {
       return Pair.of(LockGetResult.SUCCESS,
           Option.of(StorageLockFile.createFromStream(inputStream, String.valueOf(blob.getGeneration()))));
