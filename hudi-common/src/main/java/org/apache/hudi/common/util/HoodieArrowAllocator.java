@@ -40,25 +40,31 @@ import org.apache.arrow.memory.RootAllocator;
  */
 public class HoodieArrowAllocator {
 
-  private static volatile BufferAllocator rootAllocator;
-
   private HoodieArrowAllocator() {
     // Utility class
   }
 
   /**
-   * Get or create the shared root allocator using double-checked locking.
-   * The root allocator is (Long.MAX_VALUE).
+   * Initialization-on-demand holder idiom for thread-safe lazy initialization.
+   * The root allocator is created when first accessed and has a maximum size of Long.MAX_VALUE.
+   */
+  private static class RootAllocatorHolder {
+    static final BufferAllocator INSTANCE = new RootAllocator(Long.MAX_VALUE);
+
+    static {
+      Runtime.getRuntime().addShutdownHook(new Thread(
+              INSTANCE::close, "hudi-arrow-root-allocator-shutdown"));
+    }
+  }
+
+  /**
+   * Get the shared root allocator.
+   * Thread-safe lazy initialization using the holder idiom.
+   *
+   * @return The singleton root allocator instance
    */
   private static BufferAllocator getRootAllocator() {
-    if (rootAllocator == null) {
-      synchronized (HoodieArrowAllocator.class) {
-        if (rootAllocator == null) {
-          rootAllocator = new RootAllocator(Long.MAX_VALUE);
-        }
-      }
-    }
-    return rootAllocator;
+    return RootAllocatorHolder.INSTANCE;
   }
 
   /**
@@ -71,15 +77,5 @@ public class HoodieArrowAllocator {
    */
   public static BufferAllocator newChildAllocator(String name, long childSizeBytes) {
     return getRootAllocator().newChildAllocator("hudi-arrow-" + name, 0, childSizeBytes);
-  }
-
-  /**
-   * Close the root allocator. Should only be called during application shutdown
-   */
-  public static synchronized void close() {
-    if (rootAllocator != null) {
-      rootAllocator.close();
-      rootAllocator = null;
-    }
   }
 }
