@@ -487,4 +487,121 @@ public class TestHiveAvroSerializer {
     BigDecimal resultDecimal = HoodieAvroUtils.DECIMAL_CONVERSION.fromFixed(resultFixed, decimalType.toAvroSchema(), decimalType.toAvroSchema().getLogicalType());
     assertEquals(bd, resultDecimal);
   }
+
+  @Test
+  public void testGenerateColumnTypesForDecimalBackedByBytes() throws Exception {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 152-162 for decimal backed by bytes
+    String schemaWithDecimalBytes = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"amount\",\"type\":[\"null\",{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithDecimalBytes);
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies bytes-backed decimal as decimal type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be decimal(10,2) type due to the decimal logical type backed by bytes
+    assertEquals(TypeInfoFactory.getDecimalTypeInfo(10, 2), columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForDecimalBackedByFixed() throws Exception {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 152-162 for decimal backed by fixed
+    String schemaWithDecimalFixed = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"amount\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"fixed_decimal\",\"size\":6,\"logicalType\":\"decimal\",\"precision\":12,\"scale\":4}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithDecimalFixed);
+    assertInstanceOf(HoodieSchema.Decimal.class, schema.getField("amount").get().getNonNullSchema());
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies fixed-backed decimal as decimal type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be decimal(12,4) type due to the decimal logical type backed by fixed
+    assertEquals(TypeInfoFactory.getDecimalTypeInfo(12, 4), columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForDate() throws Exception {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 187-189 for date
+    String schemaWithDate = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"birth_date\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithDate);
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies date as date type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be date type due to the date logical type
+    assertEquals(TypeInfoFactory.dateTypeInfo, columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimestampMillis() throws Exception {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 192-194 for timestamp-millis
+    String schemaWithTimestampMillis = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"created_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimestampMillis);
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies timestamp-millis as timestamp type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be timestamp type due to the timestamp-millis logical type
+    assertEquals(TypeInfoFactory.timestampTypeInfo, columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimestampMicros() {
+    // Test timestamp-micros - AvroSerDe.TIMESTAMP_TYPE_NAME is only "timestamp-millis", NOT "timestamp-micros"
+    String schemaWithTimestampMicros = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"updated_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimestampMicros);
+
+    // HiveTypeUtils.generateColumnTypes throws an exception for timestamp-micros since it's not supported by AvroSerDe
+    assertThrows(Exception.class, () -> {
+      HiveTypeUtils.generateColumnTypes(schema);
+    });
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimeMillis() {
+    // Test time-millis logical type - there's no specific branch for TIME type in HiveTypeUtils
+    String schemaWithTimeMillis = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"event_time\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"time-millis\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMillis);
+
+    // HiveTypeUtils.generateColumnTypes throws an exception for time-millis since it's not supported by AvroSerDe
+    assertThrows(Exception.class, () -> HiveTypeUtils.generateColumnTypes(schema));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimeMicros() {
+    // Test time-micros logical type
+    String schemaWithTimeMicros = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"event_time\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"time-micros\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMicros);
+
+    // HiveTypeUtils.generateColumnTypes throws an exception for time-micros since it's not supported by AvroSerDe
+    assertThrows(Exception.class, () -> HiveTypeUtils.generateColumnTypes(schema));
+  }
 }
