@@ -27,6 +27,9 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -50,9 +53,9 @@ class TestHoodieHiveRecord {
     // Create a minimal HoodieHiveRecord instance with mocked dependencies
     HoodieKey key = new HoodieKey("test-key", "test-partition");
     ArrayWritable data = new ArrayWritable(Writable.class, new Writable[]{new Text("test")});
-    Schema schema = Schema.createRecord("TestRecord", null, null, false);
-    schema.setFields(Collections.singletonList(new Schema.Field("testField", Schema.create(Schema.Type.STRING), null, null)));
-    
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("testField", HoodieSchema.create(HoodieSchemaType.STRING), null, null)));
+
     // Create HoodieHiveRecord with mocked dependencies
     hoodieHiveRecord = new HoodieHiveRecord(key, data, schema, new HiveAvroSerializer(schema));
   }

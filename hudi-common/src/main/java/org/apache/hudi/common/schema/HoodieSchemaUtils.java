@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -35,6 +36,7 @@ import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -723,5 +725,45 @@ public final class HoodieSchemaUtils {
 
   private static boolean isSmallPrecisionDecimalField(HoodieSchema.Decimal decimal) {
     return decimal.getPrecision() <= 18;
+  }
+
+  /**
+   * Resolves a union schema by finding the schema matching the given full name.
+   * Handles both simple nullable unions (null + non-null) and complex unions with multiple types.
+   *
+   * <p>This method supports the following union types:
+   * <ul>
+   *   <li>Simple nullable unions: {@code ["null", "Type"]} - returns the non-null type</li>
+   *   <li>Complex unions: {@code ["null", "TypeA", "TypeB"]} - returns the type matching fieldSchemaFullName</li>
+   *   <li>Non-union schemas - returns the schema as-is</li>
+   * </ul>
+   *
+   * @param schema the schema to resolve (may or may not be a union)
+   * @param fieldSchemaFullName the full name of the schema to find within the union
+   * @return the resolved schema
+   * @throws HoodieSchemaException if the union cannot be resolved or no matching type is found
+   */
+  public static HoodieSchema resolveUnionSchema(HoodieSchema schema, String fieldSchemaFullName) {
+    if (schema.getType() != HoodieSchemaType.UNION) {
+      return schema;
+    }
+
+    List<HoodieSchema> innerTypes = schema.getTypes();
+    if (innerTypes.size() == 2 && schema.isNullable()) {
+      // this is a basic nullable field so handle it more efficiently
+      return schema.getNonNullType();
+    }
+
+    HoodieSchema nonNullType = innerTypes.stream()
+        .filter(it -> it.getType() != HoodieSchemaType.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
+        .findFirst()
+        .orElse(null);
+
+    if (nonNullType == null) {
+      throw new HoodieSchemaException(
+          String.format("Unsupported UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+
+    return nonNullType;
   }
 }

@@ -23,6 +23,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -1587,5 +1588,175 @@ public class TestHoodieSchemaUtils {
     assertTrue(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR)));
     assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNonUnionSchema() {
+    // Non-union schemas should be returned as-is
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(stringSchema, "any");
+
+    assertSame(stringSchema, result);
+  }
+
+  @Test
+  void testResolveUnionSchemaWithSimpleNullableUnion() {
+    // Simple nullable union: ["null", "string"] should return the non-null type efficiently
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
+
+    assertEquals(HoodieSchemaType.STRING, result.getType());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithSimpleNullableRecord() {
+    // Test with nullable record type
+    HoodieSchema personSchema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema nullablePerson = HoodieSchema.createNullable(personSchema);
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullablePerson, "Person");
+
+    assertEquals(HoodieSchemaType.RECORD, result.getType());
+    assertEquals("Person", result.getName());
+    assertFalse(result.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithComplexUnionMatchingFullName() {
+    // Complex union with 3+ types, matching by fullName
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"PersonRecord\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"CompanyRecord\",\"fields\":[{\"name\":\"companyName\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve to PersonRecord
+    HoodieSchema personResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "PersonRecord");
+    assertEquals(HoodieSchemaType.RECORD, personResult.getType());
+    assertEquals("PersonRecord", personResult.getName());
+    assertFalse(personResult.isNullable());
+    assertTrue(personResult.getField("name").isPresent());
+
+    // Resolve to CompanyRecord
+    HoodieSchema companyResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "CompanyRecord");
+    assertEquals(HoodieSchemaType.RECORD, companyResult.getType());
+    assertEquals("CompanyRecord", companyResult.getName());
+    assertFalse(companyResult.isNullable());
+    assertTrue(companyResult.getField("companyName").isPresent());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNonNullableTwoTypeUnion() {
+    // Union of two non-nullable types should use the complex resolution path
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":["
+        + "    {\"type\":\"record\",\"name\":\"TypeA\",\"fields\":[{\"name\":\"fieldA\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"TypeB\",\"fields\":[{\"name\":\"fieldB\",\"type\":\"int\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve to TypeA
+    HoodieSchema typeAResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "TypeA");
+    assertEquals(HoodieSchemaType.RECORD, typeAResult.getType());
+    assertEquals("TypeA", typeAResult.getName());
+    assertFalse(typeAResult.isNullable());
+
+    // Resolve to TypeB
+    HoodieSchema typeBResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "TypeB");
+    assertEquals(HoodieSchemaType.RECORD, typeBResult.getType());
+    assertEquals("TypeB", typeBResult.getName());
+    assertFalse(typeAResult.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaThrowsExceptionWhenNoMatch() {
+    // Complex union where the requested fullName doesn't match any type
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"PersonRecord\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"CompanyRecord\",\"fields\":[{\"name\":\"companyName\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Try to resolve to a type that doesn't exist in the union
+    HoodieSchemaException exception = assertThrows(
+        HoodieSchemaException.class,
+        () -> HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "AnimalRecord")
+    );
+
+    assertTrue(exception.getMessage().contains("Unsupported UNION type"));
+    assertTrue(exception.getMessage().contains("Only UNION of a null type and a non-null type is supported"));
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNamespacedRecords() {
+    // Test with fully qualified names (with namespace)
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"namespace\":\"com.example\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"Company\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve using fully qualified name
+    HoodieSchema personResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "com.example.model.Person");
+    assertEquals(HoodieSchemaType.RECORD, personResult.getType());
+    assertEquals("Person", personResult.getName());
+    assertFalse(personResult.isNullable());
+    assertEquals("com.example.model", personResult.getNamespace().get());
+
+    // Resolve Company
+    HoodieSchema companyResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "com.example.model.Company");
+    assertEquals(HoodieSchemaType.RECORD, companyResult.getType());
+    assertEquals("Company", companyResult.getName());
+    assertFalse(companyResult.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithPrimitiveTypes() {
+    // Test union containing primitive types (although less common)
+    // Union of null and string, but passed through the full name matching path
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // For simple 2-element nullable union, should use fast path
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
+    assertEquals(HoodieSchemaType.STRING, result.getType());
   }
 }
