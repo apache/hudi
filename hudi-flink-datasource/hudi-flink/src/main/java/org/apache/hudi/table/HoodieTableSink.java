@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.clustering.LSMClusteringScheduleMode;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 
@@ -35,6 +36,7 @@ import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.Map;
@@ -67,6 +69,11 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+
+      if (conf.get(FlinkOptions.LSM_CLUSTERING_SCHEDULE_INTERVAL) == -1L) {
+        conf.set(FlinkOptions.LSM_CLUSTERING_SCHEDULE_INTERVAL, dataStream.getExecutionEnvironment().getCheckpointConfig()
+            .getCheckpointInterval() / 1000 * conf.getInteger(FlinkOptions.LSM_CLUSTERING_DELTA_COMMITS));
+      }
       // set up default parallelism
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
 
@@ -81,6 +88,13 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
         DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        if (OptionsResolver.isAsyncRollback(conf)) {
+          pipeline = Pipelines.rollback(conf, pipeline);
+        }
+        // async archive
+        if (OptionsResolver.needsAsyncArchive(conf)) {
+          pipeline = Pipelines.archive(conf, pipeline);
+        }
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
         } else {
@@ -89,18 +103,60 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       }
 
       DataStream<Object> pipeline;
-      // bootstrap
-      final DataStream<HoodieRecord> hoodieRecordDataStream =
-          Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
-      // write pipeline
-      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      // Bucket Index and incremental rt chain
+      DataStream<RowData> finalDataStream;
+      String rtChainMode = conf.get(FlinkOptions.RT_CHAIN_MODE);
+      if (rtChainMode == null) {
+        rtChainMode = dataStream.getExecutionConfig().getGlobalJobParameters().toMap().get(FlinkOptions.RT_CHAIN_MODE.key());
+      }
+      if (rtChainMode != null && rtChainMode.equalsIgnoreCase("incremental")) {
+        finalDataStream = Pipelines.backFillDeletedRecordsInRTIncrementalChain(dataStream, conf, rowType);
+      } else {
+        finalDataStream = dataStream;
+      }
+
+      if (OptionsResolver.isLSMBasedLogFormat(conf)) {
+        // in LSM Based format, skip bootstrap and do parquet create directly
+        pipeline = Pipelines.hoodieLsmStreamWrite(conf, rowType, dataStream);
+        if (OptionsResolver.areTableServicesEnabled(conf)) {
+          if (LSMClusteringScheduleMode.STREAM.name().equalsIgnoreCase(conf.getString(FlinkOptions.LSM_CLUSTERING_SCHEDULE_MODE))) {
+            pipeline = Pipelines.lsmClusterPlan(conf, pipeline, rowType);
+          }
+
+          if (OptionsResolver.needsAsyncClustering(conf)) {
+            return Pipelines.lsmClusterExecute(conf, rowType, pipeline);
+          } else if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+            return Pipelines.clean(conf, pipeline);
+          }
+        } else {
+          return Pipelines.dummySink(pipeline);
+        }
+      } else {
+        // bootstrap
+        final DataStream<HoodieRecord> hoodieRecordDataStream =
+            Pipelines.bootstrap(conf, rowType, finalDataStream, context.isBounded(), overwrite);
+        // write pipeline
+        pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      }
+      // async archive
+      if (OptionsResolver.needsAsyncArchive(conf)) {
+        pipeline = Pipelines.archive(conf, pipeline);
+      }
+
+      if (OptionsResolver.isAsyncRollback(conf)) {
+        pipeline = Pipelines.rollback(conf, pipeline);
+      }
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.
         if (context.isBounded()) {
           conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
         }
-        return Pipelines.compact(conf, pipeline);
+        if (conf.get(FlinkOptions.COMPACTION_SCANNER_TYPE).equals(FlinkOptions.SCANNER_WITH_FK)) {
+          return Pipelines.compactWithFK(conf, pipeline);
+        } else {
+          return Pipelines.compact(conf, pipeline);
+        }
       } else {
         return Pipelines.clean(conf, pipeline);
       }

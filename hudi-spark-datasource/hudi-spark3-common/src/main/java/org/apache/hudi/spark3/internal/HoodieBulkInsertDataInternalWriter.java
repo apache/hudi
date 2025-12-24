@@ -21,6 +21,9 @@ package org.apache.hudi.spark3.internal;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper;
+import org.apache.hudi.table.action.commit.BucketBulkInsertDataInternalWriterHelper;
+import org.apache.hudi.table.action.commit.BucketLSMBulkInsertDataInternalWriterHelper;
+import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.write.DataWriter;
@@ -39,8 +42,25 @@ public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRo
   public HoodieBulkInsertDataInternalWriter(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, StructType structType, boolean populateMetaFields,
                                             boolean arePartitionRecordsSorted) {
-    this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,
+    this.bulkInsertWriterHelper = getBulkInsertWriterHelper(hoodieTable,
+      writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+  }
+
+  private BulkInsertDataInternalWriterHelper getBulkInsertWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
+                                                                       String instantTime, int taskPartitionId, long taskId, long taskEpochId,
+                                                                       StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
+    if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
+      if (hoodieTable.getMetaClient().getTableConfig().isLSMBasedLogFormat()) {
+        return new BucketLSMBulkInsertDataInternalWriterHelper(hoodieTable,
+          writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+      } else {
+        return new BucketBulkInsertDataInternalWriterHelper(hoodieTable,
+          writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+      }
+    } else {
+      return new BulkInsertDataInternalWriterHelper(hoodieTable,
         writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+    }
   }
 
   @Override

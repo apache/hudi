@@ -18,46 +18,26 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
-
 import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.hudi.io.storage.HoodieBaseParquetWriter;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 
 import java.io.IOException;
 
 /**
- * Parquet's impl of {@link HoodieRowDataFileWriter} to write {@link RowData}s.
+ * Parquet's impl of {@link HoodieRowDataFileWriter} to write fink {@link RowData}s.
  */
-public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
-    implements HoodieRowDataFileWriter {
+public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
+        implements HoodieRowDataFileWriter {
 
-  private final Path file;
-  private final HoodieWrapperFileSystem fs;
-  private final long maxFileSize;
   private final HoodieRowDataParquetWriteSupport writeSupport;
 
   public HoodieRowDataParquetWriter(Path file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig)
-      throws IOException {
-    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
-        DEFAULT_IS_DICTIONARY_ENABLED, DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION, FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-    this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file,
-        parquetConfig.getHadoopConf()));
-    this.maxFileSize = parquetConfig.getMaxFileSize()
-        + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
-    this.writeSupport = parquetConfig.getWriteSupport();
-  }
+          throws IOException {
+    super(file, parquetConfig);
 
-  @Override
-  public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    this.writeSupport = parquetConfig.getWriteSupport();
   }
 
   @Override
@@ -70,9 +50,5 @@ public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
   public void writeRow(RowData row) throws IOException {
     super.write(row);
   }
-
-  @Override
-  public void close() throws IOException {
-    super.close();
-  }
 }
+

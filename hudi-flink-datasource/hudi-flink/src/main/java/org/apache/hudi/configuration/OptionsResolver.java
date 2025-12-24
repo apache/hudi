@@ -128,6 +128,17 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether to read the instants using completion time.
+   *
+   * <p>A Hudi instant contains both the txn start time and completion time, for incremental subscription
+   * of the source reader, using completion time to filter the candidate instants can avoid data loss
+   * in scenarios like multiple writers.
+   */
+  public static boolean isReadByTxnCompletionTime(Configuration conf) {
+    return conf.getBoolean(HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key(), HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.defaultValue());
+  }
+
+  /**
    * Returns whether the source should emit changelog.
    *
    * @return true if the source is read as streaming with changelog mode enabled

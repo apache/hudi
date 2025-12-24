@@ -22,6 +22,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
@@ -37,6 +40,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimest
  */
 public class HoodieFileGroup implements Serializable {
 
+  private static final Logger LOG = LogManager.getLogger(HoodieFileGroup.class);
+
   public static Comparator<String> getReverseCommitTimeComparator() {
     return Comparator.reverseOrder();
   }
@@ -49,7 +54,7 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Slices of files in this group, sorted with greater commit first.
    */
-  private final TreeMap<String, FileSlice> fileSlices;
+  private TreeMap<String, FileSlice> fileSlices;
 
   /**
    * Timeline, based on which all getter work.
@@ -61,15 +66,19 @@ public class HoodieFileGroup implements Serializable {
    */
   private final Option<HoodieInstant> lastInstant;
 
+  // todo zhangyue143 isLSMBasedLogFormat 能否去掉
+  private final boolean isLSMBasedLogFormat;
+
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
     this.timeline = fileGroup.timeline;
     this.fileGroupId = fileGroup.fileGroupId;
     this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
+    this.isLSMBasedLogFormat = false;
   }
 
   public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
-    this(new HoodieFileGroupId(partitionPath, id), timeline);
+    this(new HoodieFileGroupId(partitionPath, id), timeline, false);
   }
 
   public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline) {
@@ -77,6 +86,15 @@ public class HoodieFileGroup implements Serializable {
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
     this.lastInstant = timeline.lastInstant();
+    this.isLSMBasedLogFormat = false;
+  }
+
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline, boolean isLSMBasedLogFormat) {
+    this.fileGroupId = fileGroupId;
+    this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
+    this.timeline = timeline;
+    this.lastInstant = timeline.lastInstant();
+    this.isLSMBasedLogFormat = isLSMBasedLogFormat;
   }
 
   /**
@@ -96,7 +114,29 @@ public class HoodieFileGroup implements Serializable {
     if (!fileSlices.containsKey(dataFile.getCommitTime())) {
       fileSlices.put(dataFile.getCommitTime(), new FileSlice(fileGroupId, dataFile.getCommitTime()));
     }
-    fileSlices.get(dataFile.getCommitTime()).setBaseFile(dataFile);
+    FileSlice fileSlice = fileSlices.get(dataFile.getCommitTime());
+    Option<HoodieBaseFile> oldBaseFileOpt = fileSlice.getBaseFile();
+    if (!oldBaseFileOpt.isPresent()) {
+      fileSlice.setBaseFile(dataFile);
+    } else {
+      if (oldBaseFileOpt.get().getModifyTime() > 0 && dataFile.getModifyTime() > 0) {
+        // 若base文件发生冲突，优先选择modify time小的那个文件
+        if (dataFile.getModifyTime() < oldBaseFileOpt.get().getModifyTime()) {
+          LOG.warn("Modify Time Compare ==>  Replace base file of file slice " + fileSlice + " from " + oldBaseFileOpt.get() + " to " +  dataFile);
+          fileSlice.setBaseFile(dataFile);
+        } else {
+          LOG.warn("Modify Time Compare ==>  Skip tp replace base file of file slice " + fileSlice + " from " + oldBaseFileOpt.get() + " to " +  dataFile);
+        }
+      } else {
+        // 若base文件发生冲突，优先选择length大的那个文件的那个文件
+        if (oldBaseFileOpt.get().getFileLen() <= dataFile.getFileLen()) {
+          LOG.warn("File Length Compare ==>  Replace base file of file slice " + fileSlice + " from " + oldBaseFileOpt.get() + " to " +  dataFile);
+          fileSlice.setBaseFile(dataFile);
+        } else {
+          LOG.warn("File Length Compare ==>  Skip tp replace base file of file slice " + fileSlice + " from " + oldBaseFileOpt.get() + " to " +  dataFile);
+        }
+      }
+    }
   }
 
   /**
@@ -154,7 +194,8 @@ public class HoodieFileGroup implements Serializable {
   }
 
   public Stream<FileSlice> getAllFileSlicesBeforeOn(String maxInstantTime) {
-    return fileSlices.values().stream().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
+    return isLSMBasedLogFormat ? getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime)) :
+        fileSlices.values().stream().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
   }
 
   /**
@@ -217,6 +258,10 @@ public class HoodieFileGroup implements Serializable {
 
   public void addFileSlice(FileSlice slice) {
     fileSlices.put(slice.getBaseInstantTime(), slice);
+  }
+
+  public void initFileSlices(TreeMap<String, FileSlice> fileSlices) {
+    this.fileSlices = fileSlices;
   }
 
   public Stream<FileSlice> getAllRawFileSlices() {

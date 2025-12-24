@@ -57,6 +57,10 @@ public class DTOUtils {
     // Timeline exists only in the first file group DTO. Optimisation to reduce payload size.
     checkState(dtos.get(0).timeline != null, "Timeline is expected to be set for the first FileGroupDTO");
     HoodieTimeline timeline = TimelineDTO.toTimeline(dtos.get(0).timeline, metaClient);
-    return dtos.stream().map(dto -> FileGroupDTO.toFileGroup(dto, timeline));
+    if (metaClient.getTableConfig().isLSMBasedLogFormat()) {
+      return dtos.stream().map(dto -> FileGroupDTO.toLSMFileGroup(dto, timeline));
+    } else {
+      return dtos.stream().map(dto -> FileGroupDTO.toFileGroup(dto, timeline));
+    }
   }
 }

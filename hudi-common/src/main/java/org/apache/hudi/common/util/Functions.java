@@ -37,6 +37,10 @@ public interface Functions {
     R apply();
   }
 
+  interface VoidFunction0 extends Serializable {
+    void apply();
+  }
+
   /**
    * A function which contains only one parameter.
    */
@@ -56,5 +60,9 @@ public interface Functions {
    */
   interface Function3<T1, T2, T3, R> extends Serializable {
     R apply(T1 val1, T2 val2, T3 val3);
+  }
+
+  interface VoidFunction3<T1, T2, T3> extends Serializable {
+    void apply(T1 val1, T2 val2, T3 val3);
   }
 }

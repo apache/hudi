@@ -18,14 +18,23 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MultiplePartialUpdateUnit;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodiePayloadConfig;
 
+import org.apache.avro.Schema;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Statistics for merge on read table source.
@@ -88,6 +97,51 @@ public class MergeOnReadTableState implements Serializable {
         .map(fieldNames::indexOf)
         .mapToInt(i -> i)
         .toArray();
+  }
+
+  // 这里可以乱序
+  public HashSet<String> getLsmRequiredColumns(TypedProperties payloadProps, Schema tableSchema, Configuration conf) {
+    HashSet<String> requiredWithMeta = new HashSet<>(requiredRowType.getFieldNames());
+
+    requiredWithMeta.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    requiredWithMeta.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    requiredWithMeta.add(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
+    // Avoid finding deleted data during query
+    if (tableSchema.getFields().stream().anyMatch(field -> HoodieRecord.HOODIE_IS_DELETED_FIELD.equals(field.name()))) {
+      requiredWithMeta.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
+    }
+
+    String orderingField = payloadProps.getString(HoodiePayloadConfig.ORDERING_FIELD.key(),
+        HoodiePayloadConfig.ORDERING_FIELD.defaultValue());
+
+    if (!StringUtils.isNullOrEmpty(orderingField) && orderingField.split(":").length > 1) {
+      requiredWithMeta.addAll(new MultiplePartialUpdateUnit(orderingField).getAllOrderingFields());
+    } else {
+      if (tableSchema.getField(orderingField) != null) {
+        requiredWithMeta.add(orderingField);
+      }
+    }
+
+    return requiredWithMeta;
+  }
+
+  // copy from HoodieBaseRelation#projectSchema
+  public Schema getLsmReadSchema(TypedProperties payloadProps, Schema tableSchema, Configuration conf) {
+    HashSet<String> requiredColumns = getLsmRequiredColumns(payloadProps, tableSchema, conf);
+
+    List<Schema.Field> requiredFields = tableSchema.getFields().stream().filter(f -> {
+      return requiredColumns.contains(f.name());
+    }).map(f -> {
+      // We have to create a new [[Schema.Field]] since Avro schemas can't share field
+      // instances (and will throw "org.apache.avro.AvroRuntimeException: Field already used")
+      return new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order());
+    }).collect(Collectors.toList());
+
+    ValidationUtils.checkArgument(requiredColumns.size() == requiredFields.size(),
+        "Miss match between required Col and table Col " + requiredFields + " VS " + requiredColumns);
+
+    return Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(), tableSchema.getNamespace(),
+        tableSchema.isError(), requiredFields);
   }
 
   /**

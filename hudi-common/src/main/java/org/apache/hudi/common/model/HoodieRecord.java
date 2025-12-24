@@ -145,6 +145,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * The metaData of the record.
    */
   protected Option<Map<String, String>> metaData;
+  protected transient Comparable<?> orderingValue;
 
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, Option.empty());
@@ -180,7 +181,9 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.sealed = record.sealed;
   }
 
-  public HoodieRecord() {}
+  public HoodieRecord() {
+
+  }
 
   public abstract HoodieRecord<T> newInstance();
 
@@ -192,11 +195,22 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return key;
   }
 
+  public void setKey(HoodieKey key) {
+    this.key = key;
+  }
+
   public HoodieOperation getOperation() {
     return operation;
   }
 
-  public abstract Comparable<?> getOrderingValue(Schema recordSchema, Properties props);
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+    if (orderingValue == null) {
+      orderingValue = doGetOrderingValue(recordSchema, props);
+    }
+    return orderingValue;
+  }
+
+  public abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props);
 
   public T getData() {
     if (data == null) {
@@ -288,6 +302,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   public abstract String getRecordKey(Schema recordSchema, String keyFieldName);
+
+  public String getPartitionPath(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return getPartitionPath();
+  }
 
   public void seal() {
     this.sealed = true;
@@ -408,10 +426,14 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
    */
   private static class EmptyRecord implements GenericRecord {
-    private EmptyRecord() {}
+    private EmptyRecord() {
+
+    }
 
     @Override
-    public void put(int i, Object v) {}
+    public void put(int i, Object v) {
+
+    }
 
     @Override
     public Object get(int i) {
@@ -424,7 +446,9 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     }
 
     @Override
-    public void put(String key, Object v) {}
+    public void put(String key, Object v) {
+
+    }
 
     @Override
     public Object get(String key) {
@@ -433,6 +457,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public enum HoodieRecordType {
-    AVRO, SPARK
+    AVRO, SPARK, FLINK
   }
 }

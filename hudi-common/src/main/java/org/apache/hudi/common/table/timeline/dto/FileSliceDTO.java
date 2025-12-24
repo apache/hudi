@@ -19,11 +19,13 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -56,7 +58,18 @@ public class FileSliceDTO {
   public static FileSlice toFileSlice(FileSliceDTO dto) {
     FileSlice slice = new FileSlice(dto.partitionPath, dto.baseInstantTime, dto.fileId);
     slice.setBaseFile(BaseFileDTO.toHoodieBaseFile(dto.baseFile));
-    dto.logFiles.stream().forEach(lf -> slice.addLogFile(LogFileDTO.toHoodieLogFile(lf)));
+    dto.logFiles.forEach(lf -> slice.addLogFile(LogFileDTO.toHoodieLogFile(lf)));
+    return slice;
+  }
+
+  public static FileSlice toLSMFileSlice(FileSliceDTO dto) {
+    FileSlice slice = new FileSlice(dto.partitionPath, dto.baseInstantTime, dto.fileId);
+    TreeSet<HoodieLogFile> logfiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    dto.logFiles.forEach(lf -> {
+      HoodieLogFile lsmLog = LogFileDTO.toLSMHoodieLogFile(lf);
+      logfiles.add(lsmLog);
+    });
+    slice.resetLogFiles(logfiles);
     return slice;
   }
 }

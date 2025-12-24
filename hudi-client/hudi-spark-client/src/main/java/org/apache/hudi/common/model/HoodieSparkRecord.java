@@ -82,6 +82,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
    *       (by Kryo)
    */
   private final transient StructType schema;
+  private UTF8String utf8RecordKey;
 
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
@@ -93,6 +94,15 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     validateRow(data, schema);
     this.copy = false;
     this.schema = schema;
+  }
+
+  public HoodieSparkRecord(UTF8String recordKey, InternalRow data, StructType schema) {
+    super(null, data);
+
+    validateRow(data, schema);
+    this.copy = false;
+    this.schema = schema;
+    this.utf8RecordKey = recordKey;
   }
 
   public HoodieSparkRecord(HoodieKey key, UnsafeRow data, boolean copy) {
@@ -152,6 +162,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     return keyGeneratorOpt.isPresent()
         ? ((SparkKeyGeneratorInterface) keyGeneratorOpt.get()).getRecordKey(data, structType).toString()
         : data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
+  }
+
+  public UTF8String getUtf8RecordKey() {
+    return this.utf8RecordKey;
   }
 
   @Override
@@ -226,6 +240,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
     if (null == data) {
       return true;
     }
+
+    if (operation != null && HoodieOperation.isDelete(getOperation())) {
+      return true;
+    }
+
     if (recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) == null) {
       return false;
     }
@@ -295,7 +314,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements Kryo
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
     scala.Option<NestedFieldPath> cachedNestedFieldPath =

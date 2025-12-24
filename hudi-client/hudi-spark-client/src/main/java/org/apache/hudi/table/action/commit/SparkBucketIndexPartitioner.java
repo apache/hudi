@@ -18,6 +18,26 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.BucketStrategist;
+import org.apache.hudi.index.bucket.BucketStrategistFactory;
+import org.apache.hudi.index.bucket.HoodieBucketIndex;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.WorkloadStat;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,21 +47,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.index.bucket.BucketIdentifier;
 import scala.Tuple2;
-
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.bucket.HoodieBucketIndex;
-import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.table.WorkloadStat;
 
 import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE_TABLE;
@@ -52,9 +58,10 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE_T
 public class SparkBucketIndexPartitioner<T> extends
     SparkHoodiePartitioner<T> {
 
+  private static final Logger LOG = LoggerFactory.getLogger(SparkBucketIndexPartitioner.class);
+
   private final int numBuckets;
   private final String indexKeyField;
-  private final int totalPartitionPaths;
   private final List<String> partitionPaths;
   /**
    * Helps get the RDD partition id, partition id is partition offset + bucket id.
@@ -67,6 +74,17 @@ public class SparkBucketIndexPartitioner<T> extends
    * Partition path and file groups in it pair. Decide the file group an incoming update should go to.
    */
   private Map<String, Set<String>> updatePartitionPathFileIds;
+  private final BucketStrategist bucketStrategist;
+  private final boolean isPartitionBucketIndexEnabled;
+  private final int totalPartitions;
+  /**
+   * Direct mapping from partition number to partition path
+   */
+  private String[] partitionNumberToPath;
+  /**
+   * Direct mapping from partition number to local bucket ID
+   */
+  private Integer[] partitionNumberToLocalBucketId;
 
   public SparkBucketIndexPartitioner(WorkloadProfile profile,
                                      HoodieEngineContext context,
@@ -78,19 +96,42 @@ public class SparkBucketIndexPartitioner<T> extends
           " Bucket index partitioner should only be used by BucketIndex other than "
               + table.getIndex().getClass().getSimpleName());
     }
+    this.bucketStrategist = BucketStrategistFactory.getInstant(config, context.getHadoopConf().get());
+    this.isPartitionBucketIndexEnabled = bucketStrategist.isPartitionLevel();
     this.numBuckets = ((HoodieBucketIndex) table.getIndex()).getNumBuckets();
     this.indexKeyField = config.getBucketIndexHashField();
-    this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
     partitionPathOffset = new HashMap<>();
     int i = 0;
     for (Object partitionPath : profile.getPartitionPaths()) {
       partitionPathOffset.put(partitionPath.toString(), i);
-      i += numBuckets;
+      if (isPartitionBucketIndexEnabled) {
+        i += bucketStrategist.getBucketNumber(partitionPath.toString());
+      } else {
+        i += numBuckets;
+      }
     }
+
+    this.totalPartitions = i;
     assignUpdates(profile);
     WriteOperationType operationType = profile.getOperationType();
     this.isOverwrite = INSERT_OVERWRITE.equals(operationType) || INSERT_OVERWRITE_TABLE.equals(operationType);
+
+    if (isPartitionBucketIndexEnabled) {
+      this.partitionNumberToPath = new String[totalPartitions];
+      this.partitionNumberToLocalBucketId = new Integer[totalPartitions];
+
+      for (String partitionPath : partitionPaths) {
+        int offset = partitionPathOffset.get(partitionPath);
+        int numBuckets = bucketStrategist.getBucketNumber(partitionPath);
+
+        for (int j = 0; j < numBuckets; j++) {
+          int partitionNumber = offset + j;
+          partitionNumberToPath[partitionNumber] = partitionPath;
+          partitionNumberToLocalBucketId[partitionNumber] = j;
+        }
+      }
+    }
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -111,8 +152,9 @@ public class SparkBucketIndexPartitioner<T> extends
 
   @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
-    String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
-    String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
+    Pair<String, String> res = computeBucketAndPartitionPath(bucketNumber);
+    String bucketId = res.getLeft();
+    String partitionPath = res.getRight();
     // Insert overwrite always generates new bucket file id
     if (isOverwrite) {
       return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
@@ -128,9 +170,23 @@ public class SparkBucketIndexPartitioner<T> extends
     }
   }
 
+  private Pair<String, String> computeBucketAndPartitionPath(int bucketNumber) {
+    Integer bucket;
+    String partitionPath;
+    if (isPartitionBucketIndexEnabled) {
+      bucket = partitionNumberToLocalBucketId[bucketNumber];
+      partitionPath = partitionNumberToPath[bucketNumber];
+      ValidationUtils.checkArgument(bucket != null && partitionPath != null);
+    } else {
+      bucket = bucketNumber % numBuckets;
+      partitionPath = partitionPaths.get(bucketNumber / numBuckets);
+    }
+    return Pair.of(BucketIdentifier.bucketIdStr(bucket), partitionPath);
+  }
+
   @Override
   public int numPartitions() {
-    return totalPartitionPaths * numBuckets;
+    return totalPartitions;
   }
 
   @Override
@@ -140,7 +196,7 @@ public class SparkBucketIndexPartitioner<T> extends
     Option<HoodieRecordLocation> location = keyLocation._2;
     int bucketId = location.isPresent()
         ? BucketIdentifier.bucketIdFromFileId(location.get().getFileId())
-        : BucketIdentifier.getBucketId(keyLocation._1, indexKeyField, numBuckets);
+        : BucketIdentifier.getBucketId(keyLocation._1, indexKeyField, bucketStrategist.getBucketNumber(partitionPath));
     return partitionPathOffset.get(partitionPath) + bucketId;
   }
 }

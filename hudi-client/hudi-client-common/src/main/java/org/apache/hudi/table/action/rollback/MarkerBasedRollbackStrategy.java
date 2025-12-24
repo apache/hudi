@@ -24,6 +24,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.storage.HoodieStorageStrategy;
+import org.apache.hudi.common.storage.HoodieStorageStrategyFactory;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -61,12 +63,15 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
 
   protected final String instantTime;
 
+  protected final HoodieStorageStrategy hoodieStorageStrategy;
+
   public MarkerBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
     this.context = context;
     this.basePath = table.getMetaClient().getBasePath();
     this.config = config;
     this.instantTime = instantTime;
+    this.hoodieStorageStrategy = HoodieStorageStrategyFactory.getInstant(table.getMetaClient());
   }
 
   @Override
@@ -82,8 +87,8 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
           case MERGE:
           case CREATE:
             String fileToDelete = WriteMarkers.stripMarkerSuffix(markerFilePath);
-            Path fullDeletePath = new Path(basePath, fileToDelete);
-            String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
+            Path fullDeletePath = hoodieStorageStrategy.storageLocation(fileToDelete, instantToRollback.getTimestamp());
+            String partitionPath = hoodieStorageStrategy.getRelativePath(fullDeletePath.getParent());
             return new HoodieRollbackRequest(partitionPath, EMPTY_STRING, EMPTY_STRING,
                 Collections.singletonList(fullDeletePath.toString()),
                 Collections.emptyMap());
@@ -104,11 +109,11 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
   }
 
   protected HoodieRollbackRequest getRollbackRequestForAppend(HoodieInstant instantToRollback, String markerFilePath) throws IOException {
-    Path baseFilePathForAppend = new Path(basePath, markerFilePath);
+    Path baseFilePathForAppend = hoodieStorageStrategy.storageLocation(markerFilePath, instantToRollback.getTimestamp());
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
-    String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), baseFilePathForAppend.getParent());
-    Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), relativePartitionPath);
+    String relativePartitionPath = hoodieStorageStrategy.getRelativePath(baseFilePathForAppend.getParent());
+    Path partitionPath = hoodieStorageStrategy.storageLocation(relativePartitionPath, instantToRollback.getTimestamp());
 
     // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
     //       block to the latest log-file

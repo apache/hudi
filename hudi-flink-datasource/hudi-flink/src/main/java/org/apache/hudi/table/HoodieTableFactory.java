@@ -19,24 +19,34 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.client.model.ModelUtils;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.index.bucket.expression.utils.ExpressionUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.metrics.FlinkEnvironmentContext;
+import org.apache.hudi.sink.clustering.LSMClusteringScheduleMode;
+import org.apache.hudi.table.format.mor.lsm.FlinkLsmUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -55,11 +65,15 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.config.HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_INDEX_PARTITION_BUCKET_EXPR_PREFIX;
 
 /**
  * Hoodie data source/sink factory.
@@ -72,11 +86,14 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
+    String jobName = context.getConfiguration().get(PipelineOptions.NAME);
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
+    setupBaizeOptions(jobName, conf);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    FlinkEnvironmentContext.init();
     return new HoodieTableSource(
         schema,
         path,
@@ -85,37 +102,108 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         conf);
   }
 
+  private void setupBaizeOptions(String jobName, Configuration conf) {
+    if (!StringUtils.isNullOrEmpty(jobName)) {
+      conf.setString("hoodie.metrics.pushgateway.job.name", jobName);
+      conf.setBoolean("hoodie.metrics.on", conf.getBoolean(FlinkOptions.METRIC_ON));
+      conf.setString("hoodie.metrics.reporter.type",conf.getString(FlinkOptions.REPORT_TYPE));
+    }
+  }
+
   @Override
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
+    String jobName = context.getConfiguration().get(PipelineOptions.NAME);
     checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
+    setupLSMWriteConfig(conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
+    setupBaizeOptions(jobName, conf);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    validateLSMClusteringConfig(conf);
+    FlinkEnvironmentContext.init();
     return new HoodieTableSink(conf, schema);
+  }
+
+  private void setupLSMWriteConfig(Configuration conf) {
+    if (OptionsResolver.isLSMBasedLogFormat(conf)) {
+      FlinkLsmUtils.setupLSMConfig(conf);
+    }
+  }
+
+  private void validateLSMClusteringConfig(Configuration conf) {
+    Map<String, String> confMap = conf.toMap();
+    if (!confMap.containsKey(HoodieTableConfig.HOODIE_LOG_FORMAT.key())) {
+      return;
+    }
+    if (!confMap.get(HoodieTableConfig.HOODIE_LOG_FORMAT.key()).equalsIgnoreCase(HoodieTableConfig.LSM_HOODIE_TABLE_LOG_FORMAT)) {
+      return;
+    }
+    boolean inlineLSMClustering = Boolean.parseBoolean(confMap.get(HoodieClusteringConfig.LSM_INLINE_CLUSTERING.key()));
+    boolean scheduleInlineLSMClustering = Boolean.parseBoolean(confMap.get(HoodieClusteringConfig.LSM_SCHEDULE_INLINE_CLUSTERING.key()));
+    boolean asyncLSMClustering = conf.getBoolean(FlinkOptions.LSM_CLUSTERING_ASYNC_ENABLED);
+    String scheduleLSMClusteringMod = conf.getString(FlinkOptions.LSM_CLUSTERING_SCHEDULE_MODE);
+    boolean streamOrAsyncScheduleClustering = scheduleLSMClusteringMod.equalsIgnoreCase(LSMClusteringScheduleMode.STREAM.name())
+        || scheduleLSMClusteringMod.equalsIgnoreCase(LSMClusteringScheduleMode.ASYNC.name());
+
+    // Can't turn on both async clustering and inline clustering in Flink job.
+    ValidationUtils.checkArgument(!(inlineLSMClustering && asyncLSMClustering), String.format("Either of inline clustering (%s) or "
+            + "async clustering (%s) can be enabled. Both can't be set to true at the same time in flink job. %s,%s", HoodieClusteringConfig.LSM_INLINE_CLUSTERING.key(),
+        FlinkOptions.LSM_CLUSTERING_ASYNC_ENABLED.key(), inlineLSMClustering, asyncLSMClustering));
+
+    // Can't turn on inline schedule clustering when the mod of lsm schedule clustering is async/sync  in Flink job.
+    ValidationUtils.checkArgument(!(streamOrAsyncScheduleClustering && (inlineLSMClustering || scheduleInlineLSMClustering)),
+        String.format("Either of inline schedule clustering (%s/%s) or async/sync schedule clustering (%s) can be enabled. Both can't be set to true at the same time in flink job. %s,%s,%s",
+            HoodieClusteringConfig.LSM_INLINE_CLUSTERING.key(), HoodieClusteringConfig.LSM_SCHEDULE_INLINE_CLUSTERING.key(),
+            FlinkOptions.LSM_CLUSTERING_SCHEDULE_MODE.key(), inlineLSMClustering, scheduleInlineLSMClustering, scheduleLSMClusteringMod));
   }
 
   /**
    * Supplement the table config options if not specified.
    */
   private void setupTableOptions(String basePath, Configuration conf) {
-    StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf))
-        .ifPresent(tableConfig -> {
-          if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
-              && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
-            conf.setString(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
-          }
-          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)
-              && !conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
-            conf.setString(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
-          }
-          if (tableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)
-              && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
-            conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
-          }
-        });
+    Option<HoodieTableConfig> option = StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf));
+    option.ifPresent(tableConfig -> {
+      if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
+          && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
+        conf.setString(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
+      }
+      if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)
+          && !conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+      }
+      if (tableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)
+          && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
+        conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
+      }
+      if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
+        if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
+          LOG.warn(
+              String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
+                  tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
+                  conf.get(FlinkOptions.TABLE_TYPE)));
+          conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+        }
+      }
+      if (tableConfig.contains(HoodieTableConfig.TYPE)
+          && !conf.contains(FlinkOptions.TABLE_TYPE)) {
+        conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+      }
+      if (tableConfig.isLSMBasedLogFormat() && tableConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)
+          && !conf.contains(FlinkOptions.TABLE_RECORD_MERGER_STRATEGY)) {
+        conf.set(FlinkOptions.TABLE_RECORD_MERGER_STRATEGY, tableConfig.getString(HoodieTableConfig.RECORD_MERGER_STRATEGY));
+        conf.set(FlinkOptions.RECORD_MERGER_STRATEGY, tableConfig.getString(HoodieTableConfig.RECORD_MERGER_STRATEGY));
+        // 覆盖RECORD_MERGER_IMPLS，此时用户指定的impls不会生效
+        conf.set(FlinkOptions.RECORD_MERGER_IMPLS, ModelUtils.getSupportedRecordMerger());
+      }
+    });
+
+    // HoodieTable 表不存在
+    if (!option.isPresent() && OptionsResolver.isLSMBasedLogFormat(conf)) {
+      FlinkLsmUtils.setupMergerConfig(conf);
+    }
   }
 
   @Override
@@ -144,9 +232,26 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * @param schema The table schema
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
+    checkTableType(conf);
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
-      checkPreCombineKey(conf, schema);
+    }
+    StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+    StreamerUtil.checkBasePathAndStoragePath(conf);
+  }
+
+  /**
+   * Validate the table type.
+   */
+  private void checkTableType(Configuration conf) {
+    String tableType = conf.get(FlinkOptions.TABLE_TYPE);
+    if (StringUtils.nonEmpty(tableType)) {
+      try {
+        HoodieTableType.valueOf(tableType);
+      } catch (IllegalArgumentException e) {
+        throw new HoodieValidationException("Invalid table type: " + tableType + ". Table type should be either "
+            + HoodieTableType.MERGE_ON_READ + " or " + HoodieTableType.COPY_ON_WRITE + ".");
+      }
     }
   }
 
@@ -171,26 +276,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             throw new HoodieValidationException("Field '" + f + "' specified in option "
                 + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
-    }
-  }
-
-  /**
-   * Validate pre_combine key.
-   */
-  private void checkPreCombineKey(Configuration conf, ResolvedSchema schema) {
-    List<String> fields = schema.getColumnNames();
-    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
-      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
-            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
-      }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
-      }
     }
   }
 
@@ -221,6 +306,23 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
+    // 兼容base path
+    conf.setString(HoodieWriteConfig.BASE_PATH.key(), conf.getString(FlinkOptions.PATH));
+    // set partition bucket expression
+    if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())
+        && conf.getBoolean(FlinkOptions.BUCKET_INDEX_PARTITION_LEVEL)) {
+      Properties props = new Properties();
+      for (String key : table.getOptions().keySet()) {
+        if (key.startsWith(BUCKET_INDEX_PARTITION_BUCKET_EXPR_PREFIX)) {
+          props.setProperty(key, table.getOptions().get(key));
+        }
+      }
+      conf.setString(FlinkOptions.BUCKET_INDEX_PARTITION_BUCKET_EXPR, ExpressionUtils.generateBucketExpression(props));
+    }
+    // async rollback
+    if (conf.getBoolean(FlinkOptions.ROLLBACK_ASYNC_ENABLE)) {
+      conf.setString(FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
+    }
   }
 
   /**
@@ -275,11 +377,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
     }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
-    if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
-    }
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 
   /**

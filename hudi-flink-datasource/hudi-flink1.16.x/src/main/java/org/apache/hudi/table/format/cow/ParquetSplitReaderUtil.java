@@ -19,11 +19,14 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.format.cow.vector.HeapArrayGroupColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
+import org.apache.hudi.table.format.cow.vector.HeapDecimalVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
-import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 import org.apache.hudi.table.format.cow.vector.reader.ArrayColumnReader;
+import org.apache.hudi.table.format.cow.vector.reader.ArrayGroupReader;
+import org.apache.hudi.table.format.cow.vector.reader.EmptyColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.FixedLenBytesColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.Int64TimestampColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.MapColumnReader;
@@ -61,16 +64,19 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.LogicalTypeFamily;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.VarBinaryType;
 import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.ParquetRuntimeException;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.filter.UnboundRecordFilter;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.InvalidSchemaException;
 import org.apache.parquet.schema.OriginalType;
@@ -114,7 +120,9 @@ public class ParquetSplitReaderUtil {
       int batchSize,
       Path path,
       long splitStart,
-      long splitLength) throws IOException {
+      long splitLength,
+      FilterPredicate filterPredicate,
+      UnboundRecordFilter recordFilter) throws IOException {
     List<String> selNonPartNames = Arrays.stream(selectedFields)
         .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
@@ -147,7 +155,9 @@ public class ParquetSplitReaderUtil {
         batchSize,
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
-        splitLength);
+        splitLength,
+        filterPredicate,
+        recordFilter);
   }
 
   private static ColumnVector createVector(
@@ -227,17 +237,18 @@ public class ParquetSplitReaderUtil {
         }
         return lv;
       case DECIMAL:
-        DecimalType decimalType = (DecimalType) type;
-        int precision = decimalType.getPrecision();
-        int scale = decimalType.getScale();
-        DecimalData decimal = value == null
-            ? null
-            : Preconditions.checkNotNull(DecimalData.fromBigDecimal((BigDecimal) value, precision, scale));
-        ColumnVector internalVector = createVectorFromConstant(
-            new VarBinaryType(),
-            decimal == null ? null : decimal.toUnscaledBytes(),
-            batchSize);
-        return new ParquetDecimalVector(internalVector);
+        HeapDecimalVector decv = new HeapDecimalVector(batchSize);
+        if (value == null) {
+          decv.fillWithNulls();
+        } else {
+          DecimalType decimalType = (DecimalType) type;
+          int precision = decimalType.getPrecision();
+          int scale = decimalType.getScale();
+          DecimalData decimal = Preconditions.checkNotNull(
+              DecimalData.fromBigDecimal((BigDecimal) value, precision, scale));
+          decv.fill(decimal.toUnscaledBytes());
+        }
+        return decv;
       case FLOAT:
         HeapFloatVector fv = new HeapFloatVector(batchSize);
         if (value == null) {
@@ -270,6 +281,41 @@ public class ParquetSplitReaderUtil {
           tv.fill(TimestampData.fromLocalDateTime((LocalDateTime) value));
         }
         return tv;
+      case ARRAY:
+        ArrayType arrayType = (ArrayType) type;
+        if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          HeapArrayGroupColumnVector arrayGroup = new HeapArrayGroupColumnVector(batchSize);
+          if (value == null) {
+            arrayGroup.fillWithNulls();
+            return arrayGroup;
+          } else {
+            throw new UnsupportedOperationException("Unsupported create array with default value.");
+          }
+        } else {
+          HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
+          if (value == null) {
+            arrayVector.fillWithNulls();
+            return arrayVector;
+          } else {
+            throw new UnsupportedOperationException("Unsupported create array with default value.");
+          }
+        }
+      case MAP:
+        HeapMapColumnVector mapVector = new HeapMapColumnVector(batchSize, null, null);
+        if (value == null) {
+          mapVector.fillWithNulls();
+          return mapVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create map with default value.");
+        }
+      case ROW:
+        HeapRowColumnVector rowVector = new HeapRowColumnVector(batchSize);
+        if (value == null) {
+          rowVector.fillWithNulls();
+          return rowVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create row with default value.");
+        }
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
@@ -359,12 +405,23 @@ public class ParquetSplitReaderUtil {
             throw new AssertionError();
         }
       case ARRAY:
-        return new ArrayColumnReader(
-            descriptor,
-            pageReader,
-            utcTimestamp,
-            descriptor.getPrimitiveType(),
-            fieldType);
+        ArrayType arrayType = (ArrayType) fieldType;
+        if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          return new ArrayGroupReader(createColumnReader(
+              utcTimestamp,
+              arrayType.getElementType(),
+              physicalType.asGroupType().getType(0),
+              descriptors,
+              pages,
+              depth + 1));
+        } else {
+          return new ArrayColumnReader(
+              descriptor,
+              pageReader,
+              utcTimestamp,
+              descriptor.getPrimitiveType(),
+              fieldType);
+        }
       case MAP:
         MapType mapType = (MapType) fieldType;
         ArrayColumnReader keyReader =
@@ -374,27 +431,71 @@ public class ParquetSplitReaderUtil {
                 utcTimestamp,
                 descriptor.getPrimitiveType(),
                 new ArrayType(mapType.getKeyType()));
-        ArrayColumnReader valueReader =
-            new ArrayColumnReader(
-                descriptors.get(1),
-                pages.getPageReader(descriptors.get(1)),
-                utcTimestamp,
-                descriptors.get(1).getPrimitiveType(),
-                new ArrayType(mapType.getValueType()));
-        return new MapColumnReader(keyReader, valueReader, fieldType);
+        ColumnReader<WritableColumnVector> valueReader;
+        if (mapType.getValueType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          valueReader = new ArrayGroupReader(createColumnReader(
+              utcTimestamp,
+              mapType.getValueType(),
+              physicalType.asGroupType().getType(0).asGroupType().getType(1), // Get the value physical type
+              descriptors.subList(1, descriptors.size()), // remove the key descriptor
+              pages,
+              depth + 2)); // increase the depth by 2, because there's a key_value entry in the path
+        } else {
+          valueReader = new ArrayColumnReader(
+              descriptors.get(1),
+              pages.getPageReader(descriptors.get(1)),
+              utcTimestamp,
+              descriptors.get(1).getPrimitiveType(),
+              new ArrayType(mapType.getValueType()));
+        }
+        return new MapColumnReader(keyReader, valueReader);
       case ROW:
         RowType rowType = (RowType) fieldType;
         GroupType groupType = physicalType.asGroupType();
         List<ColumnReader> fieldReaders = new ArrayList<>();
         for (int i = 0; i < rowType.getFieldCount(); i++) {
-          fieldReaders.add(
-              createColumnReader(
-                  utcTimestamp,
-                  rowType.getTypeAt(i),
-                  groupType.getType(i),
-                  descriptors,
-                  pages,
-                  depth + 1));
+          // schema evolution: read the parquet file with a new extended field name.
+          int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
+          if (fieldIndex < 0) {
+            fieldReaders.add(new EmptyColumnReader());
+          } else {
+            // Check for nested row in array with atomic field type.
+
+            // This is done to meet the Parquet field algorithm that pushes multiplicity and structures down to individual fields.
+            // In Parquet, an array of rows is stored as separate arrays for each field.
+
+            // Limitations: It won't work for multiple nested arrays and maps.
+            // The main problem is that the Flink classes and interface don't follow that pattern.
+            if (getLegacyFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType) != -1) {
+              // This is a legacy field, which means it's an array of rows with atomic fields.
+              fieldReaders.add(
+                  createColumnReader(
+                      utcTimestamp,
+                      new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)),
+                      groupType.getType(0).asGroupType().getType(fieldIndex),
+                      descriptors,
+                      pages,
+                      depth + 2));
+            } else if (descriptors.get(fieldIndex).getMaxRepetitionLevel() > 0 && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
+              fieldReaders.add(
+                  createColumnReader(
+                      utcTimestamp,
+                      new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)),
+                      groupType.getType(fieldIndex),
+                      descriptors,
+                      pages,
+                      depth + 1));
+            } else {
+              fieldReaders.add(
+                  createColumnReader(
+                      utcTimestamp,
+                      rowType.getTypeAt(i),
+                      groupType.getType(fieldIndex),
+                      descriptors,
+                      pages,
+                      depth + 1));
+            }
+          }
         }
         return new RowColumnReader(fieldReaders);
       default:
@@ -476,52 +577,134 @@ public class ParquetSplitReaderUtil {
                 || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
             "Unexpected type: %s", typeName);
-        return new HeapBytesVector(batchSize);
+        return new HeapDecimalVector(batchSize);
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
-        return new HeapArrayVector(
-            batchSize,
-            createWritableColumnVector(
-                batchSize,
-                arrayType.getElementType(),
-                physicalType,
-                descriptors,
-                depth));
+        if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          return new HeapArrayGroupColumnVector(
+              batchSize,
+              createWritableColumnVector(
+                  batchSize,
+                  arrayType.getElementType(),
+                  physicalType.asGroupType().getType(0),
+                  descriptors,
+                  depth + 1));
+        } else {
+          return new HeapArrayVector(
+              batchSize,
+              createWritableColumnVector(
+                  batchSize,
+                  arrayType.getElementType(),
+                  physicalType,
+                  descriptors,
+                  depth));
+        }
       case MAP:
         MapType mapType = (MapType) fieldType;
         GroupType repeatedType = physicalType.asGroupType().getType(0).asGroupType();
         // the map column has three level paths.
-        return new HeapMapColumnVector(
+        WritableColumnVector keyColumnVector = createWritableColumnVector(
             batchSize,
-            createWritableColumnVector(
-                batchSize,
-                mapType.getKeyType(),
-                repeatedType.getType(0),
-                descriptors,
-                depth + 2),
-            createWritableColumnVector(
-                batchSize,
-                mapType.getValueType(),
-                repeatedType.getType(1),
-                descriptors,
-                depth + 2));
+            new ArrayType(mapType.getKeyType().isNullable(), mapType.getKeyType()),
+            repeatedType.getType(0),
+            descriptors,
+            depth + 2);
+        WritableColumnVector valueColumnVector;
+        if (mapType.getValueType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          valueColumnVector = new HeapArrayGroupColumnVector(
+              batchSize,
+              createWritableColumnVector(
+                  batchSize,
+                  mapType.getValueType(),
+                  repeatedType.getType(1).asGroupType(),
+                  descriptors,
+                  depth + 2));
+        } else {
+          valueColumnVector = createWritableColumnVector(
+              batchSize,
+              new ArrayType(mapType.getValueType().isNullable(), mapType.getValueType()),
+              repeatedType.getType(1),
+              descriptors,
+              depth + 2);
+        }
+        return new HeapMapColumnVector(batchSize, keyColumnVector, valueColumnVector);
       case ROW:
         RowType rowType = (RowType) fieldType;
         GroupType groupType = physicalType.asGroupType();
-        WritableColumnVector[] columnVectors =
-            new WritableColumnVector[rowType.getFieldCount()];
+        WritableColumnVector[] columnVectors = new WritableColumnVector[rowType.getFieldCount()];
         for (int i = 0; i < columnVectors.length; i++) {
-          columnVectors[i] =
-              createWritableColumnVector(
-                  batchSize,
-                  rowType.getTypeAt(i),
-                  groupType.getType(i),
-                  descriptors,
-                  depth + 1);
+          // schema evolution: read the file with a new extended field name.
+          int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
+          if (fieldIndex < 0) {
+            // Check for nested row in array with atomic field type.
+
+            // This is done to meet the Parquet field algorithm that pushes multiplicity and structures down to individual fields.
+            // In Parquet, an array of rows is stored as separate arrays for each field.
+
+            // Limitations: It won't work for multiple nested arrays and maps.
+            // The main problem is that the Flink classes and interface don't follow that pattern.
+            if (groupType.getRepetition().equals(Type.Repetition.REPEATED) && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
+              columnVectors[i] = (WritableColumnVector) createVectorFromConstant(
+                  new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)), null, batchSize);
+            } else {
+              columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
+            }
+          } else {
+            // Check for nested row in array with atomic field type.
+
+            // This is done to meet the Parquet field algorithm that pushes multiplicity and structures down to individual fields.
+            // In Parquet, an array of rows is stored as separate arrays for each field.
+
+            // Limitations: It won't work for multiple nested arrays and maps.
+            // The main problem is that the Flink classes and interface don't follow that pattern.
+            if (getLegacyFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType) != -1) {
+              // This is a legacy field, which means it's an array of rows with atomic fields.
+              columnVectors[i] =
+                  createWritableColumnVector(
+                      batchSize,
+                      new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)),
+                      groupType.getType(0).asGroupType().getType(fieldIndex),
+                      descriptors,
+                      depth + 2);
+            } else if (descriptors.get(fieldIndex).getMaxRepetitionLevel() > 0 && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
+              columnVectors[i] =
+                  createWritableColumnVector(
+                      batchSize,
+                      new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)),
+                      groupType.getType(fieldIndex),
+                      descriptors,
+                      depth + 1);
+            } else {
+              columnVectors[i] =
+                  createWritableColumnVector(
+                      batchSize,
+                      rowType.getTypeAt(i),
+                      groupType.getType(fieldIndex),
+                      descriptors,
+                      depth + 1);
+            }
+          }
         }
         return new HeapRowColumnVector(batchSize, columnVectors);
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
+  }
+
+  private static int getFieldIndexInPhysicalType(String fieldName, GroupType groupType) {
+    // get index from fileSchema type, else, return -1
+    return groupType.containsField(fieldName) ? groupType.getFieldIndex(fieldName) : getLegacyFieldIndexInPhysicalType(fieldName, groupType);
+  }
+
+  // Compatible with existing array<row>files
+  private static int getLegacyFieldIndexInPhysicalType(String fieldName, GroupType groupType) {
+    if ("list".equals(groupType.getName()) && groupType.getFieldCount() == 1 && "element".equals(groupType.getFieldName(0))) {
+      Type elementType = groupType.getType("element");
+      if (elementType instanceof GroupType) {
+        GroupType elementGroupType = elementType.asGroupType();
+        return elementGroupType.containsField(fieldName) ? elementGroupType.getFieldIndex(fieldName) : -1;
+      }
+    }
+    return -1;
   }
 }

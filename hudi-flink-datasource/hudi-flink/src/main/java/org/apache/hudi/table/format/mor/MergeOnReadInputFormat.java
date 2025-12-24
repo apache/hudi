@@ -18,18 +18,24 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.flink.runtime.io.disk.iomanager.IOManager;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -37,11 +43,17 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.lsm.RecordReader;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.metrics.CollectStatistic;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
+import org.apache.hudi.table.format.mor.lsm.LsmMergeIterator;
+import org.apache.hudi.table.format.mor.lsm.FlinkLsmUtils;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
@@ -61,20 +73,26 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
@@ -92,6 +110,8 @@ public class MergeOnReadInputFormat
     extends RichInputFormat<RowData, MergeOnReadInputSplit> {
 
   private static final long serialVersionUID = 1L;
+
+  private static final Logger LOG = LoggerFactory.getLogger(MergeOnReadInputFormat.class);
 
   protected final Configuration conf;
 
@@ -123,7 +143,11 @@ public class MergeOnReadInputFormat
   /**
    * Required field positions.
    */
-  private final int[] requiredPos;
+  protected final int[] requiredPos;
+
+  private List<ExpressionPredicates.Predicate> predicates = new ArrayList<>();
+
+  private Option<ExpressionPredicates.Predicate> commitTimePredicate;
 
   // for limit push down
   /**
@@ -140,20 +164,26 @@ public class MergeOnReadInputFormat
    * Flag saying whether to emit the deletes. In streaming read mode, downstream
    * operators need the DELETE messages to retract the legacy accumulator.
    */
-  private boolean emitDelete;
+  protected boolean emitDelete;
 
   /**
    * Flag saying whether the input format has been closed.
    */
   private boolean closed = true;
 
-  private final InternalSchemaManager internalSchemaManager;
+  protected final InternalSchemaManager internalSchemaManager;
+  protected HoodieTableConfig tableConfig;
+
+  protected IOManager ioManager;
+  protected int memorySegmentSize;
+  protected int spillTreshold;
 
   protected MergeOnReadInputFormat(
       Configuration conf,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
+      List<ExpressionPredicates.Predicate> predicates,
       long limit,
       boolean emitDelete,
       InternalSchemaManager internalSchemaManager) {
@@ -165,9 +195,13 @@ public class MergeOnReadInputFormat
     // Needs improvement: this requiredPos is only suitable for parquet reader,
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
+    if (predicates != null && predicates.size() != 0) {
+      this.predicates.addAll(predicates);
+    }
     this.limit = limit;
     this.emitDelete = emitDelete;
     this.internalSchemaManager = internalSchemaManager;
+    this.spillTreshold = conf.getInteger(FlinkOptions.LSM_SORT_MERGE_SPILL_THRESHOLD);
   }
 
   /**
@@ -182,11 +216,71 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.closed = false;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
+    this.tableConfig = split.getTableConfig();
     this.iterator = initIterator(split);
     mayShiftInputSplit(split);
   }
 
+  public void setIOManager(IOManager ioManager) {
+    this.ioManager = ioManager;
+  }
+
+  public void setMemorySegmentSize(int memorySegmentSize) {
+    this.memorySegmentSize = memorySegmentSize;
+  }
+
+  public void setSpillTreshold(int spillTreshold) {
+    this.spillTreshold = spillTreshold;
+  }
+
   protected ClosableIterator<RowData> initIterator(MergeOnReadInputSplit split) throws IOException {
+    if (tableConfig.isLSMBasedLogFormat()) {
+      this.commitTimePredicate = extractCommitTimePredicate(split.getInstantRange());
+      if (this.commitTimePredicate.isPresent()) {
+        addCommitTimePredicate(this.commitTimePredicate.get());
+      }
+      TypedProperties payloadProps = StreamerUtil.getPayloadConfig(conf).getProps();
+      Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
+      Schema requiredSchemaWithMeta = AvroSchemaCache.intern(this.tableState.getLsmReadSchema(payloadProps, tableSchema, conf));
+      RowType rowTypeWithMeta = (RowType) AvroSchemaConverter.convertToDataType(requiredSchemaWithMeta).getLogicalType();
+      RowDataSerializer rowDataSerializer = new RowDataSerializer(rowTypeWithMeta);
+      int recordKeyIndex = FlinkLsmUtils.getRecordKeyIndex(requiredSchemaWithMeta);
+
+      List<String> lsmLogPaths = split.getLogPaths().get();
+      // 标记level 1文件的下标位置, level 1文件不spill disk
+      int level1Index = -1;
+      for (int i = 0; i < lsmLogPaths.size(); i++) {
+        int level = FSUtils.getLevelNumFromLog(new Path(lsmLogPaths.get(i)));
+        if (level == 1) {
+          level1Index = i;
+          break;
+        }
+      }
+
+      List<ClosableIterator<RowData>> iterators = lsmLogPaths.stream().map(path -> {
+        try {
+          return FlinkLsmUtils.getBaseFileIterator(path, FlinkLsmUtils.getLsmRequiredPositions(requiredSchemaWithMeta, tableSchema),
+              fieldNames, fieldTypes, defaultPartName, conf, hadoopConf, tableConfig, internalSchemaManager, predicates);
+        } catch (IOException ioe) {
+          throw new HoodieIOException(ioe.getMessage(), ioe);
+        }
+      }).collect(Collectors.toList());
+
+      List<RecordReader<HoodieRecord>> readers = FlinkLsmUtils.createLsmRecordReaders(iterators, spillTreshold, rowDataSerializer, ioManager,
+          memorySegmentSize, recordKeyIndex, level1Index);
+      return new LsmMergeIterator(
+          true,
+          conf,
+          payloadProps,
+          requiredSchemaWithMeta,
+          this.tableState.getRequiredRowType(),
+          hadoopConf,
+          this.requiredPos,
+          split.getTablePath(),
+          readers,
+          false);
+    }
+
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       if (split.getInstantRange().isPresent()) {
         // base file only with commit time filtering
@@ -210,8 +304,27 @@ public class MergeOnReadInputFormat
       return new SkipMergeIterator(
           getBaseFileIterator(split.getBasePath().get()),
           getLogFileIterator(split));
+    }  else if (split.getMergeType().equals(FlinkOptions.REALTIME_SKIP_COMBINE)) {
+      return new SkipMergeIterator(
+          getBaseFileIterator(split.getBasePath().get()),
+          getUnMergedLogFileIterator(split));
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_PAYLOAD_COMBINE)) {
+      // conf contains all the configs including reading runtime env
       return new MergeIterator(
+          conf,
+          hadoopConf,
+          split,
+          this.tableState.getRowType(),
+          this.tableState.getRequiredRowType(),
+          new Schema.Parser().parse(this.tableState.getAvroSchema()),
+          new Schema.Parser().parse(this.tableState.getRequiredAvroSchema()),
+          internalSchemaManager.getQuerySchema(),
+          this.requiredPos,
+          this.emitDelete,
+          this.tableState.getOperationPos(),
+          getBaseFileIteratorWithMetadata(split.getBasePath().get()));
+    } else if (split.getMergeType().equals(FlinkOptions.HISTORICAL_PAYLOAD_COMBINE)) {
+      return new MergeHistoricalIterator(
           conf,
           hadoopConf,
           split,
@@ -231,6 +344,42 @@ public class MergeOnReadInputFormat
           + "hoodie table path: " + split.getTablePath()
           + "flink partition Index: " + split.getSplitNumber()
           + "merge type: " + split.getMergeType());
+    }
+  }
+
+  private Option<ExpressionPredicates.Predicate> extractCommitTimePredicate(Option<InstantRange> instantRange) {
+    if (instantRange.isPresent()) {
+      InstantRange range = instantRange.get();
+      if (range instanceof InstantRange.CloseCloseRange) {
+        CallExpression expression = FlinkLsmUtils.buildCloseCloseRangeCommitExpression(range);
+        return Option.of(ExpressionPredicates.fromExpression(expression));
+      } else if (range instanceof InstantRange.CloseCloseRangeNullableBoundary) {
+        CallExpression expression = FlinkLsmUtils.buildCloseCloseRangeNullableBoundaryCommitExpression(range);
+        return Option.of(ExpressionPredicates.fromExpression(expression));
+      } else if (range instanceof InstantRange.OpenCloseRange) {
+        CallExpression expression = FlinkLsmUtils.buildOpenCloseRangeCommitExpression(range);
+        return Option.of(ExpressionPredicates.fromExpression(expression));
+      } else if (range instanceof InstantRange.OpenCloseRangeNullableBoundary) {
+        CallExpression expression = FlinkLsmUtils.buildOpenCloseRangeNullableBoundaryCommitExpression(range);
+        return Option.of(ExpressionPredicates.fromExpression(expression));
+      }
+    }
+    return Option.empty();
+  }
+
+  private void addCommitTimePredicate(ExpressionPredicates.Predicate predicate) {
+    this.predicates.add(predicate);
+  }
+
+  private void removeCommitTimePredicate(ExpressionPredicates.Predicate predicate) {
+    this.predicates.remove(predicate);
+  }
+
+  public Map<String, Long> getStatistic() {
+    if (this.iterator instanceof CollectStatistic) {
+      return ((CollectStatistic<?>) this.iterator).getStatisticMetrics();
+    } else {
+      return new HashMap<>();
     }
   }
 
@@ -277,6 +426,10 @@ public class MergeOnReadInputFormat
     if (this.iterator != null) {
       this.iterator.close();
     }
+    if (this.commitTimePredicate != null && this.commitTimePredicate.isPresent()) {
+      removeCommitTimePredicate(this.commitTimePredicate.get());
+    }
+    this.commitTimePredicate = null;
     this.iterator = null;
     this.closed = true;
   }
@@ -288,6 +441,10 @@ public class MergeOnReadInputFormat
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  public Configuration getConfiguration() {
+    return conf;
+  }
 
   /**
    * Shifts the input split by its consumed records number.
@@ -316,7 +473,7 @@ public class MergeOnReadInputFormat
     return getBaseFileIterator(path, this.requiredPos);
   }
 
-  private ClosableIterator<RowData> getBaseFileIterator(String path, int[] requiredPos) throws IOException {
+  protected ClosableIterator<RowData> getBaseFileIterator(String path, int[] requiredPos) throws IOException {
     // generate partition specs.
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
         new org.apache.hadoop.fs.Path(path).getParent(),
@@ -337,12 +494,13 @@ public class MergeOnReadInputFormat
         partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, fieldType));
       }
     });
-
+    org.apache.hadoop.conf.Configuration parquetConf = HadoopConfigurations.getParquetConf(this.conf, hadoopConf);
+    FSUtils.addChubaoFsConfig2HadoopConf(parquetConf, tableConfig);
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
         true,
-        HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
+        parquetConf,
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),
         partObjects,
@@ -350,10 +508,11 @@ public class MergeOnReadInputFormat
         2048,
         new org.apache.flink.core.fs.Path(path),
         0,
-        Long.MAX_VALUE); // read the whole file
+        Long.MAX_VALUE, // read the whole file
+        predicates);
   }
 
-  private ClosableIterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
+  protected ClosableIterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
     final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
     final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
@@ -369,7 +528,25 @@ public class MergeOnReadInputFormat
     final LogicalType[] pkTypes = pkSemanticLost ? null : tableState.getPkTypes(pkOffset);
     final StringToRowDataConverter converter = pkSemanticLost ? null : new StringToRowDataConverter(pkTypes);
 
-    return new ClosableIterator<RowData>() {
+    return new CollectStatistic<RowData>() {
+      @Override
+      public Map<String, Long> getStatisticMetrics() {
+        Map<String, Long> statistic = new HashMap<>();
+        String finalBaseCommitTime = scanner.getFinalBaseCommitTime();
+        if (StringUtils.nonEmpty(finalBaseCommitTime)) {
+          String baseCommitTime = finalBaseCommitTime.length() > 14 ? finalBaseCommitTime.substring(0, 14) : finalBaseCommitTime;
+          statistic.put("finalBaseCommitTime", Long.valueOf(baseCommitTime));
+        }
+        statistic.put("diffBetweenLogPathSizeAndScannedLogSize",
+                scanner.getDiffBetweenLogPathSizeAndScannedLogSize());
+        statistic.put("totalLogFiles", scanner.getTotalLogFiles());
+        statistic.put("totalRollbacks",scanner.getTotalRollbacks());
+        statistic.put("totalCorruptBlocks", scanner.getTotalCorruptBlocks());
+        statistic.put("totalLogBlocks", scanner.getTotalLogBlocks());
+        statistic.put("totalLogRecords", scanner.getTotalLogRecords());
+        return statistic;
+      }
+
       private RowData currentRecord;
 
       @Override
@@ -595,7 +772,7 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected static class LogFileOnlyIterator implements ClosableIterator<RowData> {
+  protected static class LogFileOnlyIterator implements CollectStatistic<RowData> {
     // iterator for log files
     private final ClosableIterator<RowData> iterator;
 
@@ -617,6 +794,15 @@ public class MergeOnReadInputFormat
     public void close() {
       if (this.iterator != null) {
         this.iterator.close();
+      }
+    }
+
+    @Override
+    public Map<String, Long> getStatisticMetrics() {
+      if (iterator instanceof CollectStatistic) {
+        return ((CollectStatistic<?>) iterator).getStatisticMetrics();
+      } else {
+        return new HashMap<>();
       }
     }
   }
@@ -669,37 +855,37 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected static class MergeIterator implements ClosableIterator<RowData> {
+  protected static class MergeIterator implements CollectStatistic {
     // base file record iterator
-    private final ClosableIterator<RowData> nested;
+    protected final ClosableIterator<RowData> nested;
     // log keys used for merging
-    private final Iterator<String> logKeysIterator;
+    protected final Iterator<String> logKeysIterator;
     // scanner
-    private final HoodieMergedLogRecordScanner scanner;
+    protected final HoodieMergedLogRecordScanner scanner;
 
     private final Schema tableSchema;
-    private final boolean emitDelete;
-    private final int operationPos;
+    protected final boolean emitDelete;
+    protected final int operationPos;
     private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
-    private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
+    protected final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
 
-    private final Option<RowDataProjection> projection;
-    private final Option<Function<IndexedRecord, GenericRecord>> avroProjection;
+    protected final Option<RowDataProjection> projection;
+    protected final Option<Function<IndexedRecord, GenericRecord>> avroProjection;
 
-    private final InstantRange instantRange;
+    protected final InstantRange instantRange;
 
     private final HoodieRecordMerger recordMerger;
 
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
     // refactor it out once FLINK-22370 is resolved.
-    private boolean readLogs = false;
+    protected boolean readLogs = false;
 
-    private final Set<String> keyToSkip = new HashSet<>();
+    protected final Set<String> keyToSkip = new HashSet<>();
 
     private final TypedProperties payloadProps;
 
-    private RowData currentRecord;
+    protected RowData currentRecord;
 
     public MergeIterator(
         Configuration flinkConf,
@@ -767,7 +953,7 @@ public class MergeOnReadInputFormat
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         if (scanner.getRecords().containsKey(curKey)) {
           keyToSkip.add(curKey);
-          Option<HoodieAvroIndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
+          Option<HoodieRecord<IndexedRecord>> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
           if (!mergedAvroRecord.isPresent()) {
             // deleted
             continue;
@@ -811,7 +997,7 @@ public class MergeOnReadInputFormat
       return false;
     }
 
-    private Option<IndexedRecord> getInsertValue(String curKey) {
+    protected Option<IndexedRecord> getInsertValue(String curKey) {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
         return Option.empty();
@@ -838,16 +1024,115 @@ public class MergeOnReadInputFormat
       }
     }
 
-    private Option<HoodieAvroIndexedRecord> mergeRowWithLog(RowData curRow, String curKey) {
-      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
+    @SuppressWarnings("unchecked")
+    protected Option<HoodieRecord<IndexedRecord>> mergeRowWithLog(RowData curRow, String curKey) {
+      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
       try {
-        Option<HoodieRecord> resultRecord = recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
-        return resultRecord.get().toIndexedRecord(tableSchema, new Properties());
+        return recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }
+    }
+
+    @Override
+    public Map<String, Long> getStatisticMetrics() {
+      Map<String, Long> statistic = new HashMap<>();
+      String finalBaseCommitTime = scanner.getFinalBaseCommitTime();
+      if (StringUtils.nonEmpty(finalBaseCommitTime)) {
+        String baseCommitTime = finalBaseCommitTime.length() > 14 ? finalBaseCommitTime.substring(0, 14) : finalBaseCommitTime;
+        statistic.put("finalBaseCommitTime", Long.valueOf(baseCommitTime));
+      }
+      statistic.put("diffBetweenLogPathSizeAndScannedLogSize", scanner.getDiffBetweenLogPathSizeAndScannedLogSize());
+      statistic.put("totalLogFiles", scanner.getTotalLogFiles());
+      statistic.put("totalRollbacks",scanner.getTotalRollbacks());
+      statistic.put("totalCorruptBlocks", scanner.getTotalCorruptBlocks());
+      statistic.put("totalLogBlocks", scanner.getTotalLogBlocks());
+      statistic.put("totalLogRecords", scanner.getTotalLogRecords());
+      return statistic;
+    }
+  }
+
+  protected static class MergeHistoricalIterator extends MergeIterator {
+    public MergeHistoricalIterator(
+        Configuration flinkConf,
+        org.apache.hadoop.conf.Configuration hadoopConf,
+        MergeOnReadInputSplit split,
+        RowType tableRowType,
+        RowType requiredRowType,
+        Schema tableSchema,
+        Schema requiredSchema,
+        InternalSchema querySchema,
+        int[] requiredPos,
+        boolean emitDelete,
+        int operationPos,
+        ClosableIterator<RowData> nested) { // the iterator should be with full schema
+      super(flinkConf, hadoopConf, split, tableRowType, requiredRowType, tableSchema,
+          querySchema,
+          Option.of(RowDataProjection.instance(requiredRowType, requiredPos)),
+          Option.of(record -> buildAvroRecordBySchema(record, requiredSchema, requiredPos, new GenericRecordBuilder(requiredSchema))),
+          emitDelete, operationPos, nested);
+    }
+
+    @Override
+    public boolean hasNext() {
+      while (!readLogs && this.nested.hasNext()) {
+        currentRecord = this.nested.next();
+        final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
+        if (scanner.getRecords().containsKey(curKey)) {
+          keyToSkip.add(curKey);
+          Option<HoodieRecord<IndexedRecord>> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
+          if (!mergedAvroRecord.isPresent()) {
+            // deleted
+            continue;
+          } else {
+            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get().getData(), this.operationPos);
+            if (!emitDelete && rowKind == RowKind.DELETE) {
+              // deleted
+              continue;
+            }
+            IndexedRecord avroRecord = avroProjection.isPresent()
+                ? avroProjection.get().apply(mergedAvroRecord.get().getData())
+                : mergedAvroRecord.get().getData();
+            this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
+            this.currentRecord.setRowKind(rowKind);
+            return true;
+          }
+        }
+
+        if (instantRange != null) {
+          boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
+          if (!isInRange) {
+            // filter base file by instant range
+            continue;
+          }
+        }
+
+        // project the full record in base with required positions
+        if (projection.isPresent()) {
+          currentRecord = projection.get().project(currentRecord);
+        }
+        return true;
+      }
+      // read the logs
+      readLogs = true;
+      while (logKeysIterator.hasNext()) {
+        final String curKey = logKeysIterator.next();
+        if (!keyToSkip.contains(curKey)) {
+          Option<IndexedRecord> insertAvroRecord = getInsertValue(curKey);
+          if (insertAvroRecord.isPresent()) {
+            // the record is a DELETE if insertAvroRecord not present, skipping
+            IndexedRecord avroRecord = avroProjection.isPresent()
+                ? avroProjection.get().apply(insertAvroRecord.get())
+                : insertAvroRecord.get();
+            this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
+            FormatUtils.setRowKind(this.currentRecord, insertAvroRecord.get(), this.operationPos);
+            return true;
+          }
+        }
+      }
+      return false;
     }
   }
 
@@ -859,6 +1144,7 @@ public class MergeOnReadInputFormat
     protected MergeOnReadTableState tableState;
     protected List<DataType> fieldTypes;
     protected String defaultPartName;
+    protected List<ExpressionPredicates.Predicate> predicates;
     protected long limit = -1;
     protected boolean emitDelete = false;
     protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;
@@ -883,6 +1169,11 @@ public class MergeOnReadInputFormat
       return this;
     }
 
+    public Builder predicates(List<ExpressionPredicates.Predicate> predicates) {
+      this.predicates = predicates;
+      return this;
+    }
+
     public Builder limit(long limit) {
       this.limit = limit;
       return this;
@@ -899,8 +1190,12 @@ public class MergeOnReadInputFormat
     }
 
     public MergeOnReadInputFormat build() {
+      if (conf.get(FlinkOptions.COMPACTION_SCANNER_TYPE).equals(FlinkOptions.SCANNER_WITH_FK)) {
+        return new MergeOnReadInputFormatWithFK(conf, tableState, fieldTypes,
+            defaultPartName, limit, emitDelete, internalSchemaManager);
+      }
       return new MergeOnReadInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, limit, emitDelete, internalSchemaManager);
+          defaultPartName, predicates, limit, emitDelete, internalSchemaManager);
     }
   }
 
@@ -908,7 +1203,7 @@ public class MergeOnReadInputFormat
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private static int[] getRequiredPosWithCommitTime(int[] requiredPos) {
+  protected static int[] getRequiredPosWithCommitTime(int[] requiredPos) {
     if (getCommitTimePos(requiredPos) >= 0) {
       return requiredPos;
     }
@@ -918,9 +1213,28 @@ public class MergeOnReadInputFormat
     return requiredPos2;
   }
 
-  private static int getCommitTimePos(int[] requiredPos) {
+  protected static int[] getRequiredPosWithRecordKey(int[] requiredPos) {
+    if (getRecordKeyPos(requiredPos) >= 0) {
+      return requiredPos;
+    }
+    int[] requiredPos2 = new int[requiredPos.length + 1];
+    requiredPos2[0] = HOODIE_RECORD_KEY_COL_POS;
+    System.arraycopy(requiredPos, 0, requiredPos2, 1, requiredPos.length);
+    return requiredPos2;
+  }
+
+  public static int getCommitTimePos(int[] requiredPos) {
     for (int i = 0; i < requiredPos.length; i++) {
       if (requiredPos[i] == HOODIE_COMMIT_TIME_COL_POS) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  public static int getRecordKeyPos(int[] requiredPos) {
+    for (int i = 0; i < requiredPos.length; i++) {
+      if (requiredPos[i] == HOODIE_RECORD_KEY_COL_POS) {
         return i;
       }
     }

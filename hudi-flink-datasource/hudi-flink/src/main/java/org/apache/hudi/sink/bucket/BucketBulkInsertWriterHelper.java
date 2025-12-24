@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.BucketStrategist;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -92,16 +93,16 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets) {
+  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, BucketStrategist bucketStrategist) {
     String recordKey = keyGen.getRecordKey(record);
     String partition = keyGen.getPartitionPath(record);
-    final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeys, numBuckets);
+    final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeys, bucketStrategist.computeBucketNumber(partition));
     String bucketId = partition + bucketNum;
     return bucketIdToFileId.computeIfAbsent(bucketId, k -> BucketIdentifier.newBucketFileIdPrefix(bucketNum));
   }
 
-  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets) {
-    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets);
+  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, BucketStrategist bucketStrategist) {
+    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, bucketStrategist);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

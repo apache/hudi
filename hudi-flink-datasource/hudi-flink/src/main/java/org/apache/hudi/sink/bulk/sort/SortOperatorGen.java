@@ -56,4 +56,12 @@ public class SortOperatorGen {
     }
     return new SortCodeGeneratorAdapter(tableConfig, rowType, builder.build());
   }
+
+  public SortCodeGenerator createSortCodeGenerator(TableConfig tableConfig) {
+    SortSpec.SortSpecBuilder builder = SortSpec.builder();
+    for (int sortIndex : sortIndices) {
+      builder.addField(sortIndex, true, true);
+    }
+    return new SortCodeGeneratorAdapter(tableConfig, rowType, builder.build());
+  }
 }

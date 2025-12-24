@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
@@ -43,7 +44,9 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
   private final Option<InstantRange> instantRange;
+  private HoodieTableConfig tableConfig;
   protected String fileId;
+  private Long savepointDateBoundary;
 
   // for streaming reader to record the consumed offset,
   // which is the start of next round reading.
@@ -58,7 +61,8 @@ public class MergeOnReadInputSplit implements InputSplit {
       long maxCompactionMemoryInBytes,
       String mergeType,
       @Nullable InstantRange instantRange,
-      String fileId) {
+      String fileId,
+      HoodieTableConfig tableConfig) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
@@ -68,6 +72,32 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.mergeType = mergeType;
     this.instantRange = Option.ofNullable(instantRange);
     this.fileId = fileId;
+    this.tableConfig = tableConfig;
+  }
+
+  public MergeOnReadInputSplit(
+      int splitNum,
+      @Nullable String basePath,
+      Option<List<String>> logPaths,
+      String latestCommit,
+      String tablePath,
+      long maxCompactionMemoryInBytes,
+      String mergeType,
+      @Nullable InstantRange instantRange,
+      String fileId,
+      Long savepointDateBoundary,
+      HoodieTableConfig tableConfig) {
+    this.splitNum = splitNum;
+    this.basePath = Option.ofNullable(basePath);
+    this.logPaths = logPaths;
+    this.latestCommit = latestCommit;
+    this.tablePath = tablePath;
+    this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
+    this.mergeType = mergeType;
+    this.instantRange = Option.ofNullable(instantRange);
+    this.fileId = fileId;
+    this.savepointDateBoundary = savepointDateBoundary;
+    this.tableConfig = tableConfig;
   }
 
   public String getFileId() {
@@ -94,6 +124,14 @@ public class MergeOnReadInputSplit implements InputSplit {
     return tablePath;
   }
 
+  public HoodieTableConfig getTableConfig() {
+    return tableConfig;
+  }
+
+  public void setTableConfig(HoodieTableConfig tableConfig) {
+    this.tableConfig = tableConfig;
+  }
+
   public long getMaxCompactionMemoryInBytes() {
     return maxCompactionMemoryInBytes;
   }
@@ -117,6 +155,10 @@ public class MergeOnReadInputSplit implements InputSplit {
 
   public long getConsumed() {
     return consumed;
+  }
+
+  public Long getSavepointDateBoundary() {
+    return this.savepointDateBoundary;
   }
 
   public boolean isConsumed() {

@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -50,6 +51,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
+  public static final String LSM_CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.lsm.plan.strategy.";
+  public static final String LSM_CLUSTERING_USING_STREAMING_COPY = "hoodie.clustering.lsm.using.streaming.copy";
+  public static final String LSM_CLUSTERING_OUT_PUT_LEVEL = "hoodie.clustering.lsm.output.level";
   public static final String SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
   public static final String FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
@@ -58,8 +62,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
+  public static final String LSM_BASE_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.table.action.cluster.strategy.LsmBaseClusteringPlanStrategy";
+  public static final String SPARK_LSM_BASE_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.SparkLsmBaseClusteringPlanStrategy";
   public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
+  public static final String SPARK_LSM_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.LsmSparkClusteringExecutionStrategy";
   public static final String SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
@@ -96,6 +106,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Files smaller than the size in bytes specified here are candidates for clustering");
 
+  public static final ConfigProperty<String> LSM_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
+      .key(LSM_CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
+      .defaultValue(String.valueOf(300 * 1024 * 1024L))
+      .sinceVersion("0.13.1")
+      .withDocumentation("Files smaller than the size in bytes specified here are candidates for lsm clustering");
+
   public static final ConfigProperty<String> PARTITION_REGEX_PATTERN = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.regex.pattern")
       .noDefaultValue()
@@ -116,6 +132,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
           + PLAN_STRATEGY_SMALL_FILE_LIMIT.key() + ") to pick the small file slices within partitions for clustering.");
 
+  public static final ConfigProperty<String> LSM_PLAN_STRATEGY_CLASS_NAME = ConfigProperty
+      .key("hoodie.clustering.lsm.plan.strategy.class")
+      .defaultValue(SPARK_LSM_BASE_CLUSTERING_PLAN_STRATEGY)
+      .sinceVersion("0.13.1")
+      .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
+          + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
+          + LSM_PLAN_STRATEGY_SMALL_FILE_LIMIT.key() + ") to pick the small file slices within partitions for clustering.");
+
   public static final ConfigProperty<String> EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
       .defaultValue(SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY)
@@ -123,6 +147,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the "
           + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
           + " meeting the configured target file sizes.");
+
+  public static final ConfigProperty<String> LSM_EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
+      .key("hoodie.clustering.lsm.execution.strategy.class")
+      .defaultValue(SPARK_LSM_EXECUTION_STRATEGY)
+      .sinceVersion("0.13.1")
+      .withDocumentation("Used for LSM.");
 
   public static final ConfigProperty<String> INLINE_CLUSTERING = ConfigProperty
       .key("hoodie.clustering.inline")
@@ -137,11 +167,54 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Config to control frequency of clustering planning");
 
+  public static final ConfigProperty<String> LSM_INLINE_CLUSTERING_MAX_COMMITS = ConfigProperty
+      .key("hoodie.clustering.lsm.inline.max.commits")
+      .defaultValue("4")
+      .sinceVersion("0.13.1")
+      .withDocumentation("Config to control frequency of lsm clustering planning");
+
   public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.async.max.commits")
       .defaultValue("4")
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
+
+  public static final ConfigProperty<String> LSM_ASYNC_CLUSTERING_MAX_COMMITS = ConfigProperty
+      .key("hoodie.clustering.lsm.async.max.commits")
+      .defaultValue("4")
+      .sinceVersion("0.13.1")
+      .withDocumentation("Config to control frequency of lsm async clustering");
+
+  public static final ConfigProperty<String> PENDING_CLUSTERING_MAX_COMMITS = ConfigProperty
+      .key("hoodie.clustering.pending.max.commits")
+      .defaultValue("2")
+      .withDocumentation("The maximum number of scheduled clustering at the same time.");
+
+  public static final ConfigProperty<String> LSM_PENDING_CLUSTERING_MAX_COMMITS = ConfigProperty
+      .key("hoodie.clustering.lsm.pending.max.commits")
+      .defaultValue("2")
+      .sinceVersion("0.13.1")
+      .withDocumentation("The maximum number of scheduled lsm clustering at the same time.");
+
+  public static final ConfigProperty<Boolean> CLUSTERING_SKIP_SORT = ConfigProperty
+      .key("hoodie.clustering.skip.sort")
+      .defaultValue(false)
+      .withDocumentation("When set to true, skip sorting during clustering, even if the clustering plan contains sorting fields.");
+
+  public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
+      .key("hoodie.clustering.max.parallelism")
+      .defaultValue(5)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "
+          + "If the resource is sufficient(Like Spark engine has enough idle executors), increasing this "
+          + "value will let the clustering job run faster, while it will give additional pressure to the "
+          + "execution engines to manage more concurrent running jobs.");
+
+  public static final ConfigProperty<Boolean> CLUSTERING_EXECUTION_SEPARATE = ConfigProperty
+      .key("hoodie.clustering.execution.separate")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .withDocumentation("");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
@@ -170,17 +243,53 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + " is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS)."
           + " Max amount of data to be included in one group");
 
+  public static final ConfigProperty<String> LSM_PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
+      .key(LSM_CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
+      .defaultValue(String.valueOf(2 * 1024 * 1024 * 1024L))
+      .sinceVersion("0.13.1")
+      .withDocumentation("Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation"
+          + " is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS)."
+          + " Max amount of data to be included in one group");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_GROUPS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.num.groups")
       .defaultValue("30")
       .sinceVersion("0.7.0")
       .withDocumentation("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism");
 
+  public static final ConfigProperty<String> LSM_PLAN_STRATEGY_MIN_GROUPS = ConfigProperty
+      .key(LSM_CLUSTERING_STRATEGY_PARAM_PREFIX + "min.num.groups")
+      .defaultValue("10")
+      .sinceVersion("0.13.1")
+      .withDocumentation("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism");
+
+  public static final ConfigProperty<Integer> PLAN_STRATEGY_INSTANT_LIMIT = ConfigProperty
+      .key("hoodie.clustering.plan.instants.limit")
+      .defaultValue(0)
+      .withDocumentation("给JDFlinkSizeBasedClusteringPlanStrategyRecently使用，从active timeline中选择最新的LimitN个instant来获取partition");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "target.file.max.bytes")
       .defaultValue(String.valueOf(1024 * 1024 * 1024L))
       .sinceVersion("0.7.0")
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
+
+  public static final ConfigProperty<Boolean> PLAN_STRATEGY_SINGLE_CLUSTERING_GROUP_PER_PARTITION = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "single.clustering.group.per.partition")
+      .defaultValue(false)
+      .withDocumentation("用于标识生成Plan时将每个分区下的小文件作为一个clustering group.");
+
+  public static final ConfigProperty<String> PLAN_STRATEGY_OUT_FILE_GROUP_EXPANSION = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "out.filegroup.expansion")
+      .defaultValue("")
+      .withDocumentation("application#others/business#K:10@application#others/business#Z:3（#替换=）, "
+          + "用@分隔不同分区，用冒号分隔分区与放大系数，分区中用井号替换等号(切割问题), for SparkSizeBasedClusteringPlanStrategyWithStorageStrategy and JDFlinkPartitionSizeBasedClusteringPlanStrategyWithCacheLayer");
+
+  public static final ConfigProperty<String> CLUSTER_EXECUTE_OUT_FILE_GROUP_EXPANSION = ConfigProperty
+      .key("hoodie.clustering.execution.out.filegroup.expansion")
+      .defaultValue("")
+      .withDocumentation("application#others/business#K:10@application#others/business#Z:3（#替换=）, "
+          + "用@分隔不同分区，用冒号分隔分区与放大系数，分区中用井号替换等号(切割问题), for SparkSizeBasedClusteringPlanStrategyWithStorageStrategy and JDFlinkPartitionSizeBasedClusteringPlanStrategyWithCacheLayer");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
@@ -212,6 +321,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.")
       .withAlternatives("hoodie.datasource.clustering.async.enable");
 
+  public static final ConfigProperty<String> LSM_ASYNC_CLUSTERING_SCHEDULE_ENABLE = ConfigProperty
+      .key("hoodie.clustering.lsm.async.schedule.enabled")
+      .defaultValue("false")
+      .sinceVersion("0.13.1")
+      .withDocumentation("Enable lsm async clustering schedule by delta commits");
+
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.clustering.preserve.commit.metadata")
       .defaultValue(true)
@@ -238,7 +353,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    *   <li>Z-order: orders records along Z-order spatial-curve</li>
    *   <li>Hilbert: orders records along Hilbert's spatial-curve</li>
    * </ul>
-   *
+   * <p>
    * NOTE: "z-order", "hilbert" strategies may consume considerably more compute, than "linear".
    *       Make sure to perform small-scale local testing for your dataset before applying globally.
    */
@@ -251,8 +366,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
-   *       either "z-order" or "hilbert" (ie leveraging space-filling curves)
-   *
+   * either "z-order" or "hilbert" (ie leveraging space-filling curves)
+   * <p>
    * Currently, two methods to order records along the curve are supported "build" and "sample":
    *
    * <ul>
@@ -261,12 +376,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
    *   <li>Sample: leverages boundary-base interleaved index method (described in more details in
    *   Amazon DynamoDB blog [1])</li>
    * </ul>
-   *
+   * <p>
    * NOTE: Boundary-based interleaved Index method has better generalization,
    *       but is slower than direct method.
-   *
+   * <p>
    * Please refer to RFC-28 for specific elaboration on both flows.
-   *
+   * <p>
    * [1] https://aws.amazon.com/cn/blogs/database/tag/z-order/
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD = ConfigProperty
@@ -279,8 +394,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD} value
-   *       is set to "sample"
-   *
+   * is set to "sample"
+   * <p>
    * Determines target sample size used by the Boundary-based Interleaved Index method.
    * Larger sample size entails better layout optimization outcomes, at the expense of higher memory
    * footprint.
@@ -311,6 +426,39 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. "
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
+
+  public static final ConfigProperty<String> LSM_INLINE_CLUSTERING = ConfigProperty
+      .key("hoodie.clustering.lsm.inline")
+      .defaultValue("false")
+      .withDocumentation("Turn on lsm inline clustering - clustering will be run after each write operation is complete, defaults to enable inline clustering");
+
+  public static final ConfigProperty<String> LSM_SCHEDULE_INLINE_CLUSTERING = ConfigProperty
+      .key("hoodie.clustering.lsm.schedule.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, clustering service will be attempted for lsm inline scheduling after each write.");
+
+  public static final ConfigProperty<Integer> NUM_RUN_CLUSTERING_TRIGGER = ConfigProperty
+      .key("hoodie.clustering.lsm.num.sorted.run.trigger")
+      .defaultValue(5)
+      .withDocumentation("The sorted run number to trigger compaction. "
+          + "Includes level0 files (one file one sorted run) and level1 runs (one level one sorted run one file).");
+
+  public static final ConfigProperty<Integer> MAX_SIZE_AMP = ConfigProperty
+      .key("hoodie.clustering.lsm.maxsize.amplification.percent")
+      .defaultValue(200)
+      .withDocumentation("The size amplification is defined as the amount (in percentage) of "
+          + "additional storage needed to store a single byte of data in the merge tree for changelog mode table.");
+
+  public static final ConfigProperty<Boolean> LSM_CLUSTERING_READFOOTER_ENABLED = ConfigProperty
+      .key("hoodie.clustering.lsm.readfooter.enabled")
+      .defaultValue(false)
+      .withDocumentation("Whether read footer when clustering schedule");
+
+  public static final ConfigProperty<Integer> LSM_CLUSTERING_READ_FOOTER_TASKS = ConfigProperty
+      .key("hoodie.clustering.lsm.readfooter.tasks")
+      .defaultValue(200)
+      .withDocumentation("This config controls the behavior of reading footers during LSM clustering. "
+          + "The final parallelism is the minimum of the number of file slices and this config.");
 
   /**
    * @deprecated Use {@link #PLAN_STRATEGY_CLASS_NAME} and its methods instead
@@ -422,7 +570,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String ASYNC_CLUSTERING_ENABLE_OPT_KEY = ASYNC_CLUSTERING_ENABLE.key();
-  /** @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead */
+  /**
+   * @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL = ASYNC_CLUSTERING_ENABLE.defaultValue();
 
@@ -440,7 +590,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   public static HoodieClusteringConfig from(TypedProperties props) {
-    return  HoodieClusteringConfig.newBuilder().fromProperties(props).build();
+    return HoodieClusteringConfig.newBuilder().fromProperties(props).build();
   }
 
   public static Builder newBuilder() {
@@ -469,6 +619,31 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withLsmClusteringPlanStrategyClass(String clusteringStrategyClass) {
+      clusteringConfig.setValue(LSM_PLAN_STRATEGY_CLASS_NAME, clusteringStrategyClass);
+      return this;
+    }
+
+    public Builder withInlineLSMClustering(Boolean inlineLSMClustering) {
+      clusteringConfig.setValue(LSM_INLINE_CLUSTERING, String.valueOf(inlineLSMClustering));
+      return this;
+    }
+
+    public Builder withLsmClusteringPlanNumSortRunTrigger(int number) {
+      clusteringConfig.setValue(NUM_RUN_CLUSTERING_TRIGGER, String.valueOf(number));
+      return this;
+    }
+
+    public Builder withLsmClusteringPlanMaxSizeAmp(int amp) {
+      clusteringConfig.setValue(MAX_SIZE_AMP, String.valueOf(amp));
+      return this;
+    }
+
+    public Builder withLsmClusteringReadFooterEnabled(boolean readFooterEnabled) {
+      clusteringConfig.setValue(LSM_CLUSTERING_READFOOTER_ENABLED, String.valueOf(readFooterEnabled));
+      return this;
+    }
+
     public Builder withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode mode) {
       clusteringConfig.setValue(PLAN_PARTITION_FILTER_MODE_NAME.key(), mode.toString());
       return this;
@@ -476,6 +651,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringExecutionStrategyClass(String runClusteringStrategyClass) {
       clusteringConfig.setValue(EXECUTION_STRATEGY_CLASS_NAME, runClusteringStrategyClass);
+      return this;
+    }
+
+    public Builder withLsmClusteringExecutionStrategyClass(String runClusteringStrategyClass) {
+      clusteringConfig.setValue(LSM_EXECUTION_STRATEGY_CLASS_NAME, runClusteringStrategyClass);
       return this;
     }
 
@@ -513,9 +693,29 @@ public class HoodieClusteringConfig extends HoodieConfig {
       clusteringConfig.setValue(PLAN_STRATEGY_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
     }
-    
+
+    public Builder withLsmClusteringPlanSmallFileLimit(long clusteringSmallFileLimit) {
+      clusteringConfig.setValue(LSM_PLAN_STRATEGY_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
+      return this;
+    }
+
     public Builder withClusteringSortColumns(String sortColumns) {
       clusteringConfig.setValue(PLAN_STRATEGY_SORT_COLUMNS, sortColumns);
+      return this;
+    }
+
+    public Builder withClusteringSkipSort(Boolean skipSort) {
+      clusteringConfig.setValue(CLUSTERING_SKIP_SORT, String.valueOf(skipSort));
+      return this;
+    }
+
+    public Builder withClusteringMaxParallelism(int parallelism) {
+      clusteringConfig.setValue(CLUSTERING_MAX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withClusteringExecutionSeparate(Boolean executionSeparate) {
+      clusteringConfig.setValue(CLUSTERING_EXECUTION_SEPARATE, String.valueOf(executionSeparate));
       return this;
     }
 
@@ -524,13 +724,38 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withLsmClusteringMaxBytesInGroup(long clusteringMaxGroupSize) {
+      clusteringConfig.setValue(LSM_PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP, String.valueOf(clusteringMaxGroupSize));
+      return this;
+    }
+
     public Builder withClusteringMaxNumGroups(int maxNumGroups) {
       clusteringConfig.setValue(PLAN_STRATEGY_MAX_GROUPS, String.valueOf(maxNumGroups));
       return this;
     }
 
+    public Builder withLsmClusteringMinNumGroups(int minNumGroups) {
+      clusteringConfig.setValue(LSM_PLAN_STRATEGY_MIN_GROUPS, String.valueOf(minNumGroups));
+      return this;
+    }
+
     public Builder withClusteringTargetFileMaxBytes(long targetFileSize) {
       clusteringConfig.setValue(PLAN_STRATEGY_TARGET_FILE_MAX_BYTES, String.valueOf(targetFileSize));
+      return this;
+    }
+
+    public Builder withClusteringPlanFileGroupExpansion(String expansion) {
+      clusteringConfig.setValue(PLAN_STRATEGY_OUT_FILE_GROUP_EXPANSION, expansion);
+      return this;
+    }
+
+    public Builder withSingleClusteringGroupPerPartition(boolean singleClusteringGroupPerPartition) {
+      clusteringConfig.setValue(PLAN_STRATEGY_SINGLE_CLUSTERING_GROUP_PER_PARTITION, String.valueOf(singleClusteringGroupPerPartition));
+      return this;
+    }
+
+    public Builder withClusteringExecuteFileGroupExpansion(String expansion) {
+      clusteringConfig.setValue(CLUSTER_EXECUTE_OUT_FILE_GROUP_EXPANSION, expansion);
       return this;
     }
 
@@ -554,6 +779,21 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withLsmAsyncClusteringMaxCommits(int numCommits) {
+      clusteringConfig.setValue(LSM_ASYNC_CLUSTERING_MAX_COMMITS, String.valueOf(numCommits));
+      return this;
+    }
+
+    public Builder withMaxOfPendingClustering(int maxNumPendingClustering) {
+      clusteringConfig.setValue(PENDING_CLUSTERING_MAX_COMMITS, String.valueOf(maxNumPendingClustering));
+      return this;
+    }
+
+    public Builder withLsmMaxOfPendingClustering(int maxNumPendingClustering) {
+      clusteringConfig.setValue(LSM_PENDING_CLUSTERING_MAX_COMMITS, String.valueOf(maxNumPendingClustering));
+      return this;
+    }
+
     public Builder fromProperties(Properties props) {
       // TODO this should cherry-pick only clustering properties
       this.clusteringConfig.getProps().putAll(props);
@@ -567,6 +807,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
       clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
+      return this;
+    }
+
+    public Builder withLsmAsyncClusteringSchedule(Boolean asyncClustering) {
+      clusteringConfig.setValue(LSM_ASYNC_CLUSTERING_SCHEDULE_ENABLE, String.valueOf(asyncClustering));
       return this;
     }
 
@@ -611,6 +856,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
         clusteringConfig.setDefaultValue(PLAN_STRATEGY_CLASS_NAME, SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
         clusteringConfig.setDefaultValue(EXECUTION_STRATEGY_CLASS_NAME, SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
       } else {
+        String logFormat = clusteringConfig.props.getProperty(HoodieTableConfig.HOODIE_LOG_FORMAT.key());
+        if (logFormat != null && logFormat.equalsIgnoreCase(HoodieTableConfig.LSM_HOODIE_TABLE_LOG_FORMAT)) {
+          clusteringConfig.setDefaultValue(
+              LSM_PLAN_STRATEGY_CLASS_NAME, getLsmDefaultPlanStrategyClassName(engineType));
+        }
         clusteringConfig.setDefaultValue(
             PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
         clusteringConfig.setDefaultValue(
@@ -635,6 +885,27 @@ public class HoodieClusteringConfig extends HoodieConfig {
             "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
         ValidationUtils.checkArgument(clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
             "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
+      }
+
+      // validate lsm inline clustering
+      String logFormat = clusteringConfig.props.getProperty(HoodieTableConfig.HOODIE_LOG_FORMAT.key());
+      if (logFormat != null && logFormat.equalsIgnoreCase(HoodieTableConfig.LSM_HOODIE_TABLE_LOG_FORMAT)) {
+        boolean inlineLSMCluster = clusteringConfig.getBoolean(HoodieClusteringConfig.LSM_INLINE_CLUSTERING);
+        boolean inlineLSMClusterSchedule = clusteringConfig.getBoolean(HoodieClusteringConfig.LSM_SCHEDULE_INLINE_CLUSTERING);
+        ValidationUtils.checkArgument(!(inlineLSMCluster && inlineLSMClusterSchedule), String.format("Either of inline lsm clustering (%s) or "
+                + "schedule inline lsm clustering (%s) can be enabled. Both can't be set to true at the same time. %s,%s", HoodieClusteringConfig.LSM_INLINE_CLUSTERING.key(),
+            HoodieClusteringConfig.LSM_SCHEDULE_INLINE_CLUSTERING.key(), inlineCluster, inlineClusterSchedule));
+      }
+    }
+
+    private String getLsmDefaultPlanStrategyClassName(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return SPARK_LSM_BASE_CLUSTERING_PLAN_STRATEGY;
+        case FLINK:
+          return LSM_BASE_CLUSTERING_PLAN_STRATEGY;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
     }
 
@@ -739,7 +1010,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     SCHEDULE_AND_EXECUTE("scheduleandexecute");
 
     private static final Map<String, ClusteringOperator> VALUE_TO_ENUM_MAP =
-            TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
+        TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
 
     private final String value;
 

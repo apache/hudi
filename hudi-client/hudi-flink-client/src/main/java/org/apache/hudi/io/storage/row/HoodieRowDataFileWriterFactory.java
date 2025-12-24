@@ -60,22 +60,43 @@ public class HoodieRowDataFileWriterFactory {
   private static HoodieRowDataFileWriter newParquetInternalRowFileWriter(
       Path path, HoodieWriteConfig writeConfig, RowType rowType, HoodieTable table)
       throws IOException {
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        writeConfig.getBloomFilterNumEntries(),
-        writeConfig.getBloomFilterFPP(),
-        writeConfig.getDynamicBloomFilterMaxNumEntries(),
-        writeConfig.getBloomFilterType());
-    HoodieRowDataParquetWriteSupport writeSupport =
-        new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter);
-    return new HoodieRowDataParquetWriter(
-        path, new HoodieParquetConfig<>(
-        writeSupport,
-        writeConfig.getParquetCompressionCodec(),
-        writeConfig.getParquetBlockSize(),
-        writeConfig.getParquetPageSize(),
-        writeConfig.getParquetMaxFileSize(),
-        writeSupport.getHadoopConf(),
-        writeConfig.getParquetCompressionRatio(),
-        writeConfig.parquetDictionaryEnabled()));
+    if (table.getMetaClient().getTableConfig().isLSMBasedLogFormat()) {
+      HoodieLSMRowDataParquetWriteSupport lsmWriteSupport =
+          new HoodieLSMRowDataParquetWriteSupport(table.getHadoopConf(), rowType);
+      return new HoodieRowDataParquetWriter(
+          path, new HoodieParquetConfig<>(
+          lsmWriteSupport,
+          writeConfig.getParquetCompressionCodec(),
+          writeConfig.getParquetBlockSize(),
+          writeConfig.getParquetPageSize(),
+          writeConfig.getParquetMaxFileSize(),
+          lsmWriteSupport.getHadoopConf(),
+          writeConfig.getParquetCompressionRatio(),
+          writeConfig.parquetDictionaryEnabled(),
+          writeConfig,
+          rowType.getFieldCount()
+      ));
+    } else {
+      BloomFilter filter = BloomFilterFactory.createBloomFilter(
+          writeConfig.getBloomFilterNumEntries(),
+          writeConfig.getBloomFilterFPP(),
+          writeConfig.getDynamicBloomFilterMaxNumEntries(),
+          writeConfig.getBloomFilterType());
+      HoodieRowDataParquetWriteSupport writeSupport =
+          new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter, writeConfig.isDataSketchEnabled());
+      return new HoodieRowDataParquetWriter(
+          path, new HoodieParquetConfig<>(
+          writeSupport,
+          writeConfig.getParquetCompressionCodec(),
+          writeConfig.getParquetBlockSize(),
+          writeConfig.getParquetPageSize(),
+          writeConfig.getParquetMaxFileSize(),
+          writeSupport.getHadoopConf(),
+          writeConfig.getParquetCompressionRatio(),
+          writeConfig.parquetDictionaryEnabled(),
+          writeConfig,
+          rowType.getFieldCount()
+      ));
+    }
   }
 }

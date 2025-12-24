@@ -38,6 +38,26 @@ import java.io.Serializable;
 public interface HoodieRecordMerger extends Serializable {
 
   String DEFAULT_MERGER_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
+  // Uses event time ordering to determine which record is chosen
+  String EVENT_TIME_BASED_MERGE_STRATEGY_UUID = "53ce6957-2a07-4c95-bf1e-548663905b70";
+
+  // Always chooses the most recently written record
+  String COMMIT_TIME_BASED_MERGE_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
+
+  // Use overwrite with latest record
+  // String OVERWRITE_LATEST_MERGE_STRATEGY_UUID = "9b450e53-5324-424b-a486-af177c427e49";
+
+  // Uses customized merge strategy to merge records
+  String CUSTOM_MERGE_STRATEGY_UUID = "1897ef5f-18bc-4557-939c-9d6a8afd1519";
+
+  // partial update
+  String PARTIAL_UPDATE_MERGE_STRATEGY_UUID = "759aa20e-3966-4244-ba6f-c1c2300e8784";
+
+  // partial update support multi ts
+  String PARTIAL_UPDATE_MULTI_TS_MERGE_STRATEGY_UUID = "f80795fd-d331-4a78-97c2-6f19e750ac29";
+
+  // Use avro payload to merge records
+  String PAYLOAD_BASED_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000000";
 
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.

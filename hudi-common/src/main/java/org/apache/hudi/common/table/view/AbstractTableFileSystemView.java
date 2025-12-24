@@ -27,8 +27,12 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.lsm.HoodieLSMLogFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.storage.HoodieStorageStrategy;
+import org.apache.hudi.common.storage.HoodieStorageStrategyFactory;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -36,10 +40,12 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -57,7 +63,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
@@ -103,19 +112,29 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
+  protected HoodieStorageStrategy hoodieStorageStrategy;
+  private HoodieTableConfig tableConfig;
+  private boolean isLSMBasedLogFormat;
 
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
-    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
+    return hoodieStorageStrategy.getRelativePath(baseFile.getHadoopPath().getParent());
+  }
+
+  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    init(metaClient, visibleActiveTimeline, null);
   }
 
   /**
    * Initialize the view.
    */
-  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+  protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, HoodieStorageStrategy storageStrategy) {
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
+    this.tableConfig = metaClient.getTableConfig();
+    this.isLSMBasedLogFormat = tableConfig.isLSMBasedLogFormat();
+    this.hoodieStorageStrategy = storageStrategy == null ? HoodieStorageStrategyFactory.getInstant(metaClient) : storageStrategy;
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
@@ -124,7 +143,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
 
     resetBootstrapBaseFileMapping(Stream.empty());
-    resetFileGroupsInPendingClustering(ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient));
+    Pair<Map<HoodieFileGroupId, HoodieInstant>, Map<String, Set<String>>> allFileGroupsInPendingClusteringPlans = ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient);
+    resetFileGroupsInPendingClustering(allFileGroupsInPendingClusteringPlans.getLeft());
+    if (metaClient.getTableConfig().isLSMBasedLogFormat()) {
+      resetLevel1FileIdInPendingClustering(allFileGroupsInPendingClusteringPlans.getRight());
+    }
   }
 
   /**
@@ -139,9 +162,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
-  public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+  public List<HoodieFileGroup> addFilesToView(List<FileStatus> statuses) {
     HoodieTimer timer = HoodieTimer.start();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
+    List<HoodieFileGroup> fileGroups = tableConfig.isLSMBasedLogFormat()
+        ? buildLSMFileGroups(statuses, visibleCommitsAndCompactionTimeline) :
+        buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
     // Group by partition for efficient updates for both InMemory and DiskBased structures.
@@ -161,7 +186,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
     });
     long storePartitionsTs = timer.endTimer();
-    LOG.info("addFilesToView: NumFiles=" + statuses.length + ", NumFileGroups=" + fileGroups.size()
+    LOG.info("addFilesToView: NumFiles=" + statuses.size() + ", NumFileGroups=" + fileGroups.size()
         + ", FileGroupsCreationTime=" + fgBuildTimeTakenMs
         + ", StoreTimeTaken=" + storePartitionsTs);
     return fileGroups;
@@ -170,7 +195,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Build FileGroups from passed in file-status.
    */
-  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
+  protected List<HoodieFileGroup> buildFileGroups(List<FileStatus> statuses, HoodieTimeline timeline,
                                                   boolean addPendingCompactionFileSlice) {
     return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses), timeline,
         addPendingCompactionFileSlice);
@@ -185,8 +210,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }));
 
     Map<Pair<String, String>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
-      String partitionPathStr =
-          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent());
+      String partitionPathStr = hoodieStorageStrategy.getRelativePath(logFile.getPath().getParent());
       return Pair.of(partitionPathStr, logFile.getFileId());
     }));
 
@@ -220,6 +244,71 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return fileGroups;
   }
 
+  protected List<HoodieFileGroup> buildLSMFileGroups(List<FileStatus> statuses, HoodieTimeline timeline) {
+    HoodieTimeline committedTimeline = timeline.filterCompletedInstants();
+    // 获取第一个completed commit之前的pending commit
+    HoodieTimeline pendingBeforeFirstCommitted;
+    Option<HoodieInstant> firstCommitted = committedTimeline.firstInstant();
+    if (firstCommitted.isPresent()) {
+      pendingBeforeFirstCommitted = metaClient.getActiveTimeline().getCommitsTimeline()
+              .findInstantsBefore(firstCommitted.get().getTimestamp())
+              .filterInflightsAndRequested();
+    } else {
+      pendingBeforeFirstCommitted = null;
+    }
+    // 预编译逆序比较器，避免重复实例化
+    Comparator<HoodieLogFile> reverseLogComparator = HoodieLogFile.getReverseLogFileComparator();
+
+    // 步骤1: 构建 logFilesMap (分组并排序)
+    Map<Pair<String, String>, TreeSet<HoodieLogFile>> logFilesMap = convertFileStatusesToLSMLogFiles(statuses)
+        .filter(lsmLog -> committedTimeline.containsOrBeforeTimelineStarts(lsmLog.getBaseCommitTime())
+            && (pendingBeforeFirstCommitted == null || !pendingBeforeFirstCommitted.containsInstant(lsmLog.getBaseCommitTime())))
+        .collect(Collectors.groupingBy(
+            logFile -> Pair.of(
+                hoodieStorageStrategy.getRelativePath(logFile.getPath().getParent()),
+                logFile.getFileId()
+            ),
+            Collectors.toCollection(() -> new TreeSet<>(reverseLogComparator))
+        ));
+
+    return logFilesMap.entrySet().stream()
+        .map(entry -> {
+          Pair<String, String> pair = entry.getKey();
+          TreeSet<HoodieLogFile> hoodieLogFiles = entry.getValue();
+          HoodieFileGroup group = new HoodieFileGroup(new HoodieFileGroupId(pair.getKey(), pair.getValue()), timeline, true);
+
+          // 步骤3: 预生成 baseInstants 避免重复计算
+          Set<String> baseInstants = hoodieLogFiles.stream()
+              .map(HoodieLogFile::getBaseCommitTime)
+              .collect(Collectors.toCollection(TreeSet::new)); // 利用 TreeSet 去重且有序
+
+          // 步骤4: 构建 FileSlices 并优化过滤逻辑
+          TreeMap<String, FileSlice> fileSlices = baseInstants.stream()
+              .map(baseInstant -> {
+                // String.valueOf(baseInstant) to do deep copy
+                FileSlice fileSlice = new FileSlice(group.getFileGroupId(), String.valueOf(baseInstant));
+                // 构建logfiles，这里使用Lazy的方式，避免内存膨胀
+                Lazy<TreeSet<HoodieLogFile>> lazyLogFiles = Lazy.lazily(() -> {
+                  return hoodieLogFiles.stream().filter(logFile -> {
+                    return logFile.getBaseCommitTime().compareToIgnoreCase(String.valueOf(baseInstant)) <= 0;
+                  }).collect(Collectors.toCollection(
+                      () -> new TreeSet<>(HoodieLogFile.getReverseLogFileComparator())
+                  ));
+                });
+                fileSlice.initLazyLogFiles(lazyLogFiles);
+                return Pair.of(baseInstant, fileSlice);
+              }).collect(Collectors.toMap(
+                  Pair::getKey,
+                  Pair::getValue,
+                  (existing, replacement) -> existing,
+                  () -> new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator())
+              ));
+
+          group.initFileSlices(fileSlices);
+          return group;
+        }).collect(Collectors.toList());
+  }
+
   /**
    * Get replaced instant for each file group by looking at all commit instants.
    */
@@ -227,7 +316,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     HoodieTimer hoodieTimer = HoodieTimer.start();
     // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
     HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
+    List<String> backtrackInstances = metaClient.getBacktrackInstances();
     Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstantsAsStream().flatMap(instant -> {
+      if (backtrackInstances.contains(instant.getTimestamp())) {
+        // It is an instance of backtracking, skip it.
+        return Stream.empty();
+      }
       try {
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
             HoodieReplaceCommitMetadata.class);
@@ -354,7 +448,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
           statusesMap.forEach((partitionPair, statuses) -> {
             String relativePartitionStr = partitionPair.getLeft();
-            List<HoodieFileGroup> groups = addFilesToView(statuses);
+            List<HoodieFileGroup> groups = addFilesToView(Arrays.stream(statuses).collect(Collectors.toList()));
             if (groups.isEmpty()) {
               storePartitionView(relativePartitionStr, new ArrayList<>());
             }
@@ -396,9 +490,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       try {
         fileStatusMap.put(partitionPair, metaClient.getFs().listStatus(absolutePartitionPath));
       } catch (IOException e) {
-        // Create the path if it does not exist already
         if (!metaClient.getFs().exists(absolutePartitionPath)) {
-          metaClient.getFs().mkdirs(absolutePartitionPath);
           fileStatusMap.put(partitionPair, new FileStatus[0]);
         } else {
           // in case the partition path was created by another caller
@@ -427,13 +519,18 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
-          Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPathStr);
           long beginLsTs = System.currentTimeMillis();
-          FileStatus[] statuses = listPartition(partitionPath);
+          List<FileStatus> files = new ArrayList<>();
+          Set<Path> allLocations = hoodieStorageStrategy.getAllLocations(partitionPathStr, false);
+          for (Path fullPath : allLocations) {
+            FileStatus[] res = listPartition(fullPath);
+            files.addAll(Arrays.asList(res));
+          }
+
           long endLsTs = System.currentTimeMillis();
-          LOG.debug("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
+          LOG.info("#files found in partition (" + partitionPathStr + ") =" + files.size() + ", Time taken ="
               + (endLsTs - beginLsTs));
-          List<HoodieFileGroup> groups = addFilesToView(statuses);
+          List<HoodieFileGroup> groups = addFilesToView(files);
 
           if (groups.isEmpty()) {
             storePartitionView(partitionPathStr, new ArrayList<>());
@@ -442,10 +539,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           throw new HoodieIOException("Failed to list base files in partition " + partitionPathStr, e);
         }
       } else {
-        LOG.debug("View already built for Partition :" + partitionPathStr + ", FOUND is ");
+        LOG.info("View already built for Partition :" + partitionPathStr + ", FOUND is ");
       }
       long endTs = System.currentTimeMillis();
-      LOG.debug("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
+      LOG.info("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
       return true;
     });
   }
@@ -460,9 +557,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       return metaClient.getFs().listStatus(partitionPath);
     } catch (IOException e) {
-      // Create the path if it does not exist already
       if (!metaClient.getFs().exists(partitionPath)) {
-        metaClient.getFs().mkdirs(partitionPath);
         return new FileStatus[0];
       } else {
         // in case the partition path was created by another caller
@@ -476,10 +571,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param statuses List of File-Status
    */
-  private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(FileStatus[] statuses) {
+  private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(List<FileStatus> statuses) {
     Predicate<FileStatus> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
         .contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
-    return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
+    return statuses.stream().filter(roFilePredicate).map(HoodieBaseFile::new);
   }
 
   /**
@@ -487,13 +582,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param statuses List of FIle-Status
    */
-  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
+  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(List<FileStatus> statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
       String fileName = fileStatus.getPath().getName();
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
       return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     };
-    return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
+    return statuses.stream().filter(rtFilePredicate).map(HoodieLogFile::new);
+  }
+
+  private Stream<HoodieLogFile> convertFileStatusesToLSMLogFiles(List<FileStatus> statuses) {
+    Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
+      String fileName = fileStatus.getPath().getName();
+      Matcher matcher = FSUtils.LSM_LOG_FILE_PATTERN.matcher(fileName);
+      return matcher.find();
+    };
+    return statuses.stream().filter(rtFilePredicate).map(HoodieLSMLogFile::new);
   }
 
   /**
@@ -766,10 +870,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
-      return fetchLatestFileSlices(partitionPath)
-          .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
-          .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true))
-          .map(this::addBootstrapBaseFileIfPresent);
+      if (isLSMBasedLogFormat) {
+        return fetchLatestFileSlices(partitionPath)
+            .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
+            .map(slice -> {
+              return processReplacedLsmLog(slice, null);
+            }).filter(Objects::nonNull)
+            .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true))
+            .map(this::addBootstrapBaseFileIfPresent);
+      } else {
+        return fetchLatestFileSlices(partitionPath)
+            .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
+            .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true))
+            .map(this::addBootstrapBaseFileIfPresent);
+      }
     } finally {
       readLock.unlock();
     }
@@ -788,6 +902,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return Option.empty();
       } else {
         Option<FileSlice> fs = fetchLatestFileSlice(partitionPath, fileId);
+
+        if (isLSMBasedLogFormat) {
+          fs = fs.map(slice -> {
+            return processReplacedLsmLog(slice, null);
+          });
+        }
+
         if (!fs.isPresent()) {
           return Option.empty();
         }
@@ -800,6 +921,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionStr) {
+    if (isLSMBasedLogFormat) {
+      throw new HoodieException("Not support for lsm");
+    }
+
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
@@ -831,7 +956,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       Stream<Stream<FileSlice>> allFileSliceStream = fetchAllStoredFileGroups(partitionPath)
           .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
-          .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
+          .map(fg -> {
+            if (isLSMBasedLogFormat) {
+              return fg.getAllFileSlicesBeforeOn(maxCommitTime).map(slice -> {
+                return processReplacedLsmLog(slice, maxCommitTime);
+              }).filter(Objects::nonNull);
+            } else {
+              return fg.getAllFileSlicesBeforeOn(maxCommitTime);
+            }
+          });
       if (includeFileSlicesInPendingCompaction) {
         return allFileSliceStream.map(sliceStream -> sliceStream.flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, false)))
             .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
@@ -850,6 +983,30 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  // TODO zhangyue143 lsm support savepoint
+  @Override
+  public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
+    if (isLSMBasedLogFormat) {
+      throw new HoodieException("Not support for lsm");
+    }
+
+    try {
+      readLock.lock();
+      List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
+      return formattedPartitionList.stream().collect(Collectors.toMap(
+          Function.identity(),
+          partitionPath -> fetchAllStoredFileGroups(partitionPath)
+              .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
+              .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime))
+              .map(sliceStream -> sliceStream.flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, false)))
+              .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
+              .map(this::addBootstrapBaseFileIfPresent)
+      ));
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
@@ -859,7 +1016,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> {
-            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+            Option<FileSlice> fileSlice;
+            if (isLSMBasedLogFormat) {
+              Option<FileSlice> fileSliceTmp = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+              fileSlice = fileSliceTmp.map(slice -> {
+                return processReplacedLsmLog(slice, maxInstantTime);
+              });
+            } else {
+              fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+            }
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
               fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
@@ -889,10 +1054,21 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
-      return fetchAllStoredFileGroups(partition)
-          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
-          .map(fileGroup -> fetchAllLogsMergedFileSlice(fileGroup, maxInstantTime))
-          .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+      if (isLSMBasedLogFormat) {
+        return fetchAllStoredFileGroups(partition)
+            .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+            .map(fileGroup -> fetchAllLogsMergedFileSlice(fileGroup, maxInstantTime))
+            .filter(Option::isPresent).map(Option::get)
+            .map(slice -> {
+              return processReplacedLsmLog(slice, maxInstantTime);
+            }).filter(Objects::nonNull)
+            .map(this::addBootstrapBaseFileIfPresent);
+      } else {
+        return fetchAllStoredFileGroups(partition)
+            .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+            .map(fileGroup -> fetchAllLogsMergedFileSlice(fileGroup, maxInstantTime))
+            .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+      }
     } finally {
       readLock.unlock();
     }
@@ -902,9 +1078,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     try {
       readLock.lock();
-      return fetchLatestFileSliceInRange(commitsToReturn)
-          .filter(slice -> !isFileGroupReplacedBeforeAny(slice.getFileGroupId(), commitsToReturn))
-          .map(this::addBootstrapBaseFileIfPresent);
+      if (isLSMBasedLogFormat) {
+        String maxInstant = commitsToReturn.stream().max(Comparator.naturalOrder()).get();
+        return fetchLatestFileSliceInRange(commitsToReturn)
+            .filter(slice -> !isFileGroupReplacedBeforeAny(slice.getFileGroupId(), commitsToReturn))
+            .map(slice -> {
+              return processReplacedLsmLog(slice, maxInstant);
+            }).filter(Objects::nonNull)
+            .map(this::addBootstrapBaseFileIfPresent);
+      } else {
+        return fetchLatestFileSliceInRange(commitsToReturn)
+            .filter(slice -> !isFileGroupReplacedBeforeAny(slice.getFileGroupId(), commitsToReturn))
+            .map(this::addBootstrapBaseFileIfPresent);
+      }
     } finally {
       readLock.unlock();
     }
@@ -916,7 +1102,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
-      return fetchAllFileSlices(partition).filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())).map(this::addBootstrapBaseFileIfPresent);
+      if (isLSMBasedLogFormat) {
+        return fetchAllFileSlices(partition)
+            .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
+            .map(slice -> {
+              return processReplacedLsmLog(slice, null);
+            }).filter(Objects::nonNull)
+            .map(this::addBootstrapBaseFileIfPresent);
+      } else {
+        return fetchAllFileSlices(partition).filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())).map(this::addBootstrapBaseFileIfPresent);
+      }
     } finally {
       readLock.unlock();
     }
@@ -968,6 +1163,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       readLock.lock();
       return fetchFileGroupsInPendingClustering();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public Set<String> getLevel1FileIdInPendingClustering(String partitionPath) {
+    try {
+      readLock.lock();
+      return fetchLevel1FileIdInPendingClustering(partitionPath);
     } finally {
       readLock.unlock();
     }
@@ -1053,9 +1258,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected abstract Stream<Pair<HoodieFileGroupId, HoodieInstant>> fetchFileGroupsInPendingClustering();
 
   /**
+   * Fetch all lsm level1 fileId in pending clustering
+   */
+  protected abstract Set<String> fetchLevel1FileIdInPendingClustering(String partitionPath);
+
+  /**
    * resets the pending clustering operation and overwrite with the new list.
    */
   abstract void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap);
+
+  /**
+   * resets lsm level1 fileId in pending clustering and overwrite with the new list.
+   */
+  abstract void resetLevel1FileIdInPendingClustering(Map<String, Set<String>> level1InPendingClustering);
 
   /**
    * Add metadata for file groups in pending clustering operations to the view.
@@ -1382,6 +1597,23 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
 
     return HoodieTimeline.compareTimestamps(instant, GREATER_THAN_OR_EQUALS, hoodieInstantOption.get().getTimestamp());
+  }
+
+  public boolean isLSMFileGroupReplaced(String partitionPath, HoodieLogFile logfile, String maxInstantTime) {
+    String fileName = logfile.getPath().getName();
+    if (StringUtils.isNullOrEmpty(maxInstantTime)) {
+      return isFileGroupReplaced(new HoodieFileGroupId(partitionPath, fileName));
+    }
+    return isFileGroupReplacedBeforeOrOn(new HoodieFileGroupId(partitionPath, fileName), maxInstantTime);
+  }
+
+  // could be null
+  private FileSlice processReplacedLsmLog(FileSlice slice, String maxInstant) {
+    TreeSet<HoodieLogFile> newLogs = slice.getLogFiles().filter(logfile -> {
+      return !isLSMFileGroupReplaced(slice.getPartitionPath(), logfile, maxInstant);
+    }).collect(Collectors.toCollection(() -> new TreeSet<>(HoodieLogFile.getReverseLogFileComparator())));
+    slice.resetLogFiles(newLogs);
+    return newLogs.isEmpty() ? null : slice;
   }
 
   @Override

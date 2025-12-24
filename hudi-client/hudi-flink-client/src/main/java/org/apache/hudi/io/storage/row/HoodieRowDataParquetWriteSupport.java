@@ -20,7 +20,9 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.datasketch.DataSketchWriteSupport;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -38,12 +40,14 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
 
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
+  private final Option<HoodieDataSketchRowDataWriteSupport> dataSketchRowDataWriteSupportOpt;
 
-  public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter) {
+  public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter, boolean dataSketchEnabled) {
     super(rowType);
     this.hadoopConf = new Configuration(conf);
     this.bloomFilterWriteSupportOpt = Option.ofNullable(bloomFilter)
         .map(HoodieBloomFilterRowDataWriteSupport::new);
+    this.dataSketchRowDataWriteSupportOpt = dataSketchEnabled ? Option.of(new HoodieDataSketchRowDataWriteSupport()) : Option.empty();
   }
 
   public Configuration getHadoopConf() {
@@ -55,13 +59,16 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
     Map<String, String> extraMetadata =
         bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
             .orElse(Collections.emptyMap());
-
+    extraMetadata = CollectionUtils.combine(extraMetadata,
+        dataSketchRowDataWriteSupportOpt.map(DataSketchWriteSupport::finalizeMetadata)
+            .orElse(Collections.emptyMap()));
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
   }
 
   public void add(String recordKey) {
     this.bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
         bloomFilterWriteSupport.addKey(recordKey));
+    this.dataSketchRowDataWriteSupportOpt.ifPresent(sketch -> sketch.addKey(recordKey));
   }
 
   private static class HoodieBloomFilterRowDataWriteSupport extends HoodieBloomFilterWriteSupport<String> {
@@ -72,6 +79,13 @@ public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport
     @Override
     protected byte[] getUTF8Bytes(String key) {
       return key.getBytes(StandardCharsets.UTF_8);
+    }
+  }
+
+  private static class HoodieDataSketchRowDataWriteSupport extends DataSketchWriteSupport<String> {
+    @Override
+    protected String getUTF8String(String key) {
+      return key;
     }
   }
 }

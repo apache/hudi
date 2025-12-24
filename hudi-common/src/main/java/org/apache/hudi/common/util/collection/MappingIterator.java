@@ -23,8 +23,13 @@ import java.util.function.Function;
 
 /**
  * Iterator mapping elements of the provided source {@link Iterator} from {@code I} to {@code O}
+ * TODO zhangyue143 这里能够基于Disruptor 异步化来提升IO性能
  */
 public class MappingIterator<I, O> implements Iterator<O> {
+
+  public static <I, O> MappingIterator<I, O> transform(Iterator<I> source, Function<I, O> mapper) {
+    return new MappingIterator(source, mapper);
+  }
 
   protected final Iterator<I> source;
   private final Function<I, O> mapper;
