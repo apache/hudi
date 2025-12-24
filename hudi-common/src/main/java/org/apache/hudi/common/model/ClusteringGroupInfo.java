@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
  */
 public class ClusteringGroupInfo implements Serializable {
 
+  private Map<String, String> extraMeta;
   private List<ClusteringOperation> operations;
   private int numOutputGroups;
 
@@ -38,16 +40,24 @@ public class ClusteringGroupInfo implements Serializable {
     List<ClusteringOperation> operations = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
     
-    return new ClusteringGroupInfo(operations, clusteringGroup.getNumOutputFileGroups());
+    return new ClusteringGroupInfo(operations, clusteringGroup.getNumOutputFileGroups(), clusteringGroup.getExtraMetadata());
   }
   
   // Only for serialization/de-serialization
   @Deprecated
-  public ClusteringGroupInfo() {}
+  public ClusteringGroupInfo() {
+
+  }
   
   private ClusteringGroupInfo(final List<ClusteringOperation> operations, final int numOutputGroups) {
     this.operations = operations;
     this.numOutputGroups = numOutputGroups;
+  }
+
+  private ClusteringGroupInfo(final List<ClusteringOperation> operations, final int numOutputGroups, Map<String, String> extraMeta) {
+    this.operations = operations;
+    this.numOutputGroups = numOutputGroups;
+    this.extraMeta = extraMeta;
   }
 
   public List<ClusteringOperation> getOperations() {
@@ -64,6 +74,10 @@ public class ClusteringGroupInfo implements Serializable {
 
   public void setNumOutputGroups(final int numOutputGroups) {
     this.numOutputGroups = numOutputGroups;
+  }
+
+  public Map<String, String> getExtraMeta() {
+    return extraMeta;
   }
 
   @Override

@@ -21,10 +21,18 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.LSMRemotePartitionerHelper;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.BucketStrategist;
+import org.apache.hudi.index.bucket.BucketStrategistFactory;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -39,6 +47,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.config.HoodieWriteConfig.LSM_SHUFFLE_FACTOR_VALUE;
+
 /**
  * A stream write function with bucket hash index.
  *
@@ -51,25 +61,35 @@ import java.util.Set;
 public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
+  protected int parallelism;
 
-  private int parallelism;
-
-  private int bucketNum;
-
-  private String indexKeyFields;
+  protected String indexKeyFields;
 
   /**
    * BucketID to file group mapping in each partition.
    * Map(partition -> Map(bucketId, fileID)).
    */
-  private Map<String, Map<Integer, String>> bucketIndex;
+  protected Map<String, Map<Integer, String>> bucketIndex;
 
   /**
    * Incremental bucket index of the current checkpoint interval,
    * it is needed because the bucket type('I' or 'U') should be decided based on the committed files view,
    * all the records in one bucket should have the same bucket type.
    */
-  private Set<String> incBucketIndex;
+  protected Set<String> incBucketIndex;
+  protected BucketStrategist bucketStrategist;
+
+  /**
+   * Used to record the last replacement commit time
+   */
+  private transient String lastRefreshInstant;
+
+  /**
+   * Adapt remote partitioner when call index bootstrap.
+   */
+  private transient Boolean remotePartitionerEnable;
+  private transient LSMRemotePartitionerHelper remotePartitionerHelper;
+  private Integer factor;
 
   /**
    * Constructs a BucketStreamWriteFunction.
@@ -83,23 +103,54 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = config.getString(FlinkOptions.INDEX_KEY_FIELD);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
+    this.lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
+    if (OptionsResolver.enableRemotePartitioner(config)) {
+      LOG.info("BucketStreamWriteFunction enable remote partitioner.");
+      this.remotePartitionerEnable = true;
+      this.remotePartitionerHelper = new LSMRemotePartitionerHelper(writeClient.getConfig().getViewStorageConfig());
+      this.factor = config.getInteger(LSM_SHUFFLE_FACTOR_VALUE.key(), Integer.valueOf(LSM_SHUFFLE_FACTOR_VALUE.defaultValue()));
+    } else {
+      this.remotePartitionerEnable = false;
+    }
   }
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
     super.initializeState(context);
+    this.bucketStrategist = BucketStrategistFactory.getInstant(FlinkWriteClients.getHoodieClientConfig(config), metaClient.getFs());
   }
 
   @Override
-  public void snapshotState() {
+  public void snapshotState() throws IOException {
     super.snapshotState();
+    // only partition level bucket index need remove cache
+    if (bucketStrategist.isPartitionLevel()) {
+      removePartitionCache();
+    }
     this.incBucketIndex.clear();
+  }
+
+  private void removePartitionCache() throws IOException {
+    HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline()
+        .getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
+    if (!timeline.empty()) {
+      for (HoodieInstant instant : timeline.getInstants()) {
+        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        // only take care of insert operation here.
+        if (commitMetadata.getOperationType().equals(WriteOperationType.INSERT_OVERWRITE)) {
+          Set<String> affectedPartitions = commitMetadata.getPartitionToReplaceFileIds().keySet();
+          LOG.info("Clear up cached hashing metadata because find a new insert overwrite commit.\n Instant: {}.\n Effected Partitions: {}.",  lastRefreshInstant, affectedPartitions);
+          affectedPartitions.forEach(bucketStrategist::updateBucketInfo);
+        }
+      }
+      this.lastRefreshInstant = timeline.lastInstant().get().getTimestamp();
+    }
   }
 
   @Override
@@ -111,9 +162,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     bootstrapIndexIfNeed(partition);
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
+    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, bucketStrategist.getBucketNumber(partition));
     final String bucketId = partition + "/" + bucketNum;
 
+    // 新增的桶的数据都是 I
+    // 老桶的数据都是 U
     if (incBucketIndex.contains(bucketId)) {
       location = new HoodieRecordLocation("I", bucketToFileId.get(bucketNum));
     } else if (bucketToFileId.containsKey(bucketNum)) {
@@ -135,9 +188,24 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * (partition + curBucket) % numPartitions == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    final int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism;
-    int globalIndex = partitionIndex + bucketNumber;
-    return BucketIdentifier.mod(globalIndex, parallelism)  == taskID;
+    if (remotePartitionerEnable) {
+      try {
+        int subtaskId = remotePartitionerHelper.getPartition(
+            bucketStrategist.computeBucketNumber(partition),
+            partition,
+            bucketNumber,
+            parallelism,
+            factor);
+        return subtaskId == taskID;
+      } catch (Exception e) {
+        throw new RuntimeException("Get Remote Partition Failed.", e);
+      }
+
+    } else {
+      final int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism;
+      int globalIndex = partitionIndex + bucketNumber;
+      return BucketIdentifier.mod(globalIndex, parallelism) == taskID;
+    }
   }
 
   /**

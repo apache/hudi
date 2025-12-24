@@ -42,12 +42,16 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -61,6 +65,8 @@ public class ClusteringUtils {
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
   public static final String TOTAL_LOG_FILES = "TOTAL_LOG_FILES";
+  public static final String LSM_CLUSTERING_OUT_PUT_LEVEL = "hoodie.clustering.lsm.output.level";
+  public static final String LSM_CLUSTERING_OUT_PUT_LEVEL_1 = "1";
 
   /**
    * Get all pending clustering plans along with their instants.
@@ -111,19 +117,53 @@ public class ClusteringUtils {
         return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.get().getClusteringPlan()));
       }
       return Option.empty();
+    } catch (HoodieIOException hie) {
+      if (hie.getCause() instanceof FileNotFoundException) {
+        LOG.warn(hie);
+        return Option.empty();
+      }
+      throw new HoodieException("Error reading clustering plan " + pendingReplaceInstant.getTimestamp(), hie);
     } catch (IOException e) {
       throw new HoodieIOException("Error reading clustering plan " + pendingReplaceInstant.getTimestamp(), e);
     }
   }
 
   /**
+   * Get Clustering plan from timeline.
+   *
+   * @param metaClient
+   * @param pendingReplaceInstant
+   * @return
+   */
+  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient,
+                                                                                    HoodieInstant pendingReplaceInstant,
+                                                                                    boolean isCallProcedure) {
+    try {
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient, pendingReplaceInstant);
+      boolean isClustering = WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.get().getOperationType());
+      if (isCallProcedure) {
+        isClustering = true;
+      }
+      if (requestedReplaceMetadata.isPresent() && isClustering) {
+        return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.get().getClusteringPlan()));
+      }
+      return Option.empty();
+    } catch (IOException e) {
+      throw new HoodieIOException("Error reading clustering plan " + pendingReplaceInstant.getTimestamp(), e);
+    }
+  }
+
+
+  /**
    * Get filegroups to pending clustering instant mapping for all pending clustering plans.
    * This includes all clustering operations in 'requested' and 'inflight' states.
+   *
+   * @return Pair of Map(HoodieFileGroupId, HoodieInstant) and Map(PartitionPath, LSM FileId which contains level 1 file)
    */
-  public static Map<HoodieFileGroupId, HoodieInstant> getAllFileGroupsInPendingClusteringPlans(
+  public static Pair<Map<HoodieFileGroupId, HoodieInstant>, Map<String, Set<String>>> getAllFileGroupsInPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
-    Stream<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans = getAllPendingClusteringPlans(metaClient);
-    Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = pendingClusteringPlans.flatMap(clusteringPlan ->
+    List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans = getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
+    Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = pendingClusteringPlans.stream().flatMap(clusteringPlan ->
         // get all filegroups in the plan
         getFileGroupEntriesInClusteringPlan(clusteringPlan.getLeft(), clusteringPlan.getRight()));
 
@@ -138,7 +178,33 @@ public class ClusteringUtils {
       throw new HoodieException("Error getting all file groups in pending clustering", e);
     }
     LOG.info("Found " + resultMap.size() + " files in pending clustering operations");
-    return resultMap;
+
+    if (metaClient.getTableConfig().isLSMBasedLogFormat()) {
+      // <String partitionPath, Set<String> fileId>
+      Map<String, Set<String>> partitionPathToFileId = new HashMap<>();
+      pendingClusteringPlans.forEach(clusteringPlan -> getLevel1ExistsInClusteringPlan(partitionPathToFileId, clusteringPlan.getRight()));
+      LOG.info("Found " + partitionPathToFileId.size() + " partitions exists level 1 file in pending clustering");
+      return Pair.of(resultMap, partitionPathToFileId);
+    }
+
+    return Pair.of(resultMap, Collections.emptyMap());
+  }
+
+  private static void getLevel1ExistsInClusteringPlan(Map<String, Set<String>> partitionPathToFileId, HoodieClusteringPlan clusteringPlan) {
+    clusteringPlan.getInputGroups().stream().filter(inputGroup -> {
+      if (inputGroup.getExtraMetadata() != null) {
+        return LSM_CLUSTERING_OUT_PUT_LEVEL_1.equals(inputGroup.getExtraMetadata().get(LSM_CLUSTERING_OUT_PUT_LEVEL));
+      }
+      return false;
+    }).forEach(inputGroup -> {
+      List<HoodieSliceInfo> slices = inputGroup.getSlices();
+      if (slices != null && slices.size() > 0) {
+        // files in one slice have the same partition and fileId
+        HoodieSliceInfo slice0Info = slices.get(0);
+        String partitionPath = slice0Info.getPartitionPath();
+        partitionPathToFileId.computeIfAbsent(partitionPath, p -> new HashSet<>()).add(FSUtils.getFileId(slice0Info.getFileId()));
+      }
+    });
   }
 
   public static Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClusteringInstant(
@@ -182,6 +248,7 @@ public class ClusteringUtils {
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(extraMetadata)
         .setStrategy(strategy)
+        .setPreserveHoodieMetadata(true)
         .build();
   }
 
@@ -201,7 +268,7 @@ public class ClusteringUtils {
     long totalIORead = 0;
 
     for (FileSlice slice : fileSlices) {
-      numLogFiles +=  slice.getLogFiles().count();
+      numLogFiles += slice.getLogFiles().count();
       // Total size of all the log files
       totalLogFileSize += slice.getLogFiles().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
           .reduce(Long::sum).orElse(0L);
@@ -269,7 +336,7 @@ public class ClusteringUtils {
         oldestInstantToRetain = replaceTimeline.firstInstant();
       }
 
-      Option<HoodieInstant> pendingInstantOpt = replaceTimeline.filterInflights().firstInstant();
+      Option<HoodieInstant> pendingInstantOpt = replaceTimeline.filterInflightsAndRequested().firstInstant();
       if (pendingInstantOpt.isPresent()) {
         // Get the previous commit before the first inflight clustering instant.
         Option<HoodieInstant> beforePendingInstant = activeTimeline.getCommitsTimeline()

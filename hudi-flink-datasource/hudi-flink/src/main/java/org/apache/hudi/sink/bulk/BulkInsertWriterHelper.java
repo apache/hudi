@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.table.HoodieTable;
 
@@ -43,7 +44,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.FutureUtils.allOf;
 
 /**
  * Helper class for bulk insert used by Flink.
@@ -67,7 +74,9 @@ public class BulkInsertWriterHelper {
   private final String fileIdPrefix;
   private int numFilesWritten = 0;
   protected final Map<String, HoodieRowDataCreateHandle> handles = new HashMap<>();
-  @Nullable protected final RowDataKeyGen keyGen;
+  @Nullable
+  protected final RowDataKeyGen keyGen;
+  private final int flushConcurrency;
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                 String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
@@ -88,6 +97,7 @@ public class BulkInsertWriterHelper {
     this.isInputSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGen.instance(conf, rowType);
+    this.flushConcurrency = writeConfig.getFlushConcurrency();
   }
 
   /**
@@ -147,9 +157,25 @@ public class BulkInsertWriterHelper {
   }
 
   public void close() throws IOException {
-    for (HoodieRowDataCreateHandle rowCreateHandle : handles.values()) {
-      LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
-      writeStatusList.add(rowCreateHandle.close());
+    ExecutorService executor = Executors.newFixedThreadPool(flushConcurrency);
+    allOf(handles.values().stream()
+        .map(rowCreateHandle -> CompletableFuture.supplyAsync(() -> {
+          try {
+            LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
+            return rowCreateHandle.close();
+          } catch (IOException e) {
+            throw new HoodieIOException("IOE during rowCreateHandle.close()", e);
+          }
+        }, executor))
+        .collect(Collectors.toList())
+    ).whenComplete((result, throwable) -> {
+      writeStatusList.addAll(result);
+    }).join();
+    try {
+      executor.shutdown();
+      executor.awaitTermination(24, TimeUnit.DAYS);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
     }
     handles.clear();
     handle = null;

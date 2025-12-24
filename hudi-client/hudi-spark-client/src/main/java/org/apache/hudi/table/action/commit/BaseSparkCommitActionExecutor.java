@@ -131,7 +131,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // there are file groups pending clustering and receiving updates, so rollback the pending clustering instants
     // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
     if (config.isRollbackPendingClustering()) {
-      Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
+      Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).getLeft().entrySet().stream()
           .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());

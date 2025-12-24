@@ -19,8 +19,6 @@
 package org.apache.hudi.table.format.cow.vector;
 
 import org.apache.flink.table.data.MapData;
-import org.apache.flink.table.data.columnar.ColumnarMapData;
-import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.MapColumnVector;
 import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
@@ -31,49 +29,25 @@ import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector
 public class HeapMapColumnVector extends AbstractHeapVector
     implements WritableColumnVector, MapColumnVector {
 
-  private long[] offsets;
-  private long[] lengths;
-  private int size;
-  private ColumnVector keys;
-  private ColumnVector values;
+  private WritableColumnVector keys;
+  private WritableColumnVector values;
 
-  public HeapMapColumnVector(int len, ColumnVector keys, ColumnVector values) {
+  public HeapMapColumnVector(int len, WritableColumnVector keys, WritableColumnVector values) {
     super(len);
-    size = 0;
-    offsets = new long[len];
-    lengths = new long[len];
     this.keys = keys;
     this.values = values;
   }
 
-  public void setOffsets(long[] offsets) {
-    this.offsets = offsets;
+  public WritableColumnVector getKeys() {
+    return keys;
   }
 
-  public void setLengths(long[] lengths) {
-    this.lengths = lengths;
-  }
-
-  public void setKeys(ColumnVector keys) {
-    this.keys = keys;
-  }
-
-  public void setValues(ColumnVector values) {
-    this.values = values;
-  }
-
-  public int getSize() {
-    return size;
-  }
-
-  public void setSize(int size) {
-    this.size = size;
+  public WritableColumnVector getValues() {
+    return values;
   }
 
   @Override
-  public MapData getMap(int i) {
-    long offset = offsets[i];
-    long length = lengths[i];
-    return new ColumnarMapData(keys, values, (int) offset, (int) length);
+  public MapData getMap(int rowId) {
+    return new ColumnarGroupMapData(keys, values, rowId);
   }
 }

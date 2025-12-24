@@ -19,6 +19,7 @@
 package org.apache.hudi.client.model;
 
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 
 /**
  * The factory clazz for hoodie row data.
@@ -39,5 +40,29 @@ public abstract class HoodieRowDataCreation {
     return withMetaFields
         ? new HoodieRowDataWithMetaFields(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row, withOperation)
         : new HoodieRowData(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row, withOperation);
+  }
+
+  public static AbstractHoodieRowData createLSMHoodieInternalRowData(
+      String recordKey,
+      String seqId,
+      RowData row) {
+    return new LSMHoodieInternalRowData(
+        StringData.fromString(recordKey),
+        StringData.fromString(seqId),
+        row);
+  }
+
+  public static AbstractHoodieRowData createLSMHoodieRowData(
+      String commitTime,
+      String partitionPath,
+      String fileName,
+      RowData row,
+      boolean withOperation) {
+    return new LSMHoodieRowData(
+        StringData.fromString(commitTime),
+        StringData.fromString(partitionPath),
+        StringData.fromString(fileName),
+        row,
+        withOperation);
   }
 }

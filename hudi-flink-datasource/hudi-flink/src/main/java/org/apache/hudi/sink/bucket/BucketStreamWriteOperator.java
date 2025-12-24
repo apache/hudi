@@ -22,6 +22,7 @@ import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.types.logical.RowType;
 
 /**
  * Operator for {@link BucketStreamWriteFunction}.
@@ -34,7 +35,15 @@ public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
     super(new BucketStreamWriteFunction<>(conf));
   }
 
+  public BucketStreamWriteOperator(Configuration conf, RowType rowType) {
+    super(new LSMBucketStreamWriteFunction<>(conf, rowType));
+  }
+
   public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
     return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator<>(conf));
+  }
+
+  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
+    return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator<>(conf, rowType));
   }
 }

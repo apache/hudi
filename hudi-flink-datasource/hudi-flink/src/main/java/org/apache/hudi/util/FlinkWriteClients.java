@@ -23,8 +23,8 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -34,12 +34,15 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.clustering.LSMClusteringScheduleMode;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
@@ -159,10 +162,28 @@ public class FlinkWriteClients {
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
+            .withRecordMergerImpls(conf.getString(FlinkOptions.RECORD_MERGER_IMPLS))
+            .withRecordMergerStrategy(conf.getString(FlinkOptions.RECORD_MERGER_STRATEGY))
+            .withFlushConcurrency(conf.getInteger(FlinkOptions.WRITE_BULK_INSERT_FLUSH_CONCURRENCY))
             .combineInput(conf.getBoolean(FlinkOptions.PRE_COMBINE), true)
             .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
+            .withOperation(conf.getString(FlinkOptions.OPERATION))
+            .withStorageStrategyClass(conf.getString(FlinkOptions.STORAGE_STRATEGY))
+            .withStoragePath(conf.getString(FlinkOptions.STORAGE_PATH))
             .withClusteringConfig(
                 HoodieClusteringConfig.newBuilder()
+                    // clustering conf for LSM
+                    .withLsmClusteringPlanStrategyClass(conf.getString(FlinkOptions.LSM_CLUSTERING_PLAN_STRATEGY_CLASS))
+                    .withLsmClusteringPlanNumSortRunTrigger(conf.getInteger(FlinkOptions.NUM_RUN_CLUSTERING_TRIGGER))
+                    .withLsmClusteringPlanMaxSizeAmp(conf.getInteger(FlinkOptions.MAX_SIZE_AMP))
+                    .withLsmClusteringReadFooterEnabled(conf.getBoolean(FlinkOptions.READFOOTER_ENABLED))
+                    .withLsmAsyncClusteringSchedule(conf.getString(FlinkOptions.LSM_CLUSTERING_SCHEDULE_MODE).equalsIgnoreCase(LSMClusteringScheduleMode.ASYNC.name()))
+                    .withLsmAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.LSM_CLUSTERING_DELTA_COMMITS))
+                    .withLsmMaxOfPendingClustering(conf.getInteger(FlinkOptions.LSM_CLUSTERING_PENDING_MAX_NUM))
+                    .withLsmClusteringPlanSmallFileLimit(conf.getLong(FlinkOptions.LSM_CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT))
+                    .withLsmClusteringMaxBytesInGroup(conf.getLong(FlinkOptions.LSM_PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP))
+                    .withLsmClusteringMinNumGroups(conf.getInteger(FlinkOptions.LSM_CLUSTERING_MIN_NUM_GROUPS))
+                    // clustreing conf before
                     .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
                     .withClusteringPlanStrategyClass(conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS))
                     .withClusteringPlanPartitionFilterMode(
@@ -177,6 +198,8 @@ public class FlinkWriteClients {
                     .withClusteringPartitionRegexPattern(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN))
                     .withClusteringPartitionSelected(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED))
                     .withAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS))
+                    .withClusteringSortColumns(conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS))
+                    .withMaxOfPendingClustering(conf.getInteger(FlinkOptions.CLUSTERING_PENDING_MAX_NUM))
                     .build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
@@ -188,8 +211,10 @@ public class FlinkWriteClients {
                 .withCleanerParallelism(20)
                 .withCleanerPolicy(HoodieCleaningPolicy.valueOf(conf.getString(FlinkOptions.CLEAN_POLICY)))
                 .build())
+            .withAysncRollback(conf.getBoolean(FlinkOptions.ROLLBACK_ASYNC_ENABLE))
             .withArchivalConfig(HoodieArchivalConfig.newBuilder()
                 .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                .archiveCleanCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS_CLEAN), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS_CLEAN))
                 .build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
@@ -197,6 +222,8 @@ public class FlinkWriteClients {
                     CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
                 .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
+                .withMaxOfPendingCompaction(conf.getInteger(FlinkOptions.COMPACTION_PENDING_MAX_NUM))
+                .withIncrementalPartitions(conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_INCREMENTAL_PARTITIONS))
                 .build())
             .withMemoryConfig(
                 HoodieMemoryConfig.newBuilder()
@@ -208,9 +235,14 @@ public class FlinkWriteClients {
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
                 .logFileMaxSize(conf.getLong(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .logFileRolloverDirectly(conf.getBoolean(FlinkOptions.WRITE_LOG_ROLLOVER_DIRECTLY))
                 .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
                 .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
                 .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
+                .dataSketchEnabled(conf.getBoolean(FlinkOptions.DATASKETCH_ENABLED))
+                .parquetRecordKeyBloomFilterEnabled(conf.getBoolean(FlinkOptions.PARQUET_RECORDKEY_BLOOM_FILTER_ENABLED))
+                .parquetRecordKeyClusteringBloomFilterEnabled(conf.getBoolean(FlinkOptions.PARQUET_RECORDKEY_CLUSTERING_BLOOM_FILTER_ENABLED))
+                .parquetRecordKeyCompactionBloomFilterEnabled(conf.getBoolean(FlinkOptions.PARQUET_RECORDKEY_COMPACTION_BLOOM_FILTER_ENABLED))
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
@@ -222,7 +254,19 @@ public class FlinkWriteClients {
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString());
+            .withSchema(getSourceSchema(conf).toString())
+            .withWriteIgnoreFailed(conf.get(FlinkOptions.IGNORE_FAILED));
+
+    if (conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())) {
+      builder.withIndexConfig(HoodieIndexConfig.newBuilder()
+          .withIndexType(HoodieIndex.IndexType.BUCKET)
+          .withIndexKeyField(conf.getString(FlinkOptions.INDEX_KEY_FIELD))
+          .withIndexRecordKeyField(conf.getString(FlinkOptions.RECORD_KEY_FIELD))
+          .withBucketNum(String.valueOf(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
+          .withBucketIndexAtPartitionLevel(conf.getBoolean(FlinkOptions.BUCKET_INDEX_PARTITION_LEVEL))
+          .withPartitionBucketExpr(conf.getString(FlinkOptions.BUCKET_INDEX_PARTITION_BUCKET_EXPR))
+          .build());
+    }
 
     if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
       builder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);

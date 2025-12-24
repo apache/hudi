@@ -38,6 +38,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
@@ -57,33 +58,88 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
+
+    List<String> backtrackInstances = table.getMetaClient().getBacktrackInstances();
+
+    // get the pending insert overwrite instant
+    List<String> pendingBackTrackInstances = table.getMetaClient().getPendingBacktrackInstances();
+    int pendingClusteringNum  = table.getActiveTimeline()
+        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)
+            && !backtrackInstances.contains(s.getTimestamp())
+            && !pendingBackTrackInstances.contains(s.getTimestamp())
+            && !s.isCompleted())
+        .filter(this::canExecute)
+        .countInstants();
+
+    if (table.getMetaClient().getTableConfig().isLSMBasedLogFormat()) {
+      if (pendingClusteringNum >= config.getLsmMaxOfPendingClustering()) {
+        LOG.info(String.format("The num of lsm pending clustering is %s >= %s.", pendingClusteringNum, config.getLsmMaxOfPendingClustering()));
+        return Option.empty();
+      }
+    } else {
+      if (pendingClusteringNum >= config.getMaxOfPendingClustering()) {
+        LOG.info(String.format("The num of pending clustering is %s >= %s.", pendingClusteringNum, config.getMaxOfPendingClustering()));
+        return Option.empty();
+      }
+    }
+
     Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline()
-        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
+        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)
+            && !backtrackInstances.contains(s.getTimestamp())
+            && !pendingBackTrackInstances.contains(s.getTimestamp())
+            && canExecute(s))
+        .lastInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
 
-    if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getInlineClusterMaxCommits());
-      return Option.empty();
-    }
+    ClusteringPlanStrategy strategy;
+    if (table.getMetaClient().getTableConfig().isLSMBasedLogFormat()) {
+      if (config.inlineLSMClusteringEnabled() && config.getLsmInlineClusterMaxCommits() > commitsSinceLastClustering) {
+        LOG.info("Not scheduling lsm inline clustering as only " + commitsSinceLastClustering
+            + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+            + config.getLsmInlineClusterMaxCommits());
+        return Option.empty();
+      }
 
-    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getAsyncClusterMaxCommits());
-      return Option.empty();
-    }
+      if (config.isLsmAsyncClusteringScheduleEnabled() && config.getLsmAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+        LOG.info("Not scheduling lsm async clustering as only " + commitsSinceLastClustering
+            + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+            + config.getLsmAsyncClusterMaxCommits());
+        return Option.empty();
+      }
 
-    LOG.info("Generating clustering plan for table " + config.getBasePath());
-    ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
-        ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
-            new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);
+      LOG.info("Generating clustering plan for table " + config.getBasePath());
+      strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
+          config.getLsmClusteringPlanStrategyClass(), new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
+          table, context, config);
+    } else {
+      if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
+        LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
+            + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+            + config.getInlineClusterMaxCommits());
+        return Option.empty();
+      }
+
+      if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+        LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
+            + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+            + config.getAsyncClusterMaxCommits());
+        return Option.empty();
+      }
+
+      LOG.info("Generating clustering plan for table " + config.getBasePath());
+      strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
+          ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
+          new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);
+    }
 
     return strategy.generateClusteringPlan();
+  }
+
+  protected boolean canExecute(HoodieInstant instant) {
+    return true;
   }
 
   @Override

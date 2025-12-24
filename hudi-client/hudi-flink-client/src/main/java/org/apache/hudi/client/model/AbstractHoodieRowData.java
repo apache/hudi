@@ -59,6 +59,14 @@ public abstract class AbstractHoodieRowData implements RowData {
     this.row = row;
   }
 
+  // wrap row data for lsm
+  public AbstractHoodieRowData(RowData row, int metaColumnsNum, boolean withOperation) {
+    this.metaColumnsNum =  withOperation ? metaColumnsNum + 1 : metaColumnsNum;
+    // use StringData[] instead of String[] in child classes
+    this.metaColumns = new String[0];
+    this.row = row;
+  }
+
   @Override
   public RowKind getRowKind() {
     return row.getRowKind();
@@ -155,7 +163,7 @@ public abstract class AbstractHoodieRowData implements RowData {
     return row.getMap(rebaseOrdinal(ordinal));
   }
 
-  private String getMetaColumnVal(int ordinal) {
+  protected String getMetaColumnVal(int ordinal) {
     return this.metaColumns[ordinal];
   }
 

@@ -103,7 +103,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       this.lastCompletedTxn = Option.empty();
       this.pendingInflightAndRequestedInstants = Collections.emptySet();
     }
-    if (!table.getStorageLayout().writeOperationSupported(operationType)) {
+    if (!table.getStorageLayout().writeOperationSupported(operationType) && !table.getMetaClient().getTableConfig().isLSMBasedLogFormat()) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
     }
@@ -250,9 +250,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
 
     final Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+    boolean lsmBasedLogFormat = table.getMetaClient().getTableConfig().isLSMBasedLogFormat();
+    String className = lsmBasedLogFormat ? config.getLSMClusteringExecutionStrategyClass() : config.getClusteringExecutionStrategyClass();
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)
-            ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
+            ReflectionUtils.loadClass(className,
                 new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config))
         .performClustering(clusteringPlan, schema, instantTime);
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();

@@ -61,5 +61,15 @@ public class OptionsInference {
     if (!conf.contains(FlinkOptions.CLUSTERING_TASKS)) {
       conf.setInteger(FlinkOptions.CLUSTERING_TASKS, writeTasks);
     }
+    // lsm clustering tasks, default same as write tasks
+    if (!conf.contains(FlinkOptions.LSM_CLUSTERING_TASKS)) {
+      conf.setInteger(FlinkOptions.LSM_CLUSTERING_TASKS, writeTasks);
+    }
+    if (!conf.contains(FlinkOptions.CLUSTERING_READ_FOOTER_TASKS)) {
+      conf.setInteger(FlinkOptions.CLUSTERING_READ_FOOTER_TASKS, writeTasks);
+    }
+    if (!conf.contains(FlinkOptions.LSM_CLUSTERING_LIST_TASKS)) {
+      conf.setInteger(FlinkOptions.LSM_CLUSTERING_LIST_TASKS, writeTasks);
+    }
   }
 }

@@ -24,18 +24,28 @@ import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.storage.HoodieStorageStrategy;
+import org.apache.hudi.common.storage.HoodieStorageStrategyFactory;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.BucketStrategist;
+import org.apache.hudi.index.bucket.BucketStrategistFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -45,6 +55,8 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.hudi.common.config.HoodieStorageConfig.DATASKETCH_ENABLED;
 
 /**
  * Create handle with RowData for datasource implemention of bulk insert.
@@ -69,12 +81,27 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final FileSystem fs;
   protected final HoodieInternalWriteStatus writeStatus;
   private final HoodieTimer currTimer;
+  private final int fieldIndex;
+  private LogicalType fieldType;
+  private final boolean isUpdateEventTime;
+  private final HoodieStorageStrategy hoodieStorageStrategy;
 
   public HoodieRowDataCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                    String instantTime, int taskPartitionId, long taskId, long taskEpochId,
                                    RowType rowType, boolean preserveHoodieMetadata) {
+    this.hoodieStorageStrategy = HoodieStorageStrategyFactory.getInstant(table.getMetaClient());
+    Option<BucketStrategist> bucketStrategist;
+    if (writeConfig.getIndexType().equals(HoodieIndex.IndexType.BUCKET) && writeConfig.isBucketIndexAtPartitionLevel()) {
+      bucketStrategist = Option.of(BucketStrategistFactory.getInstant(writeConfig, table.getMetaClient().getFs()));
+    } else {
+      bucketStrategist = Option.empty();
+    }
     this.partitionPath = partitionPath;
     this.table = table;
+    if (HoodieTableType.COPY_ON_WRITE.equals(table.getMetaClient().getTableType())) {
+      writeConfig.getStorageConfig().setValue(DATASKETCH_ENABLED.key(), "false");
+      writeConfig.setValue(DATASKETCH_ENABLED.key(), "false");
+    }
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
     this.taskPartitionId = taskPartitionId;
@@ -85,6 +112,9 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.currTimer = HoodieTimer.start();
     this.fs = table.getMetaClient().getFs();
     this.path = makeNewPath(partitionPath);
+    this.fieldIndex = rowType.getFieldIndex(writeConfig.getPayloadConfig().getString(HoodiePayloadConfig.EVENT_TIME_FIELD.key()));
+    this.fieldType = fieldIndex != -1 ? rowType.getTypeAt(fieldIndex) : null;
+    this.isUpdateEventTime = supportUpdateEventTime();
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
     writeStatus.setPartitionPath(partitionPath);
@@ -96,8 +126,10 @@ public class HoodieRowDataCreateHandle implements Serializable {
               fs,
               instantTime,
               new Path(writeConfig.getBasePath()),
-              FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath),
-              table.getPartitionMetafileFormat());
+              hoodieStorageStrategy.storageLocation(partitionPath, instantTime),
+              table.getPartitionMetafileFormat(),
+              hoodieStorageStrategy,
+              bucketStrategist.map(strategist -> strategist.computeBucketNumber(partitionPath)));
       partitionMetadata.trySave(taskPartitionId);
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
       this.fileWriter = createNewFileWriter(path, table, writeConfig, rowType);
@@ -129,13 +161,50 @@ public class HoodieRowDataCreateHandle implements Serializable {
           record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       try {
         fileWriter.writeRow(recordKey, rowData);
-        writeStatus.markSuccess(recordKey);
+        if (isUpdateEventTime) {
+          // set min/max
+          writeStatus.markSuccess(recordKey, String.valueOf(getValueFromRowData(rowData)));
+        } else {
+          writeStatus.markSuccess(recordKey);
+        }
       } catch (Throwable t) {
+        LOG.error("Failed to write : key is " + recordKey + ", data is " + rowData, t);
         writeStatus.markFailure(recordKey, t);
+        if (!writeConfig.getIgnoreWriteFailed()) {
+          throw new HoodieException(t.getMessage(), t);
+        }
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);
       throw ge;
+    }
+  }
+
+  private Object getValueFromRowData(RowData rowData) {
+    if (rowData.isNullAt(this.fieldIndex)) {
+      return null;
+    }
+    switch (this.fieldType.getTypeRoot()) {
+      case BIGINT:
+        return rowData.getLong(this.fieldIndex);
+      case VARCHAR:
+        return rowData.getString(this.fieldIndex);
+      default:
+        return null;
+    }
+  }
+
+  private boolean supportUpdateEventTime() {
+    if (fieldIndex == -1) {
+      return false;
+    }
+    switch (this.fieldType.getTypeRoot()) {
+      case BIGINT:
+      case VARCHAR:
+        return true;
+      default:
+        // other types are not supported
+        return false;
     }
   }
 
@@ -162,7 +231,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     stat.setNumInserts(writeStatus.getTotalRecords());
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(fileId);
-    stat.setPath(new Path(writeConfig.getBasePath()), path);
+    stat.setPath(hoodieStorageStrategy.getRelativePath(path));
     long fileSizeInBytes = FSUtils.getFileSize(table.getMetaClient().getFs(), path);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
@@ -178,7 +247,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   private Path makeNewPath(String partitionPath) {
-    Path path = FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath);
+    Path path = hoodieStorageStrategy.storageLocation(partitionPath, instantTime);
     try {
       if (!fs.exists(path)) {
         fs.mkdirs(path); // create a new partition as needed.

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.lsm.HoodieLSMLogFile;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -42,11 +43,13 @@ public class HoodieLogFile implements Serializable {
   public static final String LOG_FILE_PREFIX = ".";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
+  // 从小到大排序，小的commit以及小的version在前面
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
+  // 从大到小排序，大的commit以及大的version在前面
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
 
   private transient FileStatus fileStatus;
-  private final String pathStr;
+  protected final String pathStr;
   private long fileLen;
 
   public HoodieLogFile(HoodieLogFile logFile) {
@@ -137,6 +140,16 @@ public class HoodieLogFile implements Serializable {
         FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion, logWriteToken)));
   }
 
+  public HoodieLogFile rollOverDirectly(String logWriteToken) {
+    String fileId = getFileId();
+    String baseCommitTime = getBaseCommitTime();
+    Path path = getPath();
+    String extension = "." + FSUtils.getFileExtensionFromLog(path);
+    int newVersion = getLogVersion() + 1;
+    return new HoodieLogFile(new Path(path.getParent(),
+        FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion, logWriteToken)));
+  }
+
   public static Comparator<HoodieLogFile> getLogFileComparator() {
     return LOG_FILE_COMPARATOR;
   }
@@ -163,6 +176,14 @@ public class HoodieLogFile implements Serializable {
 
     @Override
     public int compare(HoodieLogFile o1, HoodieLogFile o2) {
+      if (o1 instanceof HoodieLSMLogFile) {
+        return compareLSMLogFile(o1, o2);
+      } else {
+        return compareLogFile(o1, o2);
+      }
+    }
+
+    private int compareLogFile(HoodieLogFile o1, HoodieLogFile o2) {
       String baseInstantTime1 = o1.getBaseCommitTime();
       String baseInstantTime2 = o2.getBaseCommitTime();
 
@@ -187,6 +208,47 @@ public class HoodieLogFile implements Serializable {
 
       // compare by base-commits
       return baseInstantTime1.compareTo(baseInstantTime2);
+    }
+
+    /**
+     * LSM Log 的排序规则：
+     * 1. 先按CommitTime排序
+     * 2. CommitTime相同按照Version排序
+     * 3. CommitTime相同 且 Version相同 按照 UUID 排序
+     */
+    private int compareLSMLogFile(HoodieLogFile o1, HoodieLogFile o2) {
+      HoodieLSMLogFile lsmO1 = (HoodieLSMLogFile) o1;
+      HoodieLSMLogFile lsmO2 = (HoodieLSMLogFile) o2;
+
+      String baseCommitTime1 = lsmO1.getBaseCommitTime();
+      String baseCommitTime2 = lsmO2.getBaseCommitTime();
+      if (baseCommitTime1.equals(baseCommitTime2)) {
+        int logVersion1 = lsmO1.getLogVersion();
+        int logVersion2 = lsmO2.getLogVersion();
+        if (logVersion1 == logVersion2) {
+          String uuid1 = lsmO1.getUUID();
+          String uuid2 = lsmO2.getUUID();
+          return uuid1.compareToIgnoreCase(uuid2);
+        }
+        return Integer.compare(logVersion1, logVersion2);
+      }
+      return baseCommitTime1.compareToIgnoreCase(baseCommitTime2);
+    }
+  }
+
+  public static class LSMLogFileComparatorWithLevel implements Comparator<HoodieLogFile>, Serializable {
+    private final LogFileComparator secondary = new LogFileComparator();
+
+    @Override
+    public int compare(HoodieLogFile o1, HoodieLogFile o2) {
+      HoodieLSMLogFile lsmO1 = (HoodieLSMLogFile) o1;
+      HoodieLSMLogFile lsmO2 = (HoodieLSMLogFile) o2;
+      int levelNumber1 = lsmO1.getLevelNumber();
+      int levelNumber2 = lsmO2.getLevelNumber();
+      if (levelNumber1 == levelNumber2) {
+        return secondary.compareLSMLogFile(o1, o2);
+      }
+      return Integer.compare(levelNumber1, levelNumber2);
     }
   }
 

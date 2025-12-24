@@ -132,4 +132,36 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
 
     return HoodieJavaRDD.of(writeStatusRDD);
   }
+
+  @Override
+  public HoodieData<WriteStatus> bulkInsertForClustering(HoodieData<HoodieRecord<T>> inputRecords,
+                                                         String instantTime,
+                                                         HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                                         HoodieWriteConfig config,
+                                                         boolean performDedupe,
+                                                         BulkInsertPartitioner partitioner,
+                                                         boolean useWriterSchema,
+                                                         int configuredParallelism,
+                                                         WriteHandleFactory writeHandleFactory) {
+
+    // De-dupe/merge if needed
+    HoodieData<HoodieRecord<T>> dedupedRecords = inputRecords;
+
+    int targetParallelism = deduceShuffleParallelism(inputRecords, configuredParallelism);
+
+    if (performDedupe) {
+      dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance()
+          .combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords, targetParallelism, table);
+    }
+
+    // only JavaRDD is supported for Spark partitioner, but it is not enforced by BulkInsertPartitioner API. To improve this, TODO HUDI-3463
+    final HoodieData<HoodieRecord<T>> repartitionedRecords =
+        HoodieJavaRDD.of((JavaRDD<HoodieRecord<T>>) partitioner.repartitionRecords(HoodieJavaRDD.getJavaRDD(dedupedRecords), targetParallelism));
+
+    List<WriteStatus> res = HoodieJavaRDD.getJavaRDD(repartitionedRecords)
+        .mapPartitionsWithIndex(new BulkInsertMapFunction<>(instantTime,
+            partitioner.arePartitionRecordsSorted(), config, table, useWriterSchema, partitioner, writeHandleFactory), true)
+        .flatMap(List::iterator).collect();
+    return table.getContext().parallelize(res);
+  }
 }

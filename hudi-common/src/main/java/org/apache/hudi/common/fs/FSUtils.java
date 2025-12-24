@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.storage.HoodieStorageStrategy;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -34,11 +36,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.exception.InvalidHoodieFileNameException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-
+import org.apache.hudi.shaded.com.jd.chubaofs.hadoop.ChubaoFSFileSystem;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -70,6 +74,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_BASE_PATH_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_STORAGE_CHUBAO_FS_LOG_DIR;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_STORAGE_CHUBAO_FS_LOG_LEVEL;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_STORAGE_CHUBAO_FS_OWNER;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_STORAGE_PATH;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME;
 import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
 
 /**
@@ -82,6 +92,11 @@ public class FSUtils {
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
+
+  // 00000000_063f8be4-49d3-43fd-bc74-ee37b8329ceb_0_0_3-1-0_20250409161256974.parquet
+  // 8个group
+  public static final Pattern LSM_LOG_FILE_PATTERN =
+      Pattern.compile("^(\\d+)_([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})_(\\d+)_(\\d+)_(\\d+)-(\\d+)-(\\d+)_(.*)\\.(parquet)$");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
@@ -89,6 +104,7 @@ public class FSUtils {
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
+  public static final String LSM_TEMP_FILE_SUFFIX = ".temp";
 
   public static Configuration prepareHadoopConf(Configuration conf) {
     // look for all properties, prefixed to be picked up
@@ -101,6 +117,10 @@ public class FSUtils {
     return conf;
   }
 
+  /**
+   * TODO zhangyue
+   * 待定 HDFSParquetImporterUtils
+   */
   public static FileSystem getFs(String pathStr, Configuration conf) {
     return getFs(new Path(pathStr), conf);
   }
@@ -121,6 +141,41 @@ public class FSUtils {
       return getFs(addSchemeIfLocalPath(pathStr), conf);
     }
     return getFs(pathStr, conf);
+  }
+
+  /**
+   * use this api carefully, because it will load table config from base path
+   * @param basePath
+   * @param conf
+   * @return
+   */
+  public static HoodieWrapperFileSystem getHoodieWrapperFileSystem(String basePath, Configuration conf) {
+    FileSystem fileSystem = FSUtils.getFs(basePath, conf);
+    HoodieTableConfig tableConfig = HoodieTableConfig.fromBasePath(basePath, conf);
+    return new HoodieWrapperFileSystem(fileSystem, conf, tableConfig);
+  }
+
+  public static HoodieWrapperFileSystem getHoodieWrapperFileSystem(String basePath, Configuration conf, HoodieTableConfig tableConfig) {
+    FileSystem fileSystem = FSUtils.getFs(basePath, conf);
+    if (tableConfig == null) {
+      return new HoodieWrapperFileSystem(fileSystem, conf, HoodieTableConfig.fromBasePath(basePath, conf));
+    } else {
+      return new HoodieWrapperFileSystem(fileSystem, conf, tableConfig);
+    }
+  }
+
+  public static void addChubaoFsConfig2HadoopConf(Configuration configuration, HoodieTableConfig tableConfig) {
+    if (StringUtils.nonEmpty(tableConfig.getChubaoFsOwner())) {
+      LOG.info("ChubaoFs configs are set, adding them to hadoop configuration");
+      configuration.set("fs.chubaofs.impl", ChubaoFSFileSystem.class.getName());
+      configuration.set("cfs.log.dir", tableConfig.getChubaoFsLogDir());
+      configuration.set("cfs.log.level", tableConfig.getChubaoFsLogLevel());
+      String chubaoFsOwner = tableConfig.getChubaoFsOwner();
+      StringUtils.splitKeyValues(chubaoFsOwner, ",", ":")
+          .forEach((key, value) -> {
+            configuration.set("cfs.owner." + key, value);
+          });
+    }
   }
 
   /**
@@ -173,6 +228,26 @@ public class FSUtils {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
 
+  // bucketNumber_UUID_version_levelNumber_partitionId-stageId-attemptId_writeInstant.parquet.temp
+  public static String makeLSMFileNameWithSuffix(String fileID, String writeInstant, String version,
+                                                 String levelNumber, String writeToken, String fileExtension) {
+    String uuid = UUID.randomUUID().toString();
+    return String.format("%s_%s_%s_%s_%s_%s%s%s", fileID, uuid, version, levelNumber,
+        writeToken, writeInstant, fileExtension, LSM_TEMP_FILE_SUFFIX);
+  }
+
+  // bucketNumber_UUID_version_levelNumber_partitionId-stageId-attemptId_writeInstant.parquet
+  public static String makeLSMFileName(String fileID, String writeInstant, String version,
+                                       String levelNumber, String writeToken, String fileExtension) {
+    String uuid = UUID.randomUUID().toString();
+    return String.format("%s_%s_%s_%s_%s_%s%s", fileID, uuid, version, levelNumber, writeToken, writeInstant, fileExtension);
+  }
+
+  public static String makeLSMFileName(String fileID, String uuid, String writeInstant, String version,
+                                       String levelNumber, String writeToken, String fileExtension) {
+    return String.format("%s_%s_%s_%s_%s_%s%s", fileID, uuid, version, levelNumber, writeToken, writeInstant, fileExtension);
+  }
+
   public static String makeBootstrapIndexFileName(String instantTime, String fileId, String ext) {
     return String.format("%s_%s_%s%s", fileId, "1-0-1", instantTime, ext);
   }
@@ -188,15 +263,32 @@ public class FSUtils {
 
   public static String getCommitTime(String fullFileName) {
     if (isLogFile(fullFileName)) {
-      return fullFileName.split("_")[1].split("\\.")[0];
+      String[] splits = fullFileName.split("_");
+      if (splits.length == 6) {
+        // LSM LogFile
+        return splits[5].split("\\.")[0];
+      } else {
+        return splits[1].split("\\.")[0];
+      }
     }
     return fullFileName.split("_")[2].split("\\.")[0];
   }
 
-  public static long getFileSize(FileSystem fs, Path path) throws IOException {
-    return fs.getFileStatus(path).getLen();
+  public static String getCommitTimeWithFullPath(String path) {
+    String fullFileName;
+    if (path.contains("/")) {
+      fullFileName = path.substring(path.lastIndexOf("/") + 1);
+    } else {
+      fullFileName = path;
+    }
+    return getCommitTime(fullFileName);
   }
 
+  public static long getFileSize(FileSystem fs, Path path) throws IOException {
+    return fs.exists(path) ? fs.getFileStatus(path).getLen() : 0L;
+  }
+
+  // Get FileID From BaseFileName
   public static String getFileId(String fullFileName) {
     return fullFileName.split("_")[0];
   }
@@ -219,6 +311,10 @@ public class FSUtils {
 
   /**
    * Given a base partition and a partition path, return relative path of partition path to the base path.
+   * TODO zhangyue:
+   * HoodieBackedTableMetadataWriter
+   * BootstrapUtils
+   * BaseTableMetadata
    */
   public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
     basePath = getPathWithoutSchemeAndAuthority(basePath);
@@ -248,7 +344,8 @@ public class FSUtils {
    * @param fs FileSystem instance
    * @param basePathStr base directory
    */
-  public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
+  public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr,
+                                                                HoodieStorageStrategy hoodieStorageStrategy) throws IOException {
     // If the basePathStr is a folder within the .hoodie directory then we are listing partitions within an
     // internal table.
     final boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(basePathStr);
@@ -257,7 +354,8 @@ public class FSUtils {
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
       Path filePath = locatedFileStatus.getPath();
       if (filePath.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-        partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
+        partitions.add(
+            hoodieStorageStrategy.getRelativePath(filePath.getParent()));
       }
       return true;
     }, !isMetadataTable);
@@ -335,8 +433,14 @@ public class FSUtils {
   }
 
   public static String getFileExtension(String fullName) {
-    Objects.requireNonNull(fullName);
-    String fileName = new File(fullName).getName();
+    String actualName;
+    if (fullName.endsWith(LSM_TEMP_FILE_SUFFIX)) {
+      actualName = fullName.replace(LSM_TEMP_FILE_SUFFIX, "");
+    } else {
+      actualName = fullName;
+    }
+    Objects.requireNonNull(actualName);
+    String fileName = new File(actualName).getName();
     int dotIndex = fileName.lastIndexOf('.');
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);
   }
@@ -369,14 +473,42 @@ public class FSUtils {
   }
 
   /**
-   * Get the file extension from the log file.
+   * Get the file extension from the log file. 前面没有'.'
    */
   public static String getFileExtensionFromLog(Path logPath) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(logPath, "LogFile");
+    String actualFilename = logPath.getName().endsWith(LSM_TEMP_FILE_SUFFIX) ? logPath.getName().replace(LSM_TEMP_FILE_SUFFIX, "") : logPath.getName();
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(actualFilename);
+    if (matchLSMLogFile.isPresent()) {
+      return matchLSMLogFile.get().group(9);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(actualFilename);
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(logPath, "LogFile");
+      }
+      return matcher.group(3);
     }
-    return matcher.group(3);
+  }
+
+  /**
+   * Get the fileId from a fileName.
+   */
+  public static String getFileIdFromFileName(String fileName) {
+    if (FSUtils.matchCommonLogFile(fileName).isPresent()) {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+      if (!matcher.find()) {
+        throw new InvalidHoodieFileNameException(fileName, "LogFile");
+      }
+      return matcher.group(1);
+    }
+    if (FSUtils.matchLSMLogFile(fileName).isPresent()) {
+      Matcher matcher = FSUtils.LSM_LOG_FILE_PATTERN.matcher(fileName);
+      if (!matcher.find()) {
+        throw new InvalidHoodieFileNameException(fileName, "LogFile");
+      }
+      return matcher.group(1);
+    }
+
+    return FSUtils.getFileId(fileName);
   }
 
   /**
@@ -384,21 +516,33 @@ public class FSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(path.getName());
+    if (matchLSMLogFile.isPresent()) {
+      return matchLSMLogFile.get().group(1);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(path, "LogFile");
+      }
+      return matcher.group(1);
     }
-    return matcher.group(1);
   }
 
   /**
    * Check if the file is a base file of a log file. Then get the fileId appropriately.
    */
   public static String getFileIdFromFilePath(Path filePath) {
-    if (FSUtils.isLogFile(filePath)) {
-      return FSUtils.getFileIdFromLogPath(filePath);
+    Option<Matcher> matchCommonLogFile = matchCommonLogFile(filePath.getName());
+    if (matchCommonLogFile.isPresent()) {
+      return matchCommonLogFile.get().group(1);
+    } else {
+      Option<Matcher> matchLSMLogFile = matchLSMLogFile(filePath.getName());
+      if (matchLSMLogFile.isPresent()) {
+        return matchLSMLogFile.get().group(1);
+      } else {
+        return FSUtils.getFileId(filePath.getName());
+      }
     }
-    return FSUtils.getFileId(filePath.getName());
   }
 
   /**
@@ -406,58 +550,86 @@ public class FSUtils {
    * the file name.
    */
   public static String getBaseCommitTimeFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(path.getName());
+    if (matchLSMLogFile.isPresent()) {
+      return matchLSMLogFile.get().group(8);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(path, "LogFile");
+      }
+      return matcher.group(2);
     }
-    return matcher.group(2);
   }
 
   /**
    * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(path.getName());
+    if (matchLSMLogFile.isPresent()) {
+      String val = matchLSMLogFile.get().group(5);
+      return val == null ? null : Integer.parseInt(val);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(path, "LogFile");
+      }
+      String val = matcher.group(7);
+      return val == null ? null : Integer.parseInt(val);
     }
-    String val = matcher.group(7);
-    return val == null ? null : Integer.parseInt(val);
   }
 
   /**
    * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(path.getName());
+    if (matchLSMLogFile.isPresent()) {
+      return matchLSMLogFile.get().group(5) + "-" + matchLSMLogFile.get().group(6) + "-" + matchLSMLogFile.get().group(7);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(path, "LogFile");
+      }
+      return matcher.group(6);
     }
-    return matcher.group(6);
   }
 
   /**
    * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(path.getName());
+    if (matchLSMLogFile.isPresent()) {
+      String val = matchLSMLogFile.get().group(6);
+      return val == null ? null : Integer.parseInt(val);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(path, "LogFile");
+      }
+      String val = matcher.group(8);
+      return val == null ? null : Integer.parseInt(val);
     }
-    String val = matcher.group(8);
-    return val == null ? null : Integer.parseInt(val);
   }
 
   /**
    * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(path.getName());
+    if (matchLSMLogFile.isPresent()) {
+      String val = matchLSMLogFile.get().group(7);
+      return val == null ? null : Integer.parseInt(val);
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+      if (!matcher.find()) {
+        throw new InvalidHoodiePathException(path, "LogFile");
+      }
+      String val = matcher.group(9);
+      return val == null ? null : Integer.parseInt(val);
     }
-    String val = matcher.group(9);
-    return val == null ? null : Integer.parseInt(val);
   }
 
   /**
@@ -467,12 +639,44 @@ public class FSUtils {
     return getFileVersionFromLog(logPath.getName());
   }
 
-  public static int getFileVersionFromLog(String logFileName) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
+  public static int getLevelNumFromLog(Path logPath) {
+    String logFileName = logPath.getName();
+    Matcher matcher = LSM_LOG_FILE_PATTERN.matcher(logFileName);
     if (!matcher.find()) {
       throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
     return Integer.parseInt(matcher.group(4));
+  }
+
+  public static String getLSMFilePrefix(Path path) {
+    String lsmFileName = path.getName();
+    Matcher matcher = LSM_LOG_FILE_PATTERN.matcher(lsmFileName);
+    if (!matcher.find()) {
+      throw new HoodieIOException("Invalid log file name: " + lsmFileName);
+    }
+    return matcher.group(1) + "_" + matcher.group(2);
+  }
+
+  public static String getUUIDFromLog(Path logPath) {
+    String logFileName = logPath.getName();
+    Matcher matcher = LSM_LOG_FILE_PATTERN.matcher(logFileName);
+    if (!matcher.find()) {
+      throw new HoodieIOException("Invalid log file name: " + logFileName);
+    }
+    return matcher.group(2);
+  }
+
+  public static int getFileVersionFromLog(String logFileName) {
+    Option<Matcher> matchLSMLogFile = matchLSMLogFile(logFileName);
+    if (matchLSMLogFile.isPresent()) {
+      return Integer.parseInt(matchLSMLogFile.get().group(3));
+    } else {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
+      if (!matcher.find()) {
+        throw new HoodieIOException("Invalid log file name: " + logFileName);
+      }
+      return Integer.parseInt(matcher.group(4));
+    }
   }
 
   public static String getSuffixFromLogPath(Path path) {
@@ -494,7 +698,8 @@ public class FSUtils {
 
   public static boolean isBaseFile(Path path) {
     String extension = getFileExtension(path.getName());
-    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
+    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension) && !matchLSMLogFile(path.getName()).isPresent()
+        && !path.getName().contains(LSM_TEMP_FILE_SUFFIX);
   }
 
   public static boolean isLogFile(Path logPath) {
@@ -502,8 +707,37 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
+    return matchCommonLogFile(fileName).isPresent() || matchLSMLogFile(fileName).isPresent();
+  }
+
+  public static Option<Matcher> matchCommonLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return Option.empty();
+    }
+    if (fileName.contains("/")) {
+      fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
+    }
     Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return matcher.find() && fileName.contains(".log");
+    if (matcher.find() && fileName.contains(".log")) {
+      return Option.of(matcher);
+    } else {
+      return Option.empty();
+    }
+  }
+
+  public static Option<Matcher> matchLSMLogFile(String fileName) {
+    if (StringUtils.isNullOrEmpty(fileName)) {
+      return Option.empty();
+    }
+    if (fileName.contains("/")) {
+      fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
+    }
+    Matcher matcher = LSM_LOG_FILE_PATTERN.matcher(fileName);
+    if (matcher.find()) {
+      return Option.of(matcher);
+    } else {
+      return Option.empty();
+    }
   }
 
   /**
@@ -626,6 +860,18 @@ public class FSUtils {
     return sizeInBytes / (1024 * 1024);
   }
 
+  /**
+   * TODO zhangyue need change
+   * AWSGlueCatalogSyncClient
+   * RepairsCommand
+   * HoodieBackedTableMetadataWriter
+   * CleanPlanV2MigrationHandler
+   * RepairMigratePartitionMetaProcedure
+   * HoodieAdbJdbcClient
+   * HoodieMetadataTableValidator
+   * HoodieSnapshotCopier
+   * HoodieSnapshotExporter
+   */
   public static Path getPartitionPath(String basePath, String partitionPath) {
     if (StringUtils.isNullOrEmpty(partitionPath)) {
       return new Path(basePath);
@@ -639,6 +885,16 @@ public class FSUtils {
     return getPartitionPath(new CachingPath(basePath), properPartitionPath);
   }
 
+  /**
+   * TODO zhangyue need change
+   * RepairsCommand
+   * HoodieSparkConsistentBucketIndex
+   * HoodieCDCExtractor -- CDC 用不了
+   * CleanMetadataV1MigrationHandler
+   * CompactionV1MigrationHandler
+   * RepairAddpartitionmetaProcedure
+   * HoodieMetadataTableValidator
+   */
   public static Path getPartitionPath(Path basePath, String partitionPath) {
     // For non-partitioned table, return only base-path
     return StringUtils.isNullOrEmpty(partitionPath) ? basePath : new CachingPath(basePath, partitionPath);
@@ -687,11 +943,27 @@ public class FSUtils {
     return StorageSchemes.CHDFS.getScheme().equals(fs.getScheme());
   }
 
-  public static Configuration registerFileSystem(Path file, Configuration conf) {
+  public static Configuration registerFileSystem(Path file, Configuration conf, HoodieConfig hoodieConfig) {
     Configuration returnConf = new Configuration(conf);
     String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
+    if (hoodieConfig.contains(HOODIE_BASE_PATH_KEY)) {
+      returnConf.set(HOODIE_BASE_PATH_KEY, hoodieConfig.getString(HOODIE_BASE_PATH_KEY));
+    }
+
+    if (hoodieConfig.contains(HOODIE_STORAGE_STRATEGY_CLASS_NAME) && hoodieConfig.contains(HOODIE_STORAGE_PATH)
+        && !StringUtils.isNullOrEmpty(hoodieConfig.getString(HOODIE_STORAGE_STRATEGY_CLASS_NAME))
+        && !StringUtils.isNullOrEmpty(hoodieConfig.getString(HOODIE_STORAGE_PATH))) {
+      returnConf.set(HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME.key(), hoodieConfig.getString(HOODIE_STORAGE_STRATEGY_CLASS_NAME.key()));
+      returnConf.set(HoodieTableConfig.HOODIE_STORAGE_PATH.key(), hoodieConfig.getString(HOODIE_STORAGE_PATH.key()));
+
+      if ((hoodieConfig.contains(HOODIE_STORAGE_CHUBAO_FS_OWNER) && !StringUtils.isNullOrEmpty(hoodieConfig.getString(HOODIE_STORAGE_CHUBAO_FS_OWNER)))) {
+        returnConf.set(HoodieTableConfig.HOODIE_STORAGE_CHUBAO_FS_LOG_DIR.key(), hoodieConfig.getStringOrDefault(HOODIE_STORAGE_CHUBAO_FS_LOG_DIR));
+        returnConf.set(HoodieTableConfig.HOODIE_STORAGE_CHUBAO_FS_LOG_LEVEL.key(), hoodieConfig.getStringOrDefault(HOODIE_STORAGE_CHUBAO_FS_LOG_LEVEL));
+        returnConf.set(HoodieTableConfig.HOODIE_STORAGE_CHUBAO_FS_OWNER.key(), hoodieConfig.getString(HOODIE_STORAGE_CHUBAO_FS_OWNER));
+      }
+    }
     return returnConf;
   }
 
@@ -820,6 +1092,41 @@ public class FSUtils {
     }
   }
 
+  public static List<FileStatus> getAllDataFileStatus(FileSystem fs, Path path) throws IOException {
+    List<FileStatus> statuses = new ArrayList<>();
+    for (FileStatus status : fs.listStatus(path)) {
+      if (!status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (status.isDirectory()) {
+          statuses.addAll(getAllDataFileStatus(fs, status.getPath()));
+        } else {
+          statuses.add(status);
+        }
+      }
+    }
+    return statuses;
+  }
+
+  /**
+   * Deletes a sub-path.
+   *
+   * @param fs   The file system implementation for this table.
+   * @param path the base path of hudi table.
+   * @return     A list of file status of files under the path.
+   */
+  public static List<FileStatus> getAllDataFileStatusExcludingMetaFolder(FileSystem fs, Path path) throws IOException {
+    List<FileStatus> statuses = new ArrayList<>();
+    for (FileStatus status : fs.listStatus(path)) {
+      if (!status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (status.isDirectory()) {
+          statuses.addAll(getAllDataFileStatusExcludingMetaFolder(fs, status.getPath()));
+        } else {
+          statuses.add(status);
+        }
+      }
+    }
+    return statuses;
+  }
+
   /**
    * Lists file status at a certain level in the directory hierarchy.
    * <p>
@@ -878,5 +1185,119 @@ public class FSUtils {
 
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
+  }
+
+  /**
+   * Copy from HoodieWrapperFileSystem.createImmutableFileInPath(xx)
+   */
+  public static void createImmutableFileInPath(FileSystem fs, Path fullPath, Option<byte[]> content, boolean needTempFile)
+      throws HoodieIOException {
+    FSDataOutputStream fsout = null;
+    Path tmpPath = null;
+    boolean isWrote = false;
+    try {
+      if (!content.isPresent()) {
+        fsout = fs.create(fullPath, false);
+      }
+
+      if (content.isPresent() && needTempFile) {
+        Path parent = fullPath.getParent();
+        tmpPath = new Path(parent, fullPath.getName() + "." + UUID.randomUUID());
+        fsout = fs.create(tmpPath, false);
+        fsout.write(content.get());
+        isWrote = true;
+      }
+
+      if (content.isPresent() && !needTempFile) {
+        fsout = fs.create(fullPath, false);
+        fsout.write(content.get());
+      }
+    } catch (IOException e) {
+      String errorMsg = "Failed to create file" + (tmpPath != null ? tmpPath : fullPath);
+      throw new HoodieIOException(errorMsg, e);
+    } finally {
+      boolean isClosed = false;
+      boolean renameSuccess = false;
+      try {
+        if (null != fsout) {
+          fsout.close();
+          isClosed = true;
+        }
+        if (null != tmpPath && isClosed && isWrote) {
+          renameSuccess = fs.rename(tmpPath, fullPath);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("HoodieIOE occurs, rename " + tmpPath + " to the target "
+            + fullPath + ": " + renameSuccess + ", " + " closing : " + isClosed, e);
+      } finally {
+        if (!renameSuccess && null != tmpPath) {
+          try {
+            fs.delete(tmpPath);
+            LOG.warn("Fail to rename " + tmpPath + " to " + fullPath
+                + ", target file exists: " + fs.exists(fullPath));
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to delete tmp file " + tmpPath, e);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Delete inflight and requested rollback instant file after temp file created.
+   */
+  public static void createImmutableRollbackFileInPath(FileSystem fs, Path fullPath, Option<byte[]> content, boolean needTempFile, Runnable deleteInflightAndRequestedInstantFunc)
+          throws HoodieIOException {
+    FSDataOutputStream fsout = null;
+    Path tmpPath = null;
+    boolean isWrote = false;
+    try {
+      if (content.isPresent() && needTempFile) {
+        Path parent = fullPath.getParent();
+        tmpPath = new Path(parent, fullPath.getName() + "." + UUID.randomUUID());
+        fsout = fs.create(tmpPath, false);
+        fsout.write(content.get());
+        isWrote = true;
+      }
+
+      deleteInflightAndRequestedInstantFunc.run();
+
+      if (!content.isPresent()) {
+        fsout = fs.create(fullPath, false);
+      }
+
+      if (content.isPresent() && !needTempFile) {
+        fsout = fs.create(fullPath, false);
+        fsout.write(content.get());
+      }
+    } catch (IOException e) {
+      String errorMsg = "Failed to create file" + (tmpPath != null ? tmpPath : fullPath);
+      throw new HoodieIOException(errorMsg, e);
+    } finally {
+      boolean isClosed = false;
+      boolean renameSuccess = false;
+      try {
+        if (null != fsout) {
+          fsout.close();
+          isClosed = true;
+        }
+        if (null != tmpPath && isClosed && isWrote) {
+          renameSuccess = fs.rename(tmpPath, fullPath);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("HoodieIOE occurs, rename " + tmpPath + " to the target "
+                + fullPath + ": " + renameSuccess + ", " + " closing : " + isClosed, e);
+      } finally {
+        if (!renameSuccess && null != tmpPath) {
+          try {
+            // Don't delete temp rollback file if rename failed
+            LOG.warn("Fail to rename " + tmpPath + " to " + fullPath
+                    + ", target file exists: " + fs.exists(fullPath));
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to check target file exists or not: " + fullPath, e);
+          }
+        }
+      }
+    }
   }
 }

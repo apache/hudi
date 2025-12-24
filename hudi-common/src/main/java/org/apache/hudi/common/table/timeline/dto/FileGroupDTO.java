@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -59,6 +60,12 @@ public class FileGroupDTO {
   public static HoodieFileGroup toFileGroup(FileGroupDTO dto, HoodieTimeline fgTimeline) {
     HoodieFileGroup fileGroup = new HoodieFileGroup(dto.partition, dto.id, fgTimeline);
     dto.slices.stream().map(FileSliceDTO::toFileSlice).forEach(fileGroup::addFileSlice);
+    return fileGroup;
+  }
+
+  public static HoodieFileGroup toLSMFileGroup(FileGroupDTO dto, HoodieTimeline fgTimeline) {
+    HoodieFileGroup fileGroup = new HoodieFileGroup(new HoodieFileGroupId(dto.partition, dto.id), fgTimeline, true);
+    dto.slices.stream().map(FileSliceDTO::toLSMFileSlice).forEach(fileGroup::addFileSlice);
     return fileGroup;
   }
 }

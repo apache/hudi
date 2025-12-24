@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.lsm.HoodieLSMLogFile;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -49,6 +50,13 @@ public class LogFileDTO {
     logFile.fileLen = dataFile.getFileSize();
     logFile.pathStr = dataFile.getPath().toString();
     logFile.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
+    return logFile;
+  }
+
+  public static HoodieLogFile toLSMHoodieLogFile(LogFileDTO dto) {
+    FileStatus status = FileStatusDTO.toFileStatus(dto.fileStatus);
+    HoodieLogFile logFile = (status == null) ? new HoodieLSMLogFile(dto.pathStr) : new HoodieLSMLogFile(status);
+    logFile.setFileLen(dto.fileLen);
     return logFile;
   }
 }
