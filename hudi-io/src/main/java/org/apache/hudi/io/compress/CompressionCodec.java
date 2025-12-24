@@ -21,6 +21,7 @@ package org.apache.hudi.io.compress;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -34,7 +35,7 @@ import java.util.stream.Collectors;
  * Available compression codecs.
  * There should not be any assumption on the ordering or ordinal of the defined enums.
  */
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 @Getter
 public enum CompressionCodec {
   NONE("none", 2),
