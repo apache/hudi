@@ -18,9 +18,11 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -31,19 +33,23 @@ import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.io.storage.LanceTestUtils.createRow;
 import static org.apache.hudi.io.storage.LanceTestUtils.createRowWithMetaFields;
@@ -75,51 +81,6 @@ public class TestHoodieSparkLanceReader {
   public void tearDown() throws Exception {
     if (storage != null) {
       storage.close();
-    }
-  }
-
-  @Test
-  public void testReadPrimitiveTypes() throws Exception {
-    // Create schema with primitive types
-    StructType schema = new StructType()
-        .add("id", DataTypes.IntegerType, false)
-        .add("name", DataTypes.StringType, true)
-        .add("age", DataTypes.LongType, true)
-        .add("score", DataTypes.DoubleType, true)
-        .add("active", DataTypes.BooleanType, true);
-
-    // Create test data
-    List<InternalRow> expectedRows = new ArrayList<>();
-    expectedRows.add(createRow(1, "Alice", 30L, 95.5, true));
-    expectedRows.add(createRow(2, "Bob", 25L, 87.3, false));
-    expectedRows.add(createRow(3, "Charlie", 35L, 92.1, true));
-
-    // Write and read back
-    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_primitives.lance");
-    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
-      // Verify record count
-      assertEquals(expectedRows.size(), reader.getTotalRecords(), "Record count should match");
-
-      // Verify schema
-      assertNotNull(reader.getSchema(), "Schema should not be null");
-
-      // Read all records
-      List<InternalRow> actualRows = readAllRows(reader);
-
-      // Verify record count
-      assertEquals(expectedRows.size(), actualRows.size(), "Should read same number of records");
-
-      // Verify each record
-      for (int i = 0; i < expectedRows.size(); i++) {
-        InternalRow expected = expectedRows.get(i);
-        InternalRow actual = actualRows.get(i);
-
-        assertEquals(expected.getInt(0), actual.getInt(0), "id field should match");
-        assertEquals(expected.getUTF8String(1), actual.getUTF8String(1), "name field should match");
-        assertEquals(expected.getLong(2), actual.getLong(2), "age field should match");
-        assertEquals(expected.getDouble(3), actual.getDouble(3), 0.001, "score field should match");
-        assertEquals(expected.getBoolean(4), actual.getBoolean(4), "active field should match");
-      }
     }
   }
 
@@ -157,6 +118,7 @@ public class TestHoodieSparkLanceReader {
 
   @Test
   public void testReadAllSupportedTypes() throws Exception {
+    // Create schema with all supported primitive types
     StructType schema = new StructType()
         .add("int_field", DataTypes.IntegerType, false)
         .add("long_field", DataTypes.LongType, false)
@@ -166,39 +128,39 @@ public class TestHoodieSparkLanceReader {
         .add("string_field", DataTypes.StringType, false)
         .add("binary_field", DataTypes.BinaryType, false);
 
+    // Create test data with 3 records
     List<InternalRow> expectedRows = new ArrayList<>();
-    expectedRows.add(new GenericInternalRow(new Object[]{
-        42,                                    // int
-        123456789L,                           // long
-        3.14f,                                // float
-        2.71828,                              // double
-        true,                                 // boolean
-        UTF8String.fromString("test"),        // string
-        new byte[]{1, 2, 3, 4}               // binary
-    }));
+    expectedRows.add(createRow(42, 123456789L, 3.14f, 2.71828, true, "Alice", new byte[]{1, 2, 3, 4}));
+    expectedRows.add(createRow(-100, 987654321L, 2.5f, 98.765, false, "Bob", new byte[]{10, 20, 30}));
+    expectedRows.add(createRow(0, 0L, 0.0f, 0.0, true, "Charlie", new byte[]{99}));
 
     // Write and read back
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_all_types.lance");
     try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
-      assertEquals(1, reader.getTotalRecords());
+      assertEquals(expectedRows.size(), reader.getTotalRecords(), "Record count should match");
+      assertNotNull(reader.getSchema(), "Schema should not be null");
 
       List<InternalRow> actualRows = readAllRows(reader);
+      assertEquals(expectedRows.size(), actualRows.size(), "Should read same number of records");
 
-      assertEquals(1, actualRows.size());
-      InternalRow actual = actualRows.get(0);
+      // Verify each record
+      for (int i = 0; i < expectedRows.size(); i++) {
+        InternalRow expected = expectedRows.get(i);
+        InternalRow actual = actualRows.get(i);
 
-      assertEquals(42, actual.getInt(0), "int field should match");
-      assertEquals(123456789L, actual.getLong(1), "long field should match");
-      assertEquals(3.14f, actual.getFloat(2), 0.001, "float field should match");
-      assertEquals(2.71828, actual.getDouble(3), 0.00001, "double field should match");
-      assertTrue(actual.getBoolean(4), "bool field should match");
-      assertEquals("test", actual.getUTF8String(5).toString(), "string field should match");
+        assertEquals(expected.getInt(0), actual.getInt(0), "Row " + i + " int field should match");
+        assertEquals(expected.getLong(1), actual.getLong(1), "Row " + i + " long field should match");
+        assertEquals(expected.getFloat(2), actual.getFloat(2), 0.001, "Row " + i + " float field should match");
+        assertEquals(expected.getDouble(3), actual.getDouble(3), 0.00001, "Row " + i + " double field should match");
+        assertEquals(expected.getBoolean(4), actual.getBoolean(4), "Row " + i + " bool field should match");
+        assertEquals(expected.getUTF8String(5), actual.getUTF8String(5), "Row " + i + " string field should match");
 
-      byte[] expectedBytes = new byte[]{1, 2, 3, 4};
-      byte[] actualBytes = actual.getBinary(6);
-      assertEquals(expectedBytes.length, actualBytes.length, "binary field length should match");
-      for (int i = 0; i < expectedBytes.length; i++) {
-        assertEquals(expectedBytes[i], actualBytes[i], "binary field byte " + i + " should match");
+        byte[] expectedBytes = expected.getBinary(6);
+        byte[] actualBytes = actual.getBinary(6);
+        assertEquals(expectedBytes.length, actualBytes.length, "Row " + i + " binary field length should match");
+        for (int j = 0; j < expectedBytes.length; j++) {
+          assertEquals(expectedBytes[j], actualBytes[j], "Row " + i + " binary byte " + j + " should match");
+        }
       }
     }
   }
@@ -271,12 +233,8 @@ public class TestHoodieSparkLanceReader {
       }
 
       // Verify all keys are returned in the same order
-      assertEquals(5, actualKeys.size(), "Should return all 5 record keys");
-      assertEquals("key0", actualKeys.get(0), "First key should match");
-      assertEquals("key1", actualKeys.get(1), "Second key should match");
-      assertEquals("key2", actualKeys.get(2), "Third key should match");
-      assertEquals("key3", actualKeys.get(3), "Fourth key should match");
-      assertEquals("key4", actualKeys.get(4), "Fifth key should match");
+      List<String> expectedKeys = Arrays.asList("key0", "key1", "key2", "key3", "key4");
+      assertEquals(expectedKeys, actualKeys, "Record keys should match");
     }
   }
 
@@ -309,17 +267,26 @@ public class TestHoodieSparkLanceReader {
       // Filter row keys
       Set<Pair<String, Long>> result = reader.filterRowKeys(candidateKeys);
 
-      // Verify result contains exactly 3 entries with correct positions
-      assertEquals(3, result.size(), "Should return exactly 3 matching keys");
-
-      assertTrue(result.contains(Pair.of("key2", 2L)), "Should contain key2 at position 2");
-      assertTrue(result.contains(Pair.of("key5", 5L)), "Should contain key5 at position 5");
-      assertTrue(result.contains(Pair.of("key7", 7L)), "Should contain key7 at position 7");
+      // Verify result contains exactly the expected key-position pairs
+      Set<Pair<String, Long>> expected = Set.of(
+          Pair.of("key2", 2L),
+          Pair.of("key5", 5L),
+          Pair.of("key7", 7L)
+      );
+      assertEquals(expected, result, "Should contain exactly the expected key-position pairs");
     }
   }
 
-  @Test
-  public void testFilterRowKeysWithEmptySet() throws Exception {
+  private static Stream<Arguments> filterRowKeysInputParams() {
+    return Stream.of(
+        Arguments.of(Collections.emptySet()),
+        Arguments.of((Set<String>) null)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("filterRowKeysInputParams")
+  public void testFilterRowKeysReturnsAllKeys(Set<String> candidateKeys) throws Exception {
     // Create schema with all 5 Hudi metadata fields
     StructType schema = new StructType()
         .add(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, false)
@@ -336,51 +303,20 @@ public class TestHoodieSparkLanceReader {
     }
 
     // Write with metadata population enabled
-    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_filter_empty.lance");
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_filter.lance");
     try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, rows, true)) {
-      // Filter with empty set - should return all keys
-      Set<Pair<String, Long>> result = reader.filterRowKeys(Collections.emptySet());
+      // Filter with candidateKeys - should return all keys for null or empty set
+      Set<Pair<String, Long>> result = reader.filterRowKeys(candidateKeys);
 
       // Verify all 5 keys are returned with correct positions
-      assertEquals(5, result.size(), "Empty filter should return all keys");
-      assertTrue(result.contains(Pair.of("key0", 0L)), "Should contain key0 at position 0");
-      assertTrue(result.contains(Pair.of("key1", 1L)), "Should contain key1 at position 1");
-      assertTrue(result.contains(Pair.of("key2", 2L)), "Should contain key2 at position 2");
-      assertTrue(result.contains(Pair.of("key3", 3L)), "Should contain key3 at position 3");
-      assertTrue(result.contains(Pair.of("key4", 4L)), "Should contain key4 at position 4");
-    }
-  }
-
-  @Test
-  public void testFilterRowKeysWithNull() throws Exception {
-    // Create schema with all 5 Hudi metadata fields
-    StructType schema = new StructType()
-        .add(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, false)
-        .add(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.StringType, false)
-        .add(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, false)
-        .add(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, false)
-        .add(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, false)
-        .add("value", DataTypes.IntegerType, true);
-
-    // Create 5 records with placeholder metadata fields
-    List<InternalRow> rows = new ArrayList<>();
-    for (int i = 0; i < 5; i++) {
-      rows.add(createRowWithMetaFields(i));
-    }
-
-    // Write with metadata population enabled
-    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_filter_null.lance");
-    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, rows, true)) {
-      // Filter with null - should return all keys
-      Set<Pair<String, Long>> result = reader.filterRowKeys(null);
-
-      // Verify all 5 keys are returned
-      assertEquals(5, result.size(), "Null filter should return all keys");
-      assertTrue(result.contains(Pair.of("key0", 0L)));
-      assertTrue(result.contains(Pair.of("key1", 1L)));
-      assertTrue(result.contains(Pair.of("key2", 2L)));
-      assertTrue(result.contains(Pair.of("key3", 3L)));
-      assertTrue(result.contains(Pair.of("key4", 4L)));
+      Set<Pair<String, Long>> expected = Set.of(
+          Pair.of("key0", 0L),
+          Pair.of("key1", 1L),
+          Pair.of("key2", 2L),
+          Pair.of("key3", 3L),
+          Pair.of("key4", 4L)
+      );
+      assertEquals(expected, result, "Filter should return all keys with correct positions");
     }
   }
 
@@ -509,5 +445,59 @@ public class TestHoodieSparkLanceReader {
       }
     }
     return new HoodieSparkLanceReader(path);
+  }
+
+  @Test
+  public void testReadWithRequestedSchema() throws Exception {
+    StructType fullSchema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, true)
+        .add("age", DataTypes.IntegerType, true)
+        .add("city", DataTypes.StringType, true);
+
+    List<InternalRow> rows = new ArrayList<>();
+    rows.add(createRow(1, "Alice", 30, "NYC"));
+    rows.add(createRow(2, "Bob", 25, "SF"));
+    rows.add(createRow(3, "Charlie", 35, "LA"));
+
+    // Write Lance file with full schema
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_projection.lance");
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, fullSchema, instantTime, taskContextSupplier, storage, false)) {
+      for (int i = 0; i < rows.size(); i++) {
+        writer.writeRow("key" + i, rows.get(i));
+      }
+    }
+
+    //  Create requested schema with only 2 fields
+    StructType requestedSparkSchema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, true);
+
+    // Convert to HoodieSchema
+    HoodieSchema fullHoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+        fullSchema, "record", "", true);
+    HoodieSchema requestedHoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+        requestedSparkSchema, "record", "", true);
+
+    // Read with schema projection
+    try (HoodieSparkLanceReader reader = new HoodieSparkLanceReader(path)) {
+      try (ClosableIterator<HoodieRecord<InternalRow>> recordIterator =
+           reader.getRecordIterator(fullHoodieSchema, requestedHoodieSchema)) {
+
+        int count = 0;
+        while (recordIterator.hasNext()) {
+          HoodieRecord<InternalRow> record = recordIterator.next();
+          InternalRow row = record.getData();
+          // Verify only 3 columns present 
+          assertEquals(2, row.numFields(), "Should have only 2 projected fields");
+          // Verify projected field values
+          assertEquals(count + 1, row.getInt(0), "ID should match");
+          assertFalse(row.isNullAt(1), "Name should not be null");
+          count++;
+        }
+        assertEquals(3, count, "Should read all 3 records");
+      }
+    }
   }
 }

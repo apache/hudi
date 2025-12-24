@@ -113,7 +113,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
-    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator();
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
 
@@ -134,7 +134,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator() {
+  ClosableIterator<UnsafeRow> getUnsafeRowIterator() {
 
     BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
@@ -163,7 +163,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
+  ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
     // Convert HoodieSchema to Spark StructType
     StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 
@@ -230,6 +230,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     private final UnsafeProjection projection;
     private ColumnarBatch currentBatch;
     private Iterator<InternalRow> rowIterator;
+    private ColumnVector[] columnVectors;
 
     public LanceRecordIterator(BufferAllocator allocator,
                                LanceFileReader lanceReader,
@@ -260,12 +261,15 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
           VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
           // Wrap each Arrow FieldVector in LanceArrowColumnVector for type-safe access
-          ColumnVector[] columns = root.getFieldVectors().stream()
-                  .map(LanceArrowColumnVector::new)
-                  .toArray(ColumnVector[]::new);
+          // Cache the column wrappers on first batch and reuse for all subsequent batches
+          if (columnVectors == null) {
+            columnVectors = root.getFieldVectors().stream()
+                    .map(LanceArrowColumnVector::new)
+                    .toArray(ColumnVector[]::new);
+          }
 
           // Create ColumnarBatch and keep it alive while iterating
-          currentBatch = new ColumnarBatch(columns, root.getRowCount());
+          currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
           rowIterator = currentBatch.rowIterator();
           return rowIterator.hasNext();
         }
