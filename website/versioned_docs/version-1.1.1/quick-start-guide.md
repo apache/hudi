@@ -1240,7 +1240,7 @@ CREATE TABLE hudi_table (
     driver STRING,
     fare DOUBLE,
     city STRING
-) USING HUDI TBLPROPERTIES (preCombineField = 'ts')
+) USING HUDI TBLPROPERTIES (orderingFields = 'ts')
 PARTITIONED BY (city);
 ```
 </TabItem

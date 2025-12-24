@@ -61,7 +61,7 @@ public class HoodieSparkConfigs {
           ".options(clientOpts) // any of the Hudi client opts can be passed in as well\n" +
           ".option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), \"_row_key\")\n" +
           ".option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), \"partition\")\n" +
-          ".option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), \"timestamp\")\n" +
+          ".option(HoodieTableConfig.ORDERING_FIELDS(), \"timestamp\")\n" +
           ".option(HoodieWriteConfig.TABLE_NAME, tableName)\n" +
           ".mode(SaveMode.Append)\n" +
           ".save(basePath);\n" +

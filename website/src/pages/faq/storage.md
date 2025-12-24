@@ -139,7 +139,7 @@ hudi_options = {
     'hoodie.table.name': "test_recon1",
     'hoodie.datasource.write.recordkey.field': 'uuid',
     'hoodie.datasource.write.table.name': "test_recon1",
-    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.table.ordering.fields': 'ts',
     'hoodie.upsert.shuffle.parallelism': 2,
     'hoodie.insert.shuffle.parallelism': 2,
     "hoodie.datasource.write.hive_style_partitioning":"true",
