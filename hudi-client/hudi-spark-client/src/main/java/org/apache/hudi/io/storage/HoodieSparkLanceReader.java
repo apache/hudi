@@ -132,7 +132,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * Get an iterator over UnsafeRows from the Lance file with column projection.
    * This allows reading only specific columns for better performance.
    *
-   * @param requestedSchema Avro schema specifying which columns to read
+   * @param requestedSchema schema specifying which columns to read
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
@@ -164,7 +164,6 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    // Read Arrow schema from Lance file and convert to Avro
     try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
              getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {

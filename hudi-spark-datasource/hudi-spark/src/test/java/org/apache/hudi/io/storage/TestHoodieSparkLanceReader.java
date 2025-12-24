@@ -99,7 +99,7 @@ public class TestHoodieSparkLanceReader {
     // Write and read back
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_nulls.lance");
     try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
-      List<InternalRow> actualRows = readAllRows(reader);
+      List<InternalRow> actualRows = readAllRows(reader, schema);
 
       assertEquals(expectedRows.size(), actualRows.size(), "Should read same number of records");
 
@@ -139,27 +139,14 @@ public class TestHoodieSparkLanceReader {
       assertEquals(expectedRows.size(), reader.getTotalRecords(), "Record count should match");
       assertNotNull(reader.getSchema(), "Schema should not be null");
 
-      List<InternalRow> actualRows = readAllRows(reader);
+      List<InternalRow> actualRows = readAllRows(reader, schema);
       assertEquals(expectedRows.size(), actualRows.size(), "Should read same number of records");
 
       // Verify each record
       for (int i = 0; i < expectedRows.size(); i++) {
         InternalRow expected = expectedRows.get(i);
         InternalRow actual = actualRows.get(i);
-
-        assertEquals(expected.getInt(0), actual.getInt(0), "Row " + i + " int field should match");
-        assertEquals(expected.getLong(1), actual.getLong(1), "Row " + i + " long field should match");
-        assertEquals(expected.getFloat(2), actual.getFloat(2), 0.001, "Row " + i + " float field should match");
-        assertEquals(expected.getDouble(3), actual.getDouble(3), 0.00001, "Row " + i + " double field should match");
-        assertEquals(expected.getBoolean(4), actual.getBoolean(4), "Row " + i + " bool field should match");
-        assertEquals(expected.getUTF8String(5), actual.getUTF8String(5), "Row " + i + " string field should match");
-
-        byte[] expectedBytes = expected.getBinary(6);
-        byte[] actualBytes = actual.getBinary(6);
-        assertEquals(expectedBytes.length, actualBytes.length, "Row " + i + " binary field length should match");
-        for (int j = 0; j < expectedBytes.length; j++) {
-          assertEquals(expectedBytes[j], actualBytes[j], "Row " + i + " binary byte " + j + " should match");
-        }
+        assertEquals(expected, actual);
       }
     }
   }
@@ -380,7 +367,7 @@ public class TestHoodieSparkLanceReader {
       assertEquals(3, reader.getTotalRecords(), "Should have 3 records");
 
       // Read all records and verify metadata fields were populated
-      List<InternalRow> actualRows = readAllRows(reader);
+      List<InternalRow> actualRows = readAllRows(reader, schema);
       assertEquals(3, actualRows.size(), "Should read 3 records");
 
       // Verify first row has populated metadata fields
@@ -417,15 +404,55 @@ public class TestHoodieSparkLanceReader {
 
   /**
    * Helper method to read all rows from a reader into a list.
-   * Makes copies of InternalRows to avoid reuse issues.
+   * Converts UnsafeRow to GenericInternalRow by extracting field values using type-specific getters.
    */
-  private List<InternalRow> readAllRows(HoodieSparkLanceReader reader) throws IOException {
+  private List<InternalRow> readAllRows(HoodieSparkLanceReader reader, StructType schema) throws IOException {
     List<InternalRow> rows = new ArrayList<>();
-    HoodieSchema schema = reader.getSchema();
-    try (ClosableIterator<HoodieRecord<InternalRow>> iterator = reader.getRecordIterator(schema)) {
+    HoodieSchema hoodieSchema = reader.getSchema();
+
+    try (ClosableIterator<HoodieRecord<InternalRow>> iterator = reader.getRecordIterator(hoodieSchema)) {
       while (iterator.hasNext()) {
         HoodieRecord<InternalRow> record = iterator.next();
-        rows.add(record.getData().copy());
+        InternalRow unsafeRow = record.getData();
+
+        // Extract all field values from UnsafeRow using type-specific getters
+        Object[] values = new Object[schema.fields().length];
+        for (int i = 0; i < schema.fields().length; i++) {
+          if (unsafeRow.isNullAt(i)) {
+            values[i] = null;
+          } else {
+            org.apache.spark.sql.types.DataType dataType = schema.fields()[i].dataType();
+            switch (dataType.typeName().toLowerCase()) {
+              case "integer":
+                values[i] = unsafeRow.getInt(i);
+                break;
+              case "long":
+                values[i] = unsafeRow.getLong(i);
+                break;
+              case "float":
+                values[i] = unsafeRow.getFloat(i);
+                break;
+              case "double":
+                values[i] = unsafeRow.getDouble(i);
+                break;
+              case "boolean":
+                values[i] = unsafeRow.getBoolean(i);
+                break;
+              case "string":
+                // Must copy UTF8String to avoid buffer reuse issues
+                values[i] = unsafeRow.getUTF8String(i).copy();
+                break;
+              case "binary":
+                // Must clone binary array to avoid buffer reuse issues
+                values[i] = unsafeRow.getBinary(i).clone();
+                break;
+              default:
+                values[i] = unsafeRow.get(i, dataType);
+                break;
+            }
+          }
+        }
+        rows.add(new GenericInternalRow(values));
       }
     }
     return rows;
