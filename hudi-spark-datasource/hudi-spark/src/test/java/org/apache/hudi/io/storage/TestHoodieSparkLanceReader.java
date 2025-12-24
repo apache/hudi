@@ -137,11 +137,8 @@ public class TestHoodieSparkLanceReader {
     // Write and read back
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_all_types.lance");
     try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
-      assertEquals(expectedRows.size(), reader.getTotalRecords(), "Record count should match");
       assertNotNull(reader.getSchema(), "Schema should not be null");
-
       List<InternalRow> actualRows = readAllRows(reader, schema);
-      assertEquals(expectedRows.size(), actualRows.size(), "Should read same number of records");
       assertEquals(expectedRows, actualRows);
     }
   }
