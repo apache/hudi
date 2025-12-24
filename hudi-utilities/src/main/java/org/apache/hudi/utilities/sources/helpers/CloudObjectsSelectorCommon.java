@@ -34,7 +34,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.InputBatch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
@@ -290,7 +289,7 @@ public class CloudObjectsSelectorCommon {
     StructType rowSchema = null;
     if (schemaProviderOption.isPresent()) {
       HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
-      if (sourceSchema != null && !sourceSchema.equals(InputBatch.NULL_SCHEMA)) {
+      if (sourceSchema != null && !sourceSchema.equals(HoodieSchema.NULL_SCHEMA)) {
         rowSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema);
         if (isCoalesceRequired(properties, sourceSchema)) {
           reader = reader.schema(addAliasesToRowSchema(sourceSchema, rowSchema));

@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.FlatLists;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
@@ -64,8 +63,8 @@ public class TestSortUtils {
   @ParameterizedTest
   @MethodSource("getArguments")
   void testGetComparableSortColumnsAvroRecord(HoodieRecordType recordType, boolean suffixRecordKey) {
-    Schema schema = new Schema.Parser().parse(SCHEMA);
-    GenericRecord genericRecord = new GenericData.Record(schema);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA);
+    GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
     genericRecord.put("non_pii_col", "val1");
     genericRecord.put("pii_col", "val2");
     genericRecord.put("timestamp", 3.5);

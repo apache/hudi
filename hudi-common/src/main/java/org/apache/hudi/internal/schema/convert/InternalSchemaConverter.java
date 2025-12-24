@@ -149,7 +149,7 @@ public class InternalSchemaConverter {
    */
   public static HoodieSchema fixNullOrdering(HoodieSchema schema) {
     if (schema == null) {
-      return HoodieSchema.create(HoodieSchemaType.NULL);
+      return HoodieSchema.NULL_SCHEMA;
     } else if (schema.getType() == HoodieSchemaType.NULL) {
       return schema;
     }

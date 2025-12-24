@@ -692,7 +692,7 @@ public class StreamSync implements Serializable, Closeable {
 
       checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetHoodieSchema() != null
-          && this.userProvidedSchemaProvider.getTargetHoodieSchema() != InputBatch.NULL_SCHEMA) {
+          && this.userProvidedSchemaProvider.getTargetHoodieSchema() != HoodieSchema.NULL_SCHEMA) {
         // Let's deduce the schema provider for writer side first!
         schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetHoodieSchema(), this.userProvidedSchemaProvider, metaClient);
         boolean useRowWriter = canUseRowWriter(schemaProvider.getTargetHoodieSchema());
@@ -826,7 +826,7 @@ public class StreamSync implements Serializable, Closeable {
     }
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
-    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
+    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != HoodieSchema.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
         hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
   }
 
@@ -1222,7 +1222,7 @@ public class StreamSync implements Serializable, Closeable {
     HoodieSchema newWriteSchema = targetSchema;
     try {
       // check if targetSchema is equal to NULL schema
-      HoodieSchema nullSchema = InputBatch.NULL_SCHEMA;
+      HoodieSchema nullSchema = HoodieSchema.NULL_SCHEMA;
       if (targetSchema == null || (HoodieSchemaCompatibility.areSchemasCompatible(targetSchema, nullSchema) && HoodieSchemaCompatibility.areSchemasCompatible(nullSchema, targetSchema))) {
         // target schema is null. fetch schema from commit metadata and use it
         int totalCompleted = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();

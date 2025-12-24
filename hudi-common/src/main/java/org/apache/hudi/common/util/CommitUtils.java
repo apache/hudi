@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -50,7 +49,7 @@ import java.util.stream.Collectors;
 public class CommitUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(CommitUtils.class);
-  private static final String NULL_SCHEMA_STR = HoodieSchema.create(HoodieSchemaType.NULL).toString();
+  private static final String NULL_SCHEMA_STR = HoodieSchema.NULL_SCHEMA.toString();
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**

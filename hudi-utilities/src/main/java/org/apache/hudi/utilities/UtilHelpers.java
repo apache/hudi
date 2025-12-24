@@ -68,7 +68,6 @@ import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
-import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -225,7 +224,7 @@ public class UtilHelpers {
   }
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
-    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != InputBatch.NULL_SCHEMA) {
+    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != HoodieSchema.NULL_SCHEMA) {
       return HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemaProvider.getSourceHoodieSchema());
     }
     return null;
