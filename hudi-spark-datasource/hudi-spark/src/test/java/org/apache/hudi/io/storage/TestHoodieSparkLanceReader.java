@@ -30,7 +30,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
-import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.catalyst.expressions.SafeProjection;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
@@ -142,13 +142,7 @@ public class TestHoodieSparkLanceReader {
 
       List<InternalRow> actualRows = readAllRows(reader, schema);
       assertEquals(expectedRows.size(), actualRows.size(), "Should read same number of records");
-
-      // Verify each record
-      for (int i = 0; i < expectedRows.size(); i++) {
-        InternalRow expected = expectedRows.get(i);
-        InternalRow actual = actualRows.get(i);
-        assertEquals(expected, actual);
-      }
+      assertEquals(expectedRows, actualRows);
     }
   }
 
@@ -415,45 +409,7 @@ public class TestHoodieSparkLanceReader {
       while (iterator.hasNext()) {
         HoodieRecord<InternalRow> record = iterator.next();
         InternalRow unsafeRow = record.getData();
-
-        // Extract all field values from UnsafeRow using type-specific getters
-        Object[] values = new Object[schema.fields().length];
-        for (int i = 0; i < schema.fields().length; i++) {
-          if (unsafeRow.isNullAt(i)) {
-            values[i] = null;
-          } else {
-            DataType dataType = schema.fields()[i].dataType();
-            switch (dataType.typeName().toLowerCase()) {
-              case "integer":
-                values[i] = unsafeRow.getInt(i);
-                break;
-              case "long":
-                values[i] = unsafeRow.getLong(i);
-                break;
-              case "float":
-                values[i] = unsafeRow.getFloat(i);
-                break;
-              case "double":
-                values[i] = unsafeRow.getDouble(i);
-                break;
-              case "boolean":
-                values[i] = unsafeRow.getBoolean(i);
-                break;
-              case "string":
-                // Must copy UTF8String to avoid buffer reuse issues
-                values[i] = unsafeRow.getUTF8String(i).copy();
-                break;
-              case "binary":
-                // Must clone binary array to avoid buffer reuse issues
-                values[i] = unsafeRow.getBinary(i).clone();
-                break;
-              default:
-                values[i] = unsafeRow.get(i, dataType);
-                break;
-            }
-          }
-        }
-        rows.add(new GenericInternalRow(values));
+        rows.add(SafeProjection.create(schema).apply(unsafeRow));
       }
     }
     return rows;

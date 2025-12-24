@@ -163,14 +163,5 @@
       <groupId>com.lancedb</groupId>
       <artifactId>lance-core</artifactId>
     </dependency>
-    <!-- Apache Arrow for Lance data representation -->
-    <dependency>
-      <groupId>org.apache.arrow</groupId>
-      <artifactId>arrow-vector</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.arrow</groupId>
-      <artifactId>arrow-memory-netty</artifactId>
-    </dependency>
   </dependencies>
 </project>
