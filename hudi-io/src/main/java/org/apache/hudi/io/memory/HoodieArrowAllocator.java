@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.io.memory;
 
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;

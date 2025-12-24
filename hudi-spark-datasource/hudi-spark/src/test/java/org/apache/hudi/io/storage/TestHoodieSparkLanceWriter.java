@@ -33,7 +33,7 @@ import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.HoodieArrowAllocator;
+import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;

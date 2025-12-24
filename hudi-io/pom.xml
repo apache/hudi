@@ -154,6 +154,16 @@
       <artifactId>aircompressor</artifactId>
     </dependency>
 
+    <!-- Arrow -->
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-vector</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-memory-netty</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-tests-common</artifactId>

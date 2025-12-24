@@ -23,7 +23,7 @@ import com.lancedb.lance.file.LanceFileWriter;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
-import org.apache.hudi.common.util.HoodieArrowAllocator;
+import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
