@@ -160,16 +160,24 @@ public class TestHoodieTableSource {
   }
 
   @Test
-  void testDataSkippingFilterShouldBeNotNullWhenTableSourceIsCopied() {
-    HoodieTableSource tableSource = getEmptyStreamingSource();
-    FieldReferenceExpression ref = new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0);
-    ValueLiteralExpression literal = new ValueLiteralExpression("1", DataTypes.STRING().notNull());
-    ResolvedExpression filterExpr = CallExpression.permanent(
-        BuiltInFunctionDefinitions.IN,
-        Arrays.asList(ref, literal),
-        DataTypes.BOOLEAN());
-    List<ResolvedExpression> expectedFilters = Collections.singletonList(filterExpr);
-    tableSource.applyFilters(expectedFilters);
+  void testDataSkippingFilterShouldBeNotNullWhenTableSourceIsCopied() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA_WITH_META_COLUMNS);
+    CallExpression filter1 =
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                new ValueLiteralExpression("id5", DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN()
+        );
+    tableSource.applyFilters(List.of(filter1));
+
     HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
     ColumnStatsProbe columnStatsProbe = copiedSource.getColumnStatsProbe();
     assertNotNull(columnStatsProbe);
