@@ -237,7 +237,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, cleaningPolicy);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE, cleaningPolicy);
   }
 
   /**
@@ -250,7 +250,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
-    return getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
+    return getConfigBuilder(schemaStr, HoodieIndex.IndexType.SIMPLE, HoodieFailedWritesCleaningPolicy.EAGER);
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType) {
@@ -535,7 +535,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected HoodieWriteConfig getSmallInsertWriteConfigForMDT(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.SIMPLE, HoodieFailedWritesCleaningPolicy.EAGER);
     return builder.withCompactionConfig(
                     HoodieCompactionConfig.newBuilder()
                             .compactionSmallFileSize(smallFileSize)

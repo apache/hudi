@@ -91,6 +91,10 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     for (HoodieTableType tableType : HoodieTableType.values()) {
       for (boolean enableMdt : Arrays.asList(true, false)) {
         for (FileSystemViewStorageType viewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)) {
+          if (!enableMdt && viewStorageType == FileSystemViewStorageType.MEMORY) {
+            // This is the baseline case, no need to test here.
+            continue;
+          }
           for (int writerVersion : Arrays.asList(6, 8)) {
             testCases.add(Arguments.of(tableType, enableMdt, viewStorageType, writerVersion));
           }
