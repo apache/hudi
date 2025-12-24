@@ -85,6 +85,21 @@ elif [[ ${SPARK_RUNTIME} == 'spark4.0.0' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   IMAGE_TAG=flink1200hive313spark400scala213
 fi
 
+# Copy bundle jars to temp dir for mounting
+TMP_JARS_DIR=/tmp/jars/$(date +%s)
+mkdir -p $TMP_JARS_DIR
+if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
+  # For Scala 2.13, Flink is not support, so skipping the Flink bundle validation
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-flink-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-metaserver-server-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+fi
+cp ${GITHUB_WORKSPACE}/packaging/hudi-cli-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
+
 # build docker image
 cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1
 docker build \
@@ -104,4 +119,5 @@ docker build \
 # run Java 17 test script in docker
 docker run --name $CONTAINER_NAME \
   -v ${GITHUB_WORKSPACE}:$DOCKER_TEST_DIR \
+  -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -i hudi-ci-bundle-validation:$IMAGE_TAG bash docker_java17/docker_java17_test.sh $SPARK_PROFILE $SCALA_PROFILE

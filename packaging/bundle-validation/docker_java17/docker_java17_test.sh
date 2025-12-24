@@ -24,6 +24,21 @@ DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 DOCKER_TEST_DIR=${WORKDIR}/docker-test
+# link the jar names to easier to use names
+ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
+if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
+  # For Scala 2.13, Flink is not support, so skipping the Flink and Kafka Connect bundle validation
+  # (Note that Kafka Connect bundle pulls in hudi-flink dependency)
+  ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
+  ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
+fi
+ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
+ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
+ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
+ln -sf $JARS_DIR/hudi-cli-bundle*.jar $JARS_DIR/cli.jar
+# workaround for solving dependency conflict issues of Flink sql client (FLINK-33358)
+ln -sf $FLINK_HOME/opt/flink-sql-client*.jar $FLINK_HOME/lib/flink-sql-client.jar
 
 ##
 # Function to change Java runtime version by changing JAVA_HOME
@@ -104,27 +119,6 @@ stop_hdfs() {
   use_default_java_runtime
   echo "::warning::docker_test_java17.sh stopping hadoop hdfs"
   $HADOOP_HOME/sbin/stop-dfs.sh
-}
-
-build_hudi () {
-  change_java_runtime_version
-
-  mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
-    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log \
-    -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn \
-    -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn \
-    -pl packaging/hudi-spark-bundle -am
-
-  if [ "$?" -ne 0 ]; then
-    echo "::error::docker_test_java17.sh Failed building Hudi!"
-    exit 1
-  fi
-
-  if [ ! -d $JARS_DIR ]; then
-    mkdir -p $JARS_DIR
-  fi
-
-  cp ./packaging/hudi-spark-bundle/target/hudi-spark*.jar $JARS_DIR/spark.jar
 }
 
 run_docker_tests() {

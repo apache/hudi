@@ -950,6 +950,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+      - name: Build Project
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run: |
+          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+          else
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
+          fi
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
