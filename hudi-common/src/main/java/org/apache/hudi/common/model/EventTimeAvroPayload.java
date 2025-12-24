@@ -56,7 +56,9 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
     Comparable oldValueOrderingVal = oldValue.orderingVal;
     Comparable thisOrderingVal = orderingVal;
     Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue(oldValueOrderingVal, thisOrderingVal);
-    if (comparablePair.getLeft().compareTo(comparablePair.getRight())>0){
+    oldValueOrderingVal = comparablePair.getLeft();
+    thisOrderingVal = comparablePair.getRight();
+    if (oldValueOrderingVal.compareTo(thisOrderingVal)>0){
       return oldValue;
     }else {
       return this;

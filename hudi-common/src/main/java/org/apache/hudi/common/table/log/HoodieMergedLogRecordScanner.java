@@ -276,11 +276,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue(curOrderingVal, deleteOrderingVal);
+      curOrderingVal = comparablePair.getLeft();
+      deleteOrderingVal = comparablePair.getRight();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
       boolean choosePrev = !deleteOrderingVal.equals(0)
-              && ReflectionUtils.isSameClass(comparablePair.getLeft(), comparablePair.getRight())
-              && comparablePair.getLeft().compareTo(comparablePair.getRight()) > 0;
+              && ReflectionUtils.isSameClass(curOrderingVal,deleteOrderingVal)
+              && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {
         // The DELETE message is obsolete if the old message has greater orderingVal.
         return;

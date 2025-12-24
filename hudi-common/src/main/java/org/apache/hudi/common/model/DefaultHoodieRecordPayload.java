@@ -194,6 +194,8 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
               true, consistentLogicalTimestampEnabled)).orElse(orderingVal);
     }
     Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue((Comparable)persistedOrderingVal, incomingOrderingVal);
-    return persistedOrderingVal == null || (comparablePair.getLeft()).compareTo(comparablePair.getRight()) <= 0;
+    persistedOrderingVal = comparablePair.getLeft();
+    incomingOrderingVal = comparablePair.getRight();
+    return persistedOrderingVal == null || ((Comparable)persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
 }

@@ -484,7 +484,7 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @MethodSource("sceneTypeAndCompactionEnabled")
-  void testHardDeleteWithStringOrderingField(SceneType sceneType, boolean compactionEnabled) throws Exception {
+  void testHardDeleteWithStringOrderingField(boolean isDeletedFirst, boolean compactionEnabled) throws Exception {
     StoragePath storagePath=new StoragePath(Paths.get(tempFile.getAbsolutePath().replace("%5C","\\")).toUri());
     ExecMode execMode = ExecMode.BATCH;
     String hoodieTableDDL = "create table t1(\n"
@@ -511,33 +511,29 @@ public class ITTestHoodieDataSource {
 
     String expected = null;
     String insertInto= null;
-    switch (sceneType){
-      case SCENE01:
-      case SCENE03:
-        expected = "["
-                + "+I[id1, Danny, 23, false, par1, 101], "
-                + "+I[id2, Stephen, 33, false, par1, 103]]";
-        // first commit
-        insertInto = "insert into t1 values\n"
-                + "('id1','Danny',23,false,'par1', '101'),\n"
-                + "('id2','Stephen',33,false,'par1', '103')";
-        execInsertSql(batchTableEnv, insertInto);
-        // second commit, hard delete record with smaller order value
-        insertInto = "insert into t1 values\n"
-                + "('id2','Stephen',33, true,'par1', '102')";
-        break;
-      case SCENE02:
-        expected = "["
-                + "+I[id1, Danny, 23, false, par1, 101]]";
-        // first commit
-        insertInto = "insert into t1 values\n"
-                + "('id1','Danny',23,false,'par1', '101'),\n"
-                + "('id2','Stephen',33,true,'par1', '103')";
-        execInsertSql(batchTableEnv, insertInto);
-        // second commit, hard delete record with smaller order value
-        insertInto = "insert into t1 values\n"
-                + "('id2','Stephen',33, false,'par1', '102')";
-        break;
+    if (isDeletedFirst){
+      expected = "["
+              + "+I[id1, Danny, 23, false, par1, 101], "
+              + "+I[id2, Stephen, 33, false, par1, 103]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', '101'),\n"
+              + "('id2','Stephen',33,false,'par1', '103')";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, true,'par1', '102')";
+    }else {
+      expected = "["
+              + "+I[id1, Danny, 23, false, par1, 101]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', '101'),\n"
+              + "('id2','Stephen',33,true,'par1', '103')";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, false,'par1', '102')";
     }
     execInsertSql(batchTableEnv, insertInto);
     List<Row> result =  execSelectSql(batchTableEnv, "select * from t1", execMode);
@@ -546,7 +542,7 @@ public class ITTestHoodieDataSource {
   }
   @ParameterizedTest
   @MethodSource("sceneTypeAndCompactionEnabled")
-  void testHardDeleteWithDecimalOrderingField(SceneType sceneType, boolean compactionEnabled) throws Exception {
+  void testHardDeleteWithDecimalOrderingField(boolean isDeletedFirst, boolean compactionEnabled) throws Exception {
     StoragePath storagePath=new StoragePath(Paths.get(tempFile.getAbsolutePath().replace("%5C","\\")).toUri());
     ExecMode execMode = ExecMode.BATCH;
     String hoodieTableDDL = "create table t1(\n"
@@ -573,33 +569,29 @@ public class ITTestHoodieDataSource {
 
     String expected = null;
     String insertInto= null;
-    switch (sceneType){
-      case SCENE01:
-      case SCENE03:
-        expected = "["
-                + "+I[id1, Danny, 23, false, par1, 1.10], "
-                + "+I[id2, Stephen, 33, false, par1, 1.30]]";
-        // first commit
-        insertInto = "insert into t1 values\n"
-                + "('id1','Danny',23,false,'par1', 1.10),\n"
-                + "('id2','Stephen',33,false,'par1', 1.30)";
-        execInsertSql(batchTableEnv, insertInto);
-        // second commit, hard delete record with smaller order value
-        insertInto = "insert into t1 values\n"
-                + "('id2','Stephen',33, true,'par1', 1.20)";
-        break;
-      case SCENE02:
-        expected = "["
-                + "+I[id1, Danny, 23, false, par1, 1.10]]";
-        // first commit
-        insertInto = "insert into t1 values\n"
-                + "('id1','Danny',23,false,'par1', 1.10),\n"
-                + "('id2','Stephen',33,true,'par1', 1.30)";
-        execInsertSql(batchTableEnv, insertInto);
-        // second commit, hard delete record with smaller order value
-        insertInto = "insert into t1 values\n"
-                + "('id2','Stephen',33, false,'par1', 1.20)";
-        break;
+    if (isDeletedFirst){
+      expected = "["
+              + "+I[id1, Danny, 23, false, par1, 1.10], "
+              + "+I[id2, Stephen, 33, false, par1, 1.30]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', 1.10),\n"
+              + "('id2','Stephen',33,false,'par1', 1.30)";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, true,'par1', 1.20)";
+    }else {
+      expected = "["
+              + "+I[id1, Danny, 23, false, par1, 1.10]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', 1.10),\n"
+              + "('id2','Stephen',33,true,'par1', 1.30)";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, false,'par1', 1.20)";
     }
     execInsertSql(batchTableEnv, insertInto);
     List<Row> result2 =  execSelectSql(batchTableEnv, "select * from t1", execMode);
@@ -2274,9 +2266,6 @@ public class ITTestHoodieDataSource {
   private enum ExecMode {
     BATCH, STREAM
   }
-  private enum SceneType {
-    SCENE01, SCENE02, SCENE03
-  }
 
   /**
    * Return test params => (execution mode, table type).
@@ -2362,9 +2351,9 @@ public class ITTestHoodieDataSource {
   private static Stream<Arguments> sceneTypeAndCompactionEnabled() {
       Object[][] data =
                 new Object[][] {
-                        {SceneType.SCENE01, false},
-                        {SceneType.SCENE02, false},
-                        {SceneType.SCENE03, true}};
+                        {true, false},
+                        {false, false},
+                        {true, true}};
       return Stream.of(data).map(Arguments::of);
   }
 
