@@ -1,12 +1,12 @@
 ---
-title: "Release 1.1.0"
+title: "Release 1.1.1"
 layout: releases
 toc: true
 ---
 
-## [Release 1.1.0](https://github.com/apache/hudi/releases/tag/release-1.1.0)
+## [Release 1.1.1](https://github.com/apache/hudi/releases/tag/release-1.1.1)
 
-Apache Hudi 1.1.0 is a major release that brings significant performance improvements, new features, and important changes to the platform. This release focuses on enhanced table format support, improved indexing capabilities, expanded engine support, and modernized record merging APIs.
+Apache Hudi 1.1.1 is a major release that brings significant performance improvements, new features, and important changes to the platform. This release focuses on enhanced table format support, improved indexing capabilities, expanded engine support, and modernized record merging APIs.
 
 ## Highlights
 
@@ -26,28 +26,28 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 
 #### Pluggable Table Format Support
 
-Hudi 1.1.0 introduces a new [Pluggable Table Format](/docs/hudi_stack#pluggable-table-format) framework that enables native integration of multiple table formats within the system. This foundation includes a base interface for pluggable table formats, designed to simplify extension and allow seamless interoperability across different storage backends. The Metadata Table (MDT) integration has been enhanced to support pluggability, ensuring modularity and unified metadata management across all supported table formats.
+Hudi 1.1.1 introduces a new [Pluggable Table Format](/docs/hudi_stack#pluggable-table-format) framework that enables native integration of multiple table formats within the system. This foundation includes a base interface for pluggable table formats, designed to simplify extension and allow seamless interoperability across different storage backends. The Metadata Table (MDT) integration has been enhanced to support pluggability, ensuring modularity and unified metadata management across all supported table formats.
 
 This release brings native Hudi integration through the new framework, allowing users to leverage Hudi's advanced capabilities directly while maintaining consistent semantics and performance. The configuration `hoodie.table.format` is set to `native` by default, which works as the Hudi table format. **No configuration changes are required** for existing and new Hudi tables. As additional table formats are supported in future releases, users will be able to set this configuration to work natively with other formats. [Apache XTable (Incubating)](https://xtable.apache.org/) provides pluggable format adapters for formats like Iceberg and Delta Lake.
 
 #### Table Version 9 with Index Versioning
 
-Hudi 1.1.0 introduces table version 9 with support for index versioning. Indexes in the Metadata Table (column stats, secondary index, expression index, etc) now have version tracking. In 1.1.0, these indexes use V2 layouts with enhanced capabilities including comprehensive logical data type support. Tables migrated from older versions will retain V1 index layouts, while new tables created with 1.1.0 use V2. Both versions remain backward compatible, and no action is required when upgrading to 1.1.0.
+Hudi 1.1.1 introduces table version 9 with support for index versioning. Indexes in the Metadata Table (column stats, secondary index, expression index, etc) now have version tracking. In 1.1.1, these indexes use V2 layouts with enhanced capabilities including comprehensive logical data type support. Tables migrated from older versions will retain V1 index layouts, while new tables created with 1.1.1 use V2. Both versions remain backward compatible, and no action is required when upgrading to 1.1.1.
 
 ### Indexing
 
 #### Partitioned Record Index
 
-In addition to the global record index introduced in 0.14.0, Hudi 1.1.0 adds a partitioned variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets. For more details, see [record index](/docs/indexes#record-index).
+In addition to the global record index introduced in 0.14.0, Hudi 1.1.1 adds a partitioned variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets. For more details, see [record index](/docs/indexes#record-index).
 
-Prior to 1.1.0, only global record index was available, configured as:
+Prior to 1.1.1, only global record index was available, configured as:
 
 ```properties
 hoodie.metadata.record.index.enable=true
 hoodie.index.type=RECORD_INDEX
 ```
 
-From 1.1.0 onwards, both global and partitioned variants are available:
+From 1.1.1 onwards, both global and partitioned variants are available:
 
 For partitioned record index:
 
@@ -119,7 +119,7 @@ Support for efficient streaming reads of HoodieDataBlocks (currently for AvroDat
 
 #### ORC Support in FileGroupReader
 
-Enhanced support for multiple base file formats (ORC and Parquet) in HoodieFileGroupReader. The 1.1.0 release introduced SparkColumnarFileReader trait and MultipleColumnarFileFormatReader to uniformly handle ORC and Parquet records for both Merge-on-Read (MOR) and Copy-on-Write (COW) tables.
+Enhanced support for multiple base file formats (ORC and Parquet) in HoodieFileGroupReader. The 1.1.1 release introduced SparkColumnarFileReader trait and MultipleColumnarFileFormatReader to uniformly handle ORC and Parquet records for both Merge-on-Read (MOR) and Copy-on-Write (COW) tables.
 
 #### Hive Schema Evolution Support
 
@@ -233,7 +233,7 @@ A regression affecting Complex Key Generator with a single record key field has 
 
 **Who Is Affected**: Tables using Complex Key Generator (`ComplexAvroKeyGenerator` or `ComplexKeyGenerator`) with a **single** record key field.
 
-**Default Behavior in 1.1.0**: Reverts to the correct encoding format (`field_name:field_value`) matching 0.14.0 and earlier.
+**Default Behavior in 1.1.1**: Reverts to the correct encoding format (`field_name:field_value`) matching 0.14.0 and earlier.
 
 **Migration Path**:
 
@@ -272,7 +272,7 @@ This change applies to table services as well.
 
 ### INSERT INTO Behavior Change
 
-The default behavior of Spark SQL's `INSERT INTO` command has changed. Previously, it used "upsert" operation for tables with ordering field(s), which caused deduplication. From 1.1.0, `INSERT INTO` now performs "insert" operation by default, ingesting records as-is without deduplication.
+The default behavior of Spark SQL's `INSERT INTO` command has changed. Previously, it used "upsert" operation for tables with ordering field(s), which caused deduplication. From 1.1.1, `INSERT INTO` now performs "insert" operation by default, ingesting records as-is without deduplication.
 
 **Example**:
 
@@ -281,8 +281,8 @@ Commit1:
   Partition1, recordKey1, val1, orderingValue1
   Partition1, recordKey1, val2, orderingValue2
 
-Pre-1.1.0: Returns one record (based on ordering field)
-From 1.1.0: Returns both records
+Pre-1.1.1: Returns one record (based on ordering field)
+From 1.1.1: Returns both records
 ```
 
 **To Restore Previous Behavior**: Set `hoodie.spark.sql.insert.into.operation = upsert`
@@ -366,7 +366,7 @@ Bucket index now supports only UPSERT operations and cannot be used with append 
 
 ### End of Life for Hudi Versions Prior to 0.14.0
 
-As of this release, Hudi versions prior to 0.14.0 have reached end of life. Users on these older versions should plan to upgrade to 1.1.0 or later to receive ongoing support, bug fixes, and new features. The Hudi community will focus support efforts on versions 0.14.0 and later.
+As of this release, Hudi versions prior to 0.14.0 have reached end of life. Users on these older versions should plan to upgrade to 1.1.1 or later to receive ongoing support, bug fixes, and new features. The Hudi community will focus support efforts on versions 0.14.0 and later.
 
 For more details, see the [community discussion](https://github.com/apache/hudi/discussions/13847).
 
@@ -374,4 +374,4 @@ For more details, see the [community discussion](https://github.com/apache/hudi/
 
 ## Contributors
 
-Hudi 1.1.0 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.
+Hudi 1.1.1 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.

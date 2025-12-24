@@ -64,7 +64,7 @@ Now start the SQL CLI:
 ```bash
 # For Flink versions: 1.17-1.20, 2.0
 export FLINK_VERSION=1.20 
-export HUDI_VERSION=1.1.0
+export HUDI_VERSION=1.1.1
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P /tmp/
 ./bin/sql-client.sh embedded -j /tmp/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
@@ -81,7 +81,7 @@ Please add the desired dependency to your project:
 <properties>
     <flink.version>1.20.0</flink.version>
     <flink.binary.version>1.20</flink.binary.version>
-    <hudi.version>1.1.0</hudi.version>
+    <hudi.version>1.1.1</hudi.version>
 </properties>
 <dependency>
     <groupId>org.apache.hudi</groupId>

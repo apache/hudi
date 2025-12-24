@@ -313,6 +313,7 @@ Some of these limitations will be removed in the upcoming releases. Please
 follow [this GitHub issue](https://github.com/apache/hudi/issues/14870) for developments on this feature.
 
 ## Related Resources
+
 <h3>Videos</h3>
 
-* [Advantages of Metadata Indexing and Asynchronous Indexing in Hudi Hands on Lab](https://www.youtube.com/watch?v=TSphQCsY4pY)
+- [Advantages of Metadata Indexing and Asynchronous Indexing in Hudi Hands on Lab](https://www.youtube.com/watch?v=TSphQCsY4pY)

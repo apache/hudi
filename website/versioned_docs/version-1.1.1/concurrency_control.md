@@ -260,7 +260,7 @@ Multi writing using OCC allows multiple writers to concurrently write and atomic
 
 To improve the concurrency control, the [0.13.0 release](https://hudi.apache.org/releases/release-0.13.0#early-conflict-detection-for-multi-writer) introduced a new feature, early conflict detection in OCC, to detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using Hudi's marker mechanism. Hudi can now stop a conflicting writer much earlier because of the early conflict detection and release computing resources necessary to cluster, improving resource utilization.
 
-By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](https://hudi.apache.org/docs/next/configurations#Write-Configurations-advanced-configs) page for all relevant configs).
+By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](configurations.md#Write-Configurations-advanced-configs) page for all relevant configs).
 :::note
 Early conflict Detection in OCC is an **EXPERIMENTAL** feature
 :::
@@ -291,7 +291,7 @@ A Hudi Streamer job can then be triggered as follows:
 
 ```java
 [hoodie]$ spark-submit \
-  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.0.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.0.jar" \
+  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.1.jar" \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \

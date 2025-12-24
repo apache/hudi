@@ -92,6 +92,7 @@ cleaned up, before re-enabling the metadata table again.
 ## Leveraging metadata during queries
 
 ### files index
+
 Metadata based listing using *files_index* can be leveraged on the read side by setting appropriate configs/session properties
 from different engines as shown below:
 
@@ -104,6 +105,7 @@ from different engines as shown below:
 | Athena                                           | [hudi.metadata-listing-enabled](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) | When this table property is set to `TRUE` enables the Hudi metadata table and the related file listing functionality          |
 
 ### column_stats index and data skipping
+
 Enabling metadata table and column stats index is a prerequisite to enabling data skipping capabilities. Following are the 
 corresponding configs across Spark and Flink readers.
 

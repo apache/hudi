@@ -5,30 +5,27 @@ keywords: [ hudi, download ]
 toc: true
 ---
 
-## Release 1.1.0
+## Release 1.1.1
 
-* Source Release : [Apache Hudi 1.1.0 Source Release](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 1.1.0](/releases/release-1.1.0))
+* Source Release : [Apache Hudi 1.1.1 Source Release](https://downloads.apache.org/hudi/1.1.1/hudi-1.1.1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.1.1/hudi-1.1.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.1.1/hudi-1.1.1.src.tgz.sha512))
+* Release Note : ([Release Note for Apache Hudi 1.1.1](/releases/release-1.1.1))
 
-<!--
-TODO: keep this commented out until 1.1.1 is released
-TODO: replace repository.apache.org link with maven.org links when updating this for 1.1.1
 * Maven Artifacts:
 
   <details>
   <summary><strong>Spark Bundles</strong></summary>
   * **Spark 4.0**
-    * [hudi-spark4.0-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark4.0-bundle_2.13/1.1.0/hudi-spark4.0-bundle_2.13-1.1.0.jar)
+    * [hudi-spark4.0-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark4.0-bundle_2.13/1.1.1/hudi-spark4.0-bundle_2.13-1.1.1.jar)
   
   * **Spark 3.5**
-    * [hudi-spark3.5-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.13/1.1.0/hudi-spark3.5-bundle_2.13-1.1.0.jar)
-    * [hudi-spark3.5-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.1.0/hudi-spark3.5-bundle_2.12-1.1.0.jar)
+    * [hudi-spark3.5-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.13/1.1.1/hudi-spark3.5-bundle_2.13-1.1.1.jar)
+    * [hudi-spark3.5-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.1.1/hudi-spark3.5-bundle_2.12-1.1.1.jar)
 
   * **Spark 3.4**
-    * [hudi-spark3.4-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.4-bundle_2.12/1.1.0/hudi-spark3.4-bundle_2.12-1.1.0.jar)
+    * [hudi-spark3.4-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.4-bundle_2.12/1.1.1/hudi-spark3.4-bundle_2.12-1.1.1.jar)
 
   * **Spark 3.3**
-    * [hudi-spark3.3-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.3-bundle_2.12/1.1.0/hudi-spark3.3-bundle_2.12-1.1.0.jar)
+    * [hudi-spark3.3-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.3-bundle_2.12/1.1.1/hudi-spark3.3-bundle_2.12-1.1.1.jar)
 
   </details>
 
@@ -36,13 +33,13 @@ TODO: replace repository.apache.org link with maven.org links when updating this
   <summary><strong>Flink Bundles</strong></summary>
 
   * **Flink 2.x**
-    * [hudi-flink2.0-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink2.0-bundle/1.1.0/hudi-flink2.0-bundle-1.1.0.jar)
+    * [hudi-flink2.0-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink2.0-bundle/1.1.1/hudi-flink2.0-bundle-1.1.1.jar)
 
   * **Flink 1.x**
-    * [hudi-flink1.20-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.20-bundle/1.1.0/hudi-flink1.20-bundle-1.1.0.jar)
-    * [hudi-flink1.19-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.19-bundle/1.1.0/hudi-flink1.19-bundle-1.1.0.jar)
-    * [hudi-flink1.18-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.18-bundle/1.1.0/hudi-flink1.18-bundle-1.1.0.jar)
-    * [hudi-flink1.17-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.17-bundle/1.1.0/hudi-flink1.17-bundle-1.1.0.jar)
+    * [hudi-flink1.20-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.20-bundle/1.1.1/hudi-flink1.20-bundle-1.1.1.jar)
+    * [hudi-flink1.19-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.19-bundle/1.1.1/hudi-flink1.19-bundle-1.1.1.jar)
+    * [hudi-flink1.18-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.18-bundle/1.1.1/hudi-flink1.18-bundle-1.1.1.jar)
+    * [hudi-flink1.17-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.17-bundle/1.1.1/hudi-flink1.17-bundle-1.1.1.jar)
 
   </details>
 
@@ -50,13 +47,13 @@ TODO: replace repository.apache.org link with maven.org links when updating this
   <summary><strong>Query Engines</strong></summary>
 
   * **Presto**
-    * [hudi-presto-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-presto-bundle/1.1.0/hudi-presto-bundle-1.1.0.jar)
+    * [hudi-presto-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-presto-bundle/1.1.1/hudi-presto-bundle-1.1.1.jar)
 
   * **Trino**
-    * [hudi-trino-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-trino-bundle/1.1.0/hudi-trino-bundle-1.1.0.jar)
+    * [hudi-trino-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-trino-bundle/1.1.1/hudi-trino-bundle-1.1.1.jar)
 
   * **Hive**
-    * [hudi-hadoop-mr-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hadoop-mr-bundle/1.1.0/hudi-hadoop-mr-bundle-1.1.0.jar)
+    * [hudi-hadoop-mr-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hadoop-mr-bundle/1.1.1/hudi-hadoop-mr-bundle-1.1.1.jar)
 
   </details>
 
@@ -64,14 +61,14 @@ TODO: replace repository.apache.org link with maven.org links when updating this
   <summary><strong>Utilities & Tools</strong></summary>
 
   * **Hudi Utilities**
-    * [hudi-utilities-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.13/1.1.0/hudi-utilities-bundle_2.13-1.1.0.jar)
-    * [hudi-utilities-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.12/1.1.0/hudi-utilities-bundle_2.12-1.1.0.jar)
-    * [hudi-utilities-slim-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.13/1.1.0/hudi-utilities-slim-bundle_2.13-1.1.0.jar)
-    * [hudi-utilities-slim-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.1.0/hudi-utilities-slim-bundle_2.12-1.1.0.jar)
+    * [hudi-utilities-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.13/1.1.1/hudi-utilities-bundle_2.13-1.1.1.jar)
+    * [hudi-utilities-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.12/1.1.1/hudi-utilities-bundle_2.12-1.1.1.jar)
+    * [hudi-utilities-slim-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.13/1.1.1/hudi-utilities-slim-bundle_2.13-1.1.1.jar)
+    * [hudi-utilities-slim-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.1.1/hudi-utilities-slim-bundle_2.12-1.1.1.jar)
 
   * **Hudi CLI**
-    * [hudi-cli-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.13/1.1.0/hudi-cli-bundle_2.13-1.1.0.jar)
-    * [hudi-cli-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.1.0/hudi-cli-bundle_2.12-1.1.0.jar)
+    * [hudi-cli-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.13/1.1.1/hudi-cli-bundle_2.13-1.1.1.jar)
+    * [hudi-cli-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.1.1/hudi-cli-bundle_2.12-1.1.1.jar)
 
   </details>
 
@@ -79,26 +76,25 @@ TODO: replace repository.apache.org link with maven.org links when updating this
   <summary><strong>Platform Integrations</strong></summary>
 
   * **AWS**
-    * [hudi-aws-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-aws-bundle/1.1.0/hudi-aws-bundle-1.1.0.jar)
+    * [hudi-aws-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-aws-bundle/1.1.1/hudi-aws-bundle-1.1.1.jar)
 
   * **Google Cloud**
-    * [hudi-gcp-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-gcp-bundle/1.1.0/hudi-gcp-bundle-1.1.0.jar)
+    * [hudi-gcp-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-gcp-bundle/1.1.1/hudi-gcp-bundle-1.1.1.jar)
 
   * **Data Catalogs**
-    * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.1.0/hudi-hive-sync-bundle-1.1.0.jar)
-    * [hudi-datahub-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-datahub-sync-bundle/1.1.0/hudi-datahub-sync-bundle-1.1.0.jar)
+    * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.1.1/hudi-hive-sync-bundle-1.1.1.jar)
+    * [hudi-datahub-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-datahub-sync-bundle/1.1.1/hudi-datahub-sync-bundle-1.1.1.jar)
   
   * **Kafka Connect**
-    * [hudi-kafka-connect-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-kafka-connect-bundle/1.1.0/hudi-kafka-connect-bundle-1.1.0.jar)
+    * [hudi-kafka-connect-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-kafka-connect-bundle/1.1.1/hudi-kafka-connect-bundle-1.1.1.jar)
 
   * **Timeline Server**
-    * [hudi-timeline-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-timeline-server-bundle/1.1.0/hudi-timeline-server-bundle-1.1.0.jar)
+    * [hudi-timeline-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-timeline-server-bundle/1.1.1/hudi-timeline-server-bundle-1.1.1.jar)
 
   * **Metaserver**
-    * [hudi-metaserver-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-metaserver-server-bundle/1.1.0/hudi-metaserver-server-bundle-1.1.0.jar)
+    * [hudi-metaserver-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-metaserver-server-bundle/1.1.1/hudi-metaserver-server-bundle-1.1.1.jar)
 
   </details>
--->
 
 ## Release 1.0.2
 
