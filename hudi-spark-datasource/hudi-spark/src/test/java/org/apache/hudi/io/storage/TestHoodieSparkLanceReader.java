@@ -30,6 +30,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
@@ -421,7 +422,7 @@ public class TestHoodieSparkLanceReader {
           if (unsafeRow.isNullAt(i)) {
             values[i] = null;
           } else {
-            org.apache.spark.sql.types.DataType dataType = schema.fields()[i].dataType();
+            DataType dataType = schema.fields()[i].dataType();
             switch (dataType.typeName().toLowerCase()) {
               case "integer":
                 values[i] = unsafeRow.getInt(i);
