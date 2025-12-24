@@ -211,9 +211,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     return new StoragePathInfo(
         inlinePath,
         blockContentLoc.getBlockSize(),
-        pathInfo.isDirectory(),
-        pathInfo.getBlockReplication(),
-        pathInfo.getBlockSize(),
-        pathInfo.getModificationTime());
+        false,
+        pathInfo == null ? 0 : pathInfo.getBlockReplication(),
+        pathInfo == null ? 0L : pathInfo.getBlockSize(),
+        pathInfo == null ? 0L : pathInfo.getModificationTime());
   }
 }
