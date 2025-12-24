@@ -57,6 +57,17 @@ public final class HoodieSchemaUtils {
   public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
   public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
+  /**
+   * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
+   * These patterns are specifically used for column stats generation and differ from
+   * InternalSchema constants which are used in schema evolution contexts.
+   */
+  private static final String ARRAY_LIST_ELEMENT = "list.element";
+  private static final String MAP_KEY_VALUE_KEY = "key_value.key";
+  private static final String MAP_KEY_VALUE_VALUE = "key_value.value";
+  private static final String ARRAY_LIST = "list";
+  private static final String MAP_KEY_VALUE = "key_value";
+
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
     throw new UnsupportedOperationException("Utility class cannot be instantiated");
@@ -399,6 +410,32 @@ public final class HoodieSchemaUtils {
   /**
    * Internal helper method for recursively retrieving nested fields.
    *
+   * <p>Supports nested field access using dot notation including MAP and ARRAY types
+   * using Parquet-style accessor patterns:</p>
+   *
+   * <ul>
+   *   <li><b>RECORD types:</b> Standard dot notation (e.g., {@code "user.profile.name"})</li>
+   *   <li><b>ARRAY types:</b> Use {@code ".list.element"} to access array elements
+   *       <ul>
+   *         <li>Example: {@code "items.list.element"} accesses element schema of array</li>
+   *         <li>Example: {@code "items.list.element.id"} accesses nested field within array elements</li>
+   *       </ul>
+   *   </li>
+   *   <li><b>MAP types:</b> Use {@code ".key_value.key"} or {@code ".key_value.value"} to access map components
+   *       <ul>
+   *         <li>Example: {@code "metadata.key_value.key"} accesses map keys (always STRING)</li>
+   *         <li>Example: {@code "metadata.key_value.value"} accesses map value schema</li>
+   *         <li>Example: {@code "nested_map.key_value.value.field"} accesses nested field within map values</li>
+   *       </ul>
+   *   </li>
+   * </ul>
+   *
+   * <p><b>Note:</b> These accessor patterns ({@code .list.element} and {@code .key_value.key/value})
+   * are specifically used for column stats generation and follow Parquet's logical type structure.
+   * This differs from {@link org.apache.hudi.internal.schema.InternalSchema} constants
+   * ({@code ARRAY_ELEMENT}, {@code MAP_KEY}, {@code MAP_VALUE}) which are used in other contexts
+   * like schema evolution.</p>
+   *
    * @param schema    the current schema to search in
    * @param fieldName the remaining field path
    * @param prefix    the accumulated field path prefix
@@ -416,21 +453,138 @@ public final class HoodieSchemaUtils {
           .map(field -> Pair.of(prefix + fieldName, field));
     } else {
       // Recursive case: nested field
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-
       int dotIndex = fieldName.indexOf(".");
       String rootFieldName = fieldName.substring(0, dotIndex);
       String remainingPath = fieldName.substring(dotIndex + 1);
 
-      return nonNullableSchema.getField(rootFieldName)
-          .flatMap(rootField -> getNestedFieldInternal(
-              rootField.schema(),
-              remainingPath,
-              prefix + rootFieldName + "."
-          ));
+      // Handle RECORD types - standard field navigation
+      if (nonNullableSchema.getType() == HoodieSchemaType.RECORD) {
+        return nonNullableSchema.getField(rootFieldName)
+            .flatMap(rootField -> getNestedFieldInternal(
+                rootField.schema(),
+                remainingPath,
+                prefix + rootFieldName + "."
+            ));
+      }
+
+      // Handle ARRAY types - expect ".list.element" pattern
+      if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY && ARRAY_LIST.equals(rootFieldName)) {
+        return handleArrayNavigation(nonNullableSchema, remainingPath, prefix);
+      }
+
+      // Handle MAP types - expect ".key_value.key" or ".key_value.value" pattern
+      if (nonNullableSchema.getType() == HoodieSchemaType.MAP && MAP_KEY_VALUE.equals(rootFieldName)) {
+        return handleMapNavigation(nonNullableSchema, remainingPath, prefix);
+      }
+      // For all other types (primitives, etc.), cannot navigate
+      return Option.empty();
     }
+  }
+
+  /**
+   * Extracts the remaining path after a component name, validating the format.
+   * Supports both "component" (end of path) and "component.rest" (continued navigation).
+   *
+   * @param remainingPath the remaining path to parse
+   * @param component     the component name to extract after (e.g., "element", "key", "value")
+   * @return Option containing the path after the component (empty string if at end), or Option.empty() if invalid format
+   */
+  private static Option<String> extractPathAfterComponent(String remainingPath, String component) {
+    if (remainingPath.equals(component)) {
+      return Option.of("");
+    } else if (remainingPath.startsWith(component + ".")) {
+      return Option.of(remainingPath.substring((component + ".").length()));
+    }
+    return Option.empty();  // Invalid format (e.g., "elementXYZ")
+  }
+
+  /**
+   * Handles navigation into ARRAY types using the Parquet-style ".list.element" pattern.
+   *
+   * @param arraySchema   the ARRAY schema to navigate into
+   * @param remainingPath the remaining path after "list" (should start with "element")
+   * @param prefix        the accumulated field path prefix
+   * @return Option containing the nested field, or Option.empty() if invalid path
+   */
+  private static Option<Pair<String, HoodieSchemaField>> handleArrayNavigation(
+      HoodieSchema arraySchema, String remainingPath, String prefix) {
+    return extractPathAfterComponent(remainingPath, "element")
+        .flatMap(pathAfterElement -> {
+          HoodieSchema elementSchema = arraySchema.getElementType();
+          if (pathAfterElement.isEmpty()) {
+            // We've reached the end - return nested component field for element
+            HoodieSchemaField nestedComponentField = HoodieSchemaField.of(
+                "element",
+                elementSchema,
+                null,  // doc
+                null   // defaultVal
+            );
+            return Option.of(Pair.of(prefix + ARRAY_LIST_ELEMENT, nestedComponentField));
+          } else {
+            // Continue navigating into element schema
+            return getNestedFieldInternal(
+                elementSchema,
+                pathAfterElement,
+                prefix + ARRAY_LIST_ELEMENT + "."
+            );
+          }
+        });
+  }
+
+  /**
+   * Handles navigation into MAP types using the Parquet-style ".key_value.key" or ".key_value.value" patterns.
+   *
+   * @param mapSchema     the MAP schema to navigate into
+   * @param remainingPath the remaining path after "key_value" (should start with "key" or "value")
+   * @param prefix        the accumulated field path prefix
+   * @return Option containing the nested field, or Option.empty() if invalid path
+   */
+  private static Option<Pair<String, HoodieSchemaField>> handleMapNavigation(
+      HoodieSchema mapSchema, String remainingPath, String prefix) {
+    Option<Pair<String, HoodieSchemaField>> keyResult = extractPathAfterComponent(remainingPath, "key")
+        .flatMap(pathAfterKey -> {
+          if (pathAfterKey.isEmpty()) {
+            // We've reached the end - return nested component field for key (always STRING)
+            HoodieSchema keySchema = mapSchema.getKeyType();
+            HoodieSchemaField nestedComponentField = HoodieSchemaField.of(
+                "key",
+                keySchema,
+                null,  // doc
+                null   // defaultVal
+            );
+            return Option.of(Pair.of(prefix + MAP_KEY_VALUE_KEY, nestedComponentField));
+          } else {
+            // Keys are primitives, cannot navigate further
+            return Option.empty();
+          }
+        });
+
+    if (keyResult.isPresent()) {
+      return keyResult;
+    }
+
+    // Try to match "value" path
+    return extractPathAfterComponent(remainingPath, "value")
+        .flatMap(pathAfterValue -> {
+          HoodieSchema valueSchema = mapSchema.getValueType();
+          if (pathAfterValue.isEmpty()) {
+            // We've reached the end - return nested component field for value
+            HoodieSchemaField nestedComponentField = HoodieSchemaField.of(
+                "value",
+                valueSchema,
+                null,  // doc
+                null   // defaultVal
+            );
+            return Option.of(Pair.of(prefix + MAP_KEY_VALUE_VALUE, nestedComponentField));
+          } else {
+            // Continue navigating into value schema
+            return getNestedFieldInternal(
+                valueSchema,
+                pathAfterValue,
+                prefix + MAP_KEY_VALUE_VALUE + "."
+            );
+          }
+        });
   }
 
   /**
