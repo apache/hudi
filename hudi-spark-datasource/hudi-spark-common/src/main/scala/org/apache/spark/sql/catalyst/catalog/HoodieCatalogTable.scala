@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -211,8 +212,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       // Save all the table config to the hoodie.properties.
       val properties = TypedProperties.fromMap(tableConfigs.asJava)
 
+      val databaseFromIdentifier = table.identifier.database.getOrElse(
+        spark.sessionState.catalog.getCurrentDatabase)
       val catalogDatabaseName = formatName(spark,
-        table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
+        if (StringUtils.isNullOrEmpty(databaseFromIdentifier)) "default" else databaseFromIdentifier)
 
       val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
