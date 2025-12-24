@@ -19,10 +19,8 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.*;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -165,7 +163,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
-                                                IndexedRecord incomingRecord, Properties properties) {
+                                                Object incomingRecord, Properties properties) {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
@@ -185,10 +183,17 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
         orderField,
         true, consistentLogicalTimestampEnabled);
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
-        orderField,
-        true, consistentLogicalTimestampEnabled);
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    Comparable incomingOrderingVal = null;
+    if (incomingRecord instanceof IndexedRecord) {
+      incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
+              orderField,
+              true, consistentLogicalTimestampEnabled);
+    } else if (incomingRecord instanceof Option) {
+      incomingOrderingVal = ((Option<IndexedRecord>) incomingRecord).map(record-> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record,
+              orderField,
+              true, consistentLogicalTimestampEnabled)).orElse(orderingVal);
+    }
+    Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue((Comparable)persistedOrderingVal, incomingOrderingVal);
+    return persistedOrderingVal == null || (comparablePair.getLeft()).compareTo(comparablePair.getRight()) <= 0;
   }
-
 }

@@ -99,7 +99,7 @@ public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
 
   @Override
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
-                                                IndexedRecord incomingRecord, Properties properties) {
+                                                Object incomingRecord, Properties properties) {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older absolutely.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)

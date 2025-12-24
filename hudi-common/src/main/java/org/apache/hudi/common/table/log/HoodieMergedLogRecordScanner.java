@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -31,16 +28,9 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
-import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.SpillableMapUtils;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.*;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
@@ -285,18 +275,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-      if (curOrderingVal instanceof Utf8){
-        curOrderingVal=curOrderingVal.toString();
-      }
-      if (curOrderingVal instanceof GenericData.Fixed){
-        Conversions.DecimalConversion conversion=new Conversions.DecimalConversion();
-        curOrderingVal=conversion.fromFixed((GenericData.Fixed) curOrderingVal,((GenericData.Fixed) curOrderingVal).getSchema(),((GenericData.Fixed) curOrderingVal).getSchema().getLogicalType());
-      }
+      Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue(curOrderingVal, deleteOrderingVal);
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
       boolean choosePrev = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
-          && curOrderingVal.compareTo(deleteOrderingVal) > 0;
+              && ReflectionUtils.isSameClass(comparablePair.getLeft(), comparablePair.getRight())
+              && comparablePair.getLeft().compareTo(comparablePair.getRight()) > 0;
       if (choosePrev) {
         // The DELETE message is obsolete if the old message has greater orderingVal.
         return;
