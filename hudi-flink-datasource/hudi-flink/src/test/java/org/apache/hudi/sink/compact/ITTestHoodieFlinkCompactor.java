@@ -315,7 +315,9 @@ public class ITTestHoodieFlinkCompactor {
     HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf);
     asyncCompactionService.start(null);
 
-    TestUtils.waitUntil(() -> TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath(), HoodieTimeline.COMMIT_ACTION) != null, 20);
+    assertTrue(TestUtils.waitUntil(() ->
+            TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath(), HoodieTimeline.COMMIT_ACTION) != null, 20),
+        "Timed out waiting for compaction commit");
     asyncCompactionService.shutDown();
 
     TestData.checkWrittenDataCOW(tempFile, EXPECTED2);

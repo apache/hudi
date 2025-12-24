@@ -160,8 +160,15 @@ public class TestUtils {
     return newCompletionTime;
   }
 
+  /**
+   * Waits for a condition to be met within a specific timeout.
+   *
+   * @param condition      The condition to poll.
+   * @param timeoutSeconds Maximum time to wait in seconds.
+   */
   public static boolean waitUntil(BooleanSupplier condition, int timeoutSeconds) throws InterruptedException {
-    for (int i = 0; i < timeoutSeconds; i++) {
+    long limit = System.currentTimeMillis() + (timeoutSeconds * 1000L);
+    while (System.currentTimeMillis() < limit) {
       if (condition.getAsBoolean()) {
         return true;
       }
