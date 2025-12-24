@@ -516,7 +516,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               if (fileSlice.getBaseFile().isPresent()) {
                 HoodieConfig fileGroupReaderConfig = new HoodieConfig(fileGroupReaderProps);
                 baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(getStorage()).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                    .getFileReader(fileGroupReaderConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
+                    .getFileReader(fileGroupReaderConfig, fileSlice.getBaseFile().get().getPathInfo(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
               }
               return Pair.of(baseFileReader, buildReusableRecordBufferLoader(fileSlice, latestMetadataInstantTime, instantRange));
             } catch (IOException ex) {
