@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -34,11 +35,10 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -57,8 +57,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * base file format.
  */
 public class HoodieHFileDataBlock extends HoodieDataBlock {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieHFileDataBlock.class);
-
   private final Option<String> compressionCodec;
   // This path is used for constructing HFile reader context, which should not be
   // interpreted as the actual file path for the HFile data blocks
@@ -164,12 +162,13 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
+    StoragePathInfo storagePathInfo = getStoragePathInfo(inlinePath, blockContentLoc);
     HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlinePath, inlineConf);
 
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, inlinePath, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
+        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, storagePathInfo, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
       final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
               fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) :
@@ -190,18 +189,31 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
+    StoragePathInfo storagePathInfo = getStoragePathInfo(inlinePath, blockContentLoc);
     HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlinePath, inlineConf);
 
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
-            inlinePath,
+            storagePathInfo,
             HoodieFileFormat.HFILE,
             Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
       return (ClosableIterator<T>) (fullKey ? reader.getEngineRecordsByKeysIterator(sortedKeys, readerSchema) :
               reader.getEngineRecordsByKeyPrefixIterator(sortedKeys, readerSchema));
     }
+  }
+
+  private static StoragePathInfo getStoragePathInfo(StoragePath inlinePath, HoodieLogBlockContentLocation blockContentLoc) {
+    HoodieLogFile logFile = blockContentLoc.getLogFile();
+    StoragePathInfo pathInfo = logFile.getPathInfo();
+    return new StoragePathInfo(
+        inlinePath,
+        blockContentLoc.getBlockSize(),
+        pathInfo.isDirectory(),
+        pathInfo.getBlockReplication(),
+        pathInfo.getBlockSize(),
+        pathInfo.getModificationTime());
   }
 }
