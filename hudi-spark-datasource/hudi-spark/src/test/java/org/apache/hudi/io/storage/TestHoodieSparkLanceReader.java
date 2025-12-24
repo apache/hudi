@@ -30,7 +30,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
@@ -188,9 +187,11 @@ public class TestHoodieSparkLanceReader {
 
       // Verify all records
       int count = 0;
-      try (ClosableIterator<UnsafeRow> iterator = reader.getUnsafeRowIterator()) {
+      HoodieSchema readerSchema = reader.getSchema();
+      try (ClosableIterator<HoodieRecord<InternalRow>> iterator = reader.getRecordIterator(readerSchema)) {
         while (iterator.hasNext()) {
-          InternalRow row = iterator.next();
+          HoodieRecord<InternalRow> record = iterator.next();
+          InternalRow row = record.getData();
           assertEquals(count, row.getInt(0), "id should match");
           assertEquals(count * 2L, row.getLong(1), "value should match");
           count++;
@@ -416,13 +417,15 @@ public class TestHoodieSparkLanceReader {
 
   /**
    * Helper method to read all rows from a reader into a list.
-   * Makes copies of UnsafeRows to avoid reuse issues.
+   * Makes copies of InternalRows to avoid reuse issues.
    */
   private List<InternalRow> readAllRows(HoodieSparkLanceReader reader) throws IOException {
     List<InternalRow> rows = new ArrayList<>();
-    try (ClosableIterator<UnsafeRow> iterator = reader.getUnsafeRowIterator()) {
+    HoodieSchema schema = reader.getSchema();
+    try (ClosableIterator<HoodieRecord<InternalRow>> iterator = reader.getRecordIterator(schema)) {
       while (iterator.hasNext()) {
-        rows.add(iterator.next().copy());
+        HoodieRecord<InternalRow> record = iterator.next();
+        rows.add(record.getData().copy());
       }
     }
     return rows;

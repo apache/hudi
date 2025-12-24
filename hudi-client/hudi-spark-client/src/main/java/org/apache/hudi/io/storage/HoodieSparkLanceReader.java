@@ -129,33 +129,6 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   }
 
   /**
-   * Get an iterator over UnsafeRows from the Lance file.
-   *
-   * @return ClosableIterator over UnsafeRows
-   * @throws IOException if reading fails
-   */
-  ClosableIterator<UnsafeRow> getUnsafeRowIterator() {
-
-    BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
-        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
-
-    try {
-      LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
-
-      // Get schema from Lance file and convert to Spark StructType
-      Schema arrowSchema = lanceReader.schema();
-      StructType sparkSchema = LanceArrowUtils.fromArrowSchema(arrowSchema);
-
-      ArrowReader arrowReader = lanceReader.readAll(null, null, DEFAULT_BATCH_SIZE);
-
-      return new LanceRecordIterator(allocator, lanceReader, arrowReader, sparkSchema);
-    } catch (Exception e) {
-      allocator.close();
-      throw new HoodieException("Failed to create Lance reader for: " + path, e);
-    }
-  }
-
-  /**
    * Get an iterator over UnsafeRows from the Lance file with column projection.
    * This allows reading only specific columns for better performance.
    *
@@ -163,7 +136,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
-  ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
+  private ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
     // Convert HoodieSchema to Spark StructType
     StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 
