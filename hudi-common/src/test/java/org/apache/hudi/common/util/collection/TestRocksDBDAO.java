@@ -35,6 +35,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -237,6 +242,67 @@ public class TestRocksDBDAO {
     String rocksDBBasePath = dbManager.getRocksDBBasePath();
     dbManager.close();
     assertFalse(new File(rocksDBBasePath).exists());
+  }
+
+  /**
+   * Test that concurrent access to RocksDBDAO does not cause ConcurrentModificationException.
+   * This test verifies the thread-safety of the columnFamilySerializers map which is accessed
+   * via getSerializerForColumnFamily() during get/put operations.
+   */
+  @Test
+  public void testConcurrentAccess() throws InterruptedException {
+    int numThreads = 10;
+    int numOperationsPerThread = 100;
+    int numColumnFamilies = 5;
+
+    List<String> columnFamilies = new ArrayList<>();
+    for (int i = 0; i < numColumnFamilies; i++) {
+      String family = "concurrent_family_" + i;
+      columnFamilies.add(family);
+      dbManager.addColumnFamily(family);
+    }
+
+    ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(numThreads);
+    AtomicReference<Throwable> error = new AtomicReference<>(null);
+
+    // Spawn threads that concurrently access different column families
+    for (int t = 0; t < numThreads; t++) {
+      final int threadId = t;
+      executor.submit(() -> {
+        try {
+          // Wait for all threads to be ready
+          startLatch.await();
+
+          for (int i = 0; i < numOperationsPerThread; i++) {
+            // Each thread accesses different column families to trigger
+            // concurrent calls to getSerializerForColumnFamily()
+            String family = columnFamilies.get((threadId + i) % numColumnFamilies);
+            String key = "key_" + threadId + "_" + i;
+            String value = "value_" + threadId + "_" + i;
+
+            dbManager.put(family, key, value);
+            String retrieved = dbManager.get(family, key);
+            assertEquals(value, retrieved, "Value mismatch for key: " + key);
+          }
+        } catch (Throwable t1) {
+          error.compareAndSet(null, t1);
+        } finally {
+          doneLatch.countDown();
+        }
+      });
+    }
+
+    startLatch.countDown();
+
+    // Wait for all threads to complete
+    boolean completed = doneLatch.await(60, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    assertTrue(completed, "Test timed out - threads did not complete in time");
+    assertNull(error.get(), "Concurrent access caused an exception: "
+        + (error.get() != null ? error.get().getMessage() : ""));
   }
 
   /**
