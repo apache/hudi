@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.OrderingValueUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -282,11 +284,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+      Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue(curOrderingVal, deleteOrderingVal);
+      curOrderingVal = comparablePair.getLeft();
+      deleteOrderingVal = comparablePair.getRight();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
       boolean choosePrev = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
-          && curOrderingVal.compareTo(deleteOrderingVal) > 0;
+              && ReflectionUtils.isSameClass(curOrderingVal,deleteOrderingVal)
+              && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {
         // The DELETE message is obsolete if the old message has greater orderingVal.
         return;

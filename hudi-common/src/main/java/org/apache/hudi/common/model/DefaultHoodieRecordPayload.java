@@ -20,6 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.OrderingValueUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -49,6 +51,8 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   private AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
   private boolean isDefaultRecordPayloadDeleted = false;
 
+  protected static final Comparable<?> DEFAULT_VALUE = 0;
+
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -59,11 +63,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
-      return Option.empty();
-    }
-
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    Option<IndexedRecord> incomingRecord = recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes,schema));
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -74,15 +74,17 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * We reached a point where the value is disk is older than the incoming record.
      */
-    eventTime = updateEventTime(incomingRecord, properties);
+    if (incomingRecord.isPresent()) {
+      eventTime = updateEventTime((GenericRecord) incomingRecord.get(), properties);
+    }
 
     if (!isDeleteComputed.getAndSet(true)) {
-      isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
+      isDefaultRecordPayloadDeleted = incomingRecord.map(record -> isDeleteRecord((GenericRecord) record, properties)).orElse(true);
     }
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDefaultRecordPayloadDeleted ? Option.empty() : Option.of(incomingRecord);
+    return isDefaultRecordPayloadDeleted ? Option.empty() : incomingRecord;
   }
 
   @Override
@@ -165,7 +167,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
-                                                IndexedRecord incomingRecord, Properties properties) {
+                                                Option<IndexedRecord> incomingRecord, Properties properties) {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
@@ -185,10 +187,15 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
         orderField,
         true, consistentLogicalTimestampEnabled);
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
+    Comparable incomingOrderingVal = incomingRecord.map(record -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record,
         orderField,
-        true, consistentLogicalTimestampEnabled);
+        true, consistentLogicalTimestampEnabled)).orElse(orderingVal);
+    if (incomingRecord.isEmpty() && DEFAULT_VALUE.equals(incomingOrderingVal)) {
+      return true;
+    }
+    Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue((Comparable) persistedOrderingVal, incomingOrderingVal);
+    persistedOrderingVal = comparablePair.getLeft();
+    incomingOrderingVal = comparablePair.getRight();
     return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
-
 }
