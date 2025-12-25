@@ -41,6 +41,8 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.Spark41OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark41LegacyHoodieParquetFileFormat, Spark41ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.streaming.runtime.MemoryStream
+import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_1ExtendedSqlParser}
@@ -215,5 +217,15 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
 
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
+  }
+
+  override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
+    // In Spark 4.1, MemoryStream is in org.apache.spark.sql.execution.streaming.runtime package
+    // and takes SparkSession directly instead of SQLContext
+    val memoryStream = new MemoryStream[T](id, sparkSession)
+    new HoodieMemoryStream[T] {
+      override def addData(data: TraversableOnce[T]): Unit = memoryStream.addData(data)
+      override def toDS(): Dataset[T] = memoryStream.toDS()
+    }
   }
 }

@@ -204,4 +204,13 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
+
+  override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
+    val memoryStream = new MemoryStream[T](id, sparkSession.sqlContext)
+    new HoodieMemoryStream[T] {
+      override def addData(data: TraversableOnce[T]): Unit = memoryStream.addData(data)
+
+      override def toDS(): Dataset[T] = memoryStream.toDS()
+    }
+  }
 }
