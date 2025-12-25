@@ -50,6 +50,8 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.unsafe.types.UTF8String
 
+import scala.jdk.CollectionConverters.MapHasAsScala
+
 /**
  * Implementation of [[SparkAdapter]] for Spark 4.0.x branch
  */
