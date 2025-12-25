@@ -196,7 +196,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
     }
   }
 
-  // scalastyle:off argcount
+  // scalastyle:off parameter.number
   private def buildVectorizedIterator(
                                        hadoopAttemptContext: TaskAttemptContextImpl,
                                        split: FileSplit,
@@ -211,7 +211,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
                                        openedFooter: OpenedParquetFooter,
                                        shouldCloseInputStream: AtomicBoolean,
                                        schemaEvolutionUtils: ParquetSchemaEvolutionUtils): Iterator[InternalRow] = {
-    // scalastyle:on argcount
+    // scalastyle:on parameter.number
     assert(openedFooter.inputStreamOpt.isPresent)
     val vectorizedReader = schemaEvolutionUtils.buildVectorizedReader(
       convertTz.orNull,
@@ -253,6 +253,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
     }
   }
 
+  // scalastyle:off parameter.number
   private def buildRowBasedIterator(
                                      hadoopAttemptContext: TaskAttemptContextImpl,
                                      split: FileSplit,
@@ -267,6 +268,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
                                      enableLogicalTimestampRepair: Boolean,
                                      tableSchemaOpt: HOption[MessageType],
                                      schemaEvolutionUtils: ParquetSchemaEvolutionUtils): Iterator[InternalRow] with Closeable = {
+    // scalastyle:on parameter.number
     // ParquetRecordReader returns InternalRow
     val readSupport = new HoodieParquetReadSupport(
       convertTz,
