@@ -2629,7 +2629,7 @@
         <orc.spark.version>1.9.1</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
-        <fasterxml.spark3.versfasterxml.versionion>2.15.2</fasterxml.spark3.versfasterxml.versionion>
+        <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.annotation.version>${fasterxml.spark3.version}</fasterxml.jackson.annotation.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
