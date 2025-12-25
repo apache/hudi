@@ -57,12 +57,12 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
 
   def this(rootAvroType: Schema,
            rootCatalystType: DataType,
-           datetimeRebaseMode: String) = {
+           datetimeRebaseMode: LegacyBehaviorPolicy.Value) = {
     this(
       rootAvroType,
       rootCatalystType,
       positionalFieldMatch = false,
-      RebaseSpec(LegacyBehaviorPolicy.withName(datetimeRebaseMode)),
+      RebaseSpec(datetimeRebaseMode),
       new NoopFilters)
   }
 
