@@ -1399,10 +1399,11 @@ public class HoodieAvroUtils {
     } else {
       GenericData.Record rec = new GenericData.Record(targetSchema);
       for (Schema.Field field : targetSchema.getFields()) {
-        if (record.hasField(field.name())) {
-          rec.put(field.pos(), record.get(field.name()));
-        } else {
+        Field sourceField = record.getSchema().getField(field.name());
+        if (sourceField == null) {
           rec.put(field.pos(), null);
+        } else {
+          rec.put(field.pos(), record.get(sourceField.pos()));
         }
       }
       return rec;
