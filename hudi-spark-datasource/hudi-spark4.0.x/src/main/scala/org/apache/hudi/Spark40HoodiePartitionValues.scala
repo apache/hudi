@@ -38,7 +38,7 @@ case class Spark40HoodiePartitionValues(values: InternalRow) extends HoodieParti
   }
 
   override def copy(): InternalRow = {
-    Spark4HoodiePartitionValues(values.copy())
+    Spark40HoodiePartitionValues(values.copy())
   }
 
   override def isNullAt(ordinal: Int): Boolean = {

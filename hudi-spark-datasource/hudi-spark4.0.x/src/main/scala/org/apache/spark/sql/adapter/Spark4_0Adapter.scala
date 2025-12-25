@@ -17,10 +17,12 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.Spark40HoodieFileScanRDD
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark40HoodieFileScanRDD, Spark40HoodiePartitionCDCFileGroupMapping, Spark40HoodiePartitionFileSliceMapping}
+import org.apache.hudi.client.model.{HoodieInternalRow, Spark40HoodieInternalRow}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
@@ -29,15 +31,18 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.streaming.MemoryStream
+import org.apache.spark.sql.hudi.HoodieMemoryStream
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_0ExtendedSqlParser}
@@ -45,6 +50,9 @@ import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilde
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.unsafe.types.UTF8String
+
+import scala.jdk.CollectionConverters.MapHasAsScala
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 4.0.x branch
@@ -104,6 +112,12 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark40LegacyHoodieParquetFileFormat(appendPartitionValues))
+  }
+
+  override def createInternalRow(metaFields: Array[UTF8String],
+                                 sourceRow: InternalRow,
+                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark40HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 
   override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
