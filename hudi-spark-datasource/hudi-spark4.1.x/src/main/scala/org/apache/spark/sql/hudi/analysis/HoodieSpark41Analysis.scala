@@ -44,7 +44,7 @@ import org.apache.spark.sql.util.PartitioningUtils.normalizePartitionSpec
  *
  * Check out HUDI-4178 for more details
  */
-case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
+case class HoodieSpark41DataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with ProvidesHoodieConfig {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan match {
@@ -85,7 +85,7 @@ case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
  * Note that [[HoodieAnalysis]] intercepts the [[InsertIntoStatement]] after Spark's built-in
  * Resolution rules are applies, the logic of resolving the user specified columns and default
  * values may no longer be applied. To make INSERT with a subset of columns specified by user
- * to work, this custom resolution rule [[HoodieSpark40ResolveColumnsForInsertInto]] is added
+ * to work, this custom resolution rule [[HoodieSpark41ResolveColumnsForInsertInto]] is added
  * to achieve the same, before converting [[InsertIntoStatement]] into
  * [[InsertIntoHoodieTableCommand]].
  *
@@ -95,7 +95,7 @@ case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
  * Also note that, the project logic in [[ResolveImplementationsEarly]] for INSERT is still
  * needed in the case of INSERT with all columns in a different ordering.
  */
-case class HoodieSpark40ResolveColumnsForInsertInto() extends ResolveInsertionBase {
+case class HoodieSpark41ResolveColumnsForInsertInto() extends ResolveInsertionBase {
   // NOTE: This is copied from [[PreprocessTableInsertion]] with additional handling of Hudi relations
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
