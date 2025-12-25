@@ -188,6 +188,23 @@ class HoodieSpark4_1ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
   }
 
   /**
+   * Gets the integer value from an IntegerValueContext after parameter replacement. Asserts that
+   * parameter markers have been substituted before reaching DataTypeAstBuilder.
+   *
+   * @param ctx
+   * The IntegerValueContext to extract the integer from
+   * @return
+   * The integer value
+   */
+  private def getIntegerValue(ctx: IntegerValueContext): Int = {
+    assert(
+      !ctx.isInstanceOf[ParameterIntegerValueContext],
+      "Parameter markers should be substituted before DataTypeAstBuilder processes the " +
+        s"parse tree. Found unsubstituted parameter: ${ctx.getText}")
+    ctx.getText.toInt
+  }
+
+  /**
    * Create a logical query plan for a hive-style FROM statement body.
    */
   private def withFromStatementBody(

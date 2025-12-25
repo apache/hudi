@@ -34,6 +34,12 @@ grammar SqlBase;
    * When true, the behavior of keywords follows ANSI SQL standard.
    */
   public boolean SQL_standard_keyword_behavior = false;
+
+  /**
+   * When false, parameter markers (? and :param) are only allowed in constant contexts.
+   * When true, parameter markers are allowed everywhere a literal is supported.
+   */
+  public boolean parameter_substitution_enabled = true;
 }
 
 @lexer::members {
@@ -373,11 +379,11 @@ describeColName
     ;
 
 ctes
-    : WITH namedQuery (',' namedQuery)*
+    : WITH RECURSIVE? namedQuery (COMMA namedQuery)*
     ;
 
 namedQuery
-    : name=errorCapturingIdentifier (columnAliases=identifierList)? AS? '(' query ')'
+    : name=errorCapturingIdentifier (columnAliases=identifierList)? (MAX RECURSION LEVEL integerValue)? AS? LEFT_PAREN query RIGHT_PAREN
     ;
 
 tableProvider
@@ -1038,11 +1044,29 @@ identifier
     | {!SQL_standard_keyword_behavior}? strictNonReserved
     ;
 
+// simpleIdentifier: like identifier but without IDENTIFIER('literal') support
+// Use this for contexts where IDENTIFIER() syntax is not appropriate:
+//   - Named parameters (:param_name)
+//   - Extract field names (EXTRACT(field FROM ...))
+//   - Other keyword-like or string-like uses
+simpleIdentifier
+    : simpleStrictIdentifier
+    | {!SQL_standard_keyword_behavior}? strictNonReserved
+    ;
+
 strictIdentifier
     : IDENTIFIER              #unquotedIdentifier
     | quotedIdentifier        #quotedIdentifierAlternative
     | {SQL_standard_keyword_behavior}? ansiNonReserved #unquotedIdentifier
     | {!SQL_standard_keyword_behavior}? nonReserved    #unquotedIdentifier
+    ;
+
+// simpleStrictIdentifier: like strictIdentifier but without IDENTIFIER('literal') support
+simpleStrictIdentifier
+    : IDENTIFIER              #simpleUnquotedIdentifier
+    | quotedIdentifier        #simpleQuotedIdentifierAlternative
+    | {SQL_standard_keyword_behavior}? ansiNonReserved #simpleUnquotedIdentifier
+    | {!SQL_standard_keyword_behavior}? nonReserved    #simpleUnquotedIdentifier
     ;
 
 quotedIdentifier
@@ -1062,11 +1086,25 @@ number
     | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
     ;
 
+integerValue
+    : INTEGER_VALUE                                                                          #integerVal
+    | parameterMarker                                                                        #parameterIntegerValue
+    ;
+
 alterColumnAction
     : TYPE dataType
     | commentSpec
     | colPosition
     | setOrDrop=(SET | DROP) NOT NULL
+    ;
+
+parameterMarker
+    : {parameter_substitution_enabled}? namedParameterMarker                                   #namedParameterMarkerRule
+    | {parameter_substitution_enabled}? QUESTION                                               #positionalParameterMarkerRule
+    ;
+
+namedParameterMarker
+    : COLON simpleIdentifier
     ;
 
 // When `SQL_standard_keyword_behavior=true`, there are 2 kinds of keywords in Spark SQL.
