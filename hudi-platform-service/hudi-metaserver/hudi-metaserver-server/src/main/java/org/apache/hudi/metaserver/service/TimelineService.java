@@ -29,8 +29,7 @@ import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.util.MetaserverTableUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -42,9 +41,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * Handle all timeline / instant / instant meta related requests.
  */
+@Slf4j
 public class TimelineService implements Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final List<TAction> ALL_ACTIONS = Arrays.asList(TAction.COMMIT, TAction.DELTACOMMIT,
       TAction.CLEAN, TAction.ROLLBACK, TAction.SAVEPOINT, TAction.REPLACECOMMIT, TAction.COMPACTION, TAction.RESTORE);
   private static final List<TState> PENDING_STATES = Arrays.asList(TState.REQUESTED, TState.INFLIGHT);
@@ -107,7 +106,7 @@ public class TimelineService implements Serializable {
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     if (store.instantExists(tableId, toInstant)) {
-      LOG.info("Instant " + toInstant + " has been already changed to");
+      log.info("Instant {} has been already changed to", toInstant);
       result.setSuccess(true);
       return result;
     }
@@ -124,7 +123,7 @@ public class TimelineService implements Serializable {
     HoodieInstantChangeResult result = new HoodieInstantChangeResult();
     Long tableId = MetaserverTableUtils.getTableId(store, db, tb);
     if (store.instantExists(tableId, toInstant)) {
-      LOG.info("Instant " + toInstant + " has been already changed to");
+      log.info("Instant {} has been already changed to", toInstant);
       result.setSuccess(true);
       return result;
     }
@@ -144,7 +143,7 @@ public class TimelineService implements Serializable {
       }
       store.deleteInstant(tableId, instant);
     } else {
-      LOG.info("Instant " + instant + " has been already deleted");
+      log.info("Instant {} has been already deleted", instant);
     }
     result.setSuccess(true);
     return result;
