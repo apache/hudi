@@ -19,17 +19,27 @@
 
 package org.apache.spark.sql.hudi.dml.insert
 
+import org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion
 import org.apache.hudi.sync.common.HoodieSyncTool
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.util.Utils
+import org.scalatest.BeforeAndAfterAll
 
 import java.io.File
 import java.util.Properties
 
-class TestInsertTableWithHiveSupport extends HoodieSparkSqlTestBase {
+class TestInsertTableWithHiveSupport extends HoodieSparkSqlTestBase with BeforeAndAfterAll {
+
+  // Skip tests on Java 11 and 17 due to Hive metastore incompatibility with Java 9+
+  // (URLClassLoader cast fails in SessionState)
+  override def beforeAll(): Unit = {
+    assume(getJavaVersion != 11 && getJavaVersion != 17,
+      "Test skipped on Java 11 and 17 due to Hive metastore incompatibility")
+    super.beforeAll()
+  }
 
   val metastoreDerbyLocation = "/tmp/hive_metastore_db"
 
