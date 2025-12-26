@@ -43,20 +43,18 @@ public class OrderingValueUtils {
    * @return Pair<Comparable, Comparable> Canonicalized ordering value pair with consistent types for comparison
    */
   public static Pair<Comparable, Comparable> canonicalizeOrderingValue(Comparable oldOrder, Comparable incomingOrder) {
-    // Case 1: Old value is Avro Utf8 type, new value is Java String type
-    // Convert Utf8 to String to unify as Java String type for comparison
     if (oldOrder instanceof Utf8 && incomingOrder instanceof String) {
+      // Case 1: Old value is Avro Utf8 type, new value is Java String type
+      // Convert Utf8 to String to unify as Java String type for comparison
       oldOrder = oldOrder.toString();
     } else if (incomingOrder instanceof Utf8 && oldOrder instanceof String) {
       // Case 2: New value is Avro Utf8 type, old value is Java String type
       // Convert Utf8 to String to unify as Java String type for comparison
       incomingOrder = incomingOrder.toString();
-    }
-
-    // Case 3: Old value is Avro Fixed type, new value is Java BigDecimal type
-    // Convert Fixed type to BigDecimal to unify as Java BigDecimal type for comparison
-    // Fixed type is typically used for storing decimal values (e.g., DECIMAL)
-    if (oldOrder instanceof GenericData.Fixed && incomingOrder instanceof BigDecimal) {
+    } else if (oldOrder instanceof GenericData.Fixed && incomingOrder instanceof BigDecimal) {
+      // Case 3: Old value is Avro Fixed type, new value is Java BigDecimal type
+      // Convert Fixed type to BigDecimal to unify as Java BigDecimal type for comparison
+      // Fixed type is typically used for storing decimal values (e.g., DECIMAL)
       oldOrder = (BigDecimal) HoodieAvroUtils.convertValueForSpecificDataTypes(((GenericData.Fixed) oldOrder).getSchema(), oldOrder, false);
     } else if (incomingOrder instanceof GenericData.Fixed && oldOrder instanceof BigDecimal) {
       // Case 4: New value is Avro Fixed type, old value is Java BigDecimal type
@@ -65,7 +63,6 @@ public class OrderingValueUtils {
     }
 
     // Return canonicalized ordering value pair ensuring both values have consistent types
-    // ImmutablePair is an immutable Pair implementation from Apache Commons Lang
     return Pair.of(oldOrder, incomingOrder);
   }
 }
