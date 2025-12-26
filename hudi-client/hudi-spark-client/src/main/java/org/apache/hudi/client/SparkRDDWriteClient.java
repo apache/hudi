@@ -377,6 +377,9 @@ public class SparkRDDWriteClient<T> extends
     try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(
         context.getStorageConf(), config, context, inFlightInstantTimestamp, tableConfig)) {
       if (writer.isInitialized()) {
+        if (writer.isPartitionsStateChanged()) {
+          metaClient.reloadTableConfig();
+        }
         writer.performTableServices(inFlightInstantTimestamp);
       }
     } catch (Exception e) {

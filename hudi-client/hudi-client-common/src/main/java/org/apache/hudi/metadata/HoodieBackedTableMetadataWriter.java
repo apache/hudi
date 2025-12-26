@@ -175,6 +175,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected HoodieTableMetaClient dataMetaClient;
   protected Option<HoodieMetadataMetrics> metrics;
   protected StorageConfiguration<?> storageConf;
+  private boolean isPartitionsStateChanged = false;
   protected final transient HoodieEngineContext engineContext;
   @Getter
   protected final List<MetadataPartitionType> enabledPartitionTypes;
@@ -519,6 +520,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         LOG.error(errMsg, e);
         throw new HoodieMetadataException(errMsg, e);
       }
+      isPartitionsStateChanged = true;
     }
     return true;
   }
@@ -2218,4 +2220,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, O> initializeWriteClient();
+
+  public boolean isPartitionsStateChanged() {
+    return isPartitionsStateChanged;
+  }
+
 }
