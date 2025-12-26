@@ -3096,19 +3096,16 @@ public class HoodieTableMetadataUtil {
    * required for initializing the metadata table. Saving limited properties reduces the total memory footprint when
    * a very large number of files are present in the dataset being initialized.
    */
+  @Getter(AccessLevel.PACKAGE)
   public static class DirectoryInfo implements Serializable {
 
     // Relative path of the directory (relative to the base directory)
-    @Getter(AccessLevel.PACKAGE)
     private final String relativePath;
     // Map of filenames within this partition to their respective sizes
-    @Getter(AccessLevel.PACKAGE)
     private final Map<String, Long> filenameToSizeMap;
     // List of directories within this partition
-    @Getter(AccessLevel.PACKAGE)
     private final List<StoragePath> subDirectories = new ArrayList<>();
     // Is this a hoodie partition
-    @Getter(AccessLevel.PACKAGE)
     private boolean isHoodiePartition = false;
 
     public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {

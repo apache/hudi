@@ -30,6 +30,7 @@ import lombok.Value;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 import static org.apache.hudi.stats.ValueMetadata.getEmptyValueMetadata;
 
@@ -64,6 +65,11 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
   public Object getMaxValueWrapped() {
     return getValueMetadata().wrapValue(getMaxValue());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNullCount());
   }
 
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> create(String filePath,
