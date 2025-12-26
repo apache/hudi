@@ -467,7 +467,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private String getTableDoc() {
     try {
-      return tableSchemaResolver.getTableAvroSchema(true).getDoc();
+      return tableSchemaResolver.getTableSchema(true).getDoc().orElseGet(() -> "");
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get schema's doc from storage : ", e);
     }
@@ -476,10 +476,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<FieldSchema> getStorageFieldSchemas() {
     try {
-      return tableSchemaResolver.getTableAvroSchema(true)
+      return tableSchemaResolver.getTableSchema(true)
           .getFields()
           .stream()
-          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().toAvroType().getName(), f.doc()))
           .collect(Collectors.toList());
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get field schemas from storage : ", e);

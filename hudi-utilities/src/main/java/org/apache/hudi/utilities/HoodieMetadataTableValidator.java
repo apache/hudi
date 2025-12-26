@@ -1655,8 +1655,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     for (String logFilePathStr : logFilePathSet) {
       HoodieLogFormat.Reader reader = null;
       try {
-        HoodieSchema readerSchema =
-            HoodieSchema.fromAvroSchema(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr)));
+        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr));
         if (readerSchema == null) {
           LOG.warn("Cannot read schema from log file {}. Skip the check as it's likely being written by an inflight instant.", logFilePathStr);
           continue;

@@ -279,7 +279,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
       .select("id", "name", "value", "version")
       .take(1)(0)
     assertEquals(Row(1, "a1", 10, 1000), result1)
-    val schema1 = tableSchemaResolver.getTableAvroSchema(firstCommit)
+    val schema1 = tableSchemaResolver.getTableSchema(firstCommit)
     assertNull(schema1.getField("year"))
     assertNull(schema1.getField("month"))
 
@@ -290,7 +290,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
       .select("id", "name", "value", "version", "year")
       .take(1)(0)
     assertEquals(Row(1, "a1", 12, 1001, "2022"), result2)
-    val schema2 = tableSchemaResolver.getTableAvroSchema(secondCommit)
+    val schema2 = tableSchemaResolver.getTableSchema(secondCommit)
     assertNotNull(schema2.getField("year"))
     assertNull(schema2.getField("month"))
 
@@ -301,7 +301,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
       .select("id", "name", "value", "version", "year", "month")
       .take(1)(0)
     assertEquals(Row(1, "a1", 13, 1002, "2022", "08"), result3)
-    val schema3 = tableSchemaResolver.getTableAvroSchema(thirdCommit)
+    val schema3 = tableSchemaResolver.getTableSchema(thirdCommit)
     assertNotNull(schema3.getField("year"))
     assertNotNull(schema3.getField("month"))
   }

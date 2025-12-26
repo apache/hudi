@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -36,15 +37,20 @@ import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -1758,5 +1764,228 @@ public class TestHoodieSchemaUtils {
     // For simple 2-element nullable union, should use fast path
     HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
     assertEquals(HoodieSchemaType.STRING, result.getType());
+  }
+
+  @Test
+  public void testToJavaDefaultValueNull() {
+    // Field with no default value
+    HoodieSchemaField field = HoodieSchemaField.of("testField", HoodieSchema.create(HoodieSchemaType.STRING));
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNull(result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueNullValue() {
+    // Field with explicit NULL default value
+    HoodieSchemaField field = HoodieSchemaField.of("testField",
+        HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)),
+        null,
+        HoodieSchema.NULL_VALUE);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNull(result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueString() {
+    String defaultVal = "defaultString";
+    HoodieSchemaField field = HoodieSchemaField.of("stringField",
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueInt() {
+    int defaultVal = 42;
+    HoodieSchemaField field = HoodieSchemaField.of("intField",
+        HoodieSchema.create(HoodieSchemaType.INT),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueLong() {
+    long defaultVal = 12345L;
+    HoodieSchemaField field = HoodieSchemaField.of("longField",
+        HoodieSchema.create(HoodieSchemaType.LONG),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueFloat() {
+    float defaultVal = 3.14f;
+    HoodieSchemaField field = HoodieSchemaField.of("floatField",
+        HoodieSchema.create(HoodieSchemaType.FLOAT),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueDouble() {
+    double defaultVal = 2.718;
+    HoodieSchemaField field = HoodieSchemaField.of("doubleField",
+        HoodieSchema.create(HoodieSchemaType.DOUBLE),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueBoolean() {
+    HoodieSchemaField field = HoodieSchemaField.of("boolField",
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        null,
+        true);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(true, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueBytes() {
+    byte[] defaultBytes = new byte[]{1, 2, 3, 4};
+    HoodieSchemaField field = HoodieSchemaField.of("bytesField",
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        null,
+        defaultBytes);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertArrayEquals(defaultBytes, (byte[]) result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueEnum() {
+    HoodieSchema enumSchema = HoodieSchema.createEnum("Status", null, null, Arrays.asList("ACTIVE", "INACTIVE", "PENDING"));
+    HoodieSchemaField field = HoodieSchemaField.of("statusField",
+        enumSchema,
+        null,
+        "ACTIVE");
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals("ACTIVE", result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueArray() {
+    // Create array schema with int elements
+    HoodieSchema arraySchema = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT));
+
+    // Default value as a list
+    List<Integer> defaultList = Arrays.asList(1, 2, 3);
+    HoodieSchemaField field = HoodieSchemaField.of("arrayField",
+        arraySchema,
+        null,
+        defaultList);
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNotNull(result);
+    assertInstanceOf(Collection.class, result);
+    assertArrayEquals(defaultList.toArray(), ((Collection<?>) result).toArray());
+  }
+
+  @Test
+  public void testToJavaDefaultValueMap() {
+    // Create map schema with string values
+    HoodieSchema mapSchema = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // Default value as a map
+    Map<String, String> defaultMap = new HashMap<>();
+    defaultMap.put("key1", "value1");
+    defaultMap.put("key2", "value2");
+
+    HoodieSchemaField field = HoodieSchemaField.of("mapField",
+        mapSchema,
+        null,
+        defaultMap);
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNotNull(result);
+    // GenericData should return a map
+    assertInstanceOf(Map.class, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueRecord() {
+    // Create nested record schema
+    HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING), null, "default1"),
+            HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.INT), null, 10)
+        )
+    );
+
+    // Create a default record value
+    Map<String, Object> defaultRecord = new HashMap<>();
+    defaultRecord.put("field1", "default1");
+    defaultRecord.put("field2", 10);
+
+    HoodieSchemaField field = HoodieSchemaField.of("recordField",
+        nestedRecordSchema,
+        null,
+        defaultRecord);
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNotNull(result);
+    // GenericData should return a GenericRecord
+    assertInstanceOf(GenericRecord.class, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueNullableField() {
+    // Create nullable string field with default value
+    // With a non-null defaultValue, the union type must be ["string", null]
+    HoodieSchema nullableStringSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL));
+    HoodieSchemaField field = HoodieSchemaField.of("nullableField",
+        nullableStringSchema,
+        null,
+        "defaultValue");
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals("defaultValue", result);
+  }
+
+  @SuppressWarnings("DataFlowIssue")
+  @Test
+  public void testToJavaDefaultValueNullFieldArgument() {
+    // Should throw IllegalArgumentException for null field
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.toJavaDefaultValue(null));
+  }
+
+  @Test
+  public void testToJavaDefaultValueConsistencyWithAvro() {
+    // Test that HoodieSchemaUtils.toJavaDefaultValue produces equivalent results to HoodieAvroUtils.toJavaDefaultValue
+
+    // Test with primitive types
+    HoodieSchemaField stringField = HoodieSchemaField.of("stringField",
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        null,
+        "test");
+
+    Object hoodieResult = HoodieSchemaUtils.toJavaDefaultValue(stringField);
+    Object avroResult = HoodieAvroUtils.toJavaDefaultValue(stringField.getAvroField());
+
+    assertEquals(avroResult, hoodieResult);
+
+    // Test with int
+    HoodieSchemaField intField = HoodieSchemaField.of("intField",
+        HoodieSchema.create(HoodieSchemaType.INT),
+        null,
+        42);
+
+    Object hoodieIntResult = HoodieSchemaUtils.toJavaDefaultValue(intField);
+    Object avroIntResult = HoodieAvroUtils.toJavaDefaultValue(intField.getAvroField());
+
+    assertEquals(avroIntResult, hoodieIntResult);
   }
 }

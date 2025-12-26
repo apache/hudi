@@ -446,10 +446,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public List<FieldSchema> getStorageFieldSchemas() {
     try {
-      return tableSchemaResolver.getTableAvroSchema(false)
+      return tableSchemaResolver.getTableSchema(false)
           .getFields()
           .stream()
-          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().toAvroType().getName(), f.doc()))
           .collect(Collectors.toList());
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get field schemas from storage : ", e);

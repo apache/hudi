@@ -25,6 +25,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -41,7 +42,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -204,7 +204,7 @@ public class TableCommand {
               help = "File path to write schema") final String outputFilePath) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(client);
-    Schema schema = tableSchemaResolver.getTableAvroSchema();
+    HoodieSchema schema = tableSchemaResolver.getTableSchema();
     if (outputFilePath != null) {
       log.info("Latest table schema : " + schema.toString(true));
       writeToFile(outputFilePath, schema.toString(true));

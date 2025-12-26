@@ -133,7 +133,7 @@ public class SchemaEvolutionContext {
         json -> Option.ofNullable(new Schema.Parser().parse(json)));
     if (avroSchemaOpt == null) {
       // the code path should only be invoked in tests.
-      return new TableSchemaResolver(this.metaClient).getTableAvroSchema();
+      return new TableSchemaResolver(this.metaClient).getTableSchema().toAvroSchema();
     }
     return avroSchemaOpt.orElseThrow(() -> new HoodieValidationException("The avro schema cache should always be set up together with the internal schema cache"));
   }

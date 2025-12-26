@@ -143,7 +143,7 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
                                                           Configuration configs,
                                                           SparkAdapter sparkAdapter) {
     try {
-      StructType dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema());
+      StructType dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableSchema().toAvroSchema());
       return sparkAdapter.createOrcFileReader(false, sqlConf, options, configs, dataSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to broadcast ORC file reader", e);

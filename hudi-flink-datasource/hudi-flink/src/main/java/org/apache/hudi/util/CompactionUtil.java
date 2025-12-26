@@ -129,7 +129,7 @@ public class CompactionUtil {
    */
   public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchemaFromDataFile());
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
     }

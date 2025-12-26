@@ -109,7 +109,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.hudi.testutils.TestHoodieMetadataBase;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
@@ -892,7 +891,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage,
+      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage,
           logFile.getPath());
       if (writerSchema == null) {
         // not a data block
@@ -900,7 +899,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
 
       try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), HoodieSchema.fromAvroSchema(writerSchema))) {
+          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {
@@ -2875,7 +2874,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataColumnStatsRecords(List<HoodieLogFile> logFiles) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage,
+      HoodieSchema writerSchema = TableSchemaResolver.readSchemaFromLogFile(storage,
           logFile.getPath());
       if (writerSchema == null) {
         // not a data block
@@ -2883,7 +2882,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
 
       try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), HoodieSchema.fromAvroSchema(writerSchema))) {
+          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {

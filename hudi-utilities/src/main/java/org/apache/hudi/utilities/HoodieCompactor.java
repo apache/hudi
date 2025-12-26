@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -35,7 +36,6 @@ import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionS
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -286,7 +286,7 @@ public class HoodieCompactor {
 
   private String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    Schema schema = schemaUtil.getTableAvroSchema(false);
+    HoodieSchema schema = schemaUtil.getTableSchema(false);
     return schema.toString();
   }
 

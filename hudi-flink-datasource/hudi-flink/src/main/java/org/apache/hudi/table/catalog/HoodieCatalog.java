@@ -20,6 +20,7 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -35,7 +36,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -259,12 +259,12 @@ public class HoodieCatalog extends AbstractCatalog {
 
     final String path = inferTablePath(catalogPathStr, tablePath);
     Map<String, String> options = TableOptionProperties.loadFromProperties(path, hadoopConf);
-    final Schema latestSchema = getLatestTableSchema(path);
+    final HoodieSchema latestSchema = getLatestTableSchema(path);
     if (latestSchema != null) {
       List<String> pkColumns = TableOptionProperties.getPkColumns(options);
       // if the table is initialized from spark, the write schema is nullable for pk columns.
       DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
-          AvroSchemaConverter.convertToDataType(latestSchema), pkColumns);
+          AvroSchemaConverter.convertToDataType(latestSchema.toAvroSchema()), pkColumns);
       org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
           .fromRowDataType(tableDataType);
       final String pkConstraintName = TableOptionProperties.getPkConstraintName(options);
@@ -592,11 +592,11 @@ public class HoodieCatalog extends AbstractCatalog {
     throw new UnsupportedOperationException("alterPartitionColumnStatistics is not implemented.");
   }
 
-  private @Nullable Schema getLatestTableSchema(String path) {
+  private @Nullable HoodieSchema getLatestTableSchema(String path) {
     if (path != null && StreamerUtil.tableExists(path, hadoopConf)) {
       try {
         HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
-        return new TableSchemaResolver(metaClient).getTableAvroSchema(false); // change log mode is not supported now
+        return new TableSchemaResolver(metaClient).getTableSchema(false); // change log mode is not supported now
       } catch (Throwable throwable) {
         log.warn("Failed to resolve the latest table schema.", throwable);
         // ignored

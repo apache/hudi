@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSchemaConversionUtils, ScalaAssertionSupport, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
@@ -125,7 +125,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       tableMetaClient.reloadActiveTimeline()
 
       val resolver = new TableSchemaResolver(tableMetaClient)
-      val latestTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema(false))
+      val latestTableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(resolver.getTableSchema(false))
 
       val df =
         spark.read.format("org.apache.hudi")
