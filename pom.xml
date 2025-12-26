@@ -2694,7 +2694,7 @@
         <antlr.version>4.13.1</antlr.version>
         <fasterxml.spark4.version>2.18.2</fasterxml.spark4.version>
         <fasterxml.version>${fasterxml.spark4.version}</fasterxml.version>
-        <fasterxml.jackson.annotation.version>${fasterxml.spark3.version}</fasterxml.jackson.annotation.version>
+        <fasterxml.jackson.annotation.version>${fasterxml.spark4.version}</fasterxml.jackson.annotation.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark4.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark4.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark4.version}
