@@ -133,7 +133,7 @@ run_docker_tests() {
 
   mvn -e test -D$SPARK_PROFILE -D$SCALA_PROFILE -Djava17 -Duse.external.hdfs=true \
      -Dtest=org.apache.hudi.common.functional.TestHoodieLogFormat,org.apache.hudi.common.util.TestDFSPropertiesConfiguration,org.apache.hudi.common.fs.TestHoodieWrapperFileSystem \
-     -DfailIfNoTests=false -pl hudi-common -Pwarn-log
+     -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-common -Pwarn-log
 
   if [ "$?" -ne 0 ]; then
     echo "::error::docker_test_java17.sh Hudi maven tests failed"
