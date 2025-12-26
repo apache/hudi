@@ -263,46 +263,49 @@ public class TestRocksDBDAO {
     }
 
     ExecutorService executor = Executors.newFixedThreadPool(numThreads);
-    CountDownLatch startLatch = new CountDownLatch(1);
-    CountDownLatch doneLatch = new CountDownLatch(numThreads);
-    AtomicReference<Throwable> error = new AtomicReference<>(null);
+    try {
+      CountDownLatch startLatch = new CountDownLatch(1);
+      CountDownLatch doneLatch = new CountDownLatch(numThreads);
+      AtomicReference<Throwable> error = new AtomicReference<>(null);
 
-    // Spawn threads that concurrently access different column families
-    for (int t = 0; t < numThreads; t++) {
-      final int threadId = t;
-      executor.submit(() -> {
-        try {
-          // Wait for all threads to be ready
-          startLatch.await();
+      // Spawn threads that concurrently access different column families
+      for (int t = 0; t < numThreads; t++) {
+        final int threadId = t;
+        executor.submit(() -> {
+          try {
+            // Wait for all threads to be ready
+            startLatch.await();
 
-          for (int i = 0; i < numOperationsPerThread; i++) {
-            // Each thread accesses different column families to trigger
-            // concurrent calls to getSerializerForColumnFamily()
-            String family = columnFamilies.get((threadId + i) % numColumnFamilies);
-            String key = "key_" + threadId + "_" + i;
-            String value = "value_" + threadId + "_" + i;
+            for (int i = 0; i < numOperationsPerThread; i++) {
+              // Each thread accesses different column families to trigger
+              // concurrent calls to getSerializerForColumnFamily()
+              String family = columnFamilies.get((threadId + i) % numColumnFamilies);
+              String key = "key_" + threadId + "_" + i;
+              String value = "value_" + threadId + "_" + i;
 
-            dbManager.put(family, key, value);
-            String retrieved = dbManager.get(family, key);
-            assertEquals(value, retrieved, "Value mismatch for key: " + key);
+              dbManager.put(family, key, value);
+              String retrieved = dbManager.get(family, key);
+              assertEquals(value, retrieved, "Value mismatch for key: " + key);
+            }
+          } catch (Throwable t1) {
+            error.compareAndSet(null, t1);
+          } finally {
+            doneLatch.countDown();
           }
-        } catch (Throwable t1) {
-          error.compareAndSet(null, t1);
-        } finally {
-          doneLatch.countDown();
-        }
-      });
+        });
+      }
+
+      startLatch.countDown();
+
+      // Wait for all threads to complete
+      boolean completed = doneLatch.await(60, TimeUnit.SECONDS);
+
+      assertTrue(completed, "Test timed out - threads did not complete in time");
+      assertNull(error.get(), "Concurrent access caused an exception: "
+          + (error.get() != null ? error.get().getMessage() : ""));
+    } finally {
+      executor.shutdownNow();
     }
-
-    startLatch.countDown();
-
-    // Wait for all threads to complete
-    boolean completed = doneLatch.await(60, TimeUnit.SECONDS);
-    executor.shutdown();
-
-    assertTrue(completed, "Test timed out - threads did not complete in time");
-    assertNull(error.get(), "Concurrent access caused an exception: "
-        + (error.get() != null ? error.get().getMessage() : ""));
   }
 
   /**
