@@ -446,7 +446,7 @@ class HoodieSparkSqlWriterInternal {
             }
 
             // Issue the delete.
-            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false).toString
+            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableSchema(false).toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
                 schemaStr, path, tblName,
                 parameters.asJava))
@@ -683,8 +683,7 @@ class HoodieSparkSqlWriterInternal {
 
   private def getLatestTableSchema(tableMetaClient: HoodieTableMetaClient, schemaFromCatalog: Option[HoodieSchema]): Option[HoodieSchema] = {
     val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-    toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
-      .map(HoodieSchema.fromAvroSchema)
+    toScalaOption(tableSchemaResolver.getTableSchemaFromLatestCommit(false))
       .orElse(schemaFromCatalog)
   }
 
