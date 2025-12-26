@@ -33,6 +33,7 @@ import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -56,6 +57,8 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMM
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.io.storage.LanceTestUtils.createRow;
+import static org.apache.hudi.io.storage.LanceTestUtils.createRowWithMetaFields;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -107,7 +110,8 @@ public class TestHoodieSparkLanceWriter {
     // Verify using LanceFileReader
     assertTrue(storage.exists(path), "Lance file should exist");
 
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteRowWithMetadata", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -174,7 +178,8 @@ public class TestHoodieSparkLanceWriter {
     // Verify using LanceFileReader
     assertTrue(storage.exists(path));
 
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteRowWithoutMetadataPopulation", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -212,7 +217,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify file exists and has correct record count
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "testWriteRowSimple", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(1, reader.numRows());
     }
@@ -234,7 +240,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify all records were written
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(recordCount, reader.numRows(), "All records should be written");
     }
@@ -268,7 +275,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify all types were written correctly
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -307,7 +315,8 @@ public class TestHoodieSparkLanceWriter {
     }
 
     // Verify nulls are preserved
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
 
@@ -384,13 +393,14 @@ public class TestHoodieSparkLanceWriter {
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_struct.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
         path, schema, instantTime, taskContextSupplier, storage, false)) {
-      for (InternalRow row : rows) {
-        writer.writeRow("key" + rows.indexOf(row), row);
+      for (int i = 0; i < rows.size(); i++) {
+        writer.writeRow("key" + i, rows.get(i));
       }
     }
 
     assertTrue(storage.exists(path), "Lance file with struct type should exist");
-    try (BufferAllocator allocator = new RootAllocator();
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             "test", HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       assertEquals(rows.size(), reader.numRows(), "Row count should match");
       assertEquals(3, reader.schema().getFields().size(), "Should have 3 top-level fields (id, name, address)");
@@ -416,40 +426,6 @@ public class TestHoodieSparkLanceWriter {
         .add("id", DataTypes.IntegerType, false)
         .add("name", DataTypes.StringType, true)
         .add("age", DataTypes.LongType, true);
-  }
-
-  private InternalRow createRowWithMetaFields(Object... userValues) {
-    // Create row with PLACEHOLDER meta fields (will be updated by writer) + user data
-    Object[] allValues = new Object[5 + userValues.length];
-
-    // Meta fields - use empty strings as placeholders
-    allValues[0] = UTF8String.fromString(""); // commit_time
-    allValues[1] = UTF8String.fromString(""); // commit_seqno
-    allValues[2] = UTF8String.fromString(""); // record_key
-    allValues[3] = UTF8String.fromString(""); // partition_path
-    allValues[4] = UTF8String.fromString(""); // file_name
-
-    // Copy user values
-    for (int i = 0; i < userValues.length; i++) {
-      allValues[5 + i] = processValue(userValues[i]);
-    }
-
-    return new GenericInternalRow(allValues);
-  }
-
-  private InternalRow createRow(Object... values) {
-    Object[] processedValues = new Object[values.length];
-    for (int i = 0; i < values.length; i++) {
-      processedValues[i] = processValue(values[i]);
-    }
-    return new GenericInternalRow(processedValues);
-  }
-
-  private Object processValue(Object value) {
-    if (value instanceof String) {
-      return UTF8String.fromString((String) value);
-    }
-    return value;
   }
 
   private boolean hasField(VectorSchemaRoot root, String fieldName) {
