@@ -20,6 +20,8 @@ package org.apache.hudi.helper;
 
 import org.apache.hudi.connect.transaction.TransactionParticipant;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -44,8 +46,11 @@ public class MockKafkaConnect implements SinkTaskContext {
 
   private final TopicPartition testPartition;
 
+  @Setter
   private TransactionParticipant participant;
+  @Getter
   private long currentKafkaOffset;
+  @Getter
   private boolean isPaused;
   private boolean isResetOffset;
 
@@ -56,20 +61,8 @@ public class MockKafkaConnect implements SinkTaskContext {
     isResetOffset = false;
   }
 
-  public void setParticipant(TransactionParticipant participant) {
-    this.participant = participant;
-  }
-
-  public boolean isPaused() {
-    return isPaused;
-  }
-
   public boolean isResumed() {
     return !isPaused;
-  }
-
-  public long getCurrentKafkaOffset() {
-    return currentKafkaOffset;
   }
 
   @Override

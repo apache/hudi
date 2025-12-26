@@ -20,15 +20,20 @@ package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.connect.writers.ConnectWriter;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * Stores all the state for the current Transaction within a
  * {@link TransactionParticipant}.
  * @param <T> The type of status returned by the underlying writer.
  */
+@Getter
 public class TransactionInfo<T> {
 
   private final String commitTime;
   private final ConnectWriter<T> writer;
+  @Setter
   private long expectedKafkaOffset;
   private boolean commitInitiated;
 
@@ -37,26 +42,6 @@ public class TransactionInfo<T> {
     this.writer = writer;
     this.expectedKafkaOffset = 0;
     this.commitInitiated = false;
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public ConnectWriter<T> getWriter() {
-    return writer;
-  }
-
-  public long getExpectedKafkaOffset() {
-    return expectedKafkaOffset;
-  }
-
-  public boolean isCommitInitiated() {
-    return commitInitiated;
-  }
-
-  public void setExpectedKafkaOffset(long expectedKafkaOffset) {
-    this.expectedKafkaOffset = expectedKafkaOffset;
   }
 
   public void commitInitiated() {
