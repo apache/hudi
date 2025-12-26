@@ -29,13 +29,17 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 /**
@@ -131,29 +135,92 @@ public class ReflectionUtils {
    * @return Stream of Class names in package
    */
   public static Stream<String> getTopLevelClassesInClasspath(Class<?> clazz) {
+    Package pkg = clazz.getPackage();
+    if (pkg == null) {
+      return Stream.empty();
+    }
+    String packageName = pkg.getName();
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    String packageName = clazz.getPackage().getName();
     String path = packageName.replace('.', '/');
-    Enumeration<URL> resources = null;
+
     try {
-      resources = classLoader.getResources(path);
+      return Collections.list(classLoader.getResources(path)).stream()
+              .flatMap(url -> getClassesFromResource(url, packageName).stream());
     } catch (IOException e) {
-      LOG.error("Unable to fetch Resources in package " + e.getMessage());
+      LOG.error("Unable to fetch resources for package {}", packageName, e);
+      return Stream.empty();
     }
-    List<File> directories = new ArrayList<>();
-    while (Objects.requireNonNull(resources).hasMoreElements()) {
-      URL resource = resources.nextElement();
+  }
+
+  /**
+   * Gets classes from a resource URL, handling both file system and JAR resources.
+   *
+   * @param url         The resource URL
+   * @param packageName The package name
+   * @return List of class names
+   */
+  private static List<String> getClassesFromResource(URL url, String packageName) {
+    String protocol = url.getProtocol();
+    if ("file".equals(protocol)) {
       try {
-        directories.add(new File(resource.toURI()));
+        File directory = new File(url.toURI());
+        return findClasses(directory, packageName);
       } catch (URISyntaxException e) {
-        LOG.error("Unable to get " + e.getMessage());
+        LOG.error("Unable to resolve URI: {}", url, e);
+        return Collections.emptyList();
       }
+    } else if ("jar".equals(protocol)) {
+      return findClassesInJar(url, packageName);
+    } else {
+      LOG.warn("Unsupported protocol: {}", protocol);
+      return Collections.emptyList();
     }
+  }
+
+  /**
+   * Finds all classes in a JAR file for a given package.
+   *
+   * @param url         The JAR URL
+   * @param packageName The package name
+   * @return List of class names
+   */
+  private static List<String> findClassesInJar(URL url, String packageName) {
     List<String> classes = new ArrayList<>();
-    for (File directory : directories) {
-      classes.addAll(findClasses(directory, packageName));
+    String path = packageName.replace('.', '/');
+
+    try {
+      String jarPath = url.getPath();
+      if (jarPath.startsWith("jar:")) {
+        jarPath = jarPath.substring(4);
+      }
+      int separatorIndex = jarPath.indexOf("!");
+      if (separatorIndex != -1) {
+        jarPath = jarPath.substring(0, separatorIndex);
+      }
+
+      jarPath = URLDecoder.decode(jarPath, StandardCharsets.UTF_8.name());
+
+      try (JarFile jarFile = new JarFile(jarPath)) {
+        jarFile.stream()
+            .map(JarEntry::getName)
+            .filter(name -> name.startsWith(path) && name.endsWith(".class"))
+            .filter(name -> {
+              String relativePath = name.substring(path.length());
+              if (relativePath.startsWith("/")) {
+                relativePath = relativePath.substring(1);
+              }
+              return !relativePath.contains("/");
+            })
+            .forEach(name -> {
+              String className = name.replace('/', '.').substring(0, name.length() - 6);
+              classes.add(className);
+            });
+      }
+    } catch (IOException e) {
+      LOG.error("Unable to read JAR file from URL: {}", url, e);
     }
-    return classes.stream();
+
+    return classes;
   }
 
   /**
