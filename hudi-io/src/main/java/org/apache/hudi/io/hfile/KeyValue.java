@@ -19,16 +19,22 @@
 
 package org.apache.hudi.io.hfile;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 
 /**
  * Represents a key-value pair in the data block.
  */
+@Getter
 public class KeyValue {
+
   // Key part starts after the key length (integer) and value length (integer)
   public static final int KEY_OFFSET = SIZEOF_INT32 * 2;
   private final byte[] bytes;
+  @Getter(AccessLevel.NONE)
   private final int offset;
   private final Key key;
 
@@ -36,17 +42,6 @@ public class KeyValue {
     this.bytes = bytes;
     this.offset = offset;
     this.key = new Key(bytes, offset + KEY_OFFSET, readInt(bytes, offset));
-  }
-
-  /**
-   * @return the backing array of the entire KeyValue (all KeyValue fields are in a single array)
-   */
-  public byte[] getBytes() {
-    return bytes;
-  }
-
-  public Key getKey() {
-    return key;
   }
 
   /**
