@@ -969,7 +969,7 @@ public class TestHoodieAvroUtils {
     HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
 
     String[] userSortColumns = new String[] {"non_pii_col", "timestamp"};
-    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, Schema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
+    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, HoodieSchema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
     if (suffixRecordKey) {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5, "record1"}, sortColumnValues);
     } else {

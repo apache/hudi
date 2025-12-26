@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -980,11 +981,11 @@ public class HoodieAvroUtils {
    */
   public static Object[] getSortColumnValuesWithPartitionPathAndRecordKey(HoodieRecord record,
                                                                           String[] columns,
-                                                                          Schema schema,
+                                                                          HoodieSchema schema,
                                                                           boolean suffixRecordKey,
                                                                           boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema, PROPERTIES).get().getData();
+      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema.toAvroSchema(), PROPERTIES).get().getData();
       int numColumns = columns.length;
       Object[] values = new Object[columns.length + 1 + (suffixRecordKey ? 1 : 0)];
       values[0] = record.getPartitionPath();
