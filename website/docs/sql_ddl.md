@@ -77,7 +77,7 @@ should be specified as `PARTITIONED BY (dt, hh)`.
 
 As discussed [here](quick-start-guide.md#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
 key for each new record in the examples so far. If you want to use an existing field as the key, you can set the `primaryKey` option. 
-Typically, this is also accompanied by configuring ordering fields (via `preCombineField` option) to deal with out-of-order data and potential 
+Typically, this is also accompanied by configuring ordering fields (via `orderingFields` option) to deal with out-of-order data and potential 
 duplicate records with the same key in the incoming writes.
 
 :::note
@@ -86,7 +86,7 @@ this materializes a composite key of the two fields, which can be useful for exp
 :::
 
 Here is an example of creating a table using both options. Typically, a field that denotes the time of the event or
-fact, e.g., order creation time, event generation time etc., is used as the ordering field (via `preCombineField`). Hudi resolves multiple versions
+fact, e.g., order creation time, event generation time etc., is used as the ordering field (via `orderingFields`). Hudi resolves multiple versions
 of the same record by ordering based on this field when queries are run on the table.
 
 ```sql
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS hudi_table_keyed (
 TBLPROPERTIES (
   type = 'cow',
   primaryKey = 'id',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 );
 ```
 
@@ -118,13 +118,13 @@ CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
 TBLPROPERTIES (
   type = 'mor',
   primaryKey = 'id',
-  precombineField = 'ts',
+  orderingFields = 'ts',
   recordMergeMode = 'EVENT_TIME_ORDERING'
 )
 LOCATION 'file:///tmp/hudi_table_merge_mode/';
 ```
 
-With `EVENT_TIME_ORDERING`, the record with the larger event time (specified via `precombineField` ordering field) overwrites the record with the
+With `EVENT_TIME_ORDERING`, the record with the larger event time (specified via `orderingFields`) overwrites the record with the
 smaller event time on the same key, regardless of transaction's commit time. Users can set `CUSTOM` mode to provide their own
 merge logic. With `CUSTOM` merge mode, you can provide a custom class that implements the merge logic. The interfaces 
 to implement is explained in detail [here](record_merger.md#custom).
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS hudi_table_merge_mode_custom (
 TBLPROPERTIES (
   type = 'mor',
   primaryKey = 'id',
-  precombineField = 'ts',
+  orderingFields = 'ts',
   recordMergeMode = 'CUSTOM',
   'hoodie.record.merge.strategy.id' = '<unique-uuid>'
 )
@@ -177,7 +177,7 @@ CREATE TABLE hudi_table_ctas
 USING hudi
 TBLPROPERTIES (
   type = 'cow',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 )
 PARTITIONED BY (dt)
 AS SELECT * FROM parquet_table;
@@ -196,7 +196,7 @@ CREATE TABLE hudi_table_ctas
 USING hudi
 TBLPROPERTIES (
   type = 'cow',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 )
 AS SELECT * FROM parquet_table;
 ```
@@ -579,10 +579,10 @@ Users can set table properties while creating a table. The important table prope
 |------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](table_types.md)                                                               |
 | primaryKey | uuid | The primary key field names of the table separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto-generate primary keys. If explicitly set, primary key generation will honor user configuration.                                  |
-| preCombineField |  | The ordering field(s) of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the ordering field value. |
+| orderingFields |  | The ordering field(s) of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the ordering field value. |
 
 :::note
-`primaryKey`, `preCombineField`, and `type` and other properties are case-sensitive. 
+`primaryKey`, `orderingFields`, and `type` and other properties are case-sensitive. 
 :::
 
 #### Passing Lock Providers for Concurrent Writers
@@ -833,7 +833,7 @@ WITH (
 'connector' = 'hudi',
 'path' = 'file:///tmp/hudi_table',
 'table.type' = 'MERGE_ON_READ',
-'precombine.field' = 'ts'
+'ordering.fields' = 'ts'
 );
 ```
 
