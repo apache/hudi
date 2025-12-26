@@ -22,6 +22,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -35,6 +37,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -528,8 +531,9 @@ public class UtilitiesTestBase {
         final TypeDescription type = orcSchema.getChildren().get(c);
 
         Object fieldValue = record.get(thisField);
-        Schema.Field avroField = record.getSchema().getField(thisField);
-        AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+        HoodieSchemaField field = HoodieSchema.fromAvroSchema(record.getSchema()).getField(thisField)
+            .orElseThrow(() -> new HoodieSchemaException("Could not find field: " + thisField));
+        AvroOrcUtils.addToVector(type, colVector, field.schema(), fieldValue, batch.size);
       }
     }
   }

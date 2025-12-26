@@ -379,7 +379,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-            .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+            .of(metaClient, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
         Set<String> allPartitions = lastCommit.updatedRecords.stream()
             .map(record -> record.getPartitionPath())
@@ -499,7 +499,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-            .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+            .of(metaClient, HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
         Set<String> allPartitions = lastCommit.updatedRecords.stream()
             .map(record -> record.getPartitionPath())

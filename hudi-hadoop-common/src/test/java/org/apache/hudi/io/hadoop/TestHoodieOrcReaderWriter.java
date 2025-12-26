@@ -26,6 +26,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -35,7 +36,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.CompressionKind;
@@ -62,7 +62,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
   protected HoodieAvroOrcWriter createWriter(
-      Schema avroSchema, boolean populateMetaFields) throws Exception {
+      HoodieSchema schema, boolean populateMetaFields) throws Exception {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.00001, -1, BloomFilterTypeCode.SIMPLE.name());
     StorageConfiguration conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
     int orcStripSize = Integer.parseInt(HoodieStorageConfig.ORC_STRIPE_SIZE.defaultValue());
@@ -74,7 +74,7 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
     String instantTime = "000";
-    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, avroSchema, mockTaskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, schema, mockTaskContextSupplier);
   }
 
   @Override

@@ -19,7 +19,8 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.MessageType;
 
@@ -31,7 +32,7 @@ public class ParquetTableSchemaResolver extends TableSchemaResolver {
     super(metaClient);
   }
 
-  public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
+  public static MessageType convertAvroSchemaToParquet(HoodieSchema schema, Configuration hadoopConf) {
     return getAvroSchemaConverter(hadoopConf).convert(schema);
   }
 }

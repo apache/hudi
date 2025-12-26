@@ -310,8 +310,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
 
   private def getListType(hadoopConf: Configuration, path: StoragePath): String = {
     val reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, new HadoopStorageConfiguration(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
-    //TODO boundary to revisit in later pr to use HoodieSchema directly
-    val schema = ParquetTableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema.toAvroSchema, hadoopConf)
+    val schema = ParquetTableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema, hadoopConf)
 
     val list = schema.getFields.asScala.find(_.getName == TestParquetReaderCompatibility.listFieldName).get
     val groupType = list.asGroupType()

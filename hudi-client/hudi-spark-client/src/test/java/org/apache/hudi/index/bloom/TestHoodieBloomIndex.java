@@ -160,7 +160,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter, Option.of(context));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
@@ -289,7 +289,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), filter, metadataWriter, Option.of(context));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter, metadataWriter, Option.of(context));
 
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
     final String commitTime = "0000001";
@@ -370,7 +370,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter, Option.of(context));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -460,7 +460,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter, Option.of(context));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -540,7 +540,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter, Option.of(context));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -634,7 +634,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1,
         BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), filter, Option.of(context));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter, Option.of(context));
     String fileId = testTable.addCommit("000").getFileIdWithInserts("2016/01/31", record1);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));

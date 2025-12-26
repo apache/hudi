@@ -107,7 +107,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieSparkClientTestHarness {
     HoodieData<HoodieRecord<IndexedRecord>> taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context, table);
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
 
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(table, SCHEMA.toAvroSchema());
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(table, SCHEMA);
 
     if (isInsert) {
       testTable.addCommit("001").withInserts("2016/01/31", getRecordFileId(record1), record1);

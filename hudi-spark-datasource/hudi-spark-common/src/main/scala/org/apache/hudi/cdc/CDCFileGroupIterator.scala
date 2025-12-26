@@ -149,7 +149,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val tableSchemaOpt = if (schema != null) {
     val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(schema.getAvroSchema)
+    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(schema)
     org.apache.hudi.common.util.Option.of(parquetSchema)
   } else {
     org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()

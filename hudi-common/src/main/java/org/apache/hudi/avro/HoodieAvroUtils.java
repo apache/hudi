@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -245,10 +246,6 @@ public class HoodieAvroUtils {
     return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT || type == Schema.Type.DOUBLE;
   }
 
-  public static boolean isMetadataField(String fieldName) {
-    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
-  }
-
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
     return HoodieAvroUtils.addMetadataFields(originalSchema);
   }
@@ -307,7 +304,7 @@ public class HoodieAvroUtils {
     }
 
     for (Schema.Field field : schema.getFields()) {
-      if (!isMetadataField(field.name())) {
+      if (!HoodieSchemaUtils.isMetadataField(field.name())) {
         Schema.Field newField = createNewSchemaField(field);
         for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
           newField.addProp(prop.getKey(), prop.getValue());
@@ -1095,7 +1092,7 @@ public class HoodieAvroUtils {
         for (int i = 0; i < newSchema.getFields().size(); i++) {
           Schema.Field newField = newSchema.getFields().get(i);
           String newFieldName = newField.name();
-          if (skipMetadataFields && isMetadataField(newFieldName)) {
+          if (skipMetadataFields && HoodieSchemaUtils.isMetadataField(newFieldName)) {
             continue;
           }
           fieldNames.push(newFieldName);

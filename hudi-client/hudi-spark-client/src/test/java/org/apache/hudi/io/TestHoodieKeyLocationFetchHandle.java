@@ -58,7 +58,7 @@ import java.util.Properties;
 import scala.Tuple2;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA_WITH_METADATA_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.Transformations.recordsToPartitionRecordsMap;
@@ -96,7 +96,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
     List<HoodieRecord> records = dataGen.generateInserts(makeNewCommitTime(), 100);
     Map<String, List<HoodieRecord>> partitionRecordsMap = recordsToPartitionRecordsMap(records);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, AVRO_SCHEMA_WITH_METADATA_FIELDS);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, HOODIE_SCHEMA_WITH_METADATA_FIELDS);
     Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList =
         writeToParquetAndGetExpectedRecordLocations(partitionRecordsMap, testTable);
 

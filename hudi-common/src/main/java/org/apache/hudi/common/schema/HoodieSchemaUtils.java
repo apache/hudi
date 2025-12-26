@@ -33,6 +33,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -652,6 +653,25 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Fetch schema for record key and partition path.
+   * This is equivalent to HoodieAvroUtils.getRecordKeyPartitionPathSchema() but returns HoodieSchema.
+   *
+   * @return HoodieSchema containing record key and partition path fields
+   */
+  public static HoodieSchema getRecordKeyPartitionPathSchema() {
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>();
+
+    HoodieSchemaField recordKeyField =
+        createNewSchemaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    HoodieSchemaField partitionPathField =
+        createNewSchemaField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+
+    toBeAddedFields.add(recordKeyField);
+    toBeAddedFields.add(partitionPathField);
+    return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, toBeAddedFields);
+  }
+
+  /**
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
    * the top level field, b is at second level and so on.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
@@ -769,5 +789,9 @@ public final class HoodieSchemaUtils {
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
     return "string,string,string,string,string," + hiveColumnTypes;
+  }
+
+  public static boolean isMetadataField(String fieldName) {
+    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
   }
 }

@@ -128,7 +128,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
             .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
                 new StoragePath(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
-                mergeHandle.getWriterSchemaWithMetaFields().toAvroSchema());
+                mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
           // TODO create hoodie record with rec can getRecordKey
           mergeHandle.write(new HoodieAvroIndexedRecord(rec));

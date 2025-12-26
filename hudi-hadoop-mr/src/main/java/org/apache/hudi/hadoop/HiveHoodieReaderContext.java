@@ -134,8 +134,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Read file schema and repair logical types if needed
     HoodieSchema fileSchema;
     if (isParquetOrOrc) {
-      Schema avroFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
-      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(avroFileSchema, dataSchema.toAvroSchema());
+      HoodieSchema rawFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readHoodieSchema(storage, filePath);
+      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(rawFileSchema.toAvroSchema(), dataSchema.toAvroSchema());
       fileSchema = HoodieSchema.fromAvroSchema(repairedAvroSchema);
     } else {
       fileSchema = dataSchema;

@@ -19,12 +19,12 @@
 
 package org.apache.hudi.io.hadoop;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.AvroOrcUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
@@ -40,22 +40,22 @@ import java.util.List;
 public class OrcReaderIterator<T> implements ClosableIterator<T> {
 
   private final RecordReader recordReader;
-  private final Schema avroSchema;
+  private final HoodieSchema schema;
   private final List<String> fieldNames;
   private final List<TypeDescription> orcFieldTypes;
-  private final Schema[] avroFieldSchemas;
+  private final HoodieSchema[] fieldSchemas;
   private final VectorizedRowBatch batch;
   private int rowInBatch;
   private T next;
 
-  public OrcReaderIterator(RecordReader recordReader, Schema schema, TypeDescription orcSchema) {
+  public OrcReaderIterator(RecordReader recordReader, HoodieSchema schema, TypeDescription orcSchema) {
     this.recordReader = recordReader;
-    this.avroSchema = schema;
+    this.schema = schema;
     this.fieldNames = orcSchema.getFieldNames();
     this.orcFieldTypes = orcSchema.getChildren();
-    this.avroFieldSchemas = fieldNames.stream()
-        .map(fieldName -> avroSchema.getField(fieldName).schema())
-        .toArray(Schema[]::new);
+    this.fieldSchemas = fieldNames.stream()
+        .map(fieldName -> this.schema.getField(fieldName).get().schema())
+        .toArray(HoodieSchema[]::new);
     this.batch = orcSchema.createRowBatch();
     this.rowInBatch = 0;
   }
@@ -109,10 +109,10 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
       return null;
     }
 
-    GenericData.Record record = new Record(avroSchema);
+    GenericData.Record record = new Record(schema.toAvroSchema());
     int numFields = orcFieldTypes.size();
     for (int i = 0; i < numFields; i++) {
-      Object data = AvroOrcUtils.readFromVector(orcFieldTypes.get(i), batch.cols[i], avroFieldSchemas[i], rowInBatch);
+      Object data = AvroOrcUtils.readFromVector(orcFieldTypes.get(i), batch.cols[i], fieldSchemas[i], rowInBatch);
       record.put(fieldNames.get(i), data);
     }
     rowInBatch++;

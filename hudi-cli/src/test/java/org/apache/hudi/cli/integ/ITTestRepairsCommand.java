@@ -104,7 +104,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
         "", HoodieTableVersion.current().versionCode(),
         "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    HoodieSparkWriteableTestTable cowTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema.toAvroSchema());
+    HoodieSparkWriteableTestTable cowTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
     cowTable.addCommit("20160401010101")
         .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
@@ -127,7 +127,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
         morTablePath, "mor_table", HoodieTableType.MERGE_ON_READ.name(),
         "", HoodieTableVersion.current().versionCode(),
         "org.apache.hudi.common.model.HoodieAvroPayload");
-    HoodieSparkWriteableTestTable morTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema.toAvroSchema());
+    HoodieSparkWriteableTestTable morTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
     morTable.addDeltaCommit("20160401010101");
     morTable.withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
@@ -151,7 +151,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
         "", HoodieTableVersion.current().versionCode(),
         "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    HoodieSparkWriteableTestTable cowNonPartitionedTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema.toAvroSchema());
+    HoodieSparkWriteableTestTable cowNonPartitionedTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
     cowNonPartitionedTable.addCommit("20160401010101")
         .withInserts(HoodieTestDataGenerator.NO_PARTITION_PATH, "1", hoodieRecords1)

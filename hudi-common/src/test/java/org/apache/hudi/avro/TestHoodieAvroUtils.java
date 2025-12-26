@@ -63,6 +63,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -283,7 +284,7 @@ public class TestHoodieAvroUtils {
     Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     boolean piiPresent = false;
     for (Schema.Field field : schema.getFields()) {
-      if (HoodieAvroUtils.isMetadataField(field.name())) {
+      if (HoodieSchemaUtils.isMetadataField(field.name())) {
         continue;
       }
 

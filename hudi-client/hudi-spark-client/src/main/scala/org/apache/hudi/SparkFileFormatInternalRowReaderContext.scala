@@ -95,7 +95,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
       val tableSchemaOpt = if (dataSchema != null) {
         val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema.toAvroSchema)
+        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema)
         org.apache.hudi.common.util.Option.of(parquetSchema)
       } else {
         org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()

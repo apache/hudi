@@ -24,6 +24,8 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -32,7 +34,6 @@ import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -56,7 +57,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private static final AtomicLong RECORD_INDEX = new AtomicLong(1);
 
   private final long maxFileSize;
-  private final Schema avroSchema;
+  private final HoodieSchema schema;
   private final List<TypeDescription> fieldTypes;
   private final List<String> fieldNames;
   private final VectorizedRowBatch batch;
@@ -72,7 +73,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private String minRecordKey;
   private String maxRecordKey;
 
-  public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, Schema schema,
+  public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));
@@ -83,8 +84,8 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
 
-    this.avroSchema = schema;
-    final TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
+    this.schema = schema;
+    final TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(this.schema);
     this.fieldTypes = orcSchema.getChildren();
     this.fieldNames = orcSchema.getFieldNames();
     this.maxFileSize = config.getMaxFileSize();
@@ -120,8 +121,8 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
       final TypeDescription type = fieldTypes.get(col);
 
       Object fieldValue = ((GenericRecord) object).get(thisField);
-      Schema.Field avroField = avroSchema.getField(thisField);
-      AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+      HoodieSchemaField field = schema.getField(thisField).get();
+      AvroOrcUtils.addToVector(type, colVector, field.schema(), fieldValue, batch.size);
     }
 
     batch.size++;
@@ -168,7 +169,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
         writer.addUserMetadata(HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE, ByteBuffer.wrap(getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().name())));
       }
     }
-    writer.addUserMetadata(HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(avroSchema.toString())));
+    writer.addUserMetadata(HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY, ByteBuffer.wrap(getUTF8Bytes(schema.toString())));
 
     writer.close();
   }
