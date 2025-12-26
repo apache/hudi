@@ -301,7 +301,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
 
   def validateTableSchema(tablePath: String): Unit = {
     val metaClient = createMetaClient(spark, tablePath)
-    val schema = new TableSchemaResolver(metaClient).getTableAvroSchema(false)
+    val schema = new TableSchemaResolver(metaClient).getTableSchema(false)
     assertFalse(schema.getFields.asScala.exists(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name())),
       "Metadata fields should be excluded from the table schema")
   }

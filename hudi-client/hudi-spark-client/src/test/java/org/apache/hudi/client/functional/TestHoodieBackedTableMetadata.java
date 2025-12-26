@@ -520,7 +520,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
       HoodieSchema writerSchema  =
-          HoodieSchema.fromAvroSchema(TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath()));
+          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
       if (writerSchema == null) {
         // not a data block
         continue;

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -42,10 +43,10 @@ import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -419,14 +420,19 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     }
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
-      Schema schema = tableSchemaResolver.getTableAvroSchema();
-      boolean isNonPartitionedKeyGen = StringUtils.isNullOrEmpty(tableConfig.getPartitionFieldProp());
+      HoodieSchema schema = tableSchemaResolver.getTableSchema();
+      String partitionFieldProp = tableConfig.getPartitionFieldProp();
+      boolean isNonPartitionedKeyGen = StringUtils.isNullOrEmpty(partitionFieldProp);
       return Option.of(
           new HoodieVirtualKeyInfo(
               tableConfig.getRecordKeyFieldProp(),
-              isNonPartitionedKeyGen ? Option.empty() : Option.of(tableConfig.getPartitionFieldProp()),
-              schema.getField(tableConfig.getRecordKeyFieldProp()).pos(),
-              isNonPartitionedKeyGen ? Option.empty() : Option.of(schema.getField(tableConfig.getPartitionFieldProp()).pos())));
+              isNonPartitionedKeyGen ? Option.empty() : Option.of(partitionFieldProp),
+              schema.getField(tableConfig.getRecordKeyFieldProp())
+                  .orElseThrow(() -> new HoodieSchemaException("Field: " + partitionFieldProp + " not found"))
+                  .pos(),
+              isNonPartitionedKeyGen ? Option.empty() : Option.of(schema.getField(partitionFieldProp)
+                  .orElseThrow(() -> new HoodieSchemaException("Field: " + partitionFieldProp + " not found"))
+                  .pos())));
     } catch (Exception exception) {
       throw new HoodieException("Fetching table schema failed with exception ", exception);
     }
