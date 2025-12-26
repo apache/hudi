@@ -19,12 +19,18 @@
 
 package org.apache.hudi.table.action.index;
 
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import lombok.NoArgsConstructor;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.index.HoodieIndexUtils.register;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @NoArgsConstructor
 public abstract class BaseHoodieIndexClient {
@@ -41,7 +47,18 @@ public abstract class BaseHoodieIndexClient {
    * @param metaClient     data table's {@link HoodieTableMetaClient} instance.
    * @param columnsToIndex list of columns to index.
    */
-  public abstract void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+  public void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
+        .withSourceFields(columnsToIndex)
+        // Use the existing version if exists, otherwise fall back to the default version.
+        .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient))
+        .withIndexOptions(Collections.EMPTY_MAP)
+        .build();
+    register(metaClient, indexDefinition);
+  }
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.
