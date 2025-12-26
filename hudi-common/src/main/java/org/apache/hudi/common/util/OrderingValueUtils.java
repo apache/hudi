@@ -47,11 +47,9 @@ public class OrderingValueUtils {
     // Convert Utf8 to String to unify as Java String type for comparison
     if (oldOrder instanceof Utf8 && incomingOrder instanceof String) {
       oldOrder = oldOrder.toString();
-    }
-
-    // Case 2: New value is Avro Utf8 type, old value is Java String type
-    // Convert Utf8 to String to unify as Java String type for comparison
-    if (incomingOrder instanceof Utf8 && oldOrder instanceof String) {
+    } else if (incomingOrder instanceof Utf8 && oldOrder instanceof String) {
+      // Case 2: New value is Avro Utf8 type, old value is Java String type
+      // Convert Utf8 to String to unify as Java String type for comparison
       incomingOrder = incomingOrder.toString();
     }
 
@@ -60,11 +58,9 @@ public class OrderingValueUtils {
     // Fixed type is typically used for storing decimal values (e.g., DECIMAL)
     if (oldOrder instanceof GenericData.Fixed && incomingOrder instanceof BigDecimal) {
       oldOrder = (BigDecimal) HoodieAvroUtils.convertValueForSpecificDataTypes(((GenericData.Fixed) oldOrder).getSchema(), oldOrder, false);
-    }
-
-    // Case 4: New value is Avro Fixed type, old value is Java BigDecimal type
-    // Convert Fixed type to BigDecimal to unify as Java BigDecimal type for comparison
-    if (incomingOrder instanceof GenericData.Fixed && oldOrder instanceof BigDecimal) {
+    } else if (incomingOrder instanceof GenericData.Fixed && oldOrder instanceof BigDecimal) {
+      // Case 4: New value is Avro Fixed type, old value is Java BigDecimal type
+      // Convert Fixed type to BigDecimal to unify as Java BigDecimal type for comparison
       incomingOrder = (BigDecimal) HoodieAvroUtils.convertValueForSpecificDataTypes(((GenericData.Fixed) incomingOrder).getSchema(), incomingOrder, false);
     }
 
