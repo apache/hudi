@@ -61,6 +61,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -479,6 +480,124 @@ public class ITTestHoodieDataSource {
         "select name, sum(age) from t1 group by name", sinkDDL, 10);
     final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
+  }
+
+  @ParameterizedTest
+  @MethodSource("sceneTypeAndCompactionEnabled")
+  void testHardDeleteWithStringOrderingField(boolean isDeletedFirst, boolean doCompaction) throws Exception {
+    StoragePath storagePath = new StoragePath(Paths.get(tempFile.getAbsolutePath().replace("%5C","\\")).toUri());
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts STRING,\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'path' = '" + storagePath + "',\n"
+            + (doCompaction ?  "  'compaction.delta_commits' = '1',\n" : "")
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    String expected;
+    String insertInto;
+    if (isDeletedFirst) {
+      expected = "["
+              + "+I[id1, Danny, 23, false, par1, 101], "
+              + "+I[id2, Stephen, 33, false, par1, 103]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', '101'),\n"
+              + "('id2','Stephen',33,false,'par1', '103')";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, true,'par1', '102')";
+    } else {
+      // first delete record will be ignored during compaction
+      expected = doCompaction
+          ? "[+I[id1, Danny, 23, false, par1, 101], +I[id2, Stephen, 33, false, par1, 102]]"
+          : "[+I[id1, Danny, 23, false, par1, 101]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', '101'),\n"
+              + "('id2','Stephen',33,true,'par1', '103')";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, false,'par1', '102')";
+    }
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result = execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
+  @MethodSource("sceneTypeAndCompactionEnabled")
+  void testHardDeleteWithDecimalOrderingField(boolean isDeletedFirst, boolean doCompaction) throws Exception {
+    StoragePath storagePath = new StoragePath(Paths.get(tempFile.getAbsolutePath().replace("%5C","\\")).toUri());
+    ExecMode execMode = ExecMode.BATCH;
+    String hoodieTableDDL = "create table t1(\n"
+            + "  uuid varchar(20),\n"
+            + "  name varchar(10),\n"
+            + "  age int,\n"
+            + "  _hoodie_is_deleted boolean,\n"
+            + "  `partition` varchar(20),\n"
+            + "  ts DECIMAL(7,2),\n"
+            + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+            + ")\n"
+            + "PARTITIONED BY (`partition`)\n"
+            + "with (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'table.type' = 'MERGE_ON_READ',\n"
+            + "  'index.type' = 'BUCKET',\n"
+            + "  'path' = '" + storagePath + "',\n"
+            + (doCompaction ?  "  'compaction.delta_commits' = '1',\n" : "")
+            + "  'read.streaming.skip_compaction' = 'false'\n"
+            + ")";
+    batchTableEnv.executeSql(hoodieTableDDL);
+
+    String expected;
+    String insertInto;
+    if (isDeletedFirst) {
+      expected = "["
+              + "+I[id1, Danny, 23, false, par1, 1.10], "
+              + "+I[id2, Stephen, 33, false, par1, 1.30]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', 1.10),\n"
+              + "('id2','Stephen',33,false,'par1', 1.30)";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, true,'par1', 1.20)";
+    } else {
+      expected = doCompaction
+          // first delete record will be ignored during compaction
+          ? "[+I[id1, Danny, 23, false, par1, 1.10], +I[id2, Stephen, 33, false, par1, 1.20]]"
+          : "[+I[id1, Danny, 23, false, par1, 1.10]]";
+      // first commit
+      insertInto = "insert into t1 values\n"
+              + "('id1','Danny',23,false,'par1', 1.10),\n"
+              + "('id2','Stephen',33,true,'par1', 1.30)";
+      execInsertSql(batchTableEnv, insertInto);
+      // second commit, hard delete record with smaller order value
+      insertInto = "insert into t1 values\n"
+              + "('id2','Stephen',33, false,'par1', 1.20)";
+    }
+    execInsertSql(batchTableEnv, insertInto);
+    List<Row> result2 = execSelectSql(batchTableEnv, "select * from t1", execMode);
+    // no record is deleted.
+    assertRowsEquals(result2, expected);
   }
 
   @ParameterizedTest
@@ -2224,6 +2343,19 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", HoodieTableType.MERGE_ON_READ},
             {"BUCKET", HoodieTableType.COPY_ON_WRITE},
             {"BUCKET", HoodieTableType.MERGE_ON_READ}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (SceneType, true/false).
+   */
+  private static Stream<Arguments> sceneTypeAndCompactionEnabled() {
+    Object[][] data =
+        new Object[][] {
+            {true, false},
+            {false, false},
+            {true, true},
+            {false, true}};
     return Stream.of(data).map(Arguments::of);
   }
 
