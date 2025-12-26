@@ -48,12 +48,11 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.util.SparkKeyGenUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -82,9 +81,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  * Performs bootstrap from a non-hudi source.
  * import static org.apache.hudi.common.util.ConfigUtils.filterProperties;
  */
+@Slf4j
 public class BootstrapExecutorUtils implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BootstrapExecutorUtils.class);
 
   /**
    * Config.
@@ -159,7 +157,7 @@ public class BootstrapExecutorUtils implements Serializable {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
     }
     this.bootstrapConfig = builder.build();
-    LOG.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
+    log.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
@@ -185,7 +183,7 @@ public class BootstrapExecutorUtils implements Serializable {
     } catch (Exception e) {
       Path basePath = new Path(cfg.basePath);
       if (fs.exists(basePath)) {
-        LOG.info("deleted target base path {}", cfg.basePath);
+        log.info("deleted target base path {}", cfg.basePath);
         fs.delete(basePath, true);
       }
       throw new HoodieException("Failed to bootstrap table", e);
@@ -219,7 +217,7 @@ public class BootstrapExecutorUtils implements Serializable {
     Path basePath = new Path(cfg.basePath);
     if (fs.exists(basePath)) {
       if (cfg.bootstrapOverwrite) {
-        LOG.info("Target base path already exists, overwrite it");
+        log.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
         throw new HoodieException("target base path already exists at " + cfg.basePath
@@ -302,7 +300,14 @@ public class BootstrapExecutorUtils implements Serializable {
     return Collections.emptyMap();
   }
 
+  /**
+   * Configuration class for Bootstrap operations.
+   * Note: Explicit setters are used instead of Lombok's @Setter annotation because this class is accessed from Scala code
+   * (RunBootstrapProcedure.scala). Since Scala compilation happens before Java compilation in the Maven build lifecycle,
+   * Lombok-generated methods would not be visible to the Scala compiler, causing compilation errors.
+   */
   public static class Config {
+
     private String database;
 
     private String tableName;

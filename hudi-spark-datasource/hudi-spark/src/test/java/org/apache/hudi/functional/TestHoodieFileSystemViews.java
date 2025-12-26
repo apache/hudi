@@ -51,6 +51,8 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -80,11 +82,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
+  @Getter(AccessLevel.PROTECTED)
   private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
-
-  protected HoodieTableType getTableType() {
-    return tableType;
-  }
 
   public static List<Arguments> tableTypeMetadataFSVTypeArgs() {
     List<Arguments> testCases = new ArrayList<>();

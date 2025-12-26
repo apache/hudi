@@ -46,14 +46,13 @@ import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -76,8 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
  * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} on the timeline server.
  */
+@Slf4j
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
-  private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -119,7 +118,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
                   context, metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath().toString(), true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
-      LOG.info("Started timeline server on port: " + timelineServicePort);
+      log.info("Started timeline server on port: {}", timelineServicePort);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
@@ -199,7 +198,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
         ? timelineService.getServerPort()
         : writeClient.getTimelineServer().get().getRemoteFileSystemViewConfig(writeClient.getConfig()).getRemoteViewServerPort();
 
-    LOG.info("Connecting to Timeline Server: " + timelineServerPort);
+    log.info("Connecting to Timeline Server: {}", timelineServerPort);
     RemoteHoodieTableFileSystemView view =
         new RemoteHoodieTableFileSystemView("localhost", timelineServerPort, newMetaClient);
 
@@ -217,7 +216,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
       try {
         return future.get();
       } catch (Exception e) {
-        LOG.error("Get result error", e);
+        log.error("Get result error", e);
         return false;
       }
     }).reduce((a, b) -> a && b).get());
@@ -303,8 +302,8 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
       boolean result = latestFileSlice.isPresent() && latestBaseFilePath.startsWith(expectedBasePath)
           && expectedCommitTime.equals(FSUtils.getCommitTime(new Path(latestBaseFilePath).getName()));
       if (!result) {
-        LOG.error("The timeline server does not return the correct result: latestFileSliceReturned="
-            + latestFileSlice + " expectedCommitTime=" + expectedCommitTime);
+        log.error("The timeline server does not return the correct result: latestFileSliceReturned={} expectedCommitTime={}",
+            latestFileSlice, expectedCommitTime);
       }
       return result;
     }
