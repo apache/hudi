@@ -687,21 +687,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".cleaner.parallelism")
       .defaultValue(512)
       .markAdvanced()
-      .sinceVersion("1.2.0")
+      .sinceVersion("1.3.0")
       .withDocumentation("Cleaner parallelism to use for metadata table.");
 
   public static final ConfigProperty<Integer> ROLLBACK_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".rollback.parallelism")
       .defaultValue(512)
       .markAdvanced()
-      .sinceVersion("1.2.0")
+      .sinceVersion("1.3.0")
       .withDocumentation("Rollback parallelism to use for metadata table.");
 
   public static final ConfigProperty<Integer> FINALIZE_WRITE_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".finalize.writes.parallelism")
       .defaultValue(512)
       .markAdvanced()
-      .sinceVersion("1.2.0")
+      .sinceVersion("1.3.0")
       .withDocumentation("Finalize write parallelism to use for metadata table.");
 
   public long getMaxLogFileSize() {
