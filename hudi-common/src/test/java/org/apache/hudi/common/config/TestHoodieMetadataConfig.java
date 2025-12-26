@@ -151,7 +151,7 @@ class TestHoodieMetadataConfig {
     assertEquals(512, config.getRollbackParallelism());
     assertEquals(512, config.getFinalizeWritesParallelism());
 
-        // Test custom value
+    // Test custom value
     Properties props = new Properties();
     props.put(HoodieMetadataConfig.CLEANER_PARALLELISM.key(), "100");
     props.put(HoodieMetadataConfig.ROLLBACK_PARALLELISM.key(), "100");
