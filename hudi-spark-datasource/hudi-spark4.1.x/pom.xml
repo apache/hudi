@@ -196,6 +196,13 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <!-- Exclude parquet-hadoop-bundle to avoid classpath conflict with parquet-hadoop from Spark 4.x -->
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>parquet-hadoop-bundle</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -268,6 +275,13 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <exclusions>
+        <!-- Exclude parquet-hadoop-bundle to avoid classpath conflict with parquet-hadoop from Spark 4.x -->
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>parquet-hadoop-bundle</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
