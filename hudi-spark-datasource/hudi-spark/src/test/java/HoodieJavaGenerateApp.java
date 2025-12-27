@@ -130,7 +130,7 @@ public class HoodieJavaGenerateApp {
    */
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
-      log.info("Enabling Hive sync to " + hiveJdbcUrl);
+      log.info("Enabling Hive sync to {}", hiveJdbcUrl);
       writer = writer.option(META_SYNC_TABLE_NAME.key(), hiveTable)
           .option(META_SYNC_DATABASE_NAME.key(), hiveDB)
           .option(HIVE_URL.key(), hiveJdbcUrl)
@@ -192,6 +192,6 @@ public class HoodieJavaGenerateApp {
     writer.save(tablePath); // ultimately where the dataset will be placed
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    log.info("Commit at instant time :" + commitInstantTime1);
+    log.info("Commit at instant time: {}", commitInstantTime1);
   }
 }

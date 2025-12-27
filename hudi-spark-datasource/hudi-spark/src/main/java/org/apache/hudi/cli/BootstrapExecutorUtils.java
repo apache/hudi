@@ -157,7 +157,7 @@ public class BootstrapExecutorUtils implements Serializable {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
     }
     this.bootstrapConfig = builder.build();
-    log.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
+    log.info("Created bootstrap executor with configs : {}", bootstrapConfig.getProps());
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,

@@ -127,7 +127,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     FileSystem fs = HadoopFSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
     this.props = this.propsFilePath == null || this.propsFilePath.isEmpty() ? buildProperties(this.configs)
         : readConfig(fs.getConf(), new StoragePath(this.propsFilePath), this.configs).getProps(true);
-    log.info("Starting data import with configs : " + props.toString());
+    log.info("Starting data import with configs : {}", props.toString());
     int ret = -1;
     try {
       // Verify that targetPath is not present.

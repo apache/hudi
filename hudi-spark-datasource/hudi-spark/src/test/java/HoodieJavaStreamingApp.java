@@ -294,7 +294,7 @@ public class HoodieJavaStreamingApp {
     // wait for spark streaming to process one microbatch
     waitTillNCommits(fs, numExpCommits, 180, 3);
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    log.info("First commit at instant time :" + commitInstantTime1);
+    log.info("First commit at instant time: {}", commitInstantTime1);
 
     String commitInstantTime2 = commitInstantTime1;
     if (null != inputDF2) {
@@ -304,7 +304,7 @@ public class HoodieJavaStreamingApp {
       Thread.sleep(3000);
       waitTillNCommits(fs, numExpCommits, 180, 3);
       commitInstantTime2 = HoodieDataSourceHelpers.listCommitsSince(fs, tablePath, commitInstantTime1).stream().sorted().findFirst().get();
-      log.info("Second commit at instant time :" + commitInstantTime2);
+      log.info("Second commit at instant time: {}", commitInstantTime2);
     }
 
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
@@ -313,7 +313,7 @@ public class HoodieJavaStreamingApp {
       }
       // Wait for compaction to also finish and track latest timestamp as commit timestamp
       waitTillNCommits(fs, numExpCommits, 180, 3);
-      log.info("Compaction commit at instant time :" + HoodieDataSourceHelpers.latestCommit(fs, tablePath));
+      log.info("Compaction commit at instant time: {}", HoodieDataSourceHelpers.latestCommit(fs, tablePath));
     }
 
     /**
@@ -349,7 +349,7 @@ public class HoodieJavaStreamingApp {
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
-      log.info("You will only see records from : " + commitInstantTime2);
+      log.info("You will only see records from: {}", commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
     }
     return numExpCommits;
@@ -391,7 +391,7 @@ public class HoodieJavaStreamingApp {
    */
   private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
-      log.info("Enabling Hive sync to " + hiveJdbcUrl);
+      log.info("Enabling Hive sync to {}", hiveJdbcUrl);
       writer = writer.option(META_SYNC_TABLE_NAME.key(), hiveTable)
           .option(META_SYNC_DATABASE_NAME.key(), hiveDB)
           .option(HIVE_URL.key(), hiveJdbcUrl)

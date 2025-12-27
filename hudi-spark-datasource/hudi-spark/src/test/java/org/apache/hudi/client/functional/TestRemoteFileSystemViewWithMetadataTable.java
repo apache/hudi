@@ -277,7 +277,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
    * Test callable to send lookup request to the timeline server for the latest file slice
    * based on the partition path and file ID.
    */
-  class TestViewLookUpCallable implements Callable<Boolean> {
+  static class TestViewLookUpCallable implements Callable<Boolean> {
     private final RemoteHoodieTableFileSystemView view;
     private final Pair<String, String> partitionFileIdPair;
     private final String expectedCommitTime;
