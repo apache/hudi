@@ -19,7 +19,6 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -32,6 +31,8 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -97,7 +98,7 @@ public abstract class JavaExecutionStrategy<T>
    */
   public abstract List<WriteStatus> performClusteringWithRecordList(
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups, final String instantTime,
-      final Map<String, String> strategyParams, final Schema schema,
+      final Map<String, String> strategyParams, final HoodieSchema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
   /**
@@ -107,11 +108,11 @@ public abstract class JavaExecutionStrategy<T>
    * @param schema         Schema of the data including metadata fields.
    * @return partitioner for the java engine
    */
-  protected BulkInsertPartitioner<List<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected BulkInsertPartitioner<List<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, HoodieSchema schema) {
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
       return new JavaCustomColumnsSortPartitioner(
           strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
-          HoodieAvroUtils.addMetadataFields(schema), getWriteConfig());
+          HoodieSchemaUtils.addMetadataFields(schema), getWriteConfig());
     } else {
       return JavaBulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode());
     }
@@ -124,7 +125,7 @@ public abstract class JavaExecutionStrategy<T>
       HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
       boolean preserveHoodieMetadata, String instantTime) {
     List<HoodieRecord<T>> inputRecords = readRecordsForGroup(clusteringGroup, instantTime);
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+    HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema()));
     List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
         .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
         .collect(Collectors.toList());

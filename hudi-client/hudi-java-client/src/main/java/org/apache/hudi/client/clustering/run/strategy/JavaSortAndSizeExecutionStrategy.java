@@ -25,13 +25,13 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.Map;
@@ -54,7 +54,7 @@ public class JavaSortAndSizeExecutionStrategy<T>
   @Override
   public List<WriteStatus> performClusteringWithRecordList(
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups,
-      final String instantTime, final Map<String, String> strategyParams, final Schema schema,
+      final String instantTime, final Map<String, String> strategyParams, final HoodieSchema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
     log.info("Starting clustering for a group, parallelism: {} commit: {}", numOutputGroups, instantTime);
 

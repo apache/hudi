@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -143,7 +142,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testSimpleUpsert(boolean isCompressionEnabled) throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema().toAvroSchema());
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(getSimpleSchema());
 
     try (BitCaskDiskMap records = new BitCaskDiskMap<>(basePath, new DefaultSerializer<>(), isCompressionEnabled)) {
       SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -174,7 +173,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
         HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
         assert recordKeys.contains(rec.getRecordKey());
         try {
-          IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema).get();
+          IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema.toAvroSchema()).get();
           String latestCommitTime =
               ((GenericRecord) indexedRecord).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
           assertEquals(latestCommitTime, newCommitTime);

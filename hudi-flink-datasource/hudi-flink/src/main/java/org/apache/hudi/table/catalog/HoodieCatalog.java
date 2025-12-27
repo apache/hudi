@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -318,7 +318,7 @@ public class HoodieCatalog extends AbstractCatalog {
     }
     final String avroSchema = AvroSchemaConverter.convertToSchema(
         resolvedSchema.toPhysicalRowDataType().getLogicalType(),
-        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
+        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:
@@ -618,7 +618,7 @@ public class HoodieCatalog extends AbstractCatalog {
     ResolvedCatalogTable resolvedTable =  (ResolvedCatalogTable) newCatalogTable;
     final String avroSchema = AvroSchemaConverter.convertToSchema(
         resolvedTable.getResolvedSchema().toPhysicalRowDataType().getLogicalType(),
-        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
+        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), avroSchema);
     java.util.Optional<UniqueConstraint> pkConstraintOpt = resolvedTable.getResolvedSchema().getPrimaryKey();
     if (pkConstraintOpt.isPresent()) {

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.FlatLists;
 
 import org.apache.avro.Schema;
@@ -77,7 +78,7 @@ public class TestSortUtils {
       record = new TestSparkRecord(new HoodieKey("record1", "partition1"), payload);
     }
     String[] userSortColumns = new String[] {"non_pii_col", "timestamp"};
-    FlatLists.ComparableList<Comparable<HoodieRecord>> comparableList = SortUtils.getComparableSortColumns(record, userSortColumns, Schema.parse(SCHEMA), suffixRecordKey, true);
+    FlatLists.ComparableList<Comparable<HoodieRecord>> comparableList = SortUtils.getComparableSortColumns(record, userSortColumns, HoodieSchema.parse(SCHEMA), suffixRecordKey, true);
     Object[] expectedSortColumnValues;
     if (suffixRecordKey) {
       expectedSortColumnValues = new Object[] {"partition1", "val1", 3.5, "record1"};

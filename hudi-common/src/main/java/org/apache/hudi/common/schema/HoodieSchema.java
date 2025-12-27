@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
@@ -486,53 +485,6 @@ public class HoodieSchema implements Serializable {
     Package pkg = HoodieSchema.class.getPackage();
     String version = pkg != null ? pkg.getImplementationVersion() : null;
     return version != null ? version : "unknown";
-  }
-
-  /**
-   * Creates a Hudi write schema from a given schema string with optional operation field.
-   * This is equivalent to HoodieAvroUtils.createHoodieWriteSchema() but returns HoodieSchema.
-   *
-   * @param schemaStr          the schema string to convert
-   * @param withOperationField whether to include operation field metadata
-   * @return HoodieSchema configured for write operations
-   * @throws IllegalArgumentException if schema string is invalid
-   */
-  public static HoodieSchema createHoodieWriteSchema(String schemaStr, boolean withOperationField) {
-    ValidationUtils.checkArgument(schemaStr != null && !schemaStr.trim().isEmpty(),
-        "Schema string cannot be null or empty");
-    Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaStr, withOperationField);
-    return HoodieSchema.fromAvroSchema(avroSchema);
-  }
-
-  /**
-   * Adds metadata fields to an existing HoodieSchema.
-   * This is equivalent to HoodieAvroUtils.addMetadataFields() but operates on HoodieSchemas.
-   *
-   * @param schema             the base schema to add metadata fields to
-   * @param withOperationField whether to include operation field metadata
-   * @return new HoodieSchema with metadata fields added
-   * @throws IllegalArgumentException if schema is null
-   */
-  public static HoodieSchema addMetadataFields(HoodieSchema schema, boolean withOperationField) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-    Schema avroSchema = schema.toAvroSchema();
-    Schema resultAvro = HoodieAvroUtils.addMetadataFields(avroSchema, withOperationField);
-    return HoodieSchema.fromAvroSchema(resultAvro);
-  }
-
-  /**
-   * Removes metadata fields from a HoodieSchema.
-   * This is equivalent to HoodieAvroUtils.removeMetadataFields() but operates on HoodieSchemas.
-   *
-   * @param schema the schema to remove metadata fields from
-   * @return new HoodieSchema without metadata fields
-   * @throws IllegalArgumentException if schema is null
-   */
-  public static HoodieSchema removeMetadataFields(HoodieSchema schema) {
-    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
-    Schema avroSchema = schema.toAvroSchema();
-    Schema resultAvro = HoodieAvroUtils.removeMetadataFields(avroSchema);
-    return HoodieSchema.fromAvroSchema(resultAvro);
   }
 
   /**

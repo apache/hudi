@@ -18,19 +18,18 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
-
-import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
@@ -69,11 +68,11 @@ public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
     HoodieExecutor<List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       // config.getSchema is not canonicalized, while config.getWriteSchema is canonicalized. So, we have to use the canonicalized schema to read the existing data.
-      Schema schema = new Schema.Parser().parse(hoodieConfig.getWriteSchema());
+      HoodieSchema schema = HoodieSchema.parse(hoodieConfig.getWriteSchema());
       if (useWriterSchema) {
-        schema = HoodieAvroUtils.addMetadataFields(schema);
+        schema = HoodieSchemaUtils.addMetadataFields(schema);
       }
-      schema = AvroSchemaCache.intern(schema);
+      schema = HoodieSchemaCache.intern(schema);
 
       bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(),
           getTransformer(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());

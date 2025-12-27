@@ -128,7 +128,7 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
 
     try {
       exec = new DisruptorExecutor(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
+          getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
       assertEquals(100, result);
@@ -157,7 +157,7 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
     final List<List<HoodieRecord>> recs = new ArrayList<>();
 
     final DisruptorMessageQueue<HoodieRecord, HoodieInsertValueGenResult> queue =
-        new DisruptorMessageQueue(1024, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+        new DisruptorMessageQueue(1024, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig),
             "BLOCKING_WAIT", numProducers, new Runnable() {
               @Override
           public void run() {
@@ -305,7 +305,7 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
         };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = new DisruptorExecutor(1024,
-        producers, consumer, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+        producers, consumer, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig),
         WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
