@@ -24,12 +24,11 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,8 +37,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
+@Slf4j
 public class HivePartitionUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HivePartitionUtil.class);
 
   /**
    * Build String, example as year=2021/month=06/day=25
@@ -72,7 +71,7 @@ public class HivePartitionUtil {
     } catch (NoSuchObjectException ignored) {
       newPartition = null;
     } catch (TException e) {
-      LOG.error("Failed to get partition " + partitionPath, e);
+      log.error("Failed to get partition {}", partitionPath, e);
       throw new HoodieHiveSyncException("Failed to get partition " + partitionPath, e);
     }
     return newPartition != null;
