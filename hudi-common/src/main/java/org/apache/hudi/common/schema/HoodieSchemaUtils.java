@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +58,11 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public final class HoodieSchemaUtils {
+
+  // As per https://avro.apache.org/docs/current/spec.html#names
+  private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
+  private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
+  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
   public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -515,10 +521,10 @@ public final class HoodieSchemaUtils {
 
   /**
    * Appends provided new fields at the end of the given schema
-   *
+   * <p></p>
    * NOTE: No deduplication is made, this method simply appends fields at the end of the list
    *       of the source schema as is
-   *
+   * <p></p>
    * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
    */
   public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
@@ -686,12 +692,15 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Gets the fully-qualified Avro record name for a Hudi table.
-   * This is equivalent to {@link AvroSchemaUtils#getAvroRecordQualifiedName(String)}
-   * but provides a HoodieSchema-context API.
+   * Generates fully-qualified name for the Avro's schema based on the Table's name
    *
    * <p>The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
    * where tableName is sanitized for Avro compatibility.</p>
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This method should not change for compatibility reasons as older versions
+   *       of Avro might be comparing fully-qualified names rather than just the record
+   *       names
    *
    * @param tableName the Hudi table name
    * @return the fully-qualified Avro record name (e.g., "hoodie.my_table.my_table_record")
@@ -702,8 +711,8 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(tableName != null && !tableName.trim().isEmpty(),
         "Table name cannot be null or empty");
 
-    // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.getAvroRecordQualifiedName(tableName);
+    String sanitizedTableName = sanitizeName(tableName);
+    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
   public static boolean hasDecimalField(HoodieSchema schema) {
@@ -840,5 +849,31 @@ public final class HoodieSchemaUtils {
       default:
         throw new IllegalArgumentException("Unsupported HoodieSchema type: " + type);
     }
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a> .
+   *
+   * @param name input name
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name) {
+    return sanitizeName(name, MASK_FOR_INVALID_CHARS_IN_NAMES);
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a>.
+   *
+   * @param name            input name
+   * @param invalidCharMask replacement for invalid characters.
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name, String invalidCharMask) {
+    if (INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name.substring(0, 1)).matches()) {
+      name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(invalidCharMask);
+    }
+    return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
   }
 }
