@@ -19,10 +19,10 @@
 
 package org.apache.hudi.utilities.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataTypes;
@@ -41,7 +41,7 @@ public class SanitizationTestUtils {
   public static String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
   private static String sanitizeIfNeeded(String src, boolean shouldSanitize) {
-    return shouldSanitize ? HoodieAvroUtils.sanitizeName(src, invalidCharMask) : src;
+    return shouldSanitize ? HoodieSchemaUtils.sanitizeName(src, invalidCharMask) : src;
   }
 
   protected static StructType getSchemaWithProperNaming() {

@@ -341,7 +341,7 @@ public final class SchemaTestUtil {
   public static HoodieSchema getHoodieSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
     try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
       HoodieSchema schema = new HoodieSchema.Parser().parse(schemaInputStream);
-      return withHoodieMetadata ? HoodieSchema.addMetadataFields(schema, false) : schema;
+      return withHoodieMetadata ? HoodieSchemaUtils.addMetadataFields(schema, false) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
     }

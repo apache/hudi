@@ -39,6 +39,7 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   }
 
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
     return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema).toAvroSchema())
@@ -46,6 +47,7 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   }
 
   @Override
+  @Deprecated
   public Schema getTargetSchema() {
     HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
     return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema).toAvroSchema())

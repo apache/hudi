@@ -19,7 +19,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -518,12 +518,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("intField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
-    //test with avro schema with meta cols
-    HoodieSchema hoodieSchemaWithMetadataFields = HoodieSchema.fromAvroSchema(HoodieAvroUtils.addMetadataFields(schema.toAvroSchema()));
+    //test schema with meta cols
+    HoodieSchema hoodieSchemaWithMetadataFields = HoodieSchemaUtils.addMetadataFields(schema);
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(hoodieSchemaWithMetadataFields)), false, V1).keySet()));
 
-    //test with avro schema with type filter
+    //test schema with type filter
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withMaxColumnsToIndexForColStats(100)

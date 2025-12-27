@@ -124,7 +124,6 @@ import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -162,8 +161,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -1597,20 +1594,19 @@ public class HoodieTableMetadataUtil {
 
   public static Map<String, HoodieSchema> getColumnsToIndex(HoodieCommitMetadata commitMetadata, HoodieTableMetaClient dataMetaClient,
                                                HoodieMetadataConfig metadataConfig, Option<HoodieRecordType> recordTypeOpt) {
-    Option<Schema> writerSchema =
+    Option<HoodieSchema> writerSchema =
         Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
             .flatMap(writerSchemaStr ->
                 isNullOrEmpty(writerSchemaStr)
                     ? Option.empty()
-                    : Option.of(new Schema.Parser().parse(writerSchemaStr)));
+                    : Option.of(HoodieSchema.parse(writerSchemaStr)));
 
     HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
 
     // NOTE: Writer schema added to commit metadata will not contain Hudi's metadata fields
     Option<HoodieSchema> tableSchema = writerSchema.isEmpty()
         ? tableConfig.getTableCreateSchema().map(HoodieSchema::fromAvroSchema) // the write schema does not set up correctly
-        : writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema)
-            .map(HoodieSchema::fromAvroSchema);
+        : writerSchema.map(schema -> tableConfig.populateMetaFields() ? HoodieSchemaUtils.addMetadataFields(schema) : schema);
 
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient);
     return getColumnsToIndex(tableConfig, metadataConfig,
@@ -2585,7 +2581,7 @@ public class HoodieTableMetadataUtil {
     List<String> mergedFields = new ArrayList<>(partitionFields.size() + sourceFields.size());
     mergedFields.addAll(partitionFields);
     mergedFields.addAll(sourceFields);
-    return HoodieSchema.fromAvroSchema(addMetadataFields(projectSchema(tableSchema.toAvroSchema(), mergedFields)));
+    return HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.projectSchema(tableSchema, mergedFields));
   }
 
   public static StoragePath filePath(StoragePath basePath, String partition, String filename) {

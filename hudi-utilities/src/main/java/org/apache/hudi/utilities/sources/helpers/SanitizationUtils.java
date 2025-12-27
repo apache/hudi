@@ -18,10 +18,10 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
@@ -96,7 +96,7 @@ public class SanitizationUtils {
     StructField[] structFields = structType.fields();
     for (StructField s : structFields) {
       DataType currFieldDataTypeSanitized = sanitizeDataTypeForAvro(s.dataType(), invalidCharMask);
-      StructField structFieldCopy = new StructField(HoodieAvroUtils.sanitizeName(s.name(), invalidCharMask),
+      StructField structFieldCopy = new StructField(HoodieSchemaUtils.sanitizeName(s.name(), invalidCharMask),
           currFieldDataTypeSanitized, s.nullable(), s.metadata());
       sanitizedStructType = sanitizedStructType.add(structFieldCopy);
     }
@@ -113,7 +113,7 @@ public class SanitizationUtils {
         // which are structurally similar except for actual column names itself. So casting is safe and sufficient.
         targetDataset = targetDataset.withColumn(sf.name(), targetDataset.col(sf.name()).cast(sanitizedFieldDataType));
       }
-      String possibleRename = HoodieAvroUtils.sanitizeName(sf.name(), invalidCharMask);
+      String possibleRename = HoodieSchemaUtils.sanitizeName(sf.name(), invalidCharMask);
       if (!sf.name().equals(possibleRename)) {
         targetDataset = targetDataset.withColumnRenamed(sf.name(), possibleRename);
       }
@@ -182,7 +182,7 @@ public class SanitizationUtils {
           } else if (kv.getValue() instanceof String) {
             String currentStrValue = (String) kv.getValue();
             if (kv.getKey().equals(AVRO_FIELD_NAME_KEY)) {
-              return Pair.of(kv.getKey(), HoodieAvroUtils.sanitizeName(currentStrValue, invalidCharMask));
+              return Pair.of(kv.getKey(), HoodieSchemaUtils.sanitizeName(currentStrValue, invalidCharMask));
             }
             return Pair.of(kv.getKey(), currentStrValue);
           } else {

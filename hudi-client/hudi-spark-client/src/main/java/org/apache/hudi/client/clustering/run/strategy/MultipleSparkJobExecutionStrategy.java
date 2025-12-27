@@ -20,7 +20,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkTaskContextSupplier;
@@ -172,7 +171,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                           final int numOutputGroups,
                                                                           final String instantTime,
                                                                           final Map<String, String> strategyParams,
-                                                                          final Schema schema,
+                                                                          final HoodieSchema schema,
                                                                           final List<HoodieFileGroupId> fileGroupIdList,
                                                                           final boolean shouldPreserveHoodieMetadata,
                                                                           final Map<String, String> extraMetadata);
@@ -230,7 +229,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
-      Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+      HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema()));
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be shuffled later.

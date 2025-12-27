@@ -19,7 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
@@ -214,7 +214,7 @@ public class InternalSchemaCache {
     return fileSchema.isEmptySchema()
         ? StringUtils.isNullOrEmpty(avroSchema)
         ? InternalSchema.getEmptyInternalSchema()
-        : InternalSchemaConverter.convert(HoodieSchema.createHoodieWriteSchema(avroSchema, false))
+        : InternalSchemaConverter.convert(HoodieSchemaUtils.createHoodieWriteSchema(avroSchema, false))
         : fileSchema;
   }
 
