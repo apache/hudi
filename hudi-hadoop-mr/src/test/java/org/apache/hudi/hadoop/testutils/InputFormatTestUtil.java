@@ -468,7 +468,7 @@ public class InputFormatTestUtil {
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
-    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(hiveColumnTypes);
+    String modifiedHiveColumnTypes = HoodieSchemaUtils.addMetadataColumnTypes(hiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
@@ -495,7 +495,7 @@ public class InputFormatTestUtil {
     String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
-    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(hiveColumnTypes);
+    String modifiedHiveColumnTypes = HoodieSchemaUtils.addMetadataColumnTypes(hiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);

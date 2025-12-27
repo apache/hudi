@@ -420,7 +420,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, roJobConf, false, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
+        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
     Set<String> seenKeys = new HashSet<>();
     for (GenericRecord r : records) {
@@ -438,7 +438,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
+        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
       assertEquals(r.get("_row_key").toString(), r.get("_hoodie_record_key").toString(), "Realtime Record :" + r);
@@ -454,7 +454,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, roJobConf, false, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES,
+        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES,
         true, HoodieRecord.HOODIE_META_COLUMNS);
     assertEquals(totalRecords, records.size());
     seenKeys = new HashSet<>();
@@ -471,7 +471,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, true,
         HoodieRecord.HOODIE_META_COLUMNS);
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
@@ -486,7 +486,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, roJobConf, false, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
     assertEquals(totalRecords, records.size());
     seenKeys = new HashSet<>();
@@ -503,7 +503,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
         FSUtils.getAllPartitionPaths(context, metaClient, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
-        basePath, rtJobConf, true, schema.toAvroSchema(), TRIP_HIVE_COLUMN_TYPES, true,
+        basePath, rtJobConf, true, schema, TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {

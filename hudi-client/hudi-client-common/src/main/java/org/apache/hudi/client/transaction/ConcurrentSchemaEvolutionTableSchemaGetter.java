@@ -35,7 +35,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.Lazy;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -59,12 +58,12 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
   protected final HoodieTableMetaClient metaClient;
 
-  private final Lazy<ConcurrentHashMap<HoodieInstant, Schema>> tableSchemaCache;
+  private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieSchema>> tableSchemaCache;
 
   private Option<HoodieInstant> latestCommitWithValidSchema = Option.empty();
 
   @VisibleForTesting
-  public ConcurrentHashMap<HoodieInstant, Schema> getTableSchemaCache() {
+  public ConcurrentHashMap<HoodieInstant, HoodieSchema> getTableSchemaCache() {
     return tableSchemaCache.get();
   }
 
@@ -89,13 +88,11 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     return schema;
   }
 
-  public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
-    return getTableAvroSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
-        .map(HoodieSchema::fromAvroSchema)
+  public Option<HoodieSchema> getTableSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
+    return getTableSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
         .or(this::getTableCreateSchemaWithoutMetaField) // Fall back: read create schema from table config.
         .map(tableSchema -> includeMetadataFields ? HoodieSchemaUtils.addMetadataFields(tableSchema, false) : HoodieSchemaUtils.removeMetadataFields(tableSchema))
-        .map(this::handlePartitionColumnsIfNeeded)
-        .map(HoodieSchema::toAvroSchema);
+        .map(this::handlePartitionColumnsIfNeeded);
   }
 
   private Option<HoodieSchema> getTableCreateSchemaWithoutMetaField() {
@@ -112,16 +109,16 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
   }
 
   @VisibleForTesting
-  Option<Schema> getTableAvroSchemaFromTimelineWithCache(Option<HoodieInstant> instantTime) {
-    return getTableAvroSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
+  Option<HoodieSchema> getTableSchemaFromTimelineWithCache(Option<HoodieInstant> instantTime) {
+    return getTableSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
   }
 
   // [HUDI-9112] simplify the logic
-  Option<Schema> getTableAvroSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
+  Option<HoodieSchema> getTableSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
     // If instantTime is empty it means read the latest one. In that case, get the cached instant if there is one.
     boolean fetchFromLastValidCommit = instantTime.isEmpty();
     Option<HoodieInstant> targetInstant = instantTime.or(getCachedLatestCommitWithValidSchema());
-    Schema cachedTableSchema = null;
+    HoodieSchema cachedTableSchema = null;
 
     // Try cache first if there is a target instant to fetch for.
     if (!targetInstant.isEmpty()) {
@@ -130,7 +127,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
     // Cache miss on either latestCommitWithValidSchema or commitMetadataCache. Compute the result.
     if (cachedTableSchema == null) {
-      Option<Pair<HoodieInstant, Schema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(reversedTimelineStream, targetInstant);
+      Option<Pair<HoodieInstant, HoodieSchema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(reversedTimelineStream, targetInstant);
       if (instantWithSchema.isPresent()) {
         targetInstant = Option.of(instantWithSchema.get().getLeft());
         cachedTableSchema = instantWithSchema.get().getRight();
@@ -159,10 +156,10 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
   }
 
   @VisibleForTesting
-  Option<Pair<HoodieInstant, Schema>> getLastCommitMetadataWithValidSchemaFromTimeline(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instant) {
+  Option<Pair<HoodieInstant, HoodieSchema>> getLastCommitMetadataWithValidSchemaFromTimeline(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instant) {
     // To find the table schema given an instant time, need to walk backwards from the latest instant in
     // the timeline finding a completed instant containing a valid schema.
-    ConcurrentHashMap<HoodieInstant, Schema> tableSchemaAtInstant = new ConcurrentHashMap<>();
+    ConcurrentHashMap<HoodieInstant, HoodieSchema> tableSchemaAtInstant = new ConcurrentHashMap<>();
     Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimelineStream
         // If a completion time is specified, find the first eligible instant in the schema evolution timeline.
         // Should switch to completion time based.
@@ -179,7 +176,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
             String schemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
             boolean isValidSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
             if (isValidSchemaStr) {
-              tableSchemaAtInstant.putIfAbsent(s, new Schema.Parser().parse(schemaStr));
+              tableSchemaAtInstant.putIfAbsent(s, HoodieSchema.parse(schemaStr));
             }
             return isValidSchemaStr;
           } catch (IOException e) {

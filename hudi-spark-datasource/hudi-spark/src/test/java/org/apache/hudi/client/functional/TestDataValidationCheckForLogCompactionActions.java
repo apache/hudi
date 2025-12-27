@@ -185,7 +185,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Verify every field.
     mainRecordsMap.forEach((key, value) -> {
       assertTrue(experimentRecordsMap.containsKey(key + RECORD_KEY_APPEND_VALUE));
-      assertGenericRecords(value, experimentRecordsMap.get(key + RECORD_KEY_APPEND_VALUE), readerSchema.toAvroSchema(), excludeFields);
+      assertGenericRecords(value, experimentRecordsMap.get(key + RECORD_KEY_APPEND_VALUE), readerSchema, excludeFields);
     });
   }
 
