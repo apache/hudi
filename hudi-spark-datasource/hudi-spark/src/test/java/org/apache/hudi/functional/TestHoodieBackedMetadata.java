@@ -122,6 +122,7 @@ import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -136,7 +137,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
@@ -211,10 +211,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Slf4j
 @Tag("functional")
 public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieBackedMetadata.class);
 
   public static List<Arguments> tableTypeAndEnableOperationArgs() {
     return asList(
@@ -2317,7 +2316,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Ensure all commits were synced to the Metadata Table
       HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
-      LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
+      log.warn("total commits in metadata table {}", metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
 
       // 8 commits (3 init + 5 deltacommits) and 2 cleaner commits.
       assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 10);
@@ -3775,7 +3774,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           verifyMetadataColumnStatsRecords(storage, logFiles);
         }
       } catch (IOException e) {
-        LOG.error("Metadata record validation failed", e);
+        log.error("Metadata record validation failed", e);
         fail("Metadata record validation failed");
       }
     });
@@ -3844,17 +3843,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
         if ((fsFileNames.size() != metadataFilenames.size())
             || (!fsFileNames.equals(metadataFilenames))) {
-          LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
-          LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
+          log.info("*** File system listing = {}", Arrays.toString(fsFileNames.toArray()));
+          log.info("*** Metadata listing = {}", Arrays.toString(metadataFilenames.toArray()));
 
           for (String fileName : fsFileNames) {
             if (!metadataFilenames.contains(fileName)) {
-              LOG.error(partition + "FsFilename " + fileName + " not found in Meta data");
+              log.error("{} FsFilename {} not found in Meta data", partition, fileName);
             }
           }
           for (String fileName : metadataFilenames) {
             if (!fsFileNames.contains(fileName)) {
-              LOG.error(partition + "Metadata file " + fileName + " not found in original FS");
+              log.error("{} Metadata file {} not found in original FS", partition, fileName);
             }
           }
         }
@@ -3941,13 +3940,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             verifyMetadataColumnStatsRecords(storage, logFiles);
           }
         } catch (Exception e) {
-          LOG.error("Metadata record validation failed", e);
+          log.error("Metadata record validation failed", e);
           fail("Metadata record validation failed");
         }
       });
 
       // TODO: include validation for record_index partition here.
-      LOG.info("Validation time=" + timer.endTimer());
+      log.info("Validation time={}", timer.endTimer());
     }
   }
 

@@ -155,6 +155,12 @@
       <artifactId>log4j-1.2-api</artifactId>
     </dependency>
 
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+    </dependency>
+
     <!-- Hoodie - Spark-->
     <dependency>
       <groupId>org.apache.hudi</groupId>

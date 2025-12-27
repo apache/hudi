@@ -43,6 +43,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -55,8 +56,6 @@ import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.util.LongAccumulator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -74,10 +73,10 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 /**
  * Loads data from Parquet Sources.
  */
+@Slf4j
 public class HDFSParquetImporterUtils implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HDFSParquetImporterUtils.class);
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")
       .withZone(ZoneId.systemDefault());
 
@@ -128,7 +127,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     FileSystem fs = HadoopFSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
     this.props = this.propsFilePath == null || this.propsFilePath.isEmpty() ? buildProperties(this.configs)
         : readConfig(fs.getConf(), new StoragePath(this.propsFilePath), this.configs).getProps(true);
-    LOG.info("Starting data import with configs : " + props.toString());
+    log.info("Starting data import with configs : {}", props.toString());
     int ret = -1;
     try {
       // Verify that targetPath is not present.
@@ -139,7 +138,7 @@ public class HDFSParquetImporterUtils implements Serializable {
         ret = dataImport(jsc, fs);
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      LOG.error("dataImport failed", t);
+      log.error("dataImport failed", t);
     }
     return ret;
   }
@@ -171,7 +170,7 @@ public class HDFSParquetImporterUtils implements Serializable {
       JavaRDD<WriteStatus> writeResponse = load(client, instantTime, hoodieRecords);
       return handleErrors(jsc, instantTime, writeResponse);
     } catch (Throwable t) {
-      LOG.error("Error occurred.", t);
+      log.error("Error occurred.", t);
     }
     return -1;
   }
@@ -202,13 +201,13 @@ public class HDFSParquetImporterUtils implements Serializable {
             throw new HoodieIOException("row field is missing. :" + this.rowKey);
           }
           String partitionPath = partitionField.toString();
-          LOG.debug("Row Key : {}, Partition Path is ({}})", rowField, partitionPath);
+          log.debug("Row Key : {}, Partition Path is ({}})", rowField, partitionPath);
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              LOG.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
+              log.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
             }
           }
           return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
@@ -259,7 +258,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
-        LOG.info("Adding overridden properties to file properties.");
+        log.info("Adding overridden properties to file properties.");
         conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
       }
     } catch (IOException ioe) {
@@ -320,14 +319,14 @@ public class HDFSParquetImporterUtils implements Serializable {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat());
+        log.error("Error processing records :writeStatus:{}", writeStatus.getStat());
       }
     });
     if (errors.value() == 0) {
-      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
+      log.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error("Import failed with {} errors.", errors.value());
+    log.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 }

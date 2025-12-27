@@ -67,6 +67,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -620,7 +622,10 @@ public class TestMergeHandle extends BaseTestHandle {
     assertEquals(expectedTotalDeletedRecords, writeStat.getNumDeletes());
   }
 
+  @AllArgsConstructor
+  @Getter
   class InputAndExpectedDataSet {
+
     private final Map<String, HoodieRecord> expectedRecordsMap;
     private final int expectedUpdates;
     private final int expectedDeletes;
@@ -628,45 +633,5 @@ public class TestMergeHandle extends BaseTestHandle {
     private final List<HoodieRecord> newInserts;
     private final List<HoodieRecord> validUpdates;
     private final Map<String, HoodieRecord> validDeletes;
-
-    public InputAndExpectedDataSet(Map<String, HoodieRecord> expectedRecordsMap, int expectedUpdates, int expectedDeletes,
-                                   List<HoodieRecord> recordsToMerge, List<HoodieRecord> newInserts, List<HoodieRecord> validUpdates,
-                                   Map<String, HoodieRecord> validDeletes) {
-      this.expectedRecordsMap = expectedRecordsMap;
-      this.expectedUpdates = expectedUpdates;
-      this.expectedDeletes = expectedDeletes;
-      this.recordsToMerge = recordsToMerge;
-      this.validUpdates = validUpdates;
-      this.newInserts = newInserts;
-      this.validDeletes = validDeletes;
-    }
-
-    public Map<String, HoodieRecord> getExpectedRecordsMap() {
-      return expectedRecordsMap;
-    }
-
-    public int getExpectedUpdates() {
-      return expectedUpdates;
-    }
-
-    public int getExpectedDeletes() {
-      return expectedDeletes;
-    }
-
-    public List<HoodieRecord> getRecordsToMerge() {
-      return recordsToMerge;
-    }
-
-    public List<HoodieRecord> getNewInserts() {
-      return newInserts;
-    }
-
-    public List<HoodieRecord> getValidUpdates() {
-      return validUpdates;
-    }
-
-    public Map<String, HoodieRecord> getValidDeletes() {
-      return validDeletes;
-    }
   }
 }
