@@ -26,10 +26,12 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 
 /**
  * Basic functional tests for Lance file format with Hudi Spark datasource.
  */
+@DisabledIfSystemProperty(named = "lance.skip.tests", matches = "true")
 class TestLanceDataSource extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
