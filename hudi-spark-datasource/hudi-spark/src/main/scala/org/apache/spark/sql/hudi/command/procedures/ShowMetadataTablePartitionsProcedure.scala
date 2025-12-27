@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.HoodieStorageUtils
 
