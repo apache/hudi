@@ -19,8 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.{getCatalystRowSerDe, sparkAdapter}
-import org.apache.hudi.avro.AvroSchemaUtils
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
@@ -121,11 +120,11 @@ object AvroConversionUtils {
   }
 
   /**
-   * Please use [[AvroSchemaUtils.getAvroRecordQualifiedName(String)]]
+   * Please use [[HoodieSchemaUtils.getRecordQualifiedName(String)]]
    */
   @Deprecated
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
-    val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+    val qualifiedName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
     val nameParts = qualifiedName.split('.')
     (nameParts.last, nameParts.init.mkString("."))
   }
