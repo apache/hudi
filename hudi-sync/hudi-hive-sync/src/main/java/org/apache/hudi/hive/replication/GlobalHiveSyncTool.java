@@ -22,9 +22,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncTool;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,9 +31,9 @@ import java.util.Properties;
 
 import static org.apache.hudi.hive.replication.GlobalHiveSyncConfig.META_SYNC_GLOBAL_REPLICATE_TIMESTAMP;
 
+@Slf4j
 public class GlobalHiveSyncTool extends HiveSyncTool {
 
-  private static final Logger LOG = LoggerFactory.getLogger(GlobalHiveSyncTool.class);
   protected final GlobalHiveSyncConfig config;
 
   public GlobalHiveSyncTool(Properties props, Configuration hadoopConf) {
@@ -53,9 +52,9 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
     Option<String> timestamp = Option.ofNullable(config.getString(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP));
     if (timestamp.isPresent()) {
       syncClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
-      LOG.info("Sync complete for {}", tableName);
+      log.info("Sync complete for {}", tableName);
     } else {
-      LOG.warn("Sync skipped: {} is not set.", META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key());
+      log.warn("Sync skipped: {} is not set.", META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key());
     }
   }
 
@@ -75,10 +74,10 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
       Option<String> timestamp = timeStampMap.get(tableName);
       if (timestamp.isPresent()) {
         syncClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
-        LOG.info("updated timestamp for " + tableName + " to: " + timestamp.get());
+        log.info("updated timestamp for {} to: {}", tableName, timestamp.get());
       } else {
         syncClient.deleteLastReplicatedTimeStamp(tableName);
-        LOG.info("deleted timestamp for " + tableName);
+        log.info("deleted timestamp for {}", tableName);
       }
     }
   }

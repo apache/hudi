@@ -29,12 +29,12 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class HoodieMetaSyncMetrics {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetaSyncMetrics.class);
   private static final String TIMER_METRIC_EXTENSION = ".timer";
   private static final String COUNTER_METRIC_EXTENSION = ".counter";
   private static final String META_SYNC_RECREATE_TABLE_METRIC = "meta_sync.recreate_table";
@@ -42,6 +42,7 @@ public class HoodieMetaSyncMetrics {
   private static final String META_SYNC_ACTION = "meta_sync";
   private static final String RECREATE_TABLE_DURATION_MS_METRIC = "recreate_table_duration_ms";
   // Metrics are shut down by the shutdown hook added in the Metrics class
+  @Getter
   private Metrics metrics;
   private final HoodieMetricsConfig metricsConfig;
   private transient HoodieStorage storage;
@@ -65,10 +66,6 @@ public class HoodieMetaSyncMetrics {
     }
   }
 
-  public Metrics getMetrics() {
-    return metrics;
-  }
-
   public Timer.Context getRecreateAndSyncTimer() {
     if (metricsConfig.isMetricsOn() && recreateAndSyncTimer == null) {
       recreateAndSyncTimer = createTimer(recreateAndSyncTimerName);
@@ -88,7 +85,7 @@ public class HoodieMetaSyncMetrics {
   public void updateRecreateAndSyncDurationInMs(long durationInNs) {
     if (metricsConfig.isMetricsOn()) {
       long durationInMs = getDurationInMs(durationInNs);
-      LOG.info("Sending recreate and sync metrics {}", durationInMs);
+      log.info("Sending recreate and sync metrics {}", durationInMs);
       metrics.registerGauge(getMetricsName(META_SYNC_ACTION, RECREATE_TABLE_DURATION_MS_METRIC), durationInMs);
     }
   }
