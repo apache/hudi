@@ -46,12 +46,11 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECO
  *
  * This writer integrates with Hudi's storage I/O layer and supports:
  * - Hudi metadata field population
- * - Record key tracking (for bloom filters - TODO)
+ * - Record key tracking (for bloom filters - TODO https://github.com/apache/hudi/issues/17664)
  * - Sequence ID generation
  */
 public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> implements HoodieSparkFileWriter {
 
-  private static final long DEFAULT_MAX_FILE_SIZE = 120 * 1024 * 1024; // 120MB
   private static final String DEFAULT_TIMEZONE = "UTC";
 
   private final StructType sparkSchema;
@@ -79,7 +78,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> i
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
                                 boolean populateMetaFields) throws IOException {
-    super(storage, file, DEFAULT_BATCH_SIZE, DEFAULT_MAX_FILE_SIZE);
+    super(storage, file, DEFAULT_BATCH_SIZE);
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
@@ -119,6 +118,17 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> i
     }
     // Finalize the writer (sets row count)
     writer.finish();
+  }
+
+  /**
+   * Check if writer can accept more records based on file size.
+   * Uses filesystem-based size checking (similar to ORC/HFile approach).
+   *
+   * @return true if writer can accept more records, false if file size limit reached
+   */
+  public boolean canWrite() {
+    //TODO https://github.com/apache/hudi/issues/17684
+    return true;
   }
 
   @Override

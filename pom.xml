@@ -117,7 +117,7 @@
     <junit.vintage.version>5.13.4</junit.vintage.version>
     <junit.platform.version>1.13.4</junit.platform.version>
     <mockito.jupiter.version>4.11.0</mockito.jupiter.version>
-    <log4j2.version>2.17.2</log4j2.version>
+    <log4j2.version>2.25.3</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
@@ -241,8 +241,8 @@
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.10.7</snappy.version>
     <arrow.version>18.3.0</arrow.version>
-    <lance.version>0.38.0</lance.version>
-    <lance.spark.connector.version>0.0.13</lance.spark.connector.version>
+    <lance.version>0.39.0</lance.version>
+    <lance.spark.connector.version>0.0.15</lance.spark.connector.version>
     <lance.spark.artifact>lance-spark-3.5_${scala.binary.version}</lance.spark.artifact>
     <lance.skip.tests>false</lance.skip.tests>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
@@ -2516,9 +2516,6 @@
         <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <kafka.version>2.8.1</kafka.version>
-        <!-- Lance: Skip tests for Spark 3.3 due to lack of support -->
-        <lance.spark.artifact>lance-spark-base_${scala.binary.version}</lance.spark.artifact>
-        <lance.skip.tests>true</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2866,15 +2863,24 @@
       </activation>
     </profile>
 
+    <!-- Java 11+ profile: adds module system flags and uses Parallel GC for faster test execution -->
+    <profile>
+      <id>java11</id>
+      <properties>
+        <argLine>-Xmx2g -Xms512m -XX:+UseParallelGC --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -XX:-OmitStackTraceInFastThrow</argLine>
+      </properties>
+      <activation>
+        <jdk>[11,17)</jdk>
+      </activation>
+    </profile>
+
     <profile>
       <id>java17</id>
       <properties>
-        <argLine>-Xmx2g --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true -XX:-OmitStackTraceInFastThrow</argLine>
+        <argLine>-Xmx2g -Xms512m -XX:+UseParallelGC --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true -XX:-OmitStackTraceInFastThrow</argLine>
       </properties>
       <activation>
-        <property>
-          <name>java17</name>
-        </property>
+        <jdk>[17,)</jdk>
       </activation>
     </profile>
 

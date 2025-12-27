@@ -205,7 +205,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // for presto engine, the hiveSchema will be: col1,col2, but the writerSchema will be col1,col2,par
     // so to be compatible with hive and presto, we should rewrite oldRecord before we call combineAndGetUpdateValue,
     // once presto on hudi have its own mor reader, we can remove the rewrite logical.
-    GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema().toAvroSchema());
+    GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
     BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieSchema.fromAvroSchema(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
     BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(getLogScannerReaderSchema().toAvroSchema()),
@@ -218,7 +218,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   }
 
   private GenericRecord convertArrayWritableToHoodieRecord(ArrayWritable arrayWritable) {
-    GenericRecord record = serializer.serialize(arrayWritable, getHiveSchema().toAvroSchema());
+    GenericRecord record = serializer.serialize(arrayWritable, getHiveSchema());
     return record;
   }
 

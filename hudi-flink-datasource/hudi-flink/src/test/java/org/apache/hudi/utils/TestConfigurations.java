@@ -26,6 +26,9 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -45,9 +48,8 @@ import java.util.stream.Collectors;
 /**
  * Configurations for the test.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TestConfigurations {
-  private TestConfigurations() {
-  }
 
   public static final DataType ROW_DATA_TYPE = DataTypes.ROW(
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
@@ -409,6 +411,7 @@ public class TestConfigurations {
    * Tool to build hoodie table DDL with schema {@link #TABLE_SCHEMA}.
    */
   public static class Sql {
+    @Getter
     private final Map<String, String> options;
     private final String tableName;
     private List<String> fields = new ArrayList<>();
@@ -462,10 +465,6 @@ public class TestConfigurations {
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
-    }
-
-    public Map<String, String> getOptions() {
-      return this.options;
     }
   }
 

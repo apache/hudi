@@ -29,12 +29,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.AbstractMap;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -178,7 +178,7 @@ public final class RocksDbDiskMap<T extends Serializable, R> extends DiskMap<T, 
     if (null == rocksDb) {
       synchronized (this) {
         if (null == rocksDb) {
-          Map<String, CustomSerializer<?>> serializerMap = new HashMap<>(4);
+          ConcurrentHashMap<String, CustomSerializer<?>> serializerMap = new ConcurrentHashMap<>(4);
           serializerMap.put(ROCKSDB_COL_FAMILY, valueSerializer);
           rocksDb = new RocksDBDAO(ROCKSDB_COL_FAMILY, diskMapPath, serializerMap);
           rocksDb.addColumnFamily(ROCKSDB_COL_FAMILY);

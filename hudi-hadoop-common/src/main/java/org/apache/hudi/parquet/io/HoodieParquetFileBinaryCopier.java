@@ -18,10 +18,11 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.HoodieFileMetadataMerger;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
@@ -32,8 +33,6 @@ import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.util.CompressionConverter;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -62,9 +61,9 @@ import java.util.Set;
  *    2) Updated row group offsets
  *    3) Validated schema consistency
  */
+@Slf4j
 public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase implements HoodieFileBinaryCopier {
-  
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetFileBinaryCopier.class);
+
   private final CompressionCodecName codecName;
 
   // Reader and relevant states of the in-processing input file
@@ -145,7 +144,7 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
   private void initNextReader() throws IOException {
     if (reader != null) {
       reader.close();
-      LOG.info("Finish binary copy input file: {}", reader.getFile());
+      log.info("Finish binary copy input file: {}", reader.getFile());
     }
 
     if (inputFiles.isEmpty()) {
@@ -154,6 +153,6 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
     }
 
     reader = inputFiles.poll();
-    LOG.info("Merging input file: {}, remaining files: {}", reader.getFile(), inputFiles.size());
+    log.info("Merging input file: {}, remaining files: {}", reader.getFile(), inputFiles.size());
   }
 }

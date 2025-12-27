@@ -38,13 +38,12 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -53,9 +52,16 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+/**
+ * Note: Getters are manually defined instead of using Lombok's @Getter annotation.
+ * This is because Scala classes in this module reference these getters, and the Scala
+ * compiler runs before Lombok annotation processing. Using @Getter would cause Scala
+ * compilation errors as the generated methods wouldn't be visible yet. To avoid
+ * complicating the build with custom compilation order configuration, we use explicit
+ * getter methods that are available during Scala compilation.
+ */
+@Slf4j
 public abstract class HoodieTestSuiteWriter implements Serializable {
-
-  private static Logger log = LoggerFactory.getLogger(HoodieTestSuiteWriter.class);
 
   protected HoodieDeltaStreamerWrapper deltaStreamerWrapper;
   protected HoodieWriteConfig writeConfig;

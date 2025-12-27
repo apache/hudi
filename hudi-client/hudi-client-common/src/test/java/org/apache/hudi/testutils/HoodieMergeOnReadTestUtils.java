@@ -43,7 +43,9 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,8 +67,7 @@ public class HoodieMergeOnReadTestUtils {
 
   public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
                                                                String basePath, JobConf jobConf, boolean realtime, boolean populateMetaFields) {
-    Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    return getRecordsUsingInputFormat(conf, inputPaths, basePath, jobConf, realtime, schema,
+    return getRecordsUsingInputFormat(conf, inputPaths, basePath, jobConf, realtime, HoodieTestDataGenerator.AVRO_SCHEMA,
         HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>(), populateMetaFields);
   }
 
@@ -104,33 +105,36 @@ public class HoodieMergeOnReadTestUtils {
         .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList()));
 
-    List<GenericRecord> records = new ArrayList<>();
     try {
       FileInputFormat.setInputPaths(jobConf, String.join(",", inputPaths));
       InputSplit[] splits = inputFormat.getSplits(jobConf, inputPaths.size());
-
-      for (InputSplit split : splits) {
-        RecordReader recordReader = inputFormat.getRecordReader(split, jobConf, null);
-        Object key = recordReader.createKey();
-        ArrayWritable writable = (ArrayWritable) recordReader.createValue();
-        while (recordReader.next(key, writable)) {
-          GenericRecordBuilder newRecord = new GenericRecordBuilder(projectedSchema);
-          // writable returns an array with [field1, field2, _hoodie_commit_time,
-          // _hoodie_commit_seqno]
-          Writable[] values = writable.get();
-          schema.getFields().stream()
-              .filter(f -> !projectCols || projectedColumns.contains(f.name()))
-              .map(f -> Pair.of(projectedSchema.getFields().stream()
-                  .filter(p -> f.name().equals(p.name())).findFirst().get(), f))
-              .forEach(fieldsPair -> newRecord.set(fieldsPair.getKey(), values[fieldsPair.getValue().pos()]));
-          records.add(newRecord.build());
+      return Arrays.stream(splits).parallel().flatMap(split -> {
+        List<GenericRecord> records = new ArrayList<>();
+        try {
+          RecordReader recordReader = inputFormat.getRecordReader(split, jobConf, null);
+          Object key = recordReader.createKey();
+          ArrayWritable writable = (ArrayWritable) recordReader.createValue();
+          while (recordReader.next(key, writable)) {
+            GenericRecordBuilder newRecord = new GenericRecordBuilder(projectedSchema);
+            // writable returns an array with [field1, field2, _hoodie_commit_time,
+            // _hoodie_commit_seqno]
+            Writable[] values = writable.get();
+            schema.getFields().stream()
+                .filter(f -> !projectCols || projectedColumns.contains(f.name()))
+                .map(f -> Pair.of(projectedSchema.getFields().stream()
+                    .filter(p -> f.name().equals(p.name())).findFirst().get(), f))
+                .forEach(fieldsPair -> newRecord.set(fieldsPair.getKey(), values[fieldsPair.getValue().pos()]));
+            records.add(newRecord.build());
+          }
+          recordReader.close();
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
         }
-        recordReader.close();
-      }
-    } catch (IOException ie) {
-      log.error("Read records error", ie);
+        return records.stream();
+      }).collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
-    return records;
   }
 
   private static void setPropsForInputFormat(FileInputFormat inputFormat, JobConf jobConf, Schema schema, String hiveColumnTypes, boolean projectCols, List<String> projectedCols,

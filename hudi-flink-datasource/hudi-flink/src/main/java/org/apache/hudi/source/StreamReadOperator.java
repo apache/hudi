@@ -26,6 +26,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.utils.RuntimeContextUtils;
 import org.apache.hudi.utils.SourceContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -44,8 +45,6 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Preconditions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,10 +61,9 @@ import java.util.concurrent.LinkedBlockingDeque;
  * This architecture allows the separation of split reading from processing the checkpoint barriers,
  * thus removing any potential back-pressure.
  */
+@Slf4j
 public class StreamReadOperator extends AbstractStreamOperator<RowData>
     implements OneInputStreamOperator<MergeOnReadInputSplit, RowData> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
 
   private static final int MINI_BATCH_SIZE = 2048;
 
@@ -114,7 +112,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
     splits = new LinkedBlockingDeque<>();
     if (context.isRestored()) {
       int subtaskIdx = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
-      LOG.info("Restoring state for operator {} (task ID: {}).", getClass().getSimpleName(), subtaskIdx);
+      log.info("Restoring state for operator {} (task ID: {}).", getClass().getSimpleName(), subtaskIdx);
 
       for (MergeOnReadInputSplit split : inputSplitsState.get()) {
         splits.add(split);
@@ -166,7 +164,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
     if (format.isClosed()) {
       // This log is important to indicate the consuming process,
       // there is only one log message for one data bucket.
-      LOG.info("Processing input split : {}", split);
+      log.info("Processing input split : {}", split);
       format.open(split);
       readMetrics.setSplitLatestCommit(split.getLatestCommit());
     }

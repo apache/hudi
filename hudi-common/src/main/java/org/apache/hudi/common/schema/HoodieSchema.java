@@ -85,6 +85,7 @@ public class HoodieSchema implements Serializable {
    * This provides compatibility with Avro's JsonProperties while maintaining Hudi's API.
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
+  public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
   private static final long serialVersionUID = 1L;
   private Schema avroSchema;
   private HoodieSchemaType type;

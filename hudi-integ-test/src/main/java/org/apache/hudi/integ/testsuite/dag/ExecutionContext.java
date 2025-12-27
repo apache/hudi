@@ -18,25 +18,31 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import java.io.Serializable;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
+
+import lombok.AllArgsConstructor;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.Serializable;
 
 /**
  * This wraps the context needed for an execution of
  * a {@link DagNode#execute(ExecutionContext, int)}.
+ *
+ * Note: Getters are manually defined instead of using Lombok's @Getter annotation.
+ * This is because Scala classes in this module reference these getters, and the Scala
+ * compiler runs before Lombok annotation processing. Using @Getter would cause Scala
+ * compilation errors as the generated methods wouldn't be visible yet. To avoid
+ * complicating the build with custom compilation order configuration, we use explicit
+ * getter methods that are available during Scala compilation.
  */
+@AllArgsConstructor
 public class ExecutionContext implements Serializable {
 
-  private WriterContext writerContext;
   private transient JavaSparkContext jsc;
-
-  public ExecutionContext(JavaSparkContext jsc, WriterContext writerContext) {
-    this.writerContext = writerContext;
-    this.jsc = jsc;
-  }
+  private WriterContext writerContext;
 
   public HoodieTestSuiteWriter getHoodieTestSuiteWriter() {
     return writerContext.getHoodieTestSuiteWriter();

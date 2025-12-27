@@ -20,14 +20,13 @@ package org.apache.hudi.connect.kafka;
 
 import org.apache.hudi.connect.ControlMessage;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -36,9 +35,8 @@ import java.util.Properties;
  * Control Topic that coordinates transactions
  * across Participants.
  */
+@Slf4j
 public class KafkaControlProducer {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaControlProducer.class);
 
   private final String bootstrapServers;
   private final String controlTopicName;

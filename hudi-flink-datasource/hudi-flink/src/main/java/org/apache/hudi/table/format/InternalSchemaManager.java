@@ -39,6 +39,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 
+import lombok.Getter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.Preconditions;
 
@@ -63,6 +64,7 @@ public class InternalSchemaManager implements Serializable {
   public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
       TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
 
+  @Getter
   private final InternalSchema querySchema;
   private final String validCommits;
   private final String tablePath;
@@ -97,10 +99,6 @@ public class InternalSchemaManager implements Serializable {
     this.tablePath = tablePath;
     this.layout = layout;
     this.tableConfig = tableConfig;
-  }
-
-  public InternalSchema getQuerySchema() {
-    return querySchema;
   }
 
   /**

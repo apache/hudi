@@ -21,9 +21,9 @@ package org.apache.hudi.io.lance;
 
 import com.lancedb.lance.file.LanceFileWriter;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -49,13 +49,15 @@ import java.util.List;
  */
 @NotThreadSafe
 public abstract class HoodieBaseLanceWriter<R> implements Closeable {
+  /** Memory size for data write operations: 120MB */
+  private static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
+
   protected static final int DEFAULT_BATCH_SIZE = 1000;
   protected final HoodieStorage storage;
   protected final StoragePath path;
   protected final BufferAllocator allocator;
   protected final List<R> bufferedRecords;
   protected final int batchSize;
-  protected final long maxFileSize;
   protected long writtenRecordCount = 0;
   protected VectorSchemaRoot root;
 
@@ -67,15 +69,14 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * @param storage HoodieStorage instance
    * @param path Path where Lance file will be written
    * @param batchSize Number of records to buffer before flushing to Lance
-   * @param maxFileSize Maximum file size in bytes before rolling over to new file
    */
-  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize, long maxFileSize) {
+  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize) {
     this.storage = storage;
     this.path = path;
-    this.allocator = new RootAllocator(Long.MAX_VALUE);
+    this.allocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
     this.bufferedRecords = new ArrayList<>(batchSize);
     this.batchSize = batchSize;
-    this.maxFileSize = maxFileSize;
   }
 
   /**
@@ -111,17 +112,6 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   }
 
   /**
-   * Check if writer can accept more records based on file size.
-   * Uses filesystem-based size checking (similar to ORC/HFile approach).
-   *
-   * @return true if writer can accept more records, false if file size limit reached
-   */
-  public boolean canWrite() {
-    //TODO will need to implement proper way to compute this
-    return true;
-  }
-
-  /**
    * Get the total number of records written so far.
    *
    * @return Number of records written
@@ -137,26 +127,66 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    */
   @Override
   public void close() throws IOException {
+    Exception primaryException = null;
+
+    // 1. Flush remaining records
     try {
       // Flush any remaining buffered records
       if (!bufferedRecords.isEmpty()) {
         flushBatch();
       }
 
-      // Close Lance writer
-      if (writer != null) {
-        writer.close();
-      }
-
-      // Close VectorSchemaRoot
-      if (root != null) {
-        root.close();
+      // Ensure writer is initialized even if no data was written
+      // This creates an empty Lance file with just schema metadata
+      if (writer == null && root == null) {
+        initializeWriter();
+        root = VectorSchemaRoot.create(getArrowSchema(), allocator);
+        root.setRowCount(0);
+        writer.write(root);
       }
     } catch (Exception e) {
-      throw new HoodieException("Failed to close Lance writer: " + path, e);
-    } finally {
-      // Always close allocator
+      primaryException = e;
+    }
+
+    // Close Lance writer
+    if (writer != null) {
+      try {
+        writer.close();
+      } catch (Exception e) {
+        if (primaryException == null) {
+          primaryException = e;
+        } else {
+          primaryException.addSuppressed(e);
+        }
+      }
+    }
+
+    // Close VectorSchemaRoot
+    if (root != null) {
+      try {
+        root.close();
+      } catch (Exception e) {
+        if (primaryException == null) {
+          primaryException = e;
+        } else {
+          primaryException.addSuppressed(e);
+        }
+      }
+    }
+
+    // Always close allocator
+    try {
       allocator.close();
+    } catch (Exception e) {
+      if (primaryException == null) {
+        primaryException = e;
+      } else {
+        primaryException.addSuppressed(e);
+      }
+    }
+
+    if (primaryException != null) {
+      throw new HoodieException("Failed to close Lance writer: " + path, primaryException);
     }
   }
 

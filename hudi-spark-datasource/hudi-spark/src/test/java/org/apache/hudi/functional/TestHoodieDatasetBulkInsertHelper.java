@@ -18,16 +18,16 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -36,6 +36,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
+import lombok.Getter;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.scheduler.SparkListener;
@@ -385,6 +386,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
     private boolean checkFlag = false;
     private String checkMessage;
+    @Getter
     private int parallelism;
 
     StageCheckBulkParallelismListener(String checkMessage) {
@@ -401,10 +403,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
       if (stageSubmitted.stageInfo().details().contains(checkMessage)) {
         checkFlag = true;
       }
-    }
-
-    public int getParallelism() {
-      return parallelism;
     }
   }
 }

@@ -63,7 +63,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -122,7 +121,6 @@ import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -942,32 +940,6 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
-  void testHasDecimalField() {
-    assertTrue(HoodieAvroUtils.hasDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
-    assertFalse(HoodieAvroUtils.hasDecimalField(new Schema.Parser().parse(EVOLVED_SCHEMA)));
-    assertFalse(HoodieAvroUtils.hasDecimalField(new Schema.Parser().parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
-    assertTrue(HoodieAvroUtils.hasDecimalField(HoodieTestDataGenerator.AVRO_SCHEMA));
-    assertTrue(HoodieAvroUtils.hasDecimalField(HoodieTestDataGenerator.AVRO_TRIP_ENCODED_DECIMAL_SCHEMA));
-    Schema recordWithMapAndArray = Schema.createRecord("recordWithMapAndArray", null, null, false,
-        Arrays.asList(new Schema.Field("mapfield", Schema.createMap(Schema.create(Schema.Type.INT)), null, null),
-            new Schema.Field("arrayfield", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
-        ));
-    assertFalse(HoodieAvroUtils.hasDecimalField(recordWithMapAndArray));
-    Schema recordWithDecMapAndArray = Schema.createRecord("recordWithDecMapAndArray", null, null, false,
-        Arrays.asList(new Schema.Field("mapfield",
-                Schema.createMap(LogicalTypes.decimal(10,6).addToSchema(Schema.create(Schema.Type.BYTES))), null, null),
-            new Schema.Field("arrayfield", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
-        ));
-    assertTrue(HoodieAvroUtils.hasDecimalField(recordWithDecMapAndArray));
-    Schema recordWithMapAndDecArray = Schema.createRecord("recordWithMapAndDecArray", null, null, false,
-        Arrays.asList(new Schema.Field("mapfield",
-            Schema.createMap(Schema.create(Schema.Type.INT)), null, null), new Schema.Field("arrayfield",
-            Schema.createArray(LogicalTypes.decimal(10,6).addToSchema(Schema.create(Schema.Type.BYTES))), null, null)
-        ));
-    assertTrue(HoodieAvroUtils.hasDecimalField(recordWithMapAndDecArray));
-  }
-
-  @Test
   void testCreateFullName() {
     String result = HoodieAvroUtils.createFullName(new ArrayDeque<>(Arrays.asList("a", "b", "c")));
     String resultSingle = HoodieAvroUtils.createFullName(new ArrayDeque<>(Collections.singletonList("a")));
@@ -997,39 +969,12 @@ public class TestHoodieAvroUtils {
     HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
 
     String[] userSortColumns = new String[] {"non_pii_col", "timestamp"};
-    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, Schema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
+    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, HoodieSchema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
     if (suffixRecordKey) {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5, "record1"}, sortColumnValues);
     } else {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5}, sortColumnValues);
     }
-  }
-
-  @Test
-  void testHasListOrMapField() {
-    Schema nestedList = Schema.createRecord("nestedList", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
-        new Schema.Field("nested", Schema.createRecord("nestedSchema", null, null, false, Collections.singletonList(
-            new Schema.Field("listField", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
-        )), null, null)
-    ));
-    Schema nestedMap = Schema.createRecord("nestedMap", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
-        new Schema.Field("nested", Schema.createUnion(Schema.create(Schema.Type.NULL),
-            Schema.createRecord("nestedSchema", null, null, false,
-                Collections.singletonList(new Schema.Field("mapField", Schema.createMap(Schema.create(Schema.Type.INT)), null, null)
-                ))), null, null)
-    ));
-    assertTrue(HoodieAvroUtils.hasListOrMapField(nestedList));
-    assertTrue(HoodieAvroUtils.hasListOrMapField(nestedMap));
-    assertFalse(HoodieAvroUtils.hasListOrMapField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
-  }
-
-  @Test
-  void testHasSmallPrecisionDecimalField() {
-    assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
-    assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR)));
-    assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
   }
 
   public static Stream<Arguments> getSchemaForFieldParams() {

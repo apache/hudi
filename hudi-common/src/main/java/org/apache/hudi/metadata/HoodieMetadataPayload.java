@@ -32,6 +32,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -102,7 +104,12 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-  private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
+
+  // Note: Variable is unused, but caching is required.
+  private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
+      HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
+  // Cache the Avro schema reference for O(1) equality checks during Avro.Schema -> HoodieSchema migration
+  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
   /**
    * Field offsets when metadata fields are present
    */
@@ -410,10 +417,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    // TODO: feature(schema): HoodieSchema change, we removed caching in a few areas, during the migration of Avro.Schema -> HoodieSchema.
-    // The schema objects might have been the same reference (due to caching), but now after converting from HoodieSchema to Avro Schema using .toAvroSchema(),
-    // it creates a new Schema object that's not the same reference as HOODIE_METADATA_SCHEMA
-    if (schema == null || HOODIE_METADATA_SCHEMA.equals(schema)) {
+    // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
+    // Uses cached Avro schema reference for O(1) equality check.
+    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);

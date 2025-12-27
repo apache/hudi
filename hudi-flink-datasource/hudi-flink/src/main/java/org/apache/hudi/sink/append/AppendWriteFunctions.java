@@ -20,15 +20,16 @@ package org.apache.hudi.sink.append;
 
 import org.apache.hudi.configuration.FlinkOptions;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
  * Utilities for {@link AppendWriteFunction} to handle rate limit if it was set.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public abstract class AppendWriteFunctions {
-  private AppendWriteFunctions() {
-  }
 
   /**
    * Creates a {@link AppendWriteFunction} instance based on the given configuration.

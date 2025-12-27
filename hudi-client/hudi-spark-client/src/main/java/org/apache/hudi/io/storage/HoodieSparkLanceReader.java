@@ -20,30 +20,36 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
+import org.apache.spark.sql.vectorized.ColumnVector;
+import org.apache.spark.sql.vectorized.ColumnarBatch;
+import org.apache.spark.sql.vectorized.LanceArrowColumnVector;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -53,14 +59,18 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
  * {@link HoodieSparkFileReader} implementation for Lance file format.
  */
 public class HoodieSparkLanceReader implements HoodieSparkFileReader {
-  // number of rows to read 
-  private static final int DEFAULT_BATCH_SIZE = 512; 
-  private final StoragePath path;
-  private final HoodieStorage storage;
+  // Memory size for data read operations: 120MB
+  public static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
 
-  public HoodieSparkLanceReader(HoodieStorage storage, StoragePath path) {
+  // Memory size for metadata operations: 8MB
+  private static final long LANCE_METADATA_ALLOCATOR_SIZE = 8 * 1024 * 1024;
+
+  // number of rows to read
+  private static final int DEFAULT_BATCH_SIZE = 512;
+  private final StoragePath path;
+
+  public HoodieSparkLanceReader(StoragePath path) {
     this.path = path;
-    this.storage = storage;
   }
 
   @Override
@@ -103,14 +113,12 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
-    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator();
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    //TODO to revisit adding support for when metadata fields are not persisted.
-
     // Get schema with only the record key field for efficient column pruning
     HoodieSchema recordKeySchema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(recordKeySchema);
@@ -121,49 +129,25 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   }
 
   /**
-   * Get an iterator over UnsafeRows from the Lance file.
-   *
-   * @return ClosableIterator over UnsafeRows
-   * @throws IOException if reading fails
-   */
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator() {
-    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-
-    try {
-      LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
-
-      // Get schema from Lance file and convert to Spark StructType
-      org.apache.arrow.vector.types.pojo.Schema arrowSchema = lanceReader.schema();
-      StructType sparkSchema = LanceArrowUtils.fromArrowSchema(arrowSchema);
-
-      ArrowReader arrowReader = lanceReader.readAll(null, null, DEFAULT_BATCH_SIZE);
-
-      return new HoodieLanceRecordIterator(allocator, lanceReader, arrowReader, sparkSchema, path.toString());
-    } catch (Exception e) {
-      allocator.close();
-      throw new HoodieException("Failed to create Lance reader for: " + path, e);
-    }
-  }
-
-  /**
    * Get an iterator over UnsafeRows from the Lance file with column projection.
    * This allows reading only specific columns for better performance.
    *
-   * @param requestedSchema Avro schema specifying which columns to read
+   * @param requestedSchema schema specifying which columns to read
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
+  private ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
     // Convert HoodieSchema to Spark StructType
     StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 
-    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
 
     try {
       LanceFileReader lanceReader = LanceFileReader.open(path.toString(), allocator);
 
       // Build list of column names to project (read only requested columns)
-      List<String> columnNames = new ArrayList<>();
+      List<String> columnNames = new ArrayList<>(requestedSparkSchema.size());
       for (StructField field : requestedSparkSchema.fields()) {
         columnNames.add(field.name());
       }
@@ -180,10 +164,10 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    // Read Arrow schema from Lance file and convert to Avro
-    try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
-      org.apache.arrow.vector.types.pojo.Schema arrowSchema = reader.schema();
+      Schema arrowSchema = reader.schema();
       StructType structType = LanceArrowUtils.fromArrowSchema(arrowSchema);
       return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", true);
     } catch (Exception e) {
@@ -198,11 +182,126 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public long getTotalRecords() {
-    try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
+             getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       return reader.numRows();
     } catch (Exception e) {
       throw new HoodieException("Failed to get row count from Lance file: " + path, e);
+    }
+  }
+
+  /**
+   * Iterator implementation that reads Lance file batches and converts to UnsafeRows.
+   * Keeps ColumnarBatch alive while iterating to avoid unnecessary data copying.
+   */
+  private class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
+    private final BufferAllocator allocator;
+    private final LanceFileReader lanceReader;
+    private final ArrowReader arrowReader;
+    private final UnsafeProjection projection;
+    private ColumnarBatch currentBatch;
+    private Iterator<InternalRow> rowIterator;
+    private ColumnVector[] columnVectors;
+
+    public LanceRecordIterator(BufferAllocator allocator,
+                               LanceFileReader lanceReader,
+                               ArrowReader arrowReader,
+                               StructType schema) {
+      this.allocator = allocator;
+      this.lanceReader = lanceReader;
+      this.arrowReader = arrowReader;
+      this.projection = UnsafeProjection.create(schema);
+    }
+
+    @Override
+    public boolean hasNext() {
+      // If we have records in current batch, return true
+      if (rowIterator != null && rowIterator.hasNext()) {
+        return true;
+      }
+
+      // Close previous batch before loading next
+      if (currentBatch != null) {
+        currentBatch.close();
+        currentBatch = null;
+      }
+
+      // Try to load next batch
+      try {
+        if (arrowReader.loadNextBatch()) {
+          VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
+
+          // Wrap each Arrow FieldVector in LanceArrowColumnVector for type-safe access
+          // Cache the column wrappers on first batch and reuse for all subsequent batches
+          if (columnVectors == null) {
+            columnVectors = root.getFieldVectors().stream()
+                    .map(LanceArrowColumnVector::new)
+                    .toArray(ColumnVector[]::new);
+          }
+
+          // Create ColumnarBatch and keep it alive while iterating
+          currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
+          rowIterator = currentBatch.rowIterator();
+          return rowIterator.hasNext();
+        }
+      } catch (IOException e) {
+        throw new HoodieException("Failed to read next batch from Lance file: " + path, e);
+      }
+
+      return false;
+    }
+
+    @Override
+    public UnsafeRow next() {
+      if (!hasNext()) {
+        throw new IllegalStateException("No more records available");
+      }
+      InternalRow row = rowIterator.next();
+      // Convert to UnsafeRow immediately while batch is still open
+      return projection.apply(row);
+    }
+
+    @Override
+    public void close() {
+      IOException arrowException = null;
+      Exception lanceException = null;
+
+      // Close current batch if exists
+      if (currentBatch != null) {
+        currentBatch.close();
+      }
+
+      // Close Arrow reader
+      if (arrowReader != null) {
+        try {
+          arrowReader.close();
+        } catch (IOException e) {
+          arrowException = e;
+        }
+      }
+
+      // Close Lance reader
+      if (lanceReader != null) {
+        try {
+          lanceReader.close();
+        } catch (Exception e) {
+          lanceException = e;
+        }
+      }
+
+      // Always close allocator
+      if (allocator != null) {
+        allocator.close();
+      }
+
+      // Throw any exceptions that occurred
+      if (arrowException != null) {
+        throw new HoodieIOException("Failed to close Arrow reader", arrowException);
+      }
+      if (lanceException != null) {
+        throw new HoodieException("Failed to close Lance reader", lanceException);
+      }
     }
   }
 }

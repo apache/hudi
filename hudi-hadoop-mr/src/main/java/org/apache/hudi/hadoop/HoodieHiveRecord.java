@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -60,9 +61,9 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private final HiveAvroSerializer avroSerializer;
 
-  protected Schema schema;
+  protected HoodieSchema schema;
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, HoodieSchema schema, HiveAvroSerializer avroSerializer) {
     super(key, data);
     this.avroSerializer = avroSerializer;
     this.schema = schema;
@@ -70,7 +71,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     isDelete = data == null;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, HoodieSchema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
     this.orderingValue = orderingValue;
     this.avroSerializer = avroSerializer;
@@ -78,7 +79,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     this.copy = false;
   }
 
-  private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
+  private HoodieHiveRecord(HoodieKey key, ArrayWritable data, HoodieSchema schema, HoodieOperation operation, boolean isCopy,
                            HiveAvroSerializer avroSerializer) {
     super(key, data, operation, Option.empty());
     this.schema = schema;
@@ -246,7 +247,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     return avroSerializer.getValue(data, name);
   }
 
-  protected Schema getSchema() {
+  protected HoodieSchema getSchema() {
     return schema;
   }
 }

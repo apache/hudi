@@ -478,39 +478,6 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Passed in {@code Union} schema and will try to resolve the field with the {@code fieldSchemaFullName}
-   * w/in the union returning its corresponding schema
-   *
-   * @param schema target schema to be inspected
-   * @param fieldSchemaFullName target field-name to be looked up w/in the union
-   * @return schema of the field w/in the union identified by the {@code fieldSchemaFullName}
-   */
-  public static Schema resolveUnionSchema(Schema schema, String fieldSchemaFullName) {
-    if (schema.getType() != Schema.Type.UNION) {
-      return schema;
-    }
-
-    List<Schema> innerTypes = schema.getTypes();
-    if (innerTypes.size() == 2 && isNullable(schema)) {
-      // this is a basic nullable field so handle it more efficiently
-      return getNonNullTypeFromUnion(schema);
-    }
-
-    Schema nonNullType =
-        innerTypes.stream()
-            .filter(it -> it.getType() != Schema.Type.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
-            .findFirst()
-            .orElse(null);
-
-    if (nonNullType == null) {
-      throw new HoodieAvroSchemaException(
-          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
-    }
-
-    return nonNullType;
-  }
-
-  /**
    * Returns true in case provided {@link Schema} is nullable (ie accepting null values),
    * returns false otherwise
    */

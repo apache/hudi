@@ -17,6 +17,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import lombok.Getter;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.KeyGroupStatePartitionStreamProvider;
 import org.apache.flink.runtime.state.StateInitializationContext;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A {@link FunctionInitializationContext} for testing purpose.
  */
+@Getter
 public class MockStateInitializationContext implements StateInitializationContext {
 
   private final MockOperatorStateStore operatorStateStore;
@@ -39,16 +41,6 @@ public class MockStateInitializationContext implements StateInitializationContex
     operatorStateStore = new MockOperatorStateStore();
     keyedStateStore = new MockKeyedStateStore();
     lastCheckpointId = -1;
-  }
-
-  @Override
-  public MockOperatorStateStore getOperatorStateStore() {
-    return operatorStateStore;
-  }
-
-  @Override
-  public MockKeyedStateStore getKeyedStateStore() {
-    return keyedStateStore;
   }
 
   @Override

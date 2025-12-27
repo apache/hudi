@@ -44,6 +44,8 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -156,5 +158,22 @@ public class TestUtils {
     java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);
     Files.move(sourcePath, newFilePath);
     return newCompletionTime;
+  }
+
+  /**
+   * Waits for a condition to be met within a specific timeout.
+   *
+   * @param condition      The condition to poll.
+   * @param timeoutSeconds Maximum time to wait in seconds.
+   */
+  public static boolean waitUntil(BooleanSupplier condition, int timeoutSeconds) throws InterruptedException {
+    long limit = System.currentTimeMillis() + (timeoutSeconds * 1000L);
+    while (System.currentTimeMillis() < limit) {
+      if (condition.getAsBoolean()) {
+        return true;
+      }
+      TimeUnit.SECONDS.sleep(1);
+    }
+    return false;
   }
 }

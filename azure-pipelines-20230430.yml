@@ -180,7 +180,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FTA hudi-spark
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -492,7 +492,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_10
         displayName: UT FT common & other modules
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '180'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"

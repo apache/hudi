@@ -30,6 +30,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -49,8 +51,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBaseParquetWriter {
 
+  @Setter
   private static class MockHoodieParquetWriter extends HoodieBaseParquetWriter<IndexedRecord> {
 
+    @Getter
     long writtenRecordCount = 0L;
     long currentDataSize = 0L;
 
@@ -63,19 +67,6 @@ public class TestHoodieBaseParquetWriter {
     @Override
     public long getDataSize() {
       return currentDataSize;
-    }
-
-    @Override
-    public long getWrittenRecordCount() {
-      return writtenRecordCount;
-    }
-
-    public void setWrittenRecordCount(long writtenCount) {
-      this.writtenRecordCount = writtenCount;
-    }
-
-    public void setCurrentDataSize(long currentDataSize) {
-      this.currentDataSize = currentDataSize;
     }
   }
 

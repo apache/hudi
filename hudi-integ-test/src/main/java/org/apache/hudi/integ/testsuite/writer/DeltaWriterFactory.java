@@ -23,6 +23,8 @@ import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
@@ -30,10 +32,8 @@ import java.io.IOException;
 /**
  * A factory to help instantiate different {@link DeltaWriterAdapter}s depending on the {@link DeltaOutputMode} and {@link DeltaInputType}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class DeltaWriterFactory {
-
-  private DeltaWriterFactory() {
-  }
 
   public static DeltaWriterAdapter getDeltaWriterAdapter(DeltaConfig config, Integer batchId) throws IOException {
     switch (config.getDeltaOutputMode()) {

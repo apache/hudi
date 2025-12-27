@@ -24,20 +24,17 @@ import java.util.Comparator;
 public interface InstantComparator extends Serializable {
 
   /**
-   * Returns Comparator that only uses action for ordering taking into account equivalent actions.
-   * @return
+   * @return {@link Comparator<HoodieInstant>} that only uses action for ordering taking into account equivalent actions.
    */
   Comparator<HoodieInstant> actionOnlyComparator();
 
   /**
-   * Returns comparator that orders primarily based on timestamp and secondary ordering based on action and state.
-   * @return
+   * @return {@link Comparator<HoodieInstant>} that orders primarily based on timestamp and secondary ordering based on action and state.
    */
   Comparator<HoodieInstant> requestedTimeOrderedComparator();
 
   /**
-   * Returns comparator that orders primarily based on completion time and secondary ordering based on {@link #requestedTimeOrderedComparator()}.
-   * @return
+   * @return {@link Comparator<HoodieInstant>} that orders primarily based on completion time and secondary ordering based on {@link #requestedTimeOrderedComparator()}.
    */
   Comparator<HoodieInstant> completionTimeOrderedComparator();
 }
