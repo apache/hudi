@@ -19,47 +19,21 @@
 
 package org.apache.hudi.metadata;
 
-import java.util.Objects;
+import lombok.NonNull;
+import lombok.Value;
 
 /**
  * Represents a record index key that requires no encoding (identity encoding).
  */
+@Value
 public class RecordIndexRawKey implements RawKey {
-  private final String recordKey;
 
-  public RecordIndexRawKey(String recordKey) {
-    this.recordKey = Objects.requireNonNull(recordKey);
-  }
+  @NonNull
+  String recordKey;
 
   @Override
   public String encode() {
     // Identity encoding - return the key as-is
     return recordKey;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    RecordIndexRawKey that = (RecordIndexRawKey) o;
-    return Objects.equals(recordKey, that.recordKey);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(recordKey);
-  }
-
-  @Override
-  public String toString() {
-    return "RecordIndexRawKey{" + "recordKey='" + recordKey + '\'' + '}';
   }
 }

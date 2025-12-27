@@ -24,8 +24,7 @@ import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
@@ -33,9 +32,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Implementation of Graphite reporter, which connects to the Graphite server, and send metrics to that server.
  */
+@Slf4j
 public class MetricsGraphiteReporter extends MetricsReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
   private final HoodieMetricsConfig metricsConfig;
@@ -64,7 +62,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     if (graphiteReporter != null) {
       graphiteReporter.start(periodSeconds, TimeUnit.SECONDS);
     } else {
-      LOG.error("Cannot start as the graphiteReporter is null.");
+      log.error("Cannot start as the graphiteReporter is null.");
     }
   }
 
@@ -73,7 +71,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     if (graphiteReporter != null) {
       graphiteReporter.report();
     } else {
-      LOG.error("Cannot report metrics as the graphiteReporter is null.");
+      log.error("Cannot report metrics as the graphiteReporter is null.");
     }
   }
 

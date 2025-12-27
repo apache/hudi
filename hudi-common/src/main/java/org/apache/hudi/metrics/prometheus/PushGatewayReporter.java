@@ -32,8 +32,7 @@ import com.codahale.metrics.Timer;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -46,9 +45,9 @@ import java.util.SortedMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 public class PushGatewayReporter extends ScheduledReporter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(PushGatewayReporter.class);
   // Ensures that we maintain a single PushGw client (single connection pool) per Push Gw Server instance.
   private static final Map<String, PushGateway> PUSH_GATEWAY_PER_HOSTNAME = new ConcurrentHashMap<>();
 
@@ -114,7 +113,7 @@ public class PushGatewayReporter extends ScheduledReporter {
       handleLabeledMetrics();
       pushGatewayClient.pushAdd(collectorRegistry, jobName, labels);
     } catch (IOException e) {
-      LOG.warn("Can't push monitoring information to pushGateway", e);
+      log.warn("Can't push monitoring information to pushGateway", e);
     }
   }
 
@@ -136,7 +135,7 @@ public class PushGatewayReporter extends ScheduledReporter {
         }
       }
     } catch (IOException e) {
-      LOG.warn("Failed to delete metrics from pushGateway with jobName {{}}", jobName, e);
+      log.warn("Failed to delete metrics from pushGateway with jobName {{}}", jobName, e);
     }
   }
 

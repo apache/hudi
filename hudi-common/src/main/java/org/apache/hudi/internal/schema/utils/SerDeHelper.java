@@ -29,6 +29,8 @@ import org.apache.hudi.internal.schema.Types;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -44,10 +46,8 @@ import java.util.regex.Pattern;
 /**
  * Utils of serialization and deserialization.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SerDeHelper {
-  private SerDeHelper() {
-
-  }
 
   public static final String LATEST_SCHEMA = "latest_schema";
   public static final String SCHEMAS = "schemas";

@@ -30,17 +30,15 @@ import org.apache.hudi.metrics.prometheus.PrometheusReporter;
 import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Properties;
 
 /**
  * Factory class for creating MetricsReporter.
  */
+@Slf4j
 public class MetricsReporterFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MetricsReporterFactory.class);
 
   public static Option<MetricsReporter> createReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     String reporterClassName = metricsConfig.getMetricReporterClassName();
@@ -58,7 +56,7 @@ public class MetricsReporterFactory {
     MetricsReporterType type = metricsConfig.getMetricsReporterType();
     MetricsReporter reporter = null;
     if (type == null) {
-      LOG.warn("Metric creation failed. {} is not configured",
+      log.warn("Metric creation failed. {} is not configured",
           HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key());
       return Option.empty();
     }
@@ -96,7 +94,7 @@ public class MetricsReporterFactory {
         reporter = new Slf4jMetricsReporter(registry);
         break;
       default:
-        LOG.error("Reporter type[" + type + "] is not supported.");
+        log.error("Reporter type[" + type + "] is not supported.");
         break;
     }
     return Option.ofNullable(reporter);

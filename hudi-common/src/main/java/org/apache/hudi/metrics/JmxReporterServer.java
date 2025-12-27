@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jmx.JmxReporter;
+import lombok.Getter;
 
 import javax.management.MBeanServer;
 import javax.management.remote.JMXConnectorServer;
@@ -91,6 +92,7 @@ public class JmxReporterServer {
 
   private JMXConnectorServer connector;
   private Registry rmiRegistry;
+  @Getter
   private JmxReporter reporter;
 
   protected JmxReporterServer(MetricRegistry registry, String host, int port,
@@ -106,10 +108,6 @@ public class JmxReporterServer {
     } catch (Exception e) {
       throw new HoodieException("Jmx service url created " + serviceUrl, e);
     }
-  }
-
-  public JmxReporter getReporter() {
-    return reporter;
   }
 
   public void start() {

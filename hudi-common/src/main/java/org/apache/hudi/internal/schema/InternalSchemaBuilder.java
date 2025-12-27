@@ -22,6 +22,9 @@ import org.apache.hudi.internal.schema.visitor.InternalSchemaVisitor;
 import org.apache.hudi.internal.schema.visitor.NameToIDVisitor;
 import org.apache.hudi.internal.schema.visitor.NameToPositionVisitor;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -34,14 +37,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * A build class to help build fields for InternalSchema
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class InternalSchemaBuilder implements Serializable {
+
   private static final InternalSchemaBuilder INSTANCE = new InternalSchemaBuilder();
 
   public static InternalSchemaBuilder getBuilder() {
     return INSTANCE;
-  }
-
-  private InternalSchemaBuilder() {
   }
 
   /**

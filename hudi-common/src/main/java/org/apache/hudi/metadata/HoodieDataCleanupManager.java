@@ -22,8 +22,9 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -35,10 +36,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * This class provides thread-safe tracking of persisted data objects and ensures they are
  * properly cleaned up when exceptions occur.
  */
+@Slf4j
 public class HoodieDataCleanupManager implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDataCleanupManager.class);
-  
+
   // Thread-local tracking of persisted data for cleanup on exceptions
+  @Getter(AccessLevel.PACKAGE)
   private final ConcurrentHashMap<Long, List<Object>> threadPersistedData = new ConcurrentHashMap<>();
   
   /**
@@ -98,7 +100,7 @@ public class HoodieDataCleanupManager implements Serializable {
             ((HoodieData<?>) data).unpersistWithDependencies();
           }
         } catch (Exception e) {
-          LOG.warn("Failed to unpersist data on exception cleanup", e);
+          log.warn("Failed to unpersist data on exception cleanup", e);
         }
       }
     }
@@ -110,14 +112,5 @@ public class HoodieDataCleanupManager implements Serializable {
   private void clearThreadTracking() {
     long threadId = Thread.currentThread().getId();
     threadPersistedData.remove(threadId);
-  }
-  
-  /**
-   * Get the thread-persisted data map for testing purposes.
-   *
-   * @return The concurrent map tracking persisted data by thread ID
-   */
-  ConcurrentHashMap<Long, List<Object>> getThreadPersistedData() {
-    return threadPersistedData;
   }
 }

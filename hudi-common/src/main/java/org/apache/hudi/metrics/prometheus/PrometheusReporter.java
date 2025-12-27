@@ -30,8 +30,8 @@ import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.dropwizard.samplebuilder.DefaultSampleBuilder;
 import io.prometheus.client.dropwizard.samplebuilder.SampleBuilder;
 import io.prometheus.client.exporter.HTTPServer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -47,13 +47,15 @@ import java.util.regex.Pattern;
  * Implementation of Prometheus reporter, which connects to the Http server, and get metrics
  * from that server.
  */
+@Slf4j
 public class PrometheusReporter extends MetricsReporter {
-  private static final Pattern LABEL_PATTERN = Pattern.compile("\\s*,\\s*");
 
-  private static final Logger LOG = LoggerFactory.getLogger(PrometheusReporter.class);
+  private static final Pattern LABEL_PATTERN = Pattern.compile("\\s*,\\s*");
   private static final Map<Integer, PrometheusServerState> PORT_TO_SERVER_STATE = new ConcurrentHashMap<>();
 
+  @Getter
   private static class PrometheusServerState {
+
     private final HTTPServer httpServer;
     private final CollectorRegistry collectorRegistry;
     private final AtomicInteger referenceCount;
@@ -64,22 +66,6 @@ public class PrometheusReporter extends MetricsReporter {
       this.collectorRegistry = collectorRegistry;
       this.referenceCount = new AtomicInteger(0);
       this.exports = ConcurrentHashMap.newKeySet();
-    }
-
-    public HTTPServer getHttpServer() {
-      return httpServer;
-    }
-
-    public CollectorRegistry getCollectorRegistry() {
-      return collectorRegistry;
-    }
-
-    public AtomicInteger getReferenceCount() {
-      return referenceCount;
-    }
-
-    public Set<DropwizardExports> getExports() {
-      return exports;
     }
   }
 
@@ -105,7 +91,7 @@ public class PrometheusReporter extends MetricsReporter {
     PrometheusServerState serverState = getAndRegisterServerState(serverPort, metricExports);
     this.collectorRegistry = serverState.getCollectorRegistry();
     
-    LOG.debug("Registered PrometheusReporter for port {}, reference count: {}", 
+    log.debug("Registered PrometheusReporter for port {}, reference count: {}", 
              serverPort, serverState.getReferenceCount().get());
   }
 
@@ -121,12 +107,12 @@ public class PrometheusReporter extends MetricsReporter {
           try {
             server.close();
           } catch (Exception e) {
-            LOG.debug("Error closing Prometheus HTTP server during shutdown: {}", e.getMessage());
+            log.debug("Error closing Prometheus HTTP server during shutdown: {}", e.getMessage());
           }
         }));
       } catch (Exception e) {
         String msg = "Could not start PrometheusReporter HTTP server on port " + serverPort;
-        LOG.error(msg, e);
+        log.error(msg, e);
         throw new HoodieException(msg, e);
       }
     }
@@ -151,10 +137,10 @@ public class PrometheusReporter extends MetricsReporter {
     if (!stopped.getAndSet(true)) {
       try {
         synchronized (PrometheusReporter.class) {
-          LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
+          log.debug("PrometheusReporter.stop() called for port {}", serverPort);
           PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
           if (serverState == null) {
-            LOG.warn("No server state found for port {} during stop()", serverPort);
+            log.warn("No server state found for port {} during stop()", serverPort);
             return;
           }
           
@@ -165,12 +151,12 @@ public class PrometheusReporter extends MetricsReporter {
           if (newReferenceCount <= 0) {
             cleanupServer(serverPort);
           } else {
-            LOG.debug("Prometheus server on port {} still has {} references, keeping server alive", 
+            log.debug("Prometheus server on port {} still has {} references, keeping server alive", 
                      serverPort, newReferenceCount);
           }
         }
       } catch (Exception e) {
-        LOG.error("Error in PrometheusReporter.stop() for port {}", serverPort, e);
+        log.error("Error in PrometheusReporter.stop() for port {}", serverPort, e);
       }
     }
   }
@@ -181,7 +167,7 @@ public class PrometheusReporter extends MetricsReporter {
         collectorRegistry.unregister(metricExports);
         unregistered = true;
       } catch (Exception e) {
-        LOG.debug("Error unregistering metric exports for port {}: {}", serverPort, e.getMessage());
+        log.debug("Error unregistering metric exports for port {}: {}", serverPort, e.getMessage());
       }
     }
   }
@@ -192,19 +178,19 @@ public class PrometheusReporter extends MetricsReporter {
 
   private int decrementReferenceCount(PrometheusServerState serverState) {
     int newCount = serverState.getReferenceCount().decrementAndGet();
-    LOG.debug("Unregistered PrometheusReporter for port {}, reference count: {}", 
+    log.debug("Unregistered PrometheusReporter for port {}, reference count: {}", 
              serverPort, newCount);
     return newCount;
   }
 
   private static synchronized void cleanupServer(int serverPort) {
-    LOG.info("No more references to Prometheus server on port {}, stopping server", serverPort);
+    log.info("No more references to Prometheus server on port {}, stopping server", serverPort);
     PrometheusServerState serverState = PORT_TO_SERVER_STATE.remove(serverPort);
     if (serverState != null) {
       try {
         serverState.getHttpServer().close();
       } catch (Exception e) {
-        LOG.debug("Error closing Prometheus HTTP server on port {}: {}", serverPort, e.getMessage());
+        log.debug("Error closing Prometheus HTTP server on port {}: {}", serverPort, e.getMessage());
       }
     }
   }
