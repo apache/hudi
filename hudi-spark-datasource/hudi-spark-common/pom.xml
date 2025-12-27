@@ -211,6 +211,19 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Hive -->
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-exec</artifactId>
+      <version>${hive.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
