@@ -19,7 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -34,9 +34,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -92,11 +91,9 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
                                     Boolean isNullTargetSchema, Boolean hasErrorTable, Boolean shouldTryWriteToErrorTable) {
     //basic deltastreamer inputs
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    Configuration configuration = mock(Configuration.class);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.convertToStoragePath(new Path("/fake/table/name")),
-        HadoopFSUtils.getStorageConf(configuration));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
     SparkSession sparkSession = mock(SparkSession.class);
+    Configuration configuration = mock(Configuration.class);
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetTableName = "testTableName";
     cfg.targetBasePath = "/fake/table/name";
@@ -288,11 +285,9 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
     // setup
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    Configuration configuration = mock(Configuration.class);
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.convertToStoragePath(new org.apache.hadoop.fs.Path(cfg.targetBasePath)),
-        HadoopFSUtils.getStorageConf(configuration));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
     SparkSession sparkSession = mock(SparkSession.class);
+    Configuration configuration = mock(Configuration.class);
     SourceFormatAdapter sourceFormatAdapter = mock(SourceFormatAdapter.class);
     TypedProperties propsSpy = spy(props);
     HoodieTableMetaClient.TableBuilder tableBuilder = spy(HoodieTableMetaClient.newTableBuilder()

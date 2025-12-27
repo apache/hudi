@@ -33,8 +33,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
@@ -845,9 +844,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       HoodieStorage storage = metaClient.getStorage();
       FileSystem fs = (FileSystem) storage.getFileSystem();
       HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
-      metaClient.setStorage(HoodieStorageUtils.getStorage(
-          HadoopFSUtils.convertToStoragePath(newFs.getWorkingDirectory()),
-          HadoopFSUtils.getStorageConf(newFs.getConf())));
+      metaClient.setStorage(new HoodieHadoopStorage(newFs));
       try {
         fun.accept(metaClient);
       } finally {
