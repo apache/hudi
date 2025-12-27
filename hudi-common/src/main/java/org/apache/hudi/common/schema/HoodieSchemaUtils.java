@@ -28,6 +28,7 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -793,5 +794,51 @@ public final class HoodieSchemaUtils {
 
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
+  }
+
+  /**
+   * Converts a HoodieSchemaField's default value to its Java representation.
+   * This is equivalent to {@link org.apache.hudi.avro.HoodieAvroUtils#toJavaDefaultValue(org.apache.avro.Schema.Field)}
+   * but operates on HoodieSchemaField.
+   *
+   * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES),
+   * the default value is returned as-is. For complex types (ARRAY, MAP, RECORD),
+   * Avro's GenericData utility is used to properly construct the default value.</p>
+   *
+   * @param field the HoodieSchemaField containing the default value
+   * @return the Java representation of the default value, or null if no default value exists
+   * @throws IllegalArgumentException if the field's type is not supported
+   * @since 1.2.0
+   */
+  public static Object toJavaDefaultValue(HoodieSchemaField field) {
+    ValidationUtils.checkArgument(field != null, "Field cannot be null");
+
+    Option<Object> defaultValOpt = field.defaultVal();
+    if (!defaultValOpt.isPresent() || defaultValOpt.get() == HoodieJsonProperties.NULL_VALUE) {
+      return null;
+    }
+
+    Object defaultVal = defaultValOpt.get();
+    HoodieSchemaType type = field.getNonNullSchema().getType();
+
+    switch (type) {
+      case STRING:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+      case ENUM:
+      case BYTES:
+        return defaultVal;
+      case ARRAY:
+      case MAP:
+      case RECORD:
+        // Use Avro's standard GenericData utility for complex types
+        // Delegate to the underlying Avro field
+        return GenericData.get().getDefaultValue(field.getAvroField());
+      default:
+        throw new IllegalArgumentException("Unsupported HoodieSchema type: " + type);
+    }
   }
 }

@@ -138,7 +138,7 @@ public class SparkValidatorUtils {
         return sqlContext.createDataFrame(
             sqlContext.emptyDataFrame().rdd(),
             AvroConversionUtils.convertAvroSchemaToStructType(
-                new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema()));
+                new TableSchemaResolver(table.getMetaClient()).getTableSchema().toAvroSchema()));
       } catch (Exception e) {
         LOG.warn("Cannot get table schema from before state.", e);
         LOG.warn("Using the schema from after state (current transaction) to create the empty Spark dataframe: {}", newStructTypeSchema);

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index.secondary;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -29,7 +30,6 @@ import org.apache.hudi.exception.HoodieSecondaryIndexException;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -82,16 +82,16 @@ public class SecondaryIndexManager {
       Map<String, String> options) {
     Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
     Set<String> colNames = columns.keySet();
-    Schema avroSchema;
+    HoodieSchema schema;
     try {
-      avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema(false);
+      schema = new TableSchemaResolver(metaClient).getTableSchema(false);
     } catch (Exception e) {
       throw new HoodieSecondaryIndexException(
           "Failed to get table avro schema: " + metaClient.getTableConfig().getTableName());
     }
 
     for (String col : colNames) {
-      if (avroSchema.getField(col) == null) {
+      if (schema.getField(col) == null) {
         throw new HoodieSecondaryIndexException("Field not exists: " + col);
       }
     }

@@ -319,7 +319,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       // Validate table schema in the end.
       TableSchemaResolver r = new TableSchemaResolver(metaClient);
       // Assert no table schema is defined.
-      assertThrows(HoodieSchemaNotFoundException.class, () -> r.getTableAvroSchema(false));
+      assertThrows(HoodieSchemaNotFoundException.class, () -> r.getTableSchema(false));
     }
 
     // Start txn 002 altering table schema

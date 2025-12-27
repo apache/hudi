@@ -406,7 +406,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         for (String path : uniqTablePaths) {
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(new HadoopStorageConfiguration(job)).build();
           TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-          String avroSchema = schemaUtil.getTableAvroSchema().toString();
+          String avroSchema = schemaUtil.getTableSchema().toString();
           Option<InternalSchema> internalSchema = schemaUtil.getTableInternalSchemaFromCommitMetadata();
           if (internalSchema.isPresent()) {
             LOG.info("Set internal and avro schema cache with path: {}", path);

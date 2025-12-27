@@ -50,6 +50,9 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -126,7 +129,6 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -662,7 +664,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
         HoodieTestUtils.createMetaClient(storage, tableBasePath));
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+    HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
     assertNotNull(tableSchema);
 
     Schema expectedSchema;
@@ -700,8 +702,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
         HoodieTestUtils.createMetaClient(storage, tableBasePath));
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
-    assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
+    HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
+    Option<HoodieSchemaField> currentTsFieldOpt = tableSchema.getField("current_ts");
+    assertTrue(currentTsFieldOpt.isPresent());
+    HoodieSchema.Timestamp currentTsSchema = (HoodieSchema.Timestamp) currentTsFieldOpt.get().schema();
+    assertEquals(HoodieSchemaType.TIMESTAMP, currentTsSchema.getType());
+    assertEquals(TimePrecision.MILLIS, currentTsSchema.getPrecision());
     assertEquals(1000, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
 
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
@@ -720,8 +726,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
     tableSchemaResolver = new TableSchemaResolver(
         HoodieTestUtils.createMetaClient(storage, tableBasePath));
-    tableSchema = tableSchemaResolver.getTableAvroSchema(false);
-    assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
+    tableSchema = tableSchemaResolver.getTableSchema(false);
+    currentTsFieldOpt = tableSchema.getField("current_ts");
+    assertTrue(currentTsFieldOpt.isPresent());
+    currentTsSchema = (HoodieSchema.Timestamp) currentTsFieldOpt.get().schema();
+    assertEquals(HoodieSchemaType.TIMESTAMP, currentTsSchema.getType());
+    assertEquals(TimePrecision.MILLIS, currentTsSchema.getPrecision());
     sqlContext.clearCache();
     assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
     assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '2080-01-01'").count());
@@ -761,7 +771,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
-      Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.current().versionCode());
@@ -781,7 +791,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
       tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
-      tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      tableSchema = tableSchemaResolver.getTableSchema(false);
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.current().versionCode());
     } finally {
       defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
@@ -826,7 +836,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestHelpers.assertCommitMetadata(topicName + ",0:500,1:500", tableBasePath, 1);
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
-      Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.EIGHT.versionCode());
@@ -842,7 +852,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestHelpers.assertCommitMetadata(topicName + ",0:1000,1:1000", tableBasePath, 2);
       tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
-      tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      tableSchema = tableSchemaResolver.getTableSchema(false);
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.EIGHT.versionCode());
     } finally {
       defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
@@ -884,7 +894,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
-      Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      HoodieSchema tableSchema = tableSchemaResolver.getTableSchema(false);
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
@@ -910,34 +920,63 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
-  private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
+  private void logicalAssertions(HoodieSchema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
     if (tableVersion > 8) {
-      assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
+      Option<HoodieSchemaField> tsMillisFieldOpt = tableSchema.getField("ts_millis");
+      assertTrue(tsMillisFieldOpt.isPresent());
+      HoodieSchema.Timestamp tsMillisFieldSchema = (HoodieSchema.Timestamp) tsMillisFieldOpt.get().schema();
+      assertEquals(HoodieSchemaType.TIMESTAMP, tsMillisFieldSchema.getType());
+      assertEquals(TimePrecision.MILLIS, tsMillisFieldSchema.getPrecision());
     }
-    assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
+    Option<HoodieSchemaField> tsMicrosFieldOpt = tableSchema.getField("ts_micros");
+    assertTrue(tsMicrosFieldOpt.isPresent());
+    HoodieSchema.Timestamp tsMicrosFieldSchema = (HoodieSchema.Timestamp) tsMicrosFieldOpt.get().schema();
+    assertEquals(HoodieSchemaType.TIMESTAMP, tsMicrosFieldSchema.getType());
+    assertEquals(TimePrecision.MICROS, tsMicrosFieldSchema.getPrecision());
     if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
-      assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
-      assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
-    }
+      Option<HoodieSchemaField> localTsMillisFieldOpt = tableSchema.getField("local_ts_millis");
+      assertTrue(localTsMillisFieldOpt.isPresent());
+      HoodieSchema.Timestamp localTsMillisFieldSchema = (HoodieSchema.Timestamp) localTsMillisFieldOpt.get().schema();
+      assertEquals(HoodieSchemaType.TIMESTAMP, localTsMillisFieldSchema.getType());
+      assertEquals(TimePrecision.MILLIS, localTsMillisFieldSchema.getPrecision());
 
-    assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
+      Option<HoodieSchemaField> localTsMicrosFieldOpt = tableSchema.getField("local_ts_micros");
+      assertTrue(localTsMicrosFieldOpt.isPresent());
+      HoodieSchema.Timestamp localTsMicrosFieldSchema = (HoodieSchema.Timestamp) localTsMicrosFieldOpt.get().schema();
+      assertEquals(HoodieSchemaType.TIMESTAMP, localTsMicrosFieldSchema.getType());
+      assertEquals(TimePrecision.MICROS, localTsMicrosFieldSchema.getPrecision());
+    }
+    Option<HoodieSchemaField> eventTimeFieldOpt = tableSchema.getField("event_time");
+    assertTrue(eventTimeFieldOpt.isPresent());
+    assertEquals(HoodieSchemaType.DATE, eventTimeFieldOpt.get().schema().getType());
 
     if (tableVersion > 8) {
-      assertEquals("bytes", tableSchema.getField("dec_plain_large").schema().getType().getName());
-      assertEquals("decimal", tableSchema.getField("dec_plain_large").schema().getLogicalType().getName());
-      assertEquals(20, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getPrecision());
-      assertEquals(10, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getScale());
+      Option<HoodieSchemaField> decPlainLargeFieldOpt = tableSchema.getField("dec_plain_large");
+      assertTrue(decPlainLargeFieldOpt.isPresent());
+      HoodieSchema.Decimal decPlainLargeSchema = (HoodieSchema.Decimal) decPlainLargeFieldOpt.get().schema();
+      // decimal backed by bytes (are not fixed length byte arrays)
+      assertFalse(decPlainLargeSchema.isFixed());
+      assertEquals(HoodieSchemaType.DECIMAL, decPlainLargeSchema.getType());
+      assertEquals(20, decPlainLargeSchema.getPrecision());
+      assertEquals(10, decPlainLargeSchema.getScale());
     }
-    assertEquals("fixed", tableSchema.getField("dec_fixed_small").schema().getType().getName());
-    assertEquals(3, tableSchema.getField("dec_fixed_small").schema().getFixedSize());
-    assertEquals("decimal", tableSchema.getField("dec_fixed_small").schema().getLogicalType().getName());
-    assertEquals(5, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_small").schema().getLogicalType()).getPrecision());
-    assertEquals(2, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_small").schema().getLogicalType()).getScale());
-    assertEquals("fixed", tableSchema.getField("dec_fixed_large").schema().getType().getName());
-    assertEquals(8, tableSchema.getField("dec_fixed_large").schema().getFixedSize());
-    assertEquals("decimal", tableSchema.getField("dec_fixed_large").schema().getLogicalType().getName());
-    assertEquals(18, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_large").schema().getLogicalType()).getPrecision());
-    assertEquals(9, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_large").schema().getLogicalType()).getScale());
+    Option<HoodieSchemaField> decFixedSmallOpt = tableSchema.getField("dec_fixed_small");
+    assertTrue(decFixedSmallOpt.isPresent());
+    HoodieSchema.Decimal decFixedSmallSchema = (HoodieSchema.Decimal) decFixedSmallOpt.get().schema();
+    assertTrue(decFixedSmallSchema.isFixed());
+    assertEquals(3, decFixedSmallSchema.getFixedSize());
+    assertEquals(HoodieSchemaType.DECIMAL, decFixedSmallSchema.getType());
+    assertEquals(5, decFixedSmallSchema.getPrecision());
+    assertEquals(2, decFixedSmallSchema.getScale());
+
+    Option<HoodieSchemaField> decFixedLargeOpt = tableSchema.getField("dec_fixed_large");
+    assertTrue(decFixedLargeOpt.isPresent());
+    HoodieSchema.Decimal decFixedLargeSchema = (HoodieSchema.Decimal) decFixedLargeOpt.get().schema();
+    assertTrue(decFixedLargeSchema.isFixed());
+    assertEquals(8, decFixedLargeSchema.getFixedSize());
+    assertEquals(HoodieSchemaType.DECIMAL, decFixedLargeSchema.getType());
+    assertEquals(18, decFixedLargeSchema.getPrecision());
+    assertEquals(9, decFixedLargeSchema.getScale());
 
     sqlContext.clearCache();
     Dataset<Row> df = sqlContext.read()
@@ -2300,7 +2339,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
         // validate table schema fetches valid schema from last but one commit.
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-        assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+        assertNotEquals(tableSchemaResolver.getTableSchema(), Schema.create(Schema.Type.NULL).toString());
         // schema from latest commit and last but one commit should match
         compareLatestTwoSchemas(metaClient);
         prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
@@ -2856,7 +2895,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       // validate table schema fetches valid schema from last but one commit.
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-      assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+      assertNotEquals(tableSchemaResolver.getTableSchema(), Schema.create(Schema.Type.NULL).toString());
       // schema from latest commit and last but one commit should match
       compareLatestTwoSchemas(metaClient);
       prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
@@ -3208,7 +3247,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // validate schema is set in commit even if target schema returns null on empty batch
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     HoodieInstant secondCommit = metaClient.reloadActiveTimeline().lastInstant().get();
-    Schema lastCommitSchema = tableSchemaResolver.getTableAvroSchema(secondCommit, true);
+    HoodieSchema lastCommitSchema = tableSchemaResolver.getTableSchema(secondCommit, true);
     assertNotEquals(firstCommit, secondCommit);
     assertNotEquals(lastCommitSchema, Schema.create(Schema.Type.NULL));
     deltaStreamer2.shutdownGracefully();
@@ -3755,10 +3794,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
         HoodieTestUtils.createMetaClient(storage, tableBasePath));
     // get schema from data file written in the latest commit
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
+    HoodieSchema tableSchema = tableSchemaResolver.getTableSchemaFromDataFile();
     assertNotNull(tableSchema);
 
-    List<String> tableFields = tableSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    List<String> tableFields = tableSchema.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList());
     // now assert that the partition column is not in the target schema
     assertFalse(tableFields.contains("partition_path"));
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
