@@ -169,7 +169,9 @@ public class HiveTestUtil {
     }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
-    storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fileSystem.getConf()), new Class<?>[] {FileSystem.class}, fileSystem);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(fileSystem.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fileSystem.getConf()));
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     if (ddlExecutor != null) {

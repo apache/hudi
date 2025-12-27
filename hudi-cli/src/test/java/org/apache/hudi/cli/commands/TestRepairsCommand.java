@@ -142,7 +142,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
     // expected all 'No'.
     String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(
-        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs), tablePath)
+        HoodieStorageUtils.getStorage(
+            HadoopFSUtils.convertToStoragePath(new Path(tablePath)),
+            HadoopFSUtils.getStorageConf(fs.getConf())), tablePath)
         .stream()
         .map(partition -> new String[] {partition, "No", "None"})
         .toArray(String[][]::new);
@@ -173,7 +175,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(
-        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs), tablePath);
+        HoodieStorageUtils.getStorage(
+            HadoopFSUtils.convertToStoragePath(new Path(tablePath)),
+            HadoopFSUtils.getStorageConf(fs.getConf())), tablePath);
     // after dry run, the action will be 'Repaired'
     String[][] rows = paths.stream()
         .map(partition -> new String[] {partition, "No", "Repaired"})

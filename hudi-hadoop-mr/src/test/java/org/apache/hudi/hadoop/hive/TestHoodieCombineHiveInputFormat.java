@@ -95,7 +95,9 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
-    storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(fs.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
   }
 
   @AfterAll

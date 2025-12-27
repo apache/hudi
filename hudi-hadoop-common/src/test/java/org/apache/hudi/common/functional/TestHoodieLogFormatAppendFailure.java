@@ -103,10 +103,10 @@ public class TestHoodieLogFormatAppendFailure {
     // Use some fs like LocalFileSystem, that does not support appends
     String uuid = UUID.randomUUID().toString();
     StoragePath localPartitionPath = new StoragePath("/tmp/");
+    FileSystem fileSystem = cluster.getFileSystem();
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(cluster.getFileSystem().getConf()), 
-        new Class<?>[] {FileSystem.class}, 
-        cluster.getFileSystem());
+        HadoopFSUtils.convertToStoragePath(fileSystem.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fileSystem.getConf()));
     StoragePath testPath = new StoragePath(localPartitionPath, uuid);
     storage.createDirectory(testPath);
 

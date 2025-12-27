@@ -152,16 +152,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   public static void setUpClass() throws IOException {
     if (shouldUseExternalHdfs()) {
       storage = HoodieStorageUtils.getStorage(
-          HadoopFSUtils.getStorageConf(useExternalHdfs().getConf()), 
-          new Class<?>[] {FileSystem.class}, 
-          useExternalHdfs());
+          HadoopFSUtils.convertToStoragePath(useExternalHdfs().getWorkingDirectory()),
+          HadoopFSUtils.getStorageConf(useExternalHdfs().getConf()));
     } else {
       // Append is not supported in LocalFileSystem. HDFS needs to be setup.
       hdfsTestService = new HdfsTestService();
       storage = HoodieStorageUtils.getStorage(
-          HadoopFSUtils.getStorageConf(hdfsTestService.start(true).getFileSystem().getConf()), 
-          new Class<?>[] {FileSystem.class}, 
-          hdfsTestService.start(true).getFileSystem());
+          HadoopFSUtils.convertToStoragePath(hdfsTestService.start(true).getFileSystem().getWorkingDirectory()),
+          HadoopFSUtils.getStorageConf(hdfsTestService.start(true).getFileSystem().getConf()));
     }
   }
 

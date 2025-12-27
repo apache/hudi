@@ -395,7 +395,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         try {
           FileSystem fs = path.getFileSystem(job);
           storage = HoodieStorageUtils.getStorage(
-              HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+              HadoopFSUtils.convertToStoragePath(path), HadoopFSUtils.getStorageConf(fs.getConf()));
           Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
           if (tablePath.isPresent()) {
             uniqTablePaths.add(tablePath.get().toUri().toString());

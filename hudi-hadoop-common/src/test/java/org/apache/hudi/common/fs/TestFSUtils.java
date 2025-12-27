@@ -583,9 +583,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     FileSystem fs = HadoopFSUtils.getFs("file:///a/b/c", new Configuration());
     FileSystem wrapperFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+        HadoopFSUtils.convertToStoragePath(new Path("file:///a/b/c")),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
     HoodieStorage wrapperStorage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(wrapperFs.getConf()), new Class<?>[] {FileSystem.class}, wrapperFs);
+        HadoopFSUtils.convertToStoragePath(new Path("file:///a/b/c")),
+        HadoopFSUtils.getStorageConf(wrapperFs.getConf()));
     assertEquals(new StoragePath("file:///x/y"),
         FSUtils.makeQualified(storage, new StoragePath("/x/y")));
     assertEquals(new StoragePath("file:///x/y"),
@@ -601,7 +603,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     StoragePath path = new StoragePath(basePath, "dummy.txt");
     FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration());
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+        HadoopFSUtils.convertToStoragePath(new Path(basePath)),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
     storage.create(path);
     long modificationTime = System.currentTimeMillis();
     storage.setModificationTime(path, modificationTime);

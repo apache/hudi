@@ -315,7 +315,8 @@ public class StreamSync implements Serializable, Closeable {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
-    this.storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+    this.storage = HoodieStorageUtils.getStorage(
+        new StoragePath(cfg.targetBasePath), HadoopFSUtils.getStorageConf(fs.getConf()));
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = streamContext.getSchemaProvider();

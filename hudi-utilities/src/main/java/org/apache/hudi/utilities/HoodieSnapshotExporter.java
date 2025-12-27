@@ -162,7 +162,8 @@ public class HoodieSnapshotExporter {
 
     final HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     final List<String> partitions = getPartitions(engineContext, cfg, HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(sourceFs.getConf()), new Class<?>[] {FileSystem.class}, sourceFs));
+        HadoopFSUtils.convertToStoragePath(new Path(cfg.sourceBasePath)),
+        HadoopFSUtils.getStorageConf(sourceFs.getConf())));
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }

@@ -77,7 +77,8 @@ class TestHoodieWrapperFileSystem {
 
     // create same commit twice
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+        HadoopFSUtils.convertToStoragePath(new Path(basePath)),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
     storage.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
     storage.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
     List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(basePath));

@@ -53,7 +53,9 @@ public class TestHoodieMergeOnReadTableInputFormat {
   @BeforeEach
   void setUp() throws IOException {
     fs = FileSystem.get(tempDir.toUri(), new Configuration());
-    storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(tempDir.toString())),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
   }
 
   @AfterEach

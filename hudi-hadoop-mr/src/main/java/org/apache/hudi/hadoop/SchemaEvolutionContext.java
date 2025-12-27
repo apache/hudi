@@ -169,7 +169,7 @@ public class SchemaEvolutionContext {
       Path path = ((FileSplit) split).getPath();
       FileSystem fs = path.getFileSystem(job);
       HoodieStorage storage = HoodieStorageUtils.getStorage(
-          HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+          HadoopFSUtils.convertToStoragePath(path), HadoopFSUtils.getStorageConf(fs.getConf()));
       return TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
     }
     return Option.empty();
@@ -180,7 +180,7 @@ public class SchemaEvolutionContext {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
       HoodieStorage storage = HoodieStorageUtils.getStorage(
-          HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+          HadoopFSUtils.convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(fs.getConf()));
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();

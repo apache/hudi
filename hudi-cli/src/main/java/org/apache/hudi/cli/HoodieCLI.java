@@ -84,9 +84,9 @@ public class HoodieCLI {
     if (storage == null || force) {
       storage = (tableMetadata != null)
           ? tableMetadata.getStorage()
-          : HoodieStorageUtils.getStorage(conf,
-              new Class<?>[] {FileSystem.class},
-              FileSystem.get(conf.unwrap()));
+          : HoodieStorageUtils.getStorage(
+              HadoopFSUtils.convertToStoragePath(FileSystem.get(conf.unwrap()).getWorkingDirectory()),
+              conf);
     }
   }
 

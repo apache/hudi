@@ -107,7 +107,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
       HoodieStorage storage = HoodieStorageUtils.getStorage(
-          HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+          HadoopFSUtils.convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(fs.getConf()));
       return getTablePath(storage, convertToStoragePath(inputPath))
           .map(path -> isHoodieTablePath(storage, path)).orElse(false);
     } catch (IOException e) {

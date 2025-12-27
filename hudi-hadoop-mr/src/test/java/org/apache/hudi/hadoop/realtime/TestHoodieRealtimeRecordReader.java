@@ -126,7 +126,9 @@ public class TestHoodieRealtimeRecordReader {
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     baseJobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
-    storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(basePath.toString())),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
   }
 
   @AfterEach

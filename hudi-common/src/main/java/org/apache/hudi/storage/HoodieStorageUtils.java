@@ -44,27 +44,4 @@ public class HoodieStorageUtils {
       throw new HoodieException("Unable to create " + storageClass, e);
     }
   }
-
-  /**
-   * Creates a {@link HoodieStorage} instance using custom constructor parameters.
-   * This method uses reflection to instantiate the storage class with provided parameter types.
-   *
-   * @param conf       storage configuration containing the storage class name
-   * @param paramTypes array of parameter types for the constructor
-   * @param params     array of parameter values for the constructor
-   * @return {@link HoodieStorage} instance
-   * @throws HoodieException if unable to create the storage instance
-   */
-  public static HoodieStorage getStorage(StorageConfiguration<?> conf,
-                                         Class<?>[] paramTypes,
-                                         Object... params) {
-    String storageClass = conf.getString(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key())
-        .orElse(HoodieStorageConfig.HOODIE_STORAGE_CLASS.defaultValue());
-    try {
-      return (HoodieStorage) ReflectionUtils.loadClass(storageClass, paramTypes, params);
-    } catch (Exception e) {
-      throw new HoodieException("Unable to create " + storageClass
-          + " with constructor parameters: " + java.util.Arrays.toString(paramTypes), e);
-    }
-  }
 }

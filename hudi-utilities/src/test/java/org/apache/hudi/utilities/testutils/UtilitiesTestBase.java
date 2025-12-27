@@ -156,7 +156,9 @@ public class UtilitiesTestBase {
       fs = FileSystem.getLocal(hadoopConf);
       basePath = sharedTempDir.toUri().toString();
     }
-    storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(basePath)),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
 
     hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {

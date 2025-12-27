@@ -723,8 +723,8 @@ public class HoodieStreamer implements Serializable {
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
       this.cfg = cfg;
       this.hoodieSparkContext = hoodieSparkContext;
-      this.storage = HoodieStorageUtils.getStorage(HadoopFSUtils
-              .getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+      this.storage = HoodieStorageUtils.getStorage(
+              new StoragePath(cfg.targetBasePath), HadoopFSUtils.getStorageConf(fs.getConf()));
       this.hiveConf = conf;
       this.sparkSession = SparkSession.builder().config(hoodieSparkContext.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();

@@ -78,7 +78,8 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+        HadoopFSUtils.convertToStoragePath(new Path(metaClient.getBasePath().toString())),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
     metaClient.setStorage(storage);
   }
 
@@ -93,7 +94,8 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     HoodieStorage storage = HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+        HadoopFSUtils.convertToStoragePath(new Path(metaClient.getMetaPath().toString())),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
     metaClient.setStorage(storage);
     List<String> folders =
         Arrays.asList("2016/04/15", ".hoodie/.temp/2/2016/04/15");

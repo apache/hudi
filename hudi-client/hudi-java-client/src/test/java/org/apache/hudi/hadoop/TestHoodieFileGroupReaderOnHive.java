@@ -77,7 +77,9 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     JobConf baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs.setConf(baseJobConf);
-    storage = HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf(fs.getConf()), new Class<?>[] {FileSystem.class}, fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(fs.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
   }
 
   @AfterAll
