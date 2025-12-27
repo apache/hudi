@@ -174,12 +174,14 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           m
 
         case _ =>
+          val catalystPlanUtils = sparkAdapter.getCatalystPlanUtils
           val newMatchedActions = m.matchedActions.map {
             case DeleteAction(deleteCondition) =>
               val resolvedDeleteCondition = deleteCondition.map(
                 resolveExpressionByPlanChildren(_, m))
               DeleteAction(resolvedDeleteCondition)
-            case UpdateAction(updateCondition, assignments) =>
+            case action if catalystPlanUtils.unapplyUpdateAction(action).isDefined =>
+              val (updateCondition, assignments) = catalystPlanUtils.unapplyUpdateAction(action).get
               val resolvedUpdateCondition = updateCondition.map(
                 resolveExpressionByPlanChildren(_, m))
               UpdateAction(

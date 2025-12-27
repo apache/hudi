@@ -56,6 +56,7 @@ private[hudi] trait SparkVersionsSupport {
   def isSpark3_4: Boolean = getSparkVersion.startsWith("3.4")
   def isSpark3_5: Boolean = getSparkVersion.startsWith("3.5")
   def isSpark4_0: Boolean = getSparkVersion.startsWith("4.0")
+  def isSpark4_1: Boolean = getSparkVersion.startsWith("4.1")
 
   def gteqSpark3_3_2: Boolean = getSparkVersion >= "3.3.2"
   def gteqSpark3_4: Boolean = getSparkVersion >= "3.4"

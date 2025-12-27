@@ -17,12 +17,13 @@
 
 package org.apache.spark.sql.hudi.streaming
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
+import org.apache.spark.sql.execution.streaming.Offset
 
 case class HoodieSourceOffset(offsetCommitTime: String) extends Offset {
 
@@ -44,7 +45,7 @@ case class HoodieSourceOffset(offsetCommitTime: String) extends Offset {
 }
 
 
-object HoodieSourceOffset {
+object HoodieSourceOffset extends SparkAdapterSupport {
 
   lazy val mapper: ObjectMapper = {
     val _mapper = new ObjectMapper
@@ -64,8 +65,14 @@ object HoodieSourceOffset {
 
   def apply(offset: Offset): HoodieSourceOffset = {
     offset match {
-      case SerializedOffset(json) => fromJson(json)
       case o: HoodieSourceOffset => o
+      case _ =>
+        // Use adapter to extract JSON from SerializedOffset to handle Spark version differences
+        // In Spark 4.1, SerializedOffset moved to runtime package
+        sparkAdapter.getCatalystPlanUtils.extractJsonFromSerializedOffset(offset) match {
+          case Some(json) => fromJson(json)
+          case None => throw new IllegalArgumentException(s"Unsupported offset type: ${offset.getClass}")
+        }
     }
   }
 

@@ -25,7 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.QueryTest.checkAnswer
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
-import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -88,7 +87,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
 
     val userToCountryMetaClient = createMetaClient(spark, userToCountryTblPath)
 
-    val inputData = new MemoryStream[(Int, String, String)](100, spark.sqlContext)
+    val inputData = sparkAdapter.createMemoryStream[(Int, String, String)](100, spark)
     val df = inputData.toDS().toDF("userid", "country", "ts")
     // stream1: from upstream data source to user_to_country_tbl
     val stream1 = df.writeStream

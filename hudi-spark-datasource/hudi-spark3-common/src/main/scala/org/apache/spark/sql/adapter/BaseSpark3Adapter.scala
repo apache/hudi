@@ -30,7 +30,7 @@ import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, Encoder, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters, HoodieSparkSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -45,7 +45,8 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
-import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.execution.streaming.MemoryStream
+import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
@@ -177,5 +178,13 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
     Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
         relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
+  }
+
+  override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
+    val memoryStream = new MemoryStream[T](id, sparkSession.sqlContext)
+    new HoodieMemoryStream[T] {
+      override def addData(data: TraversableOnce[T]): Unit = memoryStream.addData(data)
+      override def toDS(): Dataset[T] = memoryStream.toDS()
+    }
   }
 }
