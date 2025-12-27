@@ -39,11 +39,14 @@ public class TestHoodieMetadataWriteUtils {
 
   @Test
   public void testCreateMetadataWriteConfigForCleaner() {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieMetadataConfig.CLEANER_PARALLELISM.key(), "1000");
     HoodieWriteConfig writeConfig1 = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/")
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .retainCommits(5).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withProperties(properties).build())
         .build();
 
     HoodieWriteConfig metadataWriteConfig1 = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig1, HoodieFailedWritesCleaningPolicy.EAGER,
@@ -52,6 +55,7 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, metadataWriteConfig1.getCleanerPolicy());
     // default value already greater than data cleaner commits retained * 1.2
     assertEquals(HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, metadataWriteConfig1.getCleanerCommitsRetained());
+    assertEquals(1000, metadataWriteConfig1.getCleanerParallelism());
 
     assertNotEquals(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS, metadataWriteConfig1.getCleanerPolicy());
     assertNotEquals(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, metadataWriteConfig1.getCleanerPolicy());
@@ -111,5 +115,36 @@ public class TestHoodieMetadataWriteUtils {
     } else {
       assertNull(metadataWriteConfig.getLockProviderClass());
     }
+  }
+
+  @Test
+  public void testParallelismConfigs() {
+    // default
+    testMetadataConfig(false, 512, 512, 512);
+    // overrides
+    testMetadataConfig(true, 10, 20, 10);
+    testMetadataConfig(true, 1000, 2000, 1000);
+  }
+
+  private void testMetadataConfig(boolean setParallelismConfigs, int cleanerParallelism, int rollbackParallelism, int finalizeWriteParallelism) {
+    Properties properties = new Properties();
+    if (setParallelismConfigs) {
+      properties.setProperty(HoodieMetadataConfig.CLEANER_PARALLELISM.key(), Integer.toString(cleanerParallelism));
+      properties.setProperty(HoodieMetadataConfig.ROLLBACK_PARALLELISM.key(), Integer.toString(rollbackParallelism));
+      properties.setProperty(HoodieMetadataConfig.FINALIZE_WRITES_PARALLELISM.key(), Integer.toString(finalizeWriteParallelism));
+    }
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(5).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withProperties(properties).build())
+        .build();
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.EAGER,
+        HoodieTableVersion.EIGHT);
+
+    assertEquals(cleanerParallelism, metadataWriteConfig.getCleanerParallelism());
+    assertEquals(rollbackParallelism, metadataWriteConfig.getRollbackParallelism());
+    assertEquals(finalizeWriteParallelism, metadataWriteConfig.getFinalizeWriteParallelism());
   }
 }
