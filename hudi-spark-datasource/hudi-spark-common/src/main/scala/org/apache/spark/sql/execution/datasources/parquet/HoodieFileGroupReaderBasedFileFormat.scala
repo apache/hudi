@@ -133,6 +133,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
       schema.forall(s => OrcUtils.supportColumnarReads(
         s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
+    // TODO: Implement columnar batch reading for Lance - currently using row-based reading
+    val lanceBatchSupported = false
 
     val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
       parquetBatchSupported && orcBatchSupported
@@ -140,6 +142,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       parquetBatchSupported
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       orcBatchSupported
+    } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
+      lanceBatchSupported
     } else {
       throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }
@@ -306,6 +310,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
+    } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
+      sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else {
       throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }
@@ -424,8 +430,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   override def inferSchema(sparkSession: SparkSession, options: Map[String, String], files: Seq[FileStatus]): Option[StructType] = {
     if (isMultipleBaseFileFormatsEnabled || hoodieFileFormat == HoodieFileFormat.PARQUET) {
       ParquetUtils.inferSchema(sparkSession, options, files)
-    } else {
+    } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       OrcUtils.inferSchema(sparkSession, files, options)
+    } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
+      // TODO: Implement Lance schema inference
+      // For now, throw an exception will revisit
+      throw new HoodieNotSupportedException("Need to implement infer schema for Lance")
+    } else {
+      throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }
   }
 
