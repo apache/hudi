@@ -55,12 +55,12 @@ public class HoodieLanceRecordIterator implements ClosableIterator<UnsafeRow> {
   private final BufferAllocator allocator;
   private final LanceFileReader lanceReader;
   private final ArrowReader arrowReader;
-  private final StructType schema;
   private final UnsafeProjection projection;
   private final String path;
 
   private ColumnarBatch currentBatch;
   private Iterator<InternalRow> rowIterator;
+  private ColumnVector[] columnVectors;
   private boolean closed = false;
 
   /**
@@ -80,7 +80,6 @@ public class HoodieLanceRecordIterator implements ClosableIterator<UnsafeRow> {
     this.allocator = allocator;
     this.lanceReader = lanceReader;
     this.arrowReader = arrowReader;
-    this.schema = schema;
     this.projection = UnsafeProjection.create(schema);
     this.path = path;
   }
@@ -104,12 +103,15 @@ public class HoodieLanceRecordIterator implements ClosableIterator<UnsafeRow> {
         VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
         // Wrap each Arrow FieldVector in LanceArrowColumnVector for type-safe access
-        ColumnVector[] columns = root.getFieldVectors().stream()
-                .map(LanceArrowColumnVector::new)
-                .toArray(ColumnVector[]::new);
+        // Cache the column wrappers on first batch and reuse for all subsequent batches
+        if (columnVectors == null) {
+          columnVectors = root.getFieldVectors().stream()
+                  .map(LanceArrowColumnVector::new)
+                  .toArray(ColumnVector[]::new);
+        }
 
         // Create ColumnarBatch and keep it alive while iterating
-        currentBatch = new ColumnarBatch(columns, root.getRowCount());
+        currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
         rowIterator = currentBatch.rowIterator();
         return rowIterator.hasNext();
       }

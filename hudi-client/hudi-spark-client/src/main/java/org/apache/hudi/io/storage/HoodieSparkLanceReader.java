@@ -155,7 +155,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       // Read only the requested columns from Lance file for efficiency
       ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE);
 
-      return new HoodieLanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path.toString());
+      return new HoodieLanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path);
     } catch (Exception e) {
       allocator.close();
       throw new HoodieException("Failed to create Lance reader for: " + path, e);
@@ -195,113 +195,4 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * Iterator implementation that reads Lance file batches and converts to UnsafeRows.
    * Keeps ColumnarBatch alive while iterating to avoid unnecessary data copying.
    */
-  private class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
-    private final BufferAllocator allocator;
-    private final LanceFileReader lanceReader;
-    private final ArrowReader arrowReader;
-    private final UnsafeProjection projection;
-    private ColumnarBatch currentBatch;
-    private Iterator<InternalRow> rowIterator;
-    private ColumnVector[] columnVectors;
-
-    public LanceRecordIterator(BufferAllocator allocator,
-                               LanceFileReader lanceReader,
-                               ArrowReader arrowReader,
-                               StructType schema) {
-      this.allocator = allocator;
-      this.lanceReader = lanceReader;
-      this.arrowReader = arrowReader;
-      this.projection = UnsafeProjection.create(schema);
-    }
-
-    @Override
-    public boolean hasNext() {
-      // If we have records in current batch, return true
-      if (rowIterator != null && rowIterator.hasNext()) {
-        return true;
-      }
-
-      // Close previous batch before loading next
-      if (currentBatch != null) {
-        currentBatch.close();
-        currentBatch = null;
-      }
-
-      // Try to load next batch
-      try {
-        if (arrowReader.loadNextBatch()) {
-          VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
-
-          // Wrap each Arrow FieldVector in LanceArrowColumnVector for type-safe access
-          // Cache the column wrappers on first batch and reuse for all subsequent batches
-          if (columnVectors == null) {
-            columnVectors = root.getFieldVectors().stream()
-                    .map(LanceArrowColumnVector::new)
-                    .toArray(ColumnVector[]::new);
-          }
-
-          // Create ColumnarBatch and keep it alive while iterating
-          currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
-          rowIterator = currentBatch.rowIterator();
-          return rowIterator.hasNext();
-        }
-      } catch (IOException e) {
-        throw new HoodieException("Failed to read next batch from Lance file: " + path, e);
-      }
-
-      return false;
-    }
-
-    @Override
-    public UnsafeRow next() {
-      if (!hasNext()) {
-        throw new IllegalStateException("No more records available");
-      }
-      InternalRow row = rowIterator.next();
-      // Convert to UnsafeRow immediately while batch is still open
-      return projection.apply(row);
-    }
-
-    @Override
-    public void close() {
-      IOException arrowException = null;
-      Exception lanceException = null;
-
-      // Close current batch if exists
-      if (currentBatch != null) {
-        currentBatch.close();
-      }
-
-      // Close Arrow reader
-      if (arrowReader != null) {
-        try {
-          arrowReader.close();
-        } catch (IOException e) {
-          arrowException = e;
-        }
-      }
-
-      // Close Lance reader
-      if (lanceReader != null) {
-        try {
-          lanceReader.close();
-        } catch (Exception e) {
-          lanceException = e;
-        }
-      }
-
-      // Always close allocator
-      if (allocator != null) {
-        allocator.close();
-      }
-
-      // Throw any exceptions that occurred
-      if (arrowException != null) {
-        throw new HoodieIOException("Failed to close Arrow reader", arrowException);
-      }
-      if (lanceException != null) {
-        throw new HoodieException("Failed to close Lance reader", lanceException);
-      }
-    }
-  }
 }
