@@ -21,11 +21,11 @@ package org.apache.spark.sql.execution.datasources.lance
 
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.io.storage.HoodieLanceRecordIterator
+import org.apache.hudi.io.memory.HoodieArrowAllocator
+import org.apache.hudi.io.storage.{HoodieLanceRecordIterator, HoodieSparkLanceReader}
 import org.apache.hudi.storage.StorageConfiguration
 
 import com.lancedb.lance.file.LanceFileReader
-import org.apache.arrow.memory.RootAllocator
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
@@ -76,8 +76,9 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       // No columns requested - return empty iterator
       Iterator.empty
     } else {
-      // Create Arrow allocator for reading
-      val allocator = new RootAllocator(Long.MaxValue)
+      // Create child allocator for reading
+      val allocator = HoodieArrowAllocator.newChildAllocator(getClass.getSimpleName + "-data-" + filePath,
+        HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
 
       try {
         // Open Lance file reader
