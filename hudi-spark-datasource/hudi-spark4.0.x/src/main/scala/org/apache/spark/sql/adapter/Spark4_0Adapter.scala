@@ -35,6 +35,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
@@ -172,7 +173,7 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
                                      sqlConf: SQLConf,
                                      options: Map[String, String],
                                      hadoopConf: Configuration): SparkColumnarFileReader = {
-    throw new UnsupportedOperationException("Lance format is not supported in Spark 4.0")
+    new SparkLanceReaderBase(vectorized)
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
