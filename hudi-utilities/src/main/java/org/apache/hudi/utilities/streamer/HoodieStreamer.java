@@ -162,6 +162,15 @@ public class HoodieStreamer implements Serializable {
             HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(this.properties, HoodieWriteConfig.WRITE_TABLE_VERSION)));
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
+    if (null != cfg.recordMergeMode && !StringUtils.isNullOrEmpty(cfg.recordMergeMode.name())) {
+      this.properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), cfg.recordMergeMode.name());
+    }
+    if (!StringUtils.isNullOrEmpty(cfg.payloadClassName)) {
+      this.properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), cfg.payloadClassName);
+    }
+    if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
+      this.properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), cfg.recordMergeStrategyId);
+    }
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
           UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
