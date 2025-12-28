@@ -402,14 +402,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
-        <configuration>
-          <skip>${skipITs}</skip>
-          <argLine>@{argLine}</argLine>
-          <useSystemClassLoader>false</useSystemClassLoader>
-          <systemPropertyVariables>
-            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
-          </systemPropertyVariables>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -524,6 +516,33 @@
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
           </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>org.apache.maven.surefire</groupId>
+              <artifactId>surefire-junit-platform</artifactId>
+              <version>${maven-surefire-plugin.version}</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${maven-failsafe-plugin.version}</version>
+          <configuration>
+            <skip>${skipITs}</skip>
+            <argLine>@{argLine}</argLine>
+            <useSystemClassLoader>false</useSystemClassLoader>
+            <systemPropertyVariables>
+              <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+            </systemPropertyVariables>
+          </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>org.apache.maven.surefire</groupId>
+              <artifactId>surefire-junit-platform</artifactId>
+              <version>${maven-surefire-plugin.version}</version>
+            </dependency>
+          </dependencies>
         </plugin>
         <plugin>
           <groupId>org.scalatest</groupId>
@@ -741,18 +760,6 @@
             <protocVersion>${protoc.version}</protocVersion>
             <includeStdTypes>true</includeStdTypes>
           </configuration>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-surefire-plugin</artifactId>
-          <version>${maven-surefire-plugin.version}</version>
-          <dependencies>
-            <dependency>
-              <groupId>org.apache.maven.surefire</groupId>
-              <artifactId>surefire-junit-platform</artifactId>
-              <version>${maven-surefire-plugin.version}</version>
-            </dependency>
-          </dependencies>
         </plugin>
       </plugins>
     </pluginManagement>
