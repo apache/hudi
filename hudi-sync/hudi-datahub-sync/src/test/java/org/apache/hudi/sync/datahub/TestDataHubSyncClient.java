@@ -72,7 +72,7 @@ import static org.mockito.Mockito.when;
 public class TestDataHubSyncClient {
 
   @Mock
-  RestEmitter restEmitterMock;
+  RestEmitter restEmitterMock = mock(RestEmitter.class);
 
   @TempDir
   static java.nio.file.Path tmpDir;
@@ -230,7 +230,7 @@ public class TestDataHubSyncClient {
 
     CompletableFuture<MetadataWriteResponse> failedFuture = new CompletableFuture<>();
     failedFuture.completeExceptionally(new IOException("Emission failed"));
-    when(restEmitterMock.emit(any(MetadataChangeProposalWrapper.class), any()))
+    when(restEmitterMock.emit(any(MetadataChangeProposal.class), any()))
         .thenReturn(failedFuture);
 
     DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
