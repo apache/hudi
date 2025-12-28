@@ -34,9 +34,8 @@ import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -48,9 +47,9 @@ import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
+@Slf4j
 public class HoodieClusteringJob {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieClusteringJob.class);
   private final Config cfg;
   private final TypedProperties props;
   private final JavaSparkContext jsc;
@@ -160,7 +159,7 @@ public class HoodieClusteringJob {
     if (result != 0) {
       throw new HoodieException(resultMsg + " failed");
     }
-    LOG.info(resultMsg + " success");
+    log.info("{} success", resultMsg);
     jsc.stop();
   }
 
@@ -179,28 +178,28 @@ public class HoodieClusteringJob {
     return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
-          LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          log.info("Running Mode: [{}]; Do schedule", SCHEDULE);
           Option<String> instantTime = doSchedule(jsc);
           int result = instantTime.isPresent() ? 0 : -1;
           if (result == 0) {
-            LOG.info("The schedule instant time is " + instantTime.get());
+            log.info("The schedule instant time is {}", instantTime.get());
           }
           return result;
         }
         case SCHEDULE_AND_EXECUTE: {
-          LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          log.info("Running Mode: [{}]", SCHEDULE_AND_EXECUTE);
           return doScheduleAndCluster(jsc);
         }
         case EXECUTE: {
-          LOG.info("Running Mode: [" + EXECUTE + "]; Do cluster");
+          log.info("Running Mode: [{}]; Do cluster", EXECUTE);
           return doCluster(jsc);
         }
         case PURGE_PENDING_INSTANT: {
-          LOG.info("Running Mode: [" + PURGE_PENDING_INSTANT + "];");
+          log.info("Running Mode: [{}];", PURGE_PENDING_INSTANT);
           return doPurgePendingInstant(jsc);
         }
         default: {
-          LOG.error("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.error("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
           return -1;
         }
       }
@@ -218,10 +217,9 @@ public class HoodieClusteringJob {
             metaClient.getActiveTimeline().getFirstPendingClusterInstant();
         if (firstClusteringInstant.isPresent()) {
           cfg.clusteringInstantTime = firstClusteringInstant.get().requestedTime();
-          LOG.info("Found the earliest scheduled clustering instant which will be executed: "
-              + cfg.clusteringInstantTime);
+          log.info("Found the earliest scheduled clustering instant which will be executed: {}", cfg.clusteringInstantTime);
         } else {
-          LOG.info("There is no scheduled clustering in the table.");
+          log.info("There is no scheduled clustering in the table.");
           return 0;
         }
       }
@@ -249,7 +247,7 @@ public class HoodieClusteringJob {
   }
 
   private int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
-    LOG.info("Step 1: Do schedule");
+    log.info("Step 1: Do schedule");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
@@ -265,22 +263,22 @@ public class HoodieClusteringJob {
           Date clusteringStartTime = TimelineUtils.parseDateFromInstantTime(inflightClusteringInstant.requestedTime());
           if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
             // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
-            LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
+            log.info("Found failed clustering instant at : {}; Will rollback the failed clustering and re-trigger again.", inflightClusteringInstant);
             instantTime = Option.of(inflightClusteringInstant.requestedTime());
           } else {
-            LOG.info(inflightClusteringInstant + " might still be in progress, will trigger a new clustering job.");
+            log.info("{} might still be in progress, will trigger a new clustering job.", inflightClusteringInstant);
           }
         }
       }
 
       instantTime = instantTime.isPresent() ? instantTime : doSchedule(client);
       if (!instantTime.isPresent()) {
-        LOG.info("Couldn't generate cluster plan");
+        log.info("Couldn't generate cluster plan");
         return -1;
       }
 
-      LOG.info("The schedule instant time is " + instantTime.get());
-      LOG.info("Step 2: Do cluster");
+      log.info("The schedule instant time is {}", instantTime.get());
+      log.info("Step 2: Do cluster");
       Option<HoodieCommitMetadata> metadata = client.cluster(instantTime.get()).getCommitMetadata();
       clean(client);
       return UtilHelpers.handleErrors(metadata.get(), instantTime.get());

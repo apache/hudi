@@ -39,6 +39,10 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -46,8 +50,6 @@ import org.apache.spark.sql.expressions.Window;
 import org.apache.spark.sql.expressions.WindowSpec;
 import org.apache.spark.sql.functions;
 import org.apache.spark.storage.StorageLevel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.function.Function;
 
@@ -63,9 +65,9 @@ import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATES
 import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.sum;
 
+@Slf4j
 public class IncrSourceHelper {
 
-  private static final Logger LOG = LoggerFactory.getLogger(IncrSourceHelper.class);
   public static final String DEFAULT_START_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
 
@@ -225,7 +227,7 @@ public class IncrSourceHelper {
     // If source profile exists, use the numInstants from source profile.
     int numInstantsPerFetch = latestSourceProfile.map(sourceProfile -> {
       int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
-      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
+      log.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
           numInstantsFromSourceProfile, numInstantsFromConfigFinal);
       return numInstantsFromSourceProfile;
     }).orElse(numInstantsFromConfig);
@@ -274,7 +276,7 @@ public class IncrSourceHelper {
       orderedDf = orderedDf.filter(functions.col("commit_key").gt(concatenatedKey.get())).drop("commit_key");
       // If there are no more files where commit_key is greater than lastCheckpointCommit#lastCheckpointKey
       if (orderedDf.isEmpty()) {
-        LOG.info("Empty ordered source, returning endpoint:" + queryInfo.getEndInstant());
+        log.info("Empty ordered source, returning endpoint: {}", queryInfo.getEndInstant());
         sourceData.unpersist();
         // queryInfo.getEndInstant() represents source table's last completed instant
         // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
@@ -297,7 +299,7 @@ public class IncrSourceHelper {
     Row row = null;
     if (collectedRows.isEmpty()) {
       // If the first element itself exceeds limits then return first element
-      LOG.info("First object exceeding source limit: " + sourceLimit + " bytes");
+      log.info("First object exceeding source limit: {} bytes", sourceLimit);
       row = aggregatedData.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
       collectedRows = aggregatedData.limit(1);
     } else {
@@ -305,7 +307,7 @@ public class IncrSourceHelper {
       row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
           col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc()).first();
     }
-    LOG.info("Processed batch size: " + row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)) + " bytes");
+    log.info("Processed batch size: {} bytes", row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)));
     sourceData.unpersist();
     return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), Option.of(collectedRows));
   }
@@ -333,7 +335,7 @@ public class IncrSourceHelper {
 
   public static Dataset<Row> coalesceOrRepartition(Dataset dataset, int numPartitions) {
     int existingNumPartitions = dataset.rdd().getNumPartitions();
-    LOG.info("Existing number of partitions={}, required number of partitions={}", existingNumPartitions, numPartitions);
+    log.info("Existing number of partitions={}, required number of partitions={}", existingNumPartitions, numPartitions);
     if (existingNumPartitions < numPartitions) {
       dataset = dataset.repartition(numPartitions);
     } else {
@@ -345,27 +347,18 @@ public class IncrSourceHelper {
   /**
    * Kafka reset offset strategies.
    */
+  @AllArgsConstructor
+  @Getter
+  @ToString
   public enum MissingCheckpointStrategy {
     READ_LATEST("Read from latest commit in hoodie source table"),
     READ_UPTO_LATEST_COMMIT("Read everything upto latest commit");
 
+    @Getter
     private final String description;
-
-    MissingCheckpointStrategy(String description) {
-      this.description = description;
-    }
-
-    public String getDescription() {
-      return description;
-    }
 
     private static MissingCheckpointStrategy nullEnum() {
       return null;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s (%s)", name(), description);
     }
   }
 }

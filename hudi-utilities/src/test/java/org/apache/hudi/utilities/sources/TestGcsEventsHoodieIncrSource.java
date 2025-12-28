@@ -57,6 +57,7 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -73,8 +74,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -96,6 +95,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@Slf4j
 public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static final HoodieSchema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
@@ -121,8 +121,6 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   protected Option<SchemaProvider> schemaProvider;
   private HoodieTableMetaClient metaClient;
   private JavaSparkContext jsc;
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestGcsEventsHoodieIncrSource.class);
 
   @BeforeEach
   public void setUp() throws IOException {

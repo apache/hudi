@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapreduce.AvroKeyInputFormat;
@@ -39,8 +40,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,11 +61,10 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * <p>
  * This produces beautiful causality, that makes data issues in ETLs very easy to debug
  */
+@Slf4j
 public class HiveIncrPullSource extends AvroSource {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrPullSource.class);
 
   private final transient FileSystem fs;
 
@@ -93,7 +91,7 @@ public class HiveIncrPullSource extends AvroSource {
    */
   private Option<Checkpoint> findCommitToPull(Option<Checkpoint> latestTargetCommit) throws IOException {
 
-    LOG.info("Looking for commits ");
+    log.info("Looking for commits ");
 
     FileStatus[] commitTimePaths = fs.listStatus(new Path(incrPullRootPath));
     List<String> commitTimes = new ArrayList<>(commitTimePaths.length);
@@ -102,7 +100,7 @@ public class HiveIncrPullSource extends AvroSource {
       commitTimes.add(splits[splits.length - 1]);
     }
     Collections.sort(commitTimes);
-    LOG.info("Retrieved commit times " + commitTimes);
+    log.info("Retrieved commit times {}", commitTimes);
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning

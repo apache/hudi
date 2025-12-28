@@ -25,21 +25,20 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.UtilHelpers;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Archive task to run in TableServicePipeline.
  *
  * @see HoodieMultiTableServicesMain
  */
+@Slf4j
 class ArchiveTask extends TableServiceTask {
-  private static final Logger LOG = LoggerFactory.getLogger(ArchiveTask.class);
 
   @Override
   void run() {
-    LOG.info("Run Archive with props: " + props);
+    log.info("Run Archive with props: {}", props);
     HoodieWriteConfig hoodieCfg = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), hoodieCfg)) {
       UtilHelpers.retry(retry, () -> {

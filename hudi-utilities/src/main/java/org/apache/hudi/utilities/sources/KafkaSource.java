@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -43,8 +44,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -53,8 +52,9 @@ import java.util.Map;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
+@Slf4j
 public abstract class KafkaSource<T> extends Source<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
+
   private static final String COMMA_DELIMITER = ",";
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
@@ -110,14 +110,14 @@ public abstract class KafkaSource<T> extends Source<T> {
           kafkaSourceProfile.getSourcePartitions(), metrics);
       metrics.updateStreamerSourceParallelism(kafkaSourceProfile.getSourcePartitions());
       metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(kafkaSourceProfile.getMaxSourceBytes());
-      LOG.info("About to read maxEventsInSyncRound {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
+      log.info("About to read maxEventsInSyncRound {} of size {} bytes in {} partitions from Kafka for topic {} with offsetRanges {}",
           kafkaSourceProfile.getSourceSpecificContext(), kafkaSourceProfile.getMaxSourceBytes(),
           kafkaSourceProfile.getSourcePartitions(), offsetGen.getTopicName(), offsetRanges);
     } else {
       int minPartitions = (int) getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
       metrics.updateStreamerSourceParallelism(minPartitions);
       offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpoint, sourceLimit, metrics);
-      LOG.info("About to read sourceLimit {} in {} spark partitions from kafka for topic {} with offset ranges {}",
+      log.info("About to read sourceLimit {} in {} spark partitions from kafka for topic {} with offset ranges {}",
           sourceLimit, minPartitions, offsetGen.getTopicName(),
           Arrays.toString(offsetRanges));
     }
@@ -126,7 +126,7 @@ public abstract class KafkaSource<T> extends Source<T> {
 
   private InputBatch<T> toInputBatch(OffsetRange[] offsetRanges) {
     long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
-    LOG.info("About to read {} from Kafka for topic :{} after offset generation with offset ranges {}",
+    log.info("About to read {} from Kafka for topic :{} after offset generation with offset ranges {}",
         totalNewMsgs, offsetGen.getTopicName(), Arrays.toString(offsetRanges));
     if (totalNewMsgs <= 0) {
       metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
@@ -156,7 +156,7 @@ public abstract class KafkaSource<T> extends Source<T> {
       OffsetRange[] offsetRanges) {
     Map<String, Object> kafkaParams =
         filterKafkaParameters(offsetGen.getKafkaParams(), ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true));
-    LOG.debug("Original kafka params " + offsetGen.getKafkaParams() + "\n After filtering kafka params " + kafkaParams);
+    log.debug("Original kafka params {}\n After filtering kafka params {}", offsetGen.getKafkaParams(), kafkaParams);
     return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
   }
 

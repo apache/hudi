@@ -33,14 +33,13 @@ import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 
 import com.google.pubsub.v1.ReceivedMessage;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -102,6 +101,7 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --hoodie-conf hoodie.datasource.hive_sync.table=gcs_meta \
 --hoodie-conf hoodie.datasource.hive_sync.partition_fields=bucket \
 */
+@Slf4j
 public class GcsEventsSource extends RowSource {
 
   private final PubsubMessagesFetcher pubsubMessagesFetcher;
@@ -111,8 +111,6 @@ public class GcsEventsSource extends RowSource {
   private final List<String> messagesToAck = new ArrayList<>();
 
   private static final Checkpoint CHECKPOINT_VALUE_ZERO = new StreamerCheckpointV2("0");
-
-  private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
   public GcsEventsSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
                          SchemaProvider schemaProvider) {
@@ -135,12 +133,12 @@ public class GcsEventsSource extends RowSource {
     this.ackMessages = getBooleanWithAltKeys(props, ACK_MESSAGES);
     this.schemaProvider = schemaProvider;
 
-    LOG.info("Created GcsEventsSource");
+    log.info("Created GcsEventsSource");
   }
 
   @Override
   protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    LOG.info("fetchNextBatch(): Input checkpoint: " + lastCheckpoint);
+    log.info("fetchNextBatch(): Input checkpoint: {}", lastCheckpoint);
     MessageBatch messageBatch;
     try {
       messageBatch = fetchFileMetadata();
@@ -151,13 +149,13 @@ public class GcsEventsSource extends RowSource {
     }
 
     if (messageBatch.isEmpty()) {
-      LOG.info("No new data. Returning empty batch with checkpoint value: " + CHECKPOINT_VALUE_ZERO);
+      log.info("No new data. Returning empty batch with checkpoint value: {}", CHECKPOINT_VALUE_ZERO);
       return Pair.of(Option.empty(), CHECKPOINT_VALUE_ZERO);
     }
 
     Dataset<String> eventRecords = sparkSession.createDataset(messageBatch.getMessages(), Encoders.STRING());
 
-    LOG.info("Returning checkpoint value: " + CHECKPOINT_VALUE_ZERO);
+    log.info("Returning checkpoint value: {}", CHECKPOINT_VALUE_ZERO);
 
     StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
     if (sourceSchema != null) {
@@ -169,12 +167,12 @@ public class GcsEventsSource extends RowSource {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    LOG.info("onCommit(): Checkpoint: " + lastCkptStr);
+    log.info("onCommit(): Checkpoint: {}", lastCkptStr);
 
     if (ackMessages) {
       ackOutstandingMessages();
     } else {
-      LOG.warn("Not acknowledging messages. Can result in repeated redeliveries.");
+      log.warn("Not acknowledging messages. Can result in repeated redeliveries.");
     }
   }
 
@@ -204,14 +202,14 @@ public class GcsEventsSource extends RowSource {
 
       MessageValidity messageValidity = message.shouldBeProcessed();
       if (messageValidity.getDecision() == DO_SKIP) {
-        LOG.debug("Skipping message: {}", messageValidity.getDescription());
+        log.debug("Skipping message: {}", messageValidity.getDescription());
         skippedMsgCount++;
         continue;
       }
 
       messages.add(msgStr);
     }
-    LOG.info("Messages received: {}, toBeProcessed: {}, skipped: {}", receivedMessages.size(), messages.size(), skippedMsgCount);
+    log.info("Messages received: {}, toBeProcessed: {}, skipped: {}", receivedMessages.size(), messages.size(), skippedMsgCount);
     return new MessageBatch(messages);
   }
 
@@ -229,8 +227,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   private void logDetails(MetadataMessage message, String msgStr) {
-    LOG.debug("eventType: {}, objectId: {}", message.getEventType(), message.getObjectId());
-    LOG.debug("msg: {}", msgStr);
+    log.debug("eventType: {}, objectId: {}", message.getEventType(), message.getObjectId());
+    log.debug("msg: {}", msgStr);
   }
 
 }

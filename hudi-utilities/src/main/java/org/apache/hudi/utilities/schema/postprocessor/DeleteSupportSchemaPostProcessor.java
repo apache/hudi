@@ -22,10 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +35,8 @@ import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
  * An implementation of {@link SchemaPostProcessor} which will add a column named "_hoodie_is_deleted" to the end of
  * a given schema.
  */
+@Slf4j
 public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DeleteSupportSchemaPostProcessor.class);
 
   public DeleteSupportSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -48,7 +46,7 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
   public Schema processSchema(Schema schema) {
 
     if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
-      LOG.warn("column {} already exists!", HoodieRecord.HOODIE_IS_DELETED_FIELD);
+      log.warn("column {} already exists!", HoodieRecord.HOODIE_IS_DELETED_FIELD);
       return schema;
     }
 
