@@ -31,11 +31,12 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JavalinBindException;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -43,22 +44,20 @@ import java.io.Serializable;
 /**
  * A standalone timeline service exposing File-System View interfaces to clients.
  */
+@Slf4j
 public class TimelineService {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final int START_SERVICE_MAX_RETRIES = 16;
   private static final int DEFAULT_NUM_THREADS = 250;
 
+  @Getter
   private int serverPort;
   private final Config timelineServerConf;
+  @Getter
   private final StorageConfiguration<?> storageConf;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
-
-  public int getServerPort() {
-    return serverPort;
-  }
 
   public TimelineService(StorageConfiguration<?> storageConf, Config timelineServerConf,
                          FileSystemViewManager globalFileSystemViewManager) {
@@ -165,6 +164,7 @@ public class TimelineService {
     /**
      * Builder of Config class.
      */
+    @NoArgsConstructor
     public static class Builder {
       private Integer serverPort = 26754;
       private FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
@@ -186,9 +186,6 @@ public class TimelineService {
       private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
       private boolean enableRemotePartitioner = false;
-
-      public Builder() {
-      }
 
       public Builder serverPort(int serverPort) {
         this.serverPort = serverPort;
@@ -332,12 +329,12 @@ public class TimelineService {
       } catch (Exception e) {
         if (e instanceof JavalinBindException) {
           if (tryPort == 0) {
-            LOG.warn("Timeline server could not bind on a random free port.");
+            log.warn("Timeline server could not bind on a random free port.");
           } else {
-            LOG.warn("Timeline server could not bind on port {}. Attempting port {} + 1.", tryPort, tryPort);
+            log.warn("Timeline server could not bind on port {}. Attempting port {} + 1.", tryPort, tryPort);
           }
         } else {
-          LOG.warn("Timeline server start failed on port {}. Attempting port {} + 1.", tryPort, tryPort, e);
+          log.warn("Timeline server start failed on port {}. Attempting port {} + 1.", tryPort, tryPort, e);
         }
       }
     }
@@ -346,7 +343,7 @@ public class TimelineService {
 
   public int startService() throws IOException {
     int realServerPort = startServiceOnPort(serverPort);
-    LOG.info("Starting Timeline server on port: {}", realServerPort);
+    log.info("Starting Timeline server on port: {}", realServerPort);
     this.serverPort = realServerPort;
     return realServerPort;
   }
@@ -411,7 +408,7 @@ public class TimelineService {
   }
 
   public void close() {
-    LOG.info("Closing Timeline Service with port " + serverPort);
+    log.info("Closing Timeline Service with port {}", serverPort);
     if (requestHandler != null) {
       this.requestHandler.stop();
     }
@@ -420,15 +417,11 @@ public class TimelineService {
       this.app = null;
     }
     this.fsViewsManager.close();
-    LOG.info("Closed Timeline Service with port " + serverPort);
+    log.info("Closed Timeline Service with port {}", serverPort);
   }
 
   public void unregisterBasePath(String basePath) {
     fsViewsManager.clearFileSystemView(basePath);
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
   }
 
   public static void main(String[] args) throws Exception {
