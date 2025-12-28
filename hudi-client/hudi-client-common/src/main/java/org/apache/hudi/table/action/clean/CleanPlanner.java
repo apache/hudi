@@ -182,6 +182,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
         }
       }
+      LOG.info("Falling back to full cleaning as no previous clean metadata found or earliest commit to retain is not valid. Last Clean: {}", lastClean);
     }
     return getPartitionPathsForFullCleaning();
   }
