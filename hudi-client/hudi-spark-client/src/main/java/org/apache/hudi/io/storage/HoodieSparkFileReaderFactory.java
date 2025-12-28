@@ -50,7 +50,7 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
   @Override
   protected HoodieFileReader newLanceFileReader(StoragePath path) {
-    return new HoodieSparkLanceReader(storage, path);
+    return new HoodieSparkLanceReader(path);
   }
 
   @Override

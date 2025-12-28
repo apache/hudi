@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -76,7 +77,6 @@ public class LanceUtils extends FileFormatUtils {
                                                            Option<BaseKeyGenerator> keyGeneratorOpt,
                                                            Option<String> partitionPath) {
     try {
-      // Follow similar pattern as HFileUtils
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(storage)
           .getReaderFactory(HoodieRecord.HoodieRecordType.SPARK)
           .getFileReader(new HoodieReaderConfig(), filePath, HoodieFileFormat.LANCE);
@@ -112,7 +112,7 @@ public class LanceUtils extends FileFormatUtils {
                                  ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                                  filePath,
                                  HoodieFileFormat.LANCE)) {
-      return fileReader.getSchema();
+      return fileReader.getSchema().getAvroSchema();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from Lance file", e);
     }
@@ -154,8 +154,7 @@ public class LanceUtils extends FileFormatUtils {
   }
 
   @Override
-  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter) {
-    // TODO: Confusing naming of filter in the FileFormatsUtils, should be renamed to filterKeys if my assumption is correct
+  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filterKeys) {
     try (HoodieFileReader fileReader =
                  HoodieIOFactory.getIOFactory(storage)
                          .getReaderFactory(HoodieRecord.HoodieRecordType.SPARK)
@@ -163,7 +162,7 @@ public class LanceUtils extends FileFormatUtils {
                                  ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                                  filePath,
                                  HoodieFileFormat.LANCE)) {
-      return fileReader.filterRowKeys(filter);
+      return fileReader.filterRowKeys(filterKeys);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read filter keys from Lance file", e);
     }
@@ -185,8 +184,8 @@ public class LanceUtils extends FileFormatUtils {
   @Override
   public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                                           List<HoodieRecord> records,
-                                                          Schema writerSchema,
-                                                          Schema readerSchema,
+                                                          HoodieSchema writerSchema,
+                                                          HoodieSchema readerSchema,
                                                           String keyFieldName,
                                                           Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("serializeRecordsToLogBlock is not yet supported for Lance format");

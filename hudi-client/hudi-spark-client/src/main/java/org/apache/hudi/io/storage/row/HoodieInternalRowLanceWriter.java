@@ -39,7 +39,6 @@ import java.util.List;
 public class HoodieInternalRowLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     implements HoodieInternalRowFileWriter {
 
-  private static final long DEFAULT_MAX_FILE_SIZE = 120 * 1024 * 1024; // 120MB
   private static final String DEFAULT_TIMEZONE = "UTC";
 
   private final StructType sparkSchema;
@@ -57,9 +56,15 @@ public class HoodieInternalRowLanceWriter extends HoodieBaseLanceWriter<Internal
   public HoodieInternalRowLanceWriter(StoragePath file,
                                        StructType sparkSchema,
                                        HoodieStorage storage) throws IOException {
-    super(storage, file, DEFAULT_BATCH_SIZE, DEFAULT_MAX_FILE_SIZE);
+    super(storage, file, DEFAULT_BATCH_SIZE);
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
+  }
+
+  @Override
+  public boolean canWrite() {
+    //TODO https://github.com/apache/hudi/issues/17684
+    return true;
   }
 
   @Override

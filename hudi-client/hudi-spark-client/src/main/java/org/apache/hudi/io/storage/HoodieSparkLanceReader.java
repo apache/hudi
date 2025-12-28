@@ -20,7 +20,6 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hudi.HoodieSchemaConversionUtils;
@@ -109,7 +108,8 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
-    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
+    //TODO .copy() is needed for correctness, to investigate further in future.
+    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data.copy())));
   }
 
   @Override
