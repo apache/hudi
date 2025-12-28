@@ -170,7 +170,7 @@ object AvroConversionUtils {
     val loader: java.util.function.Function[Schema, StructType] = key => {
       try {
         HoodieSparkAvroSchemaConverters.toSqlType(key) match {
-          case (dataType, _) => dataType.asInstanceOf[StructType]
+          case (dataType, _, _) => dataType.asInstanceOf[StructType]
         }
       } catch {
         case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
@@ -185,7 +185,7 @@ object AvroConversionUtils {
   def convertAvroSchemaToDataType(avroSchema: Schema): DataType = {
     try {
       HoodieSparkAvroSchemaConverters.toSqlType(avroSchema) match {
-        case (dataType, _) => dataType
+        case (dataType, _, _) => dataType
       }
     } catch {
       case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to DataType: " + avroSchema, e)

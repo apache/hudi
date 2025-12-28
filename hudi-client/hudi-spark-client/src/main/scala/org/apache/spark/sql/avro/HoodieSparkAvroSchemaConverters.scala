@@ -29,9 +29,9 @@ import org.apache.spark.sql.types.DataType
  */
 object HoodieSparkAvroSchemaConverters extends HoodieAvroSchemaConverters {
 
-  override def toSqlType(avroSchema: Schema): (DataType, Boolean) =
+  override def toSqlType(avroSchema: Schema): (DataType, Boolean, Option[String]) =
     SchemaConverters.toSqlType(avroSchema) match {
-      case SchemaType(dataType, nullable) => (dataType, nullable)
+      case SchemaType(dataType, nullable, doc) => (dataType, nullable, doc)
     }
 
   override def toAvroType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): Schema =

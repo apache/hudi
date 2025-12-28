@@ -26,7 +26,7 @@ import org.apache.spark.sql.types.DataType
  */
 trait HoodieAvroSchemaConverters {
 
-  def toSqlType(avroSchema: Schema): (DataType, Boolean)
+  def toSqlType(avroSchema: Schema): (DataType, Boolean, Option[String])
 
   def toAvroType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String = ""): Schema
 
