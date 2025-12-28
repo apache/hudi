@@ -184,7 +184,17 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
-                           path: Path): Boolean = false
+                           path: Path): Boolean = {
+    // NOTE: When we have and only the base file that needs to be read with normal reading mode,
+    // we can consider the current format to be equivalent to `org.apache.spark.sql.execution.datasources.parquet.ParquetFormat`.
+    // Naturally, we can maintain the same `isSplitable` logic as the upper-level format.
+    // This will enable us to take advantage of spark's file splitting capability.
+    // For overly large single files, we can use multiple concurrent tasks to read them, thereby reducing the overall job reading time consumption
+    val superSplitable = super.isSplitable(sparkSession, options, path)
+    val splitable = !isMOR && !isIncremental && !isBootstrap && superSplitable
+    logInfo(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
+    splitable
+  }
 
   override def buildReaderWithPartitionValues(spark: SparkSession,
                                               dataStructType: StructType,
