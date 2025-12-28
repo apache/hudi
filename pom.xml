@@ -532,6 +532,7 @@
             <filereports>TestSuite.txt</filereports>
             <systemProperties>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
             </systemProperties>
           </configuration>
           <executions>
