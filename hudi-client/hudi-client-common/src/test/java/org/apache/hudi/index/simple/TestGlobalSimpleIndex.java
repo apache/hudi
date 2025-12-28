@@ -34,9 +34,10 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
@@ -98,7 +99,7 @@ class TestGlobalSimpleIndex extends HoodieCommonTestHarness {
     HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = globalSimpleIndex.tagLocation(records, context, table);
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(HoodieRecord::isCurrentLocationKnown));
 
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, conf);
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(conf));
     HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
 
     String fileId1 = UUID.randomUUID().toString();

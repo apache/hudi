@@ -24,10 +24,11 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -46,7 +47,7 @@ public class PartitionBucketIndexUtils {
 
   public static boolean isPartitionSimpleBucketIndex(StorageConfiguration conf, String basePath) {
     StoragePath storagePath = PartitionBucketIndexHashingConfig.getHashingConfigStorageFolder(basePath);
-    try (HoodieHadoopStorage storage = new HoodieHadoopStorage(storagePath, conf)) {
+    try (HoodieStorage storage = HoodieStorageUtils.getStorage(storagePath, conf)) {
       return storage.exists(storagePath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list PARTITION_BUCKET_INDEX_HASHING_FOLDER folder ", e);

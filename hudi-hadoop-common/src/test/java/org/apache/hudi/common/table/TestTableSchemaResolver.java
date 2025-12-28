@@ -43,7 +43,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -155,8 +155,9 @@ class TestTableSchemaResolver {
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
     HoodieSchema expectedSchema = getSimpleSchema();
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
-    assertEquals(expectedSchema.toAvroSchema(), TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
-        logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
+    assertEquals(expectedSchema.toAvroSchema(), TableSchemaResolver.readSchemaFromLogFile(
+        HoodieStorageUtils.getStorage(new StoragePath(logFilePath.toString()), HoodieTestUtils.getDefaultStorageConf()),
+        logFilePath));
   }
 
   @Test
