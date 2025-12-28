@@ -1160,7 +1160,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
-          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Dskip.docker=true
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Ddocker.compose.skip=true
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}

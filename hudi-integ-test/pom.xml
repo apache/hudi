@@ -26,10 +26,6 @@
   </parent>
   <artifactId>hudi-integ-test</artifactId>
   <modelVersion>4.0.0</modelVersion>
-
-  <properties>
-    <skip.docker>false</skip.docker>
-  </properties>
   <dependencies>
     <!-- Glassfish -->
     <!-- needs to be at top -->
@@ -500,9 +496,6 @@
               </arguments>
             </configuration>
           </execution>
-          <configuration>
-            <skip>${skip.docker}</skip>
-          </configuration>
         </executions>
       </plugin>
       <plugin>
