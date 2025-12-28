@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.functional;
 
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -150,10 +151,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @BeforeAll
   public static void setUpClass() throws IOException {
+    DistributedFileSystem fs = useExternalHdfs();
     if (shouldUseExternalHdfs()) {
       storage = HoodieStorageUtils.getStorage(
-          HadoopFSUtils.convertToStoragePath(useExternalHdfs().getWorkingDirectory()),
-          HadoopFSUtils.getStorageConf(useExternalHdfs().getConf()));
+          HadoopFSUtils.convertToStoragePath(fs.getWorkingDirectory()),
+          HadoopFSUtils.getStorageConf(fs.getConf()));
     } else {
       // Append is not supported in LocalFileSystem. HDFS needs to be setup.
       hdfsTestService = new HdfsTestService();

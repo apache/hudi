@@ -19,7 +19,6 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -43,6 +42,7 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
