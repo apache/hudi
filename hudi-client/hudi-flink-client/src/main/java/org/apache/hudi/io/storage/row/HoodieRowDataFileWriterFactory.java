@@ -32,7 +32,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
@@ -67,7 +67,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config,
       HoodieSchema schema) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
-    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromSchema(schema).getRowType().getLogicalType();
+    final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(
             storage.getConf().unwrapAs(Configuration.class), rowType, null);
@@ -94,7 +94,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
-    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromSchema(schema).getRowType().getLogicalType();
+    final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
     return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier);
   }
 

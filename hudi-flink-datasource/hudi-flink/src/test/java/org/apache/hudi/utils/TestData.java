@@ -46,7 +46,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
@@ -1047,7 +1047,7 @@ public class TestData {
   }
 
   private static String filterOutVariables(HoodieSchema schema, RowData record) {
-    RowDataAvroQueryContexts.RowDataQueryContext queryContext = RowDataAvroQueryContexts.fromSchema(schema);
+    RowDataQueryContexts.RowDataQueryContext queryContext = RowDataQueryContexts.fromSchema(schema);
     List<String> fields = new ArrayList<>();
     fields.add(getFieldValue(queryContext, record, "_hoodie_record_key"));
     fields.add(getFieldValue(queryContext, record, "_hoodie_partition_path"));
@@ -1059,7 +1059,7 @@ public class TestData {
     return String.join(",", fields);
   }
 
-  private static String getFieldValue(RowDataAvroQueryContexts.RowDataQueryContext queryContext, RowData rowData, String fieldName) {
+  private static String getFieldValue(RowDataQueryContexts.RowDataQueryContext queryContext, RowData rowData, String fieldName) {
     return String.valueOf(queryContext.getFieldQueryContext(fieldName).getValAsJava(rowData, true));
   }
 

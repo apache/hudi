@@ -34,7 +34,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
@@ -82,8 +82,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   @Override
   public Object getValue(RowData record, HoodieSchema schema, String fieldName) {
-    RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext =
-        RowDataAvroQueryContexts.fromSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
+    RowDataQueryContexts.FieldQueryContext fieldQueryContext =
+        RowDataQueryContexts.fromSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
     if (fieldQueryContext == null) {
       return null;
     } else {
@@ -108,7 +108,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   @Override
   public GenericRecord convertToAvroRecord(RowData record, HoodieSchema schema) {
-    return (GenericRecord) RowDataAvroQueryContexts.fromSchema(schema).getRowDataToAvroConverter().convert(schema, record);
+    return (GenericRecord) RowDataQueryContexts.fromSchema(schema).getRowDataToAvroConverter().convert(schema, record);
   }
 
   @Override
@@ -125,7 +125,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataAvroQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone).getAvroToRowDataConverter();
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone).getAvroToRowDataConverter();
     RowData rowData = (RowData) converter.convert(avroRecord);
     Schema.Field operationField = recordSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
     if (operationField != null) {
@@ -180,7 +180,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     if (record instanceof BinaryRowData) {
       return record;
     }
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(schema);
+    RowDataSerializer rowDataSerializer = RowDataQueryContexts.getRowDataSerializer(schema);
     return rowDataSerializer.toBinaryRow(record);
   }
 
@@ -197,8 +197,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
    */
   @Override
   public UnaryOperator<RowData> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
-    RowType fromType = (RowType) RowDataAvroQueryContexts.fromSchema(from).getRowType().getLogicalType();
-    RowType toType =  (RowType) RowDataAvroQueryContexts.fromSchema(to).getRowType().getLogicalType();
+    RowType fromType = (RowType) RowDataQueryContexts.fromSchema(from).getRowType().getLogicalType();
+    RowType toType =  (RowType) RowDataQueryContexts.fromSchema(to).getRowType().getLogicalType();
     RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
   }

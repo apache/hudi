@@ -49,7 +49,7 @@ import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.HoodieSchemaConverter;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
@@ -131,7 +131,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       HoodieSchema recordSchema,
       HoodieReaderContext<RowData> readerContext,
       boolean sortOutput) throws IOException {
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
+    RowDataSerializer rowDataSerializer = RowDataQueryContexts.getRowDataSerializer(recordSchema);
     try (ClosableIterator<RowData> iterator = fileGroupReader.getClosableIterator()) {
       while (iterator.hasNext()) {
         RowData rowData = rowDataSerializer.copy(iterator.next());
@@ -148,7 +148,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieSchema localSchema = getRecordSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
     AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
-        RowDataAvroQueryContexts.fromSchema(localSchema).getAvroToRowDataConverter();
+        RowDataQueryContexts.fromSchema(localSchema).getAvroToRowDataConverter();
     List<RowData> rowDataList = recordList.stream().map(record -> {
       try {
         return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema, CollectionUtils.emptyProps()).get().getData());
@@ -169,7 +169,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     TestData.assertRowDataEquals(
         Collections.singletonList(actual),
         Collections.singletonList(expected),
-        RowDataAvroQueryContexts.fromSchema(schema).getRowType());
+        RowDataQueryContexts.fromSchema(schema).getRowType());
   }
 
   @Override
@@ -325,6 +325,6 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   private static HoodieSchema getRecordSchema(String schemaStr) {
     HoodieSchema recordSchema = HoodieSchema.parse(schemaStr);
-    return HoodieSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromSchema(recordSchema).getRowType().getLogicalType());
+    return HoodieSchemaConverter.convertToSchema(RowDataQueryContexts.fromSchema(recordSchema).getRowType().getLogicalType());
   }
 }

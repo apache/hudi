@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -129,7 +129,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     // later in the file writer.
     int mergedArity = newSchema.getFields().size();
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
-    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromSchema(newSchema, utcTimezone).fieldGetters();
+    RowData.FieldGetter[] fieldGetters = RowDataQueryContexts.fromSchema(newSchema, utcTimezone).fieldGetters();
 
     int lowOrderIdx = 0;
     int highOrderIdx = 0;
@@ -138,10 +138,10 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     // shift start index for merging if there is schema discrepancy
     if (lowOrderArity != mergedArity) {
       lowOrderIdx += lowOrderArity - mergedArity;
-      lowOrderFieldGetters = RowDataAvroQueryContexts.fromSchema(lowOrderSchema, utcTimezone).fieldGetters();
+      lowOrderFieldGetters = RowDataQueryContexts.fromSchema(lowOrderSchema, utcTimezone).fieldGetters();
     } else if (highOrderArity != mergedArity) {
       highOrderIdx += highOrderArity - mergedArity;
-      highOrderFieldGetters = RowDataAvroQueryContexts.fromSchema(highOrderSchema, utcTimezone).fieldGetters();
+      highOrderFieldGetters = RowDataQueryContexts.fromSchema(highOrderSchema, utcTimezone).fieldGetters();
     }
 
     RowData lowOrderRow = (RowData) lowOrderRecord.getRecord();

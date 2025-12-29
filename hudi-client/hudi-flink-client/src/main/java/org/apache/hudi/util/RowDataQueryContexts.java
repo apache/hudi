@@ -41,7 +41,7 @@ import java.util.function.Function;
 /**
  * Maintains auxiliary utilities for row data fields handling.
  */
-public class RowDataAvroQueryContexts {
+public class RowDataQueryContexts {
   private static final Map<Pair<HoodieSchema, Boolean>, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
 
   // BinaryRowWriter in RowDataSerializer are reused, and it's not thread-safe.
@@ -82,8 +82,8 @@ public class RowDataAvroQueryContexts {
   public static RowProjection getRowProjection(HoodieSchema from, HoodieSchema to, Map<String, String> renameCols) {
     Triple<HoodieSchema, HoodieSchema, Map<String, String>> cacheKey = Triple.of(from, to, renameCols);
     return ROW_PROJECTION_CACHE.computeIfAbsent(cacheKey, key -> {
-      RowType fromType = (RowType) RowDataAvroQueryContexts.fromSchema(from).getRowType().getLogicalType();
-      RowType toType =  (RowType) RowDataAvroQueryContexts.fromSchema(to).getRowType().getLogicalType();
+      RowType fromType = (RowType) RowDataQueryContexts.fromSchema(from).getRowType().getLogicalType();
+      RowType toType =  (RowType) RowDataQueryContexts.fromSchema(to).getRowType().getLogicalType();
       return SchemaEvolvingRowDataProjection.instance(fromType, toType, renameCols);
     });
   }
