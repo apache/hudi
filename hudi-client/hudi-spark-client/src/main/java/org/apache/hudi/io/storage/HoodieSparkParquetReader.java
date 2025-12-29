@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.filter2.predicate.FilterApi;
@@ -46,7 +45,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
-import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters;
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
@@ -82,7 +81,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final List<ClosableIterator> readerIterators = new ArrayList<>();
   private Option<MessageType> fileSchemaOption = Option.empty();
   private Option<StructType> structTypeOption = Option.empty();
-  private Option<Schema> schemaOption = Option.empty();
+  private Option<HoodieSchema> schemaOption = Option.empty();
 
   public HoodieSparkParquetReader(HoodieStorage storage, StoragePath path) {
     this.path = path;
@@ -141,7 +140,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
    */
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
     HoodieSchema nonNullSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
-    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema.toAvroSchema());
+    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema.toAvroSchema()));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
     StructType dataStructType = convertToStruct(enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema());
@@ -204,11 +203,10 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       // and therefore if we convert to Avro directly we'll lose logical type-info.
       MessageType messageType = getFileSchema();
       StructType structType = getStructSchema();
-      schemaOption = Option.of(HoodieSparkAvroSchemaConverters.toAvroType(
+      schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(
           structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
     }
-    //TODO boundary to revisit using HoodieSchema directly
-    return HoodieSchema.fromAvroSchema(schemaOption.get());
+    return schemaOption.get();
   }
 
   protected StructType getStructSchema() {
