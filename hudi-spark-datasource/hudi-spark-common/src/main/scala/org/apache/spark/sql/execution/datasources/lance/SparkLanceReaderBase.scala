@@ -92,19 +92,23 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           null
         }
 
-        // Get schema from Lance file for HoodieLanceRecordIterator
-        val arrowSchema = lanceReader.schema()
-        val sparkSchema = LanceArrowUtils.fromArrowSchema(arrowSchema)
-
         // Read data with column projection (filters not supported yet)
         val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE)
+
+        val schemaForIterator = if (requiredSchema.nonEmpty) {
+          requiredSchema
+        } else {
+          // Only compute schema from Lance file when requiredSchema is empty
+          val arrowSchema = lanceReader.schema()
+          LanceArrowUtils.fromArrowSchema(arrowSchema)
+        }
 
         // Create iterator using shared HoodieLanceRecordIterator
         val lanceIterator = new HoodieLanceRecordIterator(
           allocator,
           lanceReader,
           arrowReader,
-          if (requiredSchema.nonEmpty) requiredSchema else sparkSchema,
+          schemaForIterator,
           filePath
         )
 

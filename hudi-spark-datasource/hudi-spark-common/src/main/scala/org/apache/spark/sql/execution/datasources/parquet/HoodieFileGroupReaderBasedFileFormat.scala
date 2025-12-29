@@ -133,7 +133,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
       schema.forall(s => OrcUtils.supportColumnarReads(
         s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
-    // TODO: Implement columnar batch reading for Lance - currently using row-based reading
+    // TODO: Implement columnar batch reading https://github.com/apache/hudi/issues/17736
     val lanceBatchSupported = false
 
     val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
