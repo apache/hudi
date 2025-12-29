@@ -72,7 +72,7 @@ import static org.mockito.Mockito.when;
 public class TestDataHubSyncClient {
 
   @Mock
-  RestEmitter restEmitterMock = mock(RestEmitter.class);
+  RestEmitter restEmitterMock;
 
   @TempDir
   static java.nio.file.Path tmpDir;
