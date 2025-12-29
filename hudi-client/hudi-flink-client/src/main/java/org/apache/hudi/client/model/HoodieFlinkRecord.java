@@ -103,7 +103,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
         if (recordSchema.getField(field).isEmpty()) {
           return OrderingValues.getDefault();
         }
-        return (Comparable<?>) getColumnValue(recordSchema.toAvroSchema(), field, props);
+        return (Comparable<?>) getColumnValue(recordSchema, field, props);
       });
     }
   }
@@ -190,20 +190,20 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props) {
-    return getColumnValueAsJava(recordSchema.toAvroSchema(), column, props, true);
+    return getColumnValueAsJava(recordSchema, column, props, true);
   }
 
-  private Object getColumnValueAsJava(Schema recordSchema, String column, Properties props, boolean allowsNull) {
+  private Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props, boolean allowsNull) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    RowDataQueryContext rowDataQueryContext = RowDataQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone);
+    RowDataQueryContext rowDataQueryContext = RowDataQueryContexts.fromSchema(recordSchema, utcTimezone);
     return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data, allowsNull);
   }
 
-  private Object getColumnValue(Schema recordSchema, String column, Properties props) {
+  private Object getColumnValue(HoodieSchema recordSchema, String column, Properties props) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    RowDataQueryContext rowDataQueryContext = RowDataQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone);
+    RowDataQueryContext rowDataQueryContext = RowDataQueryContexts.fromSchema(recordSchema, utcTimezone);
     return rowDataQueryContext.getFieldQueryContext(column).getFieldGetter().getFieldOrNull(data);
   }
 
