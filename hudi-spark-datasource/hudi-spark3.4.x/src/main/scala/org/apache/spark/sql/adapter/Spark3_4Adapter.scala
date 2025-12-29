@@ -158,7 +158,7 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
                                      sqlConf: SQLConf,
                                      options: Map[String, String],
                                      hadoopConf: Configuration): SparkColumnarFileReader = {
-    throw new UnsupportedOperationException("Lance format is not supported in Spark 3.4")
+    new SparkLanceReaderBase(vectorized)
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {

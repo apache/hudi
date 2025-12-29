@@ -52,7 +52,7 @@ public enum HoodieFileFormat {
   ORC(".orc"),
 
   @EnumFieldDescription("Lance is a modern columnar data format optimized for ML and AI workloads. "
-      + "It provides efficient random access, versioning, and integration with Apache Arrow.")
+      + "It provides efficient random access, and integration with Apache Arrow.")
   LANCE(".lance");
 
   public static final Set<String> BASE_FILE_EXTENSIONS = Arrays.stream(HoodieFileFormat.values())
