@@ -156,7 +156,7 @@ public class SparkMetadataWriterUtils {
   @SuppressWarnings("checkstyle:LineLength")
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
                                                                                              Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt,
-                                                                                             HoodieIndexVersion indexVersion) {
+                                                                                             HoodieIndexVersion indexVersion, String expressionIndexRangeMetadataStorageLevel) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -199,7 +199,7 @@ public class SparkMetadataWriterUtils {
 
     if (partitionRecordsFunctionOpt.isPresent()) {
       // TODO: HUDI-8848: Allow configurable storage level while computing expression index update
-      rangeMetadataHoodieJavaRDD.persist("MEMORY_AND_DISK_SER");
+      rangeMetadataHoodieJavaRDD.persist(expressionIndexRangeMetadataStorageLevel);
     }
     HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
             createColumnStatsRecords(pair.getKey(), Collections.singletonList(pair.getValue()), false, expressionIndex.getIndexName(),
@@ -310,7 +310,8 @@ public class SparkMetadataWriterUtils {
 
     // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt, indexDefinition.getVersion());
+      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt, indexDefinition.getVersion(),
+          dataWriteConfig.getIndexingConfig().getExpressionIndexRangeMetadataStorageLevel());
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return getExpressionIndexRecordsUsingBloomFilter(
           rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
