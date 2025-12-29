@@ -88,6 +88,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -129,6 +130,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -182,6 +184,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -229,6 +232,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -276,6 +280,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -316,6 +321,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -354,6 +360,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -367,6 +374,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Java UT 1 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -398,6 +406,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -411,6 +420,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -455,6 +465,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -468,6 +479,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Java FTB - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -506,6 +518,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -513,12 +526,6 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -557,6 +564,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -564,12 +572,6 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -605,6 +607,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -646,6 +649,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -700,6 +704,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -748,6 +753,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -796,6 +802,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -855,6 +862,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -898,6 +906,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -947,6 +956,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -996,6 +1006,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1010,7 +1021,7 @@ jobs:
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
+            mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
       - name: IT - Bundle Validation - OpenJDK 11
         env:
@@ -1096,6 +1107,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1140,6 +1152,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Check disk space
         run: df -h
       - name: 'Free space'
@@ -1212,6 +1225,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1243,6 +1257,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1271,6 +1286,7 @@ jobs:
           java-version: '23'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build hudi-trino-plugin with JDK 23
         working-directory: ./hudi-trino-plugin
         run:
