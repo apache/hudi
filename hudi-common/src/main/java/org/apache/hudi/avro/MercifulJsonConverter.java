@@ -286,7 +286,8 @@ public class MercifulJsonConverter {
 
       // Case 1: Input is a list. It is expected to be raw Fixed byte array input, and we only support
       // parsing it to Fixed avro type.
-      if (value instanceof List<?> && schema.getType() == HoodieSchemaType.FIXED) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
+      if (value instanceof List<?> && decimalSchema.isFixed()) {
         JsonFieldProcessor processor = generateFixedTypeHandler();
         return processor.convert(value, name, schema);
       }
@@ -299,17 +300,13 @@ public class MercifulJsonConverter {
       }
       BigDecimal bigDecimal = parseResult.getRight();
 
-      switch (schema.getType()) {
-        case BYTES:
-          // Convert to primitive Arvo type that logical type Decimal uses.
-          ByteBuffer byteBuffer = new Conversions.DecimalConversion().toBytes(bigDecimal, schema.toAvroSchema(), decimalType);
-          return Pair.of(true, byteBuffer);
-        case FIXED:
-          GenericFixed fixedValue = new Conversions.DecimalConversion().toFixed(bigDecimal, schema.toAvroSchema(), decimalType);
-          return Pair.of(true, fixedValue);
-        default: {
-          return Pair.of(false, null);
-        }
+      if (decimalSchema.isFixed()) {
+        GenericFixed fixedValue = new Conversions.DecimalConversion().toFixed(bigDecimal, schema.toAvroSchema(), decimalType);
+        return Pair.of(true, fixedValue);
+      } else {
+        // Convert to primitive Arvo type that logical type Decimal uses.
+        ByteBuffer byteBuffer = new Conversions.DecimalConversion().toBytes(bigDecimal, schema.toAvroSchema(), decimalType);
+        return Pair.of(true, byteBuffer);
       }
     }
   }
