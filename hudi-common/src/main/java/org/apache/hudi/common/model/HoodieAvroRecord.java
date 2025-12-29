@@ -152,7 +152,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
     try {
       Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema, props);
-      GenericRecord newAvroRecord = HoodieAvroUtils.projectRecordToNewSchemaShallow((GenericRecord) avroRecordOpt.get(), targetSchema);
+      GenericRecord newAvroRecord = HoodieAvroUtils.projectRecordToNewSchemaShallow(avroRecordOpt.get(), targetSchema);
       updateMetadataValuesInternal(newAvroRecord, metadataValues);
       return new HoodieAvroIndexedRecord(getKey(), newAvroRecord, getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {

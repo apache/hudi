@@ -1393,9 +1393,9 @@ public class HoodieAvroUtils {
    * the schemas are identical in field count.
    */
 
-  public static GenericRecord projectRecordToNewSchemaShallow(GenericRecord record, Schema targetSchema) {
+  public static GenericRecord projectRecordToNewSchemaShallow(IndexedRecord record, Schema targetSchema) {
     if (record.getSchema().getFields().size() == targetSchema.getFields().size()) {
-      return record;
+      return (GenericRecord) record;
     } else {
       GenericData.Record rec = new GenericData.Record(targetSchema);
       for (Schema.Field field : targetSchema.getFields()) {
