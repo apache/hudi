@@ -103,6 +103,7 @@ public class CloudObjectsSelectorCommon {
   public static final String GCS_OBJECT_SIZE = "size";
   private static final String SPACE_DELIMTER = " ";
   private static final String GCS_PREFIX = "gs://";
+  private static final String SOURCE_PATH_COLUMN = "sourcePath";
 
   private final TypedProperties properties;
 
@@ -344,6 +345,19 @@ public class CloudObjectsSelectorCommon {
         dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), StoragePath.SEPARATOR).getItem(0));
       }
     }
+
+    // add source file path to dataset if INCLUDE_SOURCE_PATH_FIELD config is enabled
+    if (getBooleanWithAltKeys(properties, CloudSourceConfig.INCLUDE_SOURCE_PATH_FIELD)) {
+      boolean sourcePathColumnExists = Arrays.stream(dataset.schema().fieldNames())
+          .anyMatch(name -> name.equalsIgnoreCase(SOURCE_PATH_COLUMN));
+      if (sourcePathColumnExists) {
+        throw new HoodieException(String.format("Column '%s' already exists in the dataset. Dataset columns: [%s]",
+            SOURCE_PATH_COLUMN, String.join(", ", dataset.schema().fieldNames())));
+      }
+      LOG.info("Adding source path field to dataset");
+      dataset = dataset.selectExpr("input_file_name() AS " + SOURCE_PATH_COLUMN, "*");
+    }
+
     dataset = coalesceOrRepartition(dataset, numPartitions);
     return Option.of(dataset);
   }
