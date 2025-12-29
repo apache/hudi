@@ -146,11 +146,34 @@ module.exports = {
           },
           {
             from: ["/docs/releases", "/docs/next/releases"],
-            to: "/releases/release-1.1.1",
+            to: "/releases/release-1.1",
           },
           {
             from: ["/releases"],
-            to: "/releases/release-1.1.1",
+            to: "/releases/release-1.1",
+          },
+          {
+            from: [
+              "/releases/release-1.0.2",
+              "/releases/release-1.0.1",
+              "/releases/release-1.0.0",
+              "/releases/release-1.0.0-beta2",
+              "/releases/release-1.0.0-beta1",
+            ],
+            to: "/releases/release-1.0",
+          },
+          {
+            from: [
+              "/releases/release-0.15.0",
+            ],
+            to: "/releases/release-0.15",
+          },
+          {
+            from: [
+              "/releases/release-0.14.1",
+              "/releases/release-0.14.0",
+            ],
+            to: "/releases/release-0.14",
           },
         ],
       },
@@ -323,7 +346,7 @@ module.exports = {
             },
             {
               label: "Releases",
-              to: "/releases/release-1.1.1",
+              to: "/releases/release-1.1",
             },
             {
               label: "Download",

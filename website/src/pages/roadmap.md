@@ -11,7 +11,7 @@ down by areas on our [stack](/docs/hudi_stack).
 
 ## Recent Release(s)
 
-[1.1.1](/releases/release-1.1.1) (Dec 2025)
+[1.1.1](/releases/release-1.1#release-111) (Dec 2025)
 
 ## Future Releases
 

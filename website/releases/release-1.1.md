@@ -1,10 +1,19 @@
 ---
-title: "Release 1.1.1"
+title: "Release 1.1"
 layout: releases
 toc: true
+last_modified_at: 2024-05-02T18:00:00-08:00
 ---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-## [Release 1.1.1](https://github.com/apache/hudi/releases/tag/release-1.1.1)
+## Version 1.1 Release Notes
+
+This page contains release notes for all Apache Hudi 1.1.x releases, including:
+- [Release 1.1.1](#release-111)
+
+---
+## [Release 1.1.1](https://github.com/apache/hudi/releases/tag/release-1.1.1) {#release-111}
 
 Apache Hudi 1.1.1 is a major release that brings significant performance improvements, new features, and important changes to the platform. This release focuses on enhanced table format support, improved indexing capabilities, expanded engine support, and modernized record merging APIs.
 
@@ -375,3 +384,4 @@ For more details, see the [community discussion](https://github.com/apache/hudi/
 ## Contributors
 
 Hudi 1.1.1 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.
+---

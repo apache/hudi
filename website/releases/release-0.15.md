@@ -1,13 +1,19 @@
 ---
-title: "Release 0.15.0"
+title: "Release 0.15"
 layout: releases
 toc: true
+last_modified_at: 2024-05-02T18:00:00-08:00
 ---
-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.15.0](https://github.com/apache/hudi/releases/tag/release-0.15.0)
+## Version 0.15 Release Notes
+
+This page contains release notes for all Apache Hudi 0.15.x releases, including:
+- [Release 0.15.0](#release-0150)
+---
+
+## [Release 0.15.0](https://github.com/apache/hudi/releases/tag/release-0.15.0) {#release-0150}
 
 Apache Hudi 0.15.0 release brings enhanced engine integration, new features, and improvements in several areas. These
 include Spark 3.5 and Scala 2.13 support, Flink 1.18 support, better Trino Hudi native connector support with newly
@@ -18,7 +24,7 @@ relevant [module and API changes](#module-and-api-changes) and
 
 ## Migration Guide
 
-This release keeps the same table version (`6`) as [0.14.0 release](/releases/release-0.14.0), and there is no need for
+This release keeps the same table version (`6`) as [0.14.0 release](/releases/release-0.14#release-0140), and there is no need for
 a table version upgrade if you are upgrading from 0.14.0. There are a
 few [module and API changes](#module-and-api-changes)
 and [behavior changes](#behavior-changes) as
@@ -317,8 +323,8 @@ partition `s3` scheme fixes the issue. We have added a fix to use `s3` scheme fo
 Catalog sync ([HUDI-7362](https://issues.apache.org/jira/browse/HUDI-7362)).
 
 ## Known Regressions
-The Hudi 0.15.0 release introduces a regression related to Complex Key generation when the record key consists of a 
-single field. This issue was also present in version 0.14.1. When upgrading a table from previous versions, 
+The Hudi 0.15.0 release introduces a regression related to Complex Key generation when the record key consists of a
+single field. This issue was also present in version 0.14.1. When upgrading a table from previous versions,
 it may silently ingest duplicate records.
 
 :::tip
