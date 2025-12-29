@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.schema;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -129,10 +132,8 @@ import java.util.stream.Collectors;
  *   <li>Custom properties</li>
  * </ul>
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class HoodieSchemaComparatorForSchemaEvolution {
-
-  protected HoodieSchemaComparatorForSchemaEvolution() {
-  }
 
   private static final HoodieSchemaComparatorForSchemaEvolution VALIDATOR = new HoodieSchemaComparatorForSchemaEvolution();
 
@@ -172,27 +173,24 @@ public class HoodieSchemaComparatorForSchemaEvolution {
       case DOUBLE:
       case BOOLEAN:
       case NULL:
-        return primitiveSchemaEquals(s1, s2);
+      case DATE:
+        // DATE is INT with date logical type (no additional properties)
+      case UUID:
+        // UUID is STRING with uuid logical type (no additional properties)
+        return true;
       case DECIMAL:
         return decimalSchemaEquals(s1, s2);
       case TIME:
         return timeSchemaEquals(s1, s2);
       case TIMESTAMP:
         return timestampSchemaEquals(s1, s2);
-      case DATE:
-      case UUID:
-        return logicalTypeSchemaEquals(s1, s2);
       default:
         throw new IllegalArgumentException("Unknown schema type: " + s1.getType());
     }
   }
 
   protected boolean validateRecord(HoodieSchema s1, HoodieSchema s2) {
-    if (s1.isError() != s2.isError()) {
-      return false;
-    }
-
-    return logicalTypeSchemaEquals(s1, s2);
+    return s1.isError() == s2.isError();
   }
 
   private boolean recordSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
@@ -230,11 +228,7 @@ public class HoodieSchemaComparatorForSchemaEvolution {
     }
 
     // If both have default values, they must be equal
-    if (f1.hasDefaultValue() && !f1.defaultVal().get().equals(f2.defaultVal().get())) {
-      return false;
-    }
-
-    return true;
+    return !f1.hasDefaultValue() || f1.defaultVal().get().equals(f2.defaultVal().get());
   }
 
   private boolean fieldEquals(HoodieSchemaField f1, HoodieSchemaField f2) {
@@ -291,15 +285,7 @@ public class HoodieSchemaComparatorForSchemaEvolution {
   }
 
   private boolean fixedSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
-    if (!validateFixed(s1, s2)) {
-      return false;
-    }
-    return logicalTypeSchemaEquals(s1, s2);
-  }
-
-  private static boolean primitiveSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
-    // For primitive types, they are equal if they have the same type
-    return true;
+    return validateFixed(s1, s2);
   }
 
   private static boolean decimalSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
@@ -326,17 +312,6 @@ public class HoodieSchemaComparatorForSchemaEvolution {
     HoodieSchema.Time t1 = (HoodieSchema.Time) s1;
     HoodieSchema.Time t2 = (HoodieSchema.Time) s2;
     return t1.getPrecision() == t2.getPrecision();
-  }
-
-  private static boolean logicalTypeSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
-    // For DATE and UUID logical types, they are equal if they have the same type.
-    // DATE is INT with date logical type (no additional properties)
-    // UUID is STRING with uuid logical type (no additional properties)
-    // The type equality check is already performed in schemaEqualsInternal before calling this method,
-    // so both schemas are guaranteed to have the same HoodieSchemaType (either both DATE or both UUID).
-    // Since these logical types have no additional properties (unlike DECIMAL, TIME, TIMESTAMP),
-    // no further comparison is needed.
-    return true;
   }
 
   /**
