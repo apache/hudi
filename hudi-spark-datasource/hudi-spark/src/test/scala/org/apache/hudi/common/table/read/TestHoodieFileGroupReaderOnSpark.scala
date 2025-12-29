@@ -399,7 +399,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def assertRecordMatchesSchema(schema: HoodieSchema, record: InternalRow): Unit = {
-    val structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema)
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
     assertRecordMatchesSchema(structType, record)
   }
 
