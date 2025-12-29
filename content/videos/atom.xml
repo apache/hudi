@@ -2,11 +2,79 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2025-08-11T00:00:00.000Z</updated>
+    <updated>2025-11-19T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Use the precombine key to handle out-of-order data with Apache Hudi]]></title>
+        <id>https://hudi.apache.org/videos/2025/11/19/use-the-precombine-key-to-handle-out-of-order-data-with-apache-hudi</id>
+        <link href="https://hudi.apache.org/videos/2025/11/19/use-the-precombine-key-to-handle-out-of-order-data-with-apache-hudi"/>
+        <updated>2025-11-19T00:00:00.000Z</updated>
+        <author>
+            <name>Andy Walner</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="etl" term="etl"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Coding Apache Trino Time Travel Queries Of Hudi Tables]]></title>
+        <id>https://hudi.apache.org/videos/2025/11/01/coding-apache-trino-time-travel-queries-of-hudi-tables</id>
+        <link href="https://hudi.apache.org/videos/2025/11/01/coding-apache-trino-time-travel-queries-of-hudi-tables"/>
+        <updated>2025-11-01T00:00:00.000Z</updated>
+        <author>
+            <name>Jordan Epstein</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="time travel" term="time travel"/>
+        <category label="apache trino" term="apache trino"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: A Database Layer Over Cloud Storage for Fast Mutations & Queries]]></title>
+        <id>https://hudi.apache.org/videos/2025/10/07/a-database-layer-over-cloud-storage-for-fast-mutations-and-queries</id>
+        <link href="https://hudi.apache.org/videos/2025/10/07/a-database-layer-over-cloud-storage-for-fast-mutations-and-queries"/>
+        <updated>2025-10-07T00:00:00.000Z</updated>
+        <author>
+            <name>Vinoth Chandar</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="cloud storage" term="cloud storage"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="cloud data lake" term="cloud data lake"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Streaming Lakehouse] Flink Streaming Ingestion to Cloud-lake at Scale]]></title>
+        <id>https://hudi.apache.org/videos/2025/09/29/flink-streaming-ingestion-to-cloud-lake-at-scale</id>
+        <link href="https://hudi.apache.org/videos/2025/09/29/flink-streaming-ingestion-to-cloud-lake-at-scale"/>
+        <updated>2025-09-29T00:00:00.000Z</updated>
+        <author>
+            <name>Zhenqiu Huang, Shiyan Xu</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="streaming lakehouse" term="streaming lakehouse"/>
+        <category label="streaming ingestion" term="streaming ingestion"/>
+        <category label="apache flink" term="apache flink"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Streaming Lakehouse] High-throughput streaming Lakehouse with Apache Hudi]]></title>
+        <id>https://hudi.apache.org/videos/2025/09/29/high-throughput-streaming-lakehouse-with-apache-hudi</id>
+        <link href="https://hudi.apache.org/videos/2025/09/29/high-throughput-streaming-lakehouse-with-apache-hudi"/>
+        <updated>2025-09-29T00:00:00.000Z</updated>
+        <author>
+            <name>Shiyan Xu</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="streaming lakehouse" term="streaming lakehouse"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Redefining Open Lakehouse Architecture with Apache Hudi 1.0]]></title>
         <id>https://hudi.apache.org/videos/2025/08/11/redefining-open-lakehouse-architecture-1.x</id>
@@ -220,80 +288,5 @@
         <category label="beginner" term="beginner"/>
         <category label="apache hudi" term="apache hudi"/>
         <category label="time-travel" term="time-travel"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Hudi Cleaning Process | hoodie.keep.min.commits and hoodie.keep.max.commits Explained]]></title>
-        <id>https://hudi.apache.org/videos/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained</id>
-        <link href="https://hudi.apache.org/videos/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained"/>
-        <updated>2024-06-12T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="data cleaning" term="data cleaning"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Multiple Spark Writers to Hudi tables | Hands on Labs]]></title>
-        <id>https://hudi.apache.org/videos/2024/06/05/multiple-spark-writers-to-hudi-tables</id>
-        <link href="https://hudi.apache.org/videos/2024/06/05/multiple-spark-writers-to-hudi-tables"/>
-        <updated>2024-06-05T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="multi-writer" term="multi-writer"/>
-        <category label="external locking" term="external locking"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Learn How to Ingest data from pulsar Topic into Hudi with DeltaStreamer | Hands on Labs]]></title>
-        <id>https://hudi.apache.org/videos/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer</id>
-        <link href="https://hudi.apache.org/videos/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer"/>
-        <updated>2024-05-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="minio" term="minio"/>
-        <category label="apache pulsar" term="apache pulsar"/>
-        <category label="real time datalake" term="real time datalake"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Build Hudi Date Dimension in Minutes with Spark SQL Minio and Query with Trino]]></title>
-        <id>https://hudi.apache.org/videos/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino</id>
-        <link href="https://hudi.apache.org/videos/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino"/>
-        <updated>2024-05-23T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="minio" term="minio"/>
-        <category label="trino" term="trino"/>
-        <category label="apache hive" term="apache hive"/>
-        <category label="hive metastore" term="hive metastore"/>
-        <category label="spark sql" term="spark sql"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Demo Video : Hudi Delta Streamer Implementing Slowly Changing Dimension and Query that using Trino]]></title>
-        <id>https://hudi.apache.org/videos/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino</id>
-        <link href="https://hudi.apache.org/videos/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino"/>
-        <updated>2024-05-22T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="slowly changing dimension type 2" term="slowly changing dimension type 2"/>
-        <category label="scd2" term="scd2"/>
-        <category label="hudi streamer" term="hudi streamer"/>
-        <category label="deltastreamer" term="deltastreamer"/>
     </entry>
 </feed>

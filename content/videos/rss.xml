@@ -4,10 +4,63 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 11 Aug 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 19 Nov 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Use the precombine key to handle out-of-order data with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/videos/2025/11/19/use-the-precombine-key-to-handle-out-of-order-data-with-apache-hudi</link>
+            <guid>https://hudi.apache.org/videos/2025/11/19/use-the-precombine-key-to-handle-out-of-order-data-with-apache-hudi</guid>
+            <pubDate>Wed, 19 Nov 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>apache hudi</category>
+            <category>etl</category>
+            <category>data lakehouse</category>
+        </item>
+        <item>
+            <title><![CDATA[Coding Apache Trino Time Travel Queries Of Hudi Tables]]></title>
+            <link>https://hudi.apache.org/videos/2025/11/01/coding-apache-trino-time-travel-queries-of-hudi-tables</link>
+            <guid>https://hudi.apache.org/videos/2025/11/01/coding-apache-trino-time-travel-queries-of-hudi-tables</guid>
+            <pubDate>Sat, 01 Nov 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>apache hudi</category>
+            <category>time travel</category>
+            <category>apache trino</category>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: A Database Layer Over Cloud Storage for Fast Mutations & Queries]]></title>
+            <link>https://hudi.apache.org/videos/2025/10/07/a-database-layer-over-cloud-storage-for-fast-mutations-and-queries</link>
+            <guid>https://hudi.apache.org/videos/2025/10/07/a-database-layer-over-cloud-storage-for-fast-mutations-and-queries</guid>
+            <pubDate>Tue, 07 Oct 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>apache hudi</category>
+            <category>cloud storage</category>
+            <category>data lakehouse</category>
+            <category>cloud data lake</category>
+        </item>
+        <item>
+            <title><![CDATA[[Streaming Lakehouse] Flink Streaming Ingestion to Cloud-lake at Scale]]></title>
+            <link>https://hudi.apache.org/videos/2025/09/29/flink-streaming-ingestion-to-cloud-lake-at-scale</link>
+            <guid>https://hudi.apache.org/videos/2025/09/29/flink-streaming-ingestion-to-cloud-lake-at-scale</guid>
+            <pubDate>Mon, 29 Sep 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>apache hudi</category>
+            <category>streaming lakehouse</category>
+            <category>streaming ingestion</category>
+            <category>apache flink</category>
+            <category>data lakehouse</category>
+        </item>
+        <item>
+            <title><![CDATA[[Streaming Lakehouse] High-throughput streaming Lakehouse with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/videos/2025/09/29/high-throughput-streaming-lakehouse-with-apache-hudi</link>
+            <guid>https://hudi.apache.org/videos/2025/09/29/high-throughput-streaming-lakehouse-with-apache-hudi</guid>
+            <pubDate>Mon, 29 Sep 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>apache hudi</category>
+            <category>streaming lakehouse</category>
+            <category>data lakehouse</category>
+        </item>
         <item>
             <title><![CDATA[Redefining Open Lakehouse Architecture with Apache Hudi 1.0]]></title>
             <link>https://hudi.apache.org/videos/2025/08/11/redefining-open-lakehouse-architecture-1.x</link>
@@ -176,66 +229,6 @@
             <category>beginner</category>
             <category>apache hudi</category>
             <category>time-travel</category>
-        </item>
-        <item>
-            <title><![CDATA[Hudi Cleaning Process | hoodie.keep.min.commits and hoodie.keep.max.commits Explained]]></title>
-            <link>https://hudi.apache.org/videos/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained</link>
-            <guid>https://hudi.apache.org/videos/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained</guid>
-            <pubDate>Wed, 12 Jun 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>data cleaning</category>
-        </item>
-        <item>
-            <title><![CDATA[Multiple Spark Writers to Hudi tables | Hands on Labs]]></title>
-            <link>https://hudi.apache.org/videos/2024/06/05/multiple-spark-writers-to-hudi-tables</link>
-            <guid>https://hudi.apache.org/videos/2024/06/05/multiple-spark-writers-to-hudi-tables</guid>
-            <pubDate>Wed, 05 Jun 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>multi-writer</category>
-            <category>external locking</category>
-        </item>
-        <item>
-            <title><![CDATA[Learn How to Ingest data from pulsar Topic into Hudi with DeltaStreamer | Hands on Labs]]></title>
-            <link>https://hudi.apache.org/videos/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer</link>
-            <guid>https://hudi.apache.org/videos/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer</guid>
-            <pubDate>Sat, 25 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>minio</category>
-            <category>apache pulsar</category>
-            <category>real time datalake</category>
-        </item>
-        <item>
-            <title><![CDATA[Build Hudi Date Dimension in Minutes with Spark SQL Minio and Query with Trino]]></title>
-            <link>https://hudi.apache.org/videos/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino</link>
-            <guid>https://hudi.apache.org/videos/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino</guid>
-            <pubDate>Thu, 23 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>minio</category>
-            <category>trino</category>
-            <category>apache hive</category>
-            <category>hive metastore</category>
-            <category>spark sql</category>
-        </item>
-        <item>
-            <title><![CDATA[Demo Video : Hudi Delta Streamer Implementing Slowly Changing Dimension and Query that using Trino]]></title>
-            <link>https://hudi.apache.org/videos/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino</link>
-            <guid>https://hudi.apache.org/videos/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino</guid>
-            <pubDate>Wed, 22 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>slowly changing dimension type 2</category>
-            <category>scd2</category>
-            <category>hudi streamer</category>
-            <category>deltastreamer</category>
         </item>
     </channel>
 </rss>

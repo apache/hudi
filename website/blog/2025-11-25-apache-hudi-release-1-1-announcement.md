@@ -11,7 +11,11 @@ tags:
   - performance
 ---
 
+<<<<<<< HEAD
 The Hudi community is excited to announce the [release of Hudi 1.1](https://hudi.apache.org/releases/release-1.1#release-111), a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.
+=======
+The Hudi community is excited to announce the [release of Hudi 1.1](https://hudi.apache.org/releases/release-1.1.1), a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.
+>>>>>>> d5c17cefa2eeb57573ee840e4e4a31fd43936b17
 
 Hudi continues to evolve rapidly, with contributions from a vibrant community of developers and users. The 1.1 release brings over 700 commits addressing performance bottlenecks, expanding engine support, and introducing new capabilities that make Hudi tables more reliable, faster, and easier to operate. Let’s dive into the highlights.
 
@@ -161,7 +165,7 @@ Spark remains one of the most popular engines for working with Hudi tables, and 
 
 ### Spark 4.0 Support
 
-Spark 4.0 brought significant performance gains for ML/AI workloads, smarter query optimization with automatic join strategy switching, dynamic partition skew mitigation, and enhanced streaming capabilities. Hudi 1.1 adds Spark 4.0 support to unlock these improvements for working with Hudi tables. To get started, use the new `hudi-spark4.0-bundle_2.13:1.1.0` artifact in your dependency list.
+Spark 4.0 brought significant performance gains for ML/AI workloads, smarter query optimization with automatic join strategy switching, dynamic partition skew mitigation, and enhanced streaming capabilities. Hudi 1.1 adds Spark 4.0 support to unlock these improvements for working with Hudi tables. To get started, use the new `hudi-spark4.0-bundle_2.13:1.1.1` artifact in your dependency list.
 
 ### Metadata Table Streaming Writes
 
@@ -211,7 +215,7 @@ Flink is a popular choice for real-time data pipelines, and Hudi 1.1 brings subs
 
 ### Flink 2.0 Support
 
-Hudi 1.1 brings support for Flink 2.0, the first major Flink release in nine years. Flink 2.0 introduced disaggregated state storage (ForSt) that decouples state from compute for unlimited scalability, asynchronous state execution for improved resource utilization, adaptive broadcast join for efficient query processing, and materialized tables for simplified stream-batch unification. Use the new `hudi-flink2.0-bundle:1.1.0` artifact to get started.
+Hudi 1.1 brings support for Flink 2.0, the first major Flink release in nine years. Flink 2.0 introduced disaggregated state storage (ForSt) that decouples state from compute for unlimited scalability, asynchronous state execution for improved resource utilization, adaptive broadcast join for efficient query processing, and materialized tables for simplified stream-batch unification. Use the new `hudi-flink2.0-bundle:1.1.1` artifact to get started.
 
 ### Engine-Native Record Support
 
@@ -235,4 +239,8 @@ Hudi 1.1 introduces [native integration with Polaris](https://hudi.apache.org/do
 
 The future of Hudi is incredibly exciting, and we're building it together with a vibrant, global community of contributors. Building on the strong foundation of 1.1, we're actively developing transformative AI/ML-focused capabilities for Hudi 1.2 and beyond—unstructured data types and column groups for efficient storage of embeddings and documents, Lance, Vortex, blob-optimized Parquet support, and vector search capabilities for lakehouse tables. This is just the beginning—we're reimagining what's possible in the lakehouse, from multi-format interoperability to next-generation AI/ML workloads, and we need your ideas, code, and creativity to make it happen.
 
+<<<<<<< HEAD
 Join us in building the future. Check out the [1.1 release notes](https://hudi.apache.org/releases/release-1.1#release-111) to get started, join our [Slack space](https://hudi.apache.org/slack/), follow us on [LinkedIn](https://www.linkedin.com/company/apache-hudi) and [X (twitter)](http://x.com/apachehudi), and subscribe (send an empty email) to the [mailing list](mailto:dev@hudi.apache.org)—let's build the next generation of Hudi together.
+=======
+Join us in building the future. Check out the [1.1 release notes](https://hudi.apache.org/releases/release-1.1.1) to get started, join our [Slack space](https://hudi.apache.org/slack/), follow us on [LinkedIn](https://www.linkedin.com/company/apache-hudi) and [X (twitter)](http://x.com/apachehudi), and subscribe (send an empty email) to the [mailing list](mailto:dev@hudi.apache.org)—let's build the next generation of Hudi together.
+>>>>>>> d5c17cefa2eeb57573ee840e4e4a31fd43936b17

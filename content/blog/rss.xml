@@ -4,10 +4,134 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Tue, 16 Dec 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 22 Dec 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[How Zupee Cut S3 Costs by 60% with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi</link>
+            <guid>https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi</guid>
+            <pubDate>Mon, 22 Dec 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[---]]></description>
+            <content:encoded><![CDATA[<hr>
+<p><em>This post summarizes Zupee's talk from the Apache Hudi community sync. Watch the recording on <a href="https://www.youtube.com/watch?v=Mpj8hnaZbe0" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
+<hr>
+<p><img decoding="async" loading="lazy" alt="Talk title slide" src="https://hudi.apache.org/assets/images/og-3d6b097ba470e207ce0f3b00e4848a7c.png" width="1999" height="1023" class="img_ev3q"></p>
+<p><a href="https://www.zupee.com/" target="_blank" rel="noopener noreferrer" class="">Zupee</a> is India's largest skill-based Ludo platform (<a href="https://en.wikipedia.org/wiki/Ludo" target="_blank" rel="noopener noreferrer" class="">Ludo</a> is a classic Indian board game), founded in 2018 with a vision of bringing moments of joy to users through meaningful entertainment. The company was the first to introduce a skill element to culturally relevant games like Ludo, reviving the joy of traditional Indian gaming.</p>
+<p>At Zupee, data plays a crucial role in everything they do—from understanding user behavior to optimizing services. It sits at the core of their decision-making process. In this community sync, Amarjeet Singh, Senior Data Engineer at Zupee, shared how his team built a scalable data platform using Apache Hudi and the significant performance gains they achieved.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="data-platform-architecture">Data Platform Architecture<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#data-platform-architecture" class="hash-link" aria-label="Direct link to Data Platform Architecture" title="Direct link to Data Platform Architecture" translate="no">​</a></h2>
+<p><img decoding="async" loading="lazy" alt="Data platform architecture" src="https://hudi.apache.org/assets/images/image1-3336d5fa43e0b8ed63ea668d2148fce0.png" width="1999" height="1085" class="img_ev3q"></p>
+<p>Zupee's data platform architecture is designed to handle complex data needs efficiently. It consists of several layers working together:</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="three-tiered-data-lake">Three-Tiered Data Lake<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#three-tiered-data-lake" class="hash-link" aria-label="Direct link to Three-Tiered Data Lake" title="Direct link to Three-Tiered Data Lake" translate="no">​</a></h3>
+<p>The data lake is structured into three zones:</p>
+<ul>
+<li class=""><strong>Landing Zone</strong>: Where raw data first arrives—like a receiving dock where all incoming data is stored in its original format.</li>
+<li class=""><strong>Exploration Zone</strong>: Data is cleaned and prepared for analysts and data scientists to explore and derive insights.</li>
+<li class=""><strong>Analytical Zone</strong>: Processed data optimized for analytical queries. This layer stores OLAP tables, facts and dimensions, or denormalized wide tables.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="metastore-and-api-layer">Metastore and API Layer<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#metastore-and-api-layer" class="hash-link" aria-label="Direct link to Metastore and API Layer" title="Direct link to Metastore and API Layer" translate="no">​</a></h3>
+<p>This layer acts as the brain of the data platform, managing metadata and providing APIs for data access and integration.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="orchestration-and-framework-layer">Orchestration and Framework Layer<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#orchestration-and-framework-layer" class="hash-link" aria-label="Direct link to Orchestration and Framework Layer" title="Direct link to Orchestration and Framework Layer" translate="no">​</a></h3>
+<p>The orchestration layer includes tools like Apache Airflow for scheduling and managing workflows, along with in-house tools and frameworks for ML operations, data ingestion, and data computation—including <a href="https://hudi.apache.org/docs/hoodie_deltastreamer/" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a> for data ingestion.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="compute-layer">Compute Layer<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#compute-layer" class="hash-link" aria-label="Direct link to Compute Layer" title="Direct link to Compute Layer" translate="no">​</a></h3>
+<p>The compute layer includes Apache Spark for large-scale data processing, and Amazon Athena and Trino for querying.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="real-time-serving-layer">Real-Time Serving Layer<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#real-time-serving-layer" class="hash-link" aria-label="Direct link to Real-Time Serving Layer" title="Direct link to Real-Time Serving Layer" translate="no">​</a></h3>
+<p>For real-time data needs, Zupee uses Apache Flink as a powerful streaming framework to power their feature store and enable real-time model predictions.</p>
+<p>The serving layer includes real-time dashboards powered by Flink, analytical dashboards powered by Athena and Trino, and Jupyter notebooks for ad-hoc analysis by data scientists and machine learning teams.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="workflow-based-data-ingestion">Workflow-Based Data Ingestion<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#workflow-based-data-ingestion" class="hash-link" aria-label="Direct link to Workflow-Based Data Ingestion" title="Direct link to Workflow-Based Data Ingestion" translate="no">​</a></h2>
+<p><img decoding="async" loading="lazy" alt="Ingestion workflow" src="https://hudi.apache.org/assets/images/image2-ec9c06a8024b506d7c10190c07c037fb.png" width="1999" height="864" class="img_ev3q"></p>
+<p>Zupee designed a data ingestion pipeline that provides smooth integration and scalability. At the heart of their approach is a centralized configuration system that gives them granular control over every aspect of their jobs.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="centralized-configuration">Centralized Configuration<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#centralized-configuration" class="hash-link" aria-label="Direct link to Centralized Configuration" title="Direct link to Centralized Configuration" translate="no">​</a></h3>
+<p>The team uses YAML files to centrally manage job details and tenant-level settings. This promotes consistency and makes updates easy. The centralized system is hosted on Amazon EMR, ensuring uniformity across all ingestion jobs.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="multi-tenant-pipeline">Multi-Tenant Pipeline<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#multi-tenant-pipeline" class="hash-link" aria-label="Direct link to Multi-Tenant Pipeline" title="Direct link to Multi-Tenant Pipeline" translate="no">​</a></h3>
+<p>Zupee runs a multi-tenant setup of generic pipelines. They can switch between different versions of Spark, Hudi Streamer, and Scala—all controlled at the tenant level.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="automated-spark-command-generation">Automated Spark Command Generation<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#automated-spark-command-generation" class="hash-link" aria-label="Direct link to Automated Spark Command Generation" title="Direct link to Automated Spark Command Generation" translate="no">​</a></h3>
+<p>The system automatically generates Spark commands based on YAML configurations. This significantly reduces manual intervention, minimizes errors, and accelerates the development process.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-ingestion-flow">The Ingestion Flow<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#the-ingestion-flow" class="hash-link" aria-label="Direct link to The Ingestion Flow" title="Direct link to The Ingestion Flow" translate="no">​</a></h3>
+<p>Here's how the workflow operates:</p>
+<ol>
+<li class="">A generic job reads a YAML file containing specific job information and tenant-level configurations.</li>
+<li class="">A single trigger starts each pipeline.</li>
+<li class="">The generic job creates Spark configurations and generates a <code>spark-submit</code> command with Hudi Streamer settings.</li>
+<li class="">The command is submitted using Livy or EMR steps.</li>
+<li class="">Throughout the process, the team tracks data lineage for monitoring and debugging.</li>
+</ol>
+<p>This workflow-based approach streamlines data ingestion, making it both scalable and reliable for handling large volumes of data.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="real-time-ingestion-with-hudi-streamer">Real-Time Ingestion with Hudi Streamer<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#real-time-ingestion-with-hudi-streamer" class="hash-link" aria-label="Direct link to Real-Time Ingestion with Hudi Streamer" title="Direct link to Real-Time Ingestion with Hudi Streamer" translate="no">​</a></h2>
+<p>Zupee uses <a href="https://hudi.apache.org/docs/hoodie_deltastreamer/" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a>, a utility built on checkpoint-based ingestion. It supports various sources including distributed file systems (S3, GCS), Kafka, and JDBC sources like MySQL and MongoDB.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="key-benefits">Key Benefits<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#key-benefits" class="hash-link" aria-label="Direct link to Key Benefits" title="Direct link to Key Benefits" translate="no">​</a></h3>
+<ul>
+<li class=""><strong>Checkpoint-based consistency</strong>: Ensures the ability to resume from the last checkpoint in case of interruption.</li>
+<li class=""><strong>Easy backfills</strong>: Reprocess historical data efficiently based on checkpoints, without re-ingesting the entire dataset—saving both time and resources.</li>
+<li class=""><strong>Data catalog syncing</strong>: Automatically syncs metadata to catalogs such as AWS Glue and Hive Metastore.</li>
+<li class=""><strong>Built-in transformations</strong>: Supports SQL transformations and flat transformations, allowing complex logic to be applied on the fly.</li>
+<li class=""><strong>Custom transformations</strong>: Developers can build custom transformation classes for specific requirements.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="deep-dive-how-hudi-streamer-works">Deep Dive: How Hudi Streamer Works<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#deep-dive-how-hudi-streamer-works" class="hash-link" aria-label="Direct link to Deep Dive: How Hudi Streamer Works" title="Direct link to Deep Dive: How Hudi Streamer Works" translate="no">​</a></h3>
+<p><img decoding="async" loading="lazy" alt="Hudi Streamer internals" src="https://hudi.apache.org/assets/images/image3-c3ba49bf9e7606a21ab2c93ad60cb758.png" width="1564" height="1810" class="img_ev3q"></p>
+<p>Here's how Hudi Streamer processes data internally:</p>
+<ol>
+<li class="">
+<p><strong>Job Submission</strong>: A Spark job is submitted with Hudi properties specifying primary keys, checkpointing details, and other configurations.</p>
+</li>
+<li class="">
+<p><strong>StreamSync Wrapper</strong>: The job creates a StreamSync wrapper (formerly DeltaSync) based on the provided properties.</p>
+</li>
+<li class="">
+<p><strong>Continuous or Single Run</strong>: StreamSync initiates a synchronized process that can run continuously or as a single batch, depending on the parameters.</p>
+</li>
+<li class="">
+<p><strong>Checkpoint Retrieval</strong>: Hudi Streamer checks if a checkpoint exists and retrieves the last position from the Hudi commit metadata. For S3-based ingestion, it checks the last modified date; for Kafka sources, it retrieves the last committed offset.</p>
+</li>
+<li class="">
+<p><strong>Transformation</strong>: If transformations are configured (single or chained), they are applied to the source data based on the format (JSON, Avro, etc.).</p>
+</li>
+<li class="">
+<p><strong>Write and Compaction</strong>: Data is written to the Hudi table. For Merge-On-Read tables, compaction runs inline or asynchronously to merge log files with base files.</p>
+</li>
+<li class="">
+<p><strong>Metadata Sync</strong>: Finally, if enabled, metadata is synced to ensure catalog consistency.</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="custom-solutions">Custom Solutions<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#custom-solutions" class="hash-link" aria-label="Direct link to Custom Solutions" title="Direct link to Custom Solutions" translate="no">​</a></h3>
+<p>The Zupee team developed several custom solutions to enhance their Hudi Streamer pipeline:</p>
+<ul>
+<li class=""><strong>Dynamic Schema Generator</strong>: A custom class that dynamically generates schemas for JSON sources, enabling automatic schema creation based on incoming data.</li>
+<li class=""><strong>Post-Process Transformations</strong>: Custom transformations to handle schema evolution at the source level.</li>
+<li class=""><strong>Centralized Configurations</strong>: Hudi configurations managed centrally via YAML files or <code>hoodie-config.xml</code>, simplifying maintenance and updates.</li>
+<li class=""><strong>Raw Data Handling</strong>: For raw data ingestion, they discovered that Hudi Streamer can infer schemas automatically without requiring a schema provider.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="results-cost-savings-and-performance-gains">Results: Cost Savings and Performance Gains<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#results-cost-savings-and-performance-gains" class="hash-link" aria-label="Direct link to Results: Cost Savings and Performance Gains" title="Direct link to Results: Cost Savings and Performance Gains" translate="no">​</a></h2>
+<p>The migration to a Hudi-powered platform delivered significant outcomes:</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="60-reduction-in-s3-network-costs">60% Reduction in S3 Network Costs<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#60-reduction-in-s3-network-costs" class="hash-link" aria-label="Direct link to 60% Reduction in S3 Network Costs" title="Direct link to 60% Reduction in S3 Network Costs" translate="no">​</a></h3>
+<p>After migrating from Hudi 0.10.x to 0.12.3 and enabling the <a href="https://hudi.apache.org/docs/metadata/" target="_blank" rel="noopener noreferrer" class="">Metadata Table</a>, Zupee reduced S3 network costs by over 60%. The metadata table eliminates expensive S3 file listing operations by maintaining an internal index of all files. The key settings are <code>hoodie.metadata.enable=true</code> for Spark and <code>hudi.metadata.listing-enabled=true</code> for Athena.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="15-minute-ingestion-sla">15-Minute Ingestion SLA<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#15-minute-ingestion-sla" class="hash-link" aria-label="Direct link to 15-Minute Ingestion SLA" title="Direct link to 15-Minute Ingestion SLA" translate="no">​</a></h3>
+<p>The team achieved a 15-minute SLA for ingesting 2-5 million records using <a href="https://hudi.apache.org/docs/table_types/" target="_blank" rel="noopener noreferrer" class="">Merge-On-Read (MOR)</a> tables with Hudi's indexing for efficient record lookups during upserts.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="30-storage-reduction">30% Storage Reduction<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#30-storage-reduction" class="hash-link" aria-label="Direct link to 30% Storage Reduction" title="Direct link to 30% Storage Reduction" translate="no">​</a></h3>
+<p>Switching from Snappy to ZSTD compression resulted in a 30% decrease in data size. While write times increased slightly, query performance improved significantly, and both storage and Athena costs decreased.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="small-file-management">Small File Management<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#small-file-management" class="hash-link" aria-label="Direct link to Small File Management" title="Direct link to Small File Management" translate="no">​</a></h3>
+<p><a href="https://hudi.apache.org/docs/compaction/" target="_blank" rel="noopener noreferrer" class="">Async compaction</a> handles the small file problem by consolidating smaller files into larger ones, configured via <code>hoodie.parquet.small.file.limit</code> and <code>hoodie.parquet.max.file.size</code>. The team also explored Parquet page-level indexing to reduce query costs by allowing engines to read only relevant pages from files.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="why-hudi-over-other-table-formats">Why Hudi Over Other Table Formats?<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#why-hudi-over-other-table-formats" class="hash-link" aria-label="Direct link to Why Hudi Over Other Table Formats?" title="Direct link to Why Hudi Over Other Table Formats?" translate="no">​</a></h2>
+<p>During the Q&amp;A, Amarjeet explained why Zupee chose Hudi over other table formats. The team ran POCs with Delta Lake but found that for near-real-time ingestion, Hudi performs much better. Since Zupee primarily works with real-time data rather than batch workloads, this was the deciding factor.</p>
+<p>The native <a href="https://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a> utility also adds significant value with its built-in checkpoint management, compaction, and catalog syncing—features that would require additional work with other ingestion approaches.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="best-practices-for-emr-upgrades">Best Practices for EMR Upgrades<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#best-practices-for-emr-upgrades" class="hash-link" aria-label="Direct link to Best Practices for EMR Upgrades" title="Direct link to Best Practices for EMR Upgrades" translate="no">​</a></h2>
+<p>When asked about upgrading Hudi on EMR, Amarjeet shared their approach: instead of using the EMR-provided JARs, they use open-source JARs. This way, they can upgrade JARs using their multi-tenant framework, which controls which JAR goes to which job. They can also use different Spark versions for different jobs. For example, if they are currently running Hudi 0.12.3 and want to test version 0.14.1, they simply specify the JAR in their YAML file for that particular job.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/12/22/how-zupee-cut-s3-costs-60-percent-with-hudi#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
+<p>Zupee's journey with Apache Hudi demonstrates how a modern data platform can solve real-world engineering challenges at scale. By moving from legacy architecture to a Hudi-powered lakehouse, they built a platform that is robust, scalable, and cost-effective.</p>
+<p>The keys to their success were:</p>
+<ul>
+<li class="">Enabling Hudi's <a href="https://hudi.apache.org/docs/metadata/" target="_blank" rel="noopener noreferrer" class="">Metadata Table</a> to eliminate file listing overhead</li>
+<li class="">Using <a href="https://hudi.apache.org/docs/table_types/" target="_blank" rel="noopener noreferrer" class="">Merge-On-Read</a> tables with indexing for efficient upserts</li>
+<li class="">Building custom transformations for flexible schema evolution</li>
+<li class="">Centralizing configuration management for operational simplicity</li>
+</ul>
+<p>Watch the <a href="https://www.youtube.com/watch?v=Mpj8hnaZbe0" target="_blank" rel="noopener noreferrer" class="">full presentation on YouTube</a>. Ready to optimize your own data platform? Get started with <a href="https://hudi.apache.org/docs/quick-start-guide" target="_blank" rel="noopener noreferrer" class="">Hudi</a> and explore <a href="https://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a> for your ingestion needs.</p>]]></content:encoded>
+            <category>hudi</category>
+            <category>lakehouse</category>
+            <category>case-study</category>
+            <category>zupee</category>
+        </item>
         <item>
             <title><![CDATA[Maximizing Throughput with Apache Hudi NBCC: Stop Retrying, Start Scaling]]></title>
             <link>https://hudi.apache.org/blog/2025/12/16/maximizing-throughput-nbcc</link>
@@ -279,7 +403,7 @@
             <guid>https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement</guid>
             <pubDate>Tue, 25 Nov 2025 00:00:00 GMT</pubDate>
             <description><![CDATA[The Hudi community is excited to announce the release of Hudi 1.1, a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.]]></description>
-            <content:encoded><![CDATA[<p>The Hudi community is excited to announce the <a href="https://hudi.apache.org/releases/release-1.1.0" target="_blank" rel="noopener noreferrer" class="">release of Hudi 1.1</a>, a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.</p>
+            <content:encoded><![CDATA[<p>The Hudi community is excited to announce the <a href="https://hudi.apache.org/releases/release-1.1.1" target="_blank" rel="noopener noreferrer" class="">release of Hudi 1.1</a>, a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.</p>
 <p>Hudi continues to evolve rapidly, with contributions from a vibrant community of developers and users. The 1.1 release brings over 700 commits addressing performance bottlenecks, expanding engine support, and introducing new capabilities that make Hudi tables more reliable, faster, and easier to operate. Let’s dive into the highlights.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="pluggable-table-formatthe-foundation-for-multi-format-support">Pluggable Table Format—The Foundation for Multi-Format Support<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#pluggable-table-formatthe-foundation-for-multi-format-support" class="hash-link" aria-label="Direct link to Pluggable Table Format—The Foundation for Multi-Format Support" title="Direct link to Pluggable Table Format—The Foundation for Multi-Format Support" translate="no">​</a></h2>
 <p>Hudi 1.1 introduces a <a href="https://hudi.apache.org/docs/hudi_stack#pluggable-table-format" target="_blank" rel="noopener noreferrer" class="">pluggable table format</a> framework that opens up the powerful storage engine capabilities beyond Hudi’s native storage format to other table formats like Apache Iceberg and Delta Lake. This framework represents a fundamental shift in how Hudi approaches table format support, enabling native integration of multiple formats and giving you a unified system with total read-write compatibility across formats.</p>
@@ -337,11 +461,11 @@
 <table><thead><tr><th style="text-align:left">Merge mode</th><th style="text-align:left">What does it do?</th></tr></thead><tbody><tr><td style="text-align:left"><code>COMMIT_TIME_ORDERING</code></td><td style="text-align:left">Picks the record with the highest completion time/instant as the final merge result (standard relational semantics or arrival time processing)</td></tr><tr><td style="text-align:left"><code>EVENT_TIME_ORDERING</code></td><td style="text-align:left">Picks the record with the highest value on a user-specified ordering field as the final merge result. Enables event time processing semantics for handling late-arriving data without corrupting record state.</td></tr></tbody></table>
 <p>The default behavior is adaptive: if no ordering field (<code>hoodie.table.ordering.fields</code>) is configured, Hudi defaults to <code>COMMIT_TIME_ORDERING</code>; if one or more ordering fields are set, it uses <code>EVENT_TIME_ORDERING</code>. This makes Hudi work out-of-the-box for simple use cases while still supporting event-time ordering when needed.</p>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="custom-mergersthe-flexible-approach">Custom Mergers—The Flexible Approach<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#custom-mergersthe-flexible-approach" class="hash-link" aria-label="Direct link to Custom Mergers—The Flexible Approach" title="Direct link to Custom Mergers—The Flexible Approach" translate="no">​</a></h3>
-<p>For complex merging logic—such as field-level reconciliation, aggregating counters, or preserving audit fields—the <code>HoodieRecordMerger</code> interface provides a modern, engine-native alternative to payload classes. You need to set the merge mode to <code>CUSTOM</code> and provide your own implementation of <code>HoodieRecordMerger</code>. By using the new API, you can achieve consistent merging across all code paths: precombine, updating writes, compaction, and snapshot reads—you are strongly encouraged to migrate to the new APIs. See <a href="https://hudi.apache.org/docs/record_merger" target="_blank" rel="noopener noreferrer" class="">the docs</a> for more details. For migration guidance, see the <a href="https://hudi.apache.org/releases/release-1.1.0/" target="_blank" rel="noopener noreferrer" class="">release notes</a> and <a href="https://github.com/apache/hudi/pull/13499" target="_blank" rel="noopener noreferrer" class="">RFC-97</a>.</p>
+<p>For complex merging logic—such as field-level reconciliation, aggregating counters, or preserving audit fields—the <code>HoodieRecordMerger</code> interface provides a modern, engine-native alternative to payload classes. You need to set the merge mode to <code>CUSTOM</code> and provide your own implementation of <code>HoodieRecordMerger</code>. By using the new API, you can achieve consistent merging across all code paths: precombine, updating writes, compaction, and snapshot reads—you are strongly encouraged to migrate to the new APIs. See <a href="https://hudi.apache.org/docs/record_merger" target="_blank" rel="noopener noreferrer" class="">the docs</a> for more details. For migration guidance, see the <a href="https://hudi.apache.org/releases/release-1.1.1/" target="_blank" rel="noopener noreferrer" class="">release notes</a> and <a href="https://github.com/apache/hudi/pull/13499" target="_blank" rel="noopener noreferrer" class="">RFC-97</a>.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="apache-spark-integration-improvements">Apache Spark Integration Improvements<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#apache-spark-integration-improvements" class="hash-link" aria-label="Direct link to Apache Spark Integration Improvements" title="Direct link to Apache Spark Integration Improvements" translate="no">​</a></h2>
 <p>Spark remains one of the most popular engines for working with Hudi tables, and the 1.1 release brings several important enhancements.</p>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="spark-40-support">Spark 4.0 Support<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#spark-40-support" class="hash-link" aria-label="Direct link to Spark 4.0 Support" title="Direct link to Spark 4.0 Support" translate="no">​</a></h3>
-<p>Spark 4.0 brought significant performance gains for ML/AI workloads, smarter query optimization with automatic join strategy switching, dynamic partition skew mitigation, and enhanced streaming capabilities. Hudi 1.1 adds Spark 4.0 support to unlock these improvements for working with Hudi tables. To get started, use the new <code>hudi-spark4.0-bundle_2.13:1.1.0</code> artifact in your dependency list.</p>
+<p>Spark 4.0 brought significant performance gains for ML/AI workloads, smarter query optimization with automatic join strategy switching, dynamic partition skew mitigation, and enhanced streaming capabilities. Hudi 1.1 adds Spark 4.0 support to unlock these improvements for working with Hudi tables. To get started, use the new <code>hudi-spark4.0-bundle_2.13:1.1.1</code> artifact in your dependency list.</p>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="metadata-table-streaming-writes">Metadata Table Streaming Writes<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#metadata-table-streaming-writes" class="hash-link" aria-label="Direct link to Metadata Table Streaming Writes" title="Direct link to Metadata Table Streaming Writes" translate="no">​</a></h3>
 <p>Hudi 1.1 introduces streaming writes to the metadata table, unifying data and metadata writes into a single RDD execution chain. The key design generates metadata records directly during data writes in parallel across executors, eliminating redundant file lookups that previously created bottlenecks and enhancing reliability when performing stage retries in Spark.</p>
 <p><img decoding="async" loading="lazy" alt="spark upsert time chart" src="https://hudi.apache.org/assets/images/6-spark-upsert-write-time-chart-734ca6975e38a28de049809099a99caa.png" width="960" height="540" class="img_ev3q"></p>
@@ -358,7 +482,7 @@
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="apache-flink-integration-improvements">Apache Flink Integration Improvements<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#apache-flink-integration-improvements" class="hash-link" aria-label="Direct link to Apache Flink Integration Improvements" title="Direct link to Apache Flink Integration Improvements" translate="no">​</a></h2>
 <p>Flink is a popular choice for real-time data pipelines, and Hudi 1.1 brings substantial improvements to the Flink integration.</p>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="flink-20-support">Flink 2.0 Support<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#flink-20-support" class="hash-link" aria-label="Direct link to Flink 2.0 Support" title="Direct link to Flink 2.0 Support" translate="no">​</a></h3>
-<p>Hudi 1.1 brings support for Flink 2.0, the first major Flink release in nine years. Flink 2.0 introduced disaggregated state storage (ForSt) that decouples state from compute for unlimited scalability, asynchronous state execution for improved resource utilization, adaptive broadcast join for efficient query processing, and materialized tables for simplified stream-batch unification. Use the new <code>hudi-flink2.0-bundle:1.1.0</code> artifact to get started.</p>
+<p>Hudi 1.1 brings support for Flink 2.0, the first major Flink release in nine years. Flink 2.0 introduced disaggregated state storage (ForSt) that decouples state from compute for unlimited scalability, asynchronous state execution for improved resource utilization, adaptive broadcast join for efficient query processing, and materialized tables for simplified stream-batch unification. Use the new <code>hudi-flink2.0-bundle:1.1.1</code> artifact to get started.</p>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="engine-native-record-support">Engine-Native Record Support<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#engine-native-record-support" class="hash-link" aria-label="Direct link to Engine-Native Record Support" title="Direct link to Engine-Native Record Support" translate="no">​</a></h3>
 <p>Hudi 1.1 eliminates expensive Avro conversions by processing Flink's native <code>RowData</code> format directly, enabling zero-copy operations throughout the pipeline. This automatic change (no configuration required) delivers 2-3x improvement in write and read performance on average compared to Hudi 1.0.</p>
 <p><img decoding="async" loading="lazy" alt="flink throughput chart" src="https://hudi.apache.org/assets/images/7-flink-write-throughput-chart-040f5478de7a2bf3fa8ddb03ffa499c0.png" width="960" height="540" class="img_ev3q"></p>
@@ -370,7 +494,7 @@
 <p>Hudi 1.1 introduces <a href="https://hudi.apache.org/docs/catalog_polaris" target="_blank" rel="noopener noreferrer" class="">native integration with Polaris</a> (pending a Polaris release that includes <a href="https://github.com/apache/polaris/pull/1862" target="_blank" rel="noopener noreferrer" class="">this PR</a>), allowing users to register Hudi tables in the Polaris catalog and query them from any Polaris-compatible engine, simplifying multi-engine workflows and providing centralized role-based access control that works uniformly across S3, Azure Blob Storage, and Google Cloud Storage.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="whats-nextjoin-us-in-building-the-future">What’s Next—Join Us in Building the Future<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#whats-nextjoin-us-in-building-the-future" class="hash-link" aria-label="Direct link to What’s Next—Join Us in Building the Future" title="Direct link to What’s Next—Join Us in Building the Future" translate="no">​</a></h2>
 <p>The future of Hudi is incredibly exciting, and we're building it together with a vibrant, global community of contributors. Building on the strong foundation of 1.1, we're actively developing transformative AI/ML-focused capabilities for Hudi 1.2 and beyond—unstructured data types and column groups for efficient storage of embeddings and documents, Lance, Vortex, blob-optimized Parquet support, and vector search capabilities for lakehouse tables. This is just the beginning—we're reimagining what's possible in the lakehouse, from multi-format interoperability to next-generation AI/ML workloads, and we need your ideas, code, and creativity to make it happen.</p>
-<p>Join us in building the future. Check out the <a href="https://hudi.apache.org/releases/release-1.1.0" target="_blank" rel="noopener noreferrer" class="">1.1 release notes</a> to get started, join our <a href="https://hudi.apache.org/slack/" target="_blank" rel="noopener noreferrer" class="">Slack space</a>, follow us on <a href="https://www.linkedin.com/company/apache-hudi" target="_blank" rel="noopener noreferrer" class="">LinkedIn</a> and <a href="http://x.com/apachehudi" target="_blank" rel="noopener noreferrer" class="">X (twitter)</a>, and subscribe (send an empty email) to the <a href="mailto:dev@hudi.apache.org" target="_blank" rel="noopener noreferrer" class="">mailing list</a>—let's build the next generation of Hudi together.</p>]]></content:encoded>
+<p>Join us in building the future. Check out the <a href="https://hudi.apache.org/releases/release-1.1.1" target="_blank" rel="noopener noreferrer" class="">1.1 release notes</a> to get started, join our <a href="https://hudi.apache.org/slack/" target="_blank" rel="noopener noreferrer" class="">Slack space</a>, follow us on <a href="https://www.linkedin.com/company/apache-hudi" target="_blank" rel="noopener noreferrer" class="">LinkedIn</a> and <a href="http://x.com/apachehudi" target="_blank" rel="noopener noreferrer" class="">X (twitter)</a>, and subscribe (send an empty email) to the <a href="mailto:dev@hudi.apache.org" target="_blank" rel="noopener noreferrer" class="">mailing list</a>—let's build the next generation of Hudi together.</p>]]></content:encoded>
             <category>hudi</category>
             <category>release</category>
             <category>feature</category>
@@ -1250,25 +1374,6 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <category>Lakehouse</category>
             <category>use-case</category>
             <category>datumagic</category>
-        </item>
-        <item>
-            <title><![CDATA[How Stifel built a modern data platform using AWS Glue and an event-driven domain architecture]]></title>
-            <link>https://hudi.apache.org/blog/2025/07/07/how-stifel-built-a-modern-data-platform-using-aws-glue-and-an-event-driven-domain-architecture</link>
-            <guid>https://hudi.apache.org/blog/2025/07/07/how-stifel-built-a-modern-data-platform-using-aws-glue-and-an-event-driven-domain-architecture</guid>
-            <pubDate>Mon, 07 Jul 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/big-data/how-stifel-built-a-modern-data-platform-using-aws-glue-and-an-event-driven-domain-architecture/">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>aws</category>
-            <category>AWS Glue</category>
-            <category>AWS Blogs</category>
-            <category>Amazon EMR</category>
-            <category>AWS Lake Formation</category>
-            <category>Data Governance</category>
-            <category>Lakehouse</category>
-            <category>use-case</category>
-            <category>det</category>
         </item>
     </channel>
 </rss>
