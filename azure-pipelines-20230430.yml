@@ -380,8 +380,8 @@ stages:
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities"
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -pl hudi-utilities"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
@@ -517,9 +517,9 @@ stages:
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -DfailIfNoTests=false $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -DfailIfNoTests=false  $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
