@@ -172,12 +172,16 @@ public class HoodieSchemaComparatorForSchemaEvolution {
       case DOUBLE:
       case BOOLEAN:
       case NULL:
+        return primitiveSchemaEquals(s1, s2);
       case DECIMAL:
+        return decimalSchemaEquals(s1, s2);
       case TIME:
+        return timeSchemaEquals(s1, s2);
       case TIMESTAMP:
+        return timestampSchemaEquals(s1, s2);
       case DATE:
       case UUID:
-        return primitiveSchemaEquals(s1, s2);
+        return logicalTypeSchemaEquals(s1, s2);
       default:
         throw new IllegalArgumentException("Unknown schema type: " + s1.getType());
     }
@@ -294,52 +298,44 @@ public class HoodieSchemaComparatorForSchemaEvolution {
   }
 
   private static boolean primitiveSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
-    // For primitive types, just check logical type
-    return logicalTypeSchemaEquals(s1, s2);
+    // For primitive types, they are equal if they have the same type
+    return true;
+  }
+
+  private static boolean decimalSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
+    HoodieSchema.Decimal d1 = (HoodieSchema.Decimal) s1;
+    HoodieSchema.Decimal d2 = (HoodieSchema.Decimal) s2;
+    // Check if both use same underlying representation (FIXED vs BYTES)
+    if (d1.isFixed() != d2.isFixed()) {
+      return false;
+    }
+    // If both use FIXED representation, they must have the same fixed size
+    if (d1.isFixed() && d1.getFixedSize() != d2.getFixedSize()) {
+      return false;
+    }
+    return d1.getPrecision() == d2.getPrecision() && d1.getScale() == d2.getScale();
+  }
+
+  private static boolean timestampSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
+    HoodieSchema.Timestamp t1 = (HoodieSchema.Timestamp) s1;
+    HoodieSchema.Timestamp t2 = (HoodieSchema.Timestamp) s2;
+    return t1.getPrecision() == t2.getPrecision() && t1.isUtcAdjusted() == t2.isUtcAdjusted();
+  }
+
+  private static boolean timeSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
+    HoodieSchema.Time t1 = (HoodieSchema.Time) s1;
+    HoodieSchema.Time t2 = (HoodieSchema.Time) s2;
+    return t1.getPrecision() == t2.getPrecision();
   }
 
   private static boolean logicalTypeSchemaEquals(HoodieSchema s1, HoodieSchema s2) {
-    // Check if both schemas are of the same logical type class
-    boolean s1IsDecimal = s1.getType() == HoodieSchemaType.DECIMAL;
-    boolean s2IsDecimal = s2.getType() == HoodieSchemaType.DECIMAL;
-    boolean s1IsTimestamp = s1.getType() == HoodieSchemaType.TIMESTAMP;
-    boolean s2IsTimestamp = s2.getType() == HoodieSchemaType.TIMESTAMP;
-    boolean s1IsTime = s1.getType() == HoodieSchemaType.TIME;
-    boolean s2IsTime = s2.getType() == HoodieSchemaType.TIME;
-
-    // If one is a logical type and the other isn't, they're not equal
-    if (s1IsDecimal != s2IsDecimal || s1IsTimestamp != s2IsTimestamp || s1IsTime != s2IsTime) {
-      return false;
-    }
-
-    // If both are decimals, compare precision, scale, and underlying type (FIXED vs BYTES)
-    if (s1IsDecimal) {
-      HoodieSchema.Decimal d1 = (HoodieSchema.Decimal) s1;
-      HoodieSchema.Decimal d2 = (HoodieSchema.Decimal) s2;
-      // Check if both use same underlying representation (FIXED vs BYTES)
-      if (d1.isFixed() != d2.isFixed()) {
-        return false;
-      }
-      return d1.getPrecision() == d2.getPrecision() && d1.getScale() == d2.getScale();
-    }
-
-    // If both are timestamps, compare precision and UTC adjustment
-    if (s1IsTimestamp) {
-      HoodieSchema.Timestamp t1 = (HoodieSchema.Timestamp) s1;
-      HoodieSchema.Timestamp t2 = (HoodieSchema.Timestamp) s2;
-      return t1.getPrecision() == t2.getPrecision() && t1.isUtcAdjusted() == t2.isUtcAdjusted();
-    }
-
-    // If both are time types, compare precision
-    // Note: time-millis is INT, time-micros is LONG, so they have different underlying types
-    // which is reflected in their precision values
-    if (s1IsTime) {
-      HoodieSchema.Time t1 = (HoodieSchema.Time) s1;
-      HoodieSchema.Time t2 = (HoodieSchema.Time) s2;
-      return t1.getPrecision() == t2.getPrecision();
-    }
-
-    // For non-logical types, they're equal
+    // For DATE and UUID logical types, they are equal if they have the same type.
+    // DATE is INT with date logical type (no additional properties)
+    // UUID is STRING with uuid logical type (no additional properties)
+    // The type equality check is already performed in schemaEqualsInternal before calling this method,
+    // so both schemas are guaranteed to have the same HoodieSchemaType (either both DATE or both UUID).
+    // Since these logical types have no additional properties (unlike DECIMAL, TIME, TIMESTAMP),
+    // no further comparison is needed.
     return true;
   }
 
