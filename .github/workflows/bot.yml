@@ -1134,7 +1134,7 @@ jobs:
         include:
           - sparkProfile: 'spark3.5'
             flinkProfile: 'flink1.20'
-            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-without-hadoop.tgz'
+            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 11
