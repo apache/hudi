@@ -25,7 +25,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 
 /**
@@ -59,10 +59,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       (2, "Bob", 25, 87.3),
       (3, "Charlie", 35, 92.1)
     )
-    val df = spark.createDataFrame(records).toDF("id", "name", "age", "score")
+    val expectedDf = spark.createDataFrame(records).toDF("id", "name", "age", "score")
 
     // Write to Hudi table with Lance base file format
-    df.write
+    expectedDf.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
       .option(RECORDKEY_FIELD.key(), "id")
@@ -74,29 +74,14 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .save(tablePath)
 
     // Read back and verify
-  val readDf = spark.read
+    val readDf = spark.read
       .format("hudi")
       .load(tablePath)
 
-    val result = readDf.select("id", "name", "age", "score")
-      .orderBy("id")
-      .collect()
+    val actual = readDf.select("id", "name", "age", "score")
 
-    assertEquals(3, result.length, "Should read 3 records")
-    assertEquals(1, result(0).getInt(0))
-    assertEquals("Alice", result(0).getString(1))
-    assertEquals(30, result(0).getInt(2))
-    assertEquals(95.5, result(0).getDouble(3), 0.01)
-
-    assertEquals(2, result(1).getInt(0))
-    assertEquals("Bob", result(1).getString(1))
-    assertEquals(25, result(1).getInt(2))
-    assertEquals(87.3, result(1).getDouble(3), 0.01)
-
-    assertEquals(3, result(2).getInt(0))
-    assertEquals("Charlie", result(2).getString(1))
-    assertEquals(35, result(2).getInt(2))
-    assertEquals(92.1, result(2).getDouble(3), 0.01)
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 
   @Test
@@ -110,10 +95,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       (2, "Bob", 25, 87.3, "Sales"),
       (3, "Charlie", 35, 92.1, "Marketing")
     )
-    val df = spark.createDataFrame(records).toDF("id", "name", "age", "score", "department")
+    val inputDf = spark.createDataFrame(records).toDF("id", "name", "age", "score", "department")
 
     // Write to Hudi table with Lance format
-    df.write
+    inputDf.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
       .option(RECORDKEY_FIELD.key(), "id")
@@ -125,24 +110,23 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .save(tablePath)
 
     // Read with schema projection - only select subset of columns
-    val projectedDf = spark.read
+    val readDf = spark.read
       .format("hudi")
       .load(tablePath)
-      .select("id", "name")  // Only read id and name
-      .orderBy("id")
 
-    val result = projectedDf.collect()
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice"),
+      (2, "Bob"),
+      (3, "Charlie")
+    )).toDF("id", "name")
 
-    assertEquals(3, result.length, "Should read 3 records")
-    assertEquals(2, result(0).length, "Should only have 2 columns")
+    val actual = readDf.select("id", "name")
 
-    assertEquals(1, result(0).getInt(0))
-    assertEquals("Alice", result(0).getString(1))
+    // Verify schema projection - should only have 2 columns
+    assertEquals(2, actual.schema.fields.length, "Should only have 2 columns")
 
-    assertEquals(2, result(1).getInt(0))
-    assertEquals("Bob", result(1).getString(1))
-
-    assertEquals(3, result(2).getInt(0))
-    assertEquals("Charlie", result(2).getString(1))
+    // Verify data equality
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 }
