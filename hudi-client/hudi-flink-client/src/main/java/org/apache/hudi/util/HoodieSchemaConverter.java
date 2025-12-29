@@ -420,7 +420,7 @@ public class HoodieSchemaConverter {
       return convertToDataType(unionTypes.get(0));
     }
 
-    // Complex multi-type unions - use RAW type (matches AvroSchemaConverter logic)
+    // Complex multi-type unions - use RAW type
     List<HoodieSchema> nonNullTypes = unionTypes.stream()
         .filter(t -> t.getType() != HoodieSchemaType.NULL)
         .collect(Collectors.toList());

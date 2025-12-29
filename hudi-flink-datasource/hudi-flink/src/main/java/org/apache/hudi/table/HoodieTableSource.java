@@ -544,7 +544,7 @@ public class HoodieTableSource implements
     return CdcInputFormat.builder()
         .config(this.conf)
         .tableState(hoodieTableState)
-        // use the explicit fields' data type because the AvroSchemaConverter
+        // use the explicit fields' data type because the HoodieSchemaConverter
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
         .predicates(this.predicates)
@@ -569,7 +569,7 @@ public class HoodieTableSource implements
     return MergeOnReadInputFormat.builder()
         .config(this.conf)
         .tableState(hoodieTableState)
-        // use the explicit fields' data type because the AvroSchemaConverter
+        // use the explicit fields' data type because the HoodieSchemaConverter
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
         .predicates(this.predicates)
