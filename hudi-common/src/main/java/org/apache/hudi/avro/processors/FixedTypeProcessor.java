@@ -18,12 +18,12 @@
 
 package org.apache.hudi.avro.processors;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import java.util.List;
 
 public abstract class FixedTypeProcessor extends JsonFieldProcessor {
-  protected byte[] convertToJavaObject(Object value, String name, Schema schema) {
+  protected byte[] convertToJavaObject(Object value, String name, HoodieSchema schema) {
     // The ObjectMapper use List to represent FixedType
     // eg: "decimal_val": [0, 0, 14, -63, -52] will convert to ArrayList<Integer>
     List<Integer> converval = (List<Integer>) value;

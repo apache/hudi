@@ -117,7 +117,7 @@ public class AvroConvertor implements Serializable {
     try {
       initSchema();
       initJsonConvertor();
-      return jsonConverter.convert(json, schema.toAvroSchema());
+      return jsonConverter.convert(json, schema);
     } catch (Exception e) {
       String errorMessage = "Failed to convert JSON string to Avro record: ";
       if (json != null) {

@@ -318,7 +318,7 @@ public final class SchemaTestUtil {
   public static GenericRecord generateAvroRecordFromJson(HoodieSchema schema, int recordNumber, String instantTime,
       String fileId, boolean populateMetaFields) throws IOException {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
-    return CONVERTER.convert(record.toJsonString(), schema.toAvroSchema());
+    return CONVERTER.convert(record.toJsonString(), schema);
   }
 
   public static HoodieSchema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {

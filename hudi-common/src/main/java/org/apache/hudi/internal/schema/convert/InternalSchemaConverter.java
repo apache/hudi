@@ -31,9 +31,6 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -504,25 +501,25 @@ public class InternalSchemaConverter {
         return HoodieSchema.create(HoodieSchemaType.DOUBLE);
 
       case DATE:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)));
+        return HoodieSchema.createDate();
 
       case TIME:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG)));
+        return HoodieSchema.createTimeMicros();
 
       case TIME_MILLIS:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT)));
+        return HoodieSchema.createTimeMillis();
 
       case TIMESTAMP:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)));
+        return HoodieSchema.createTimestampMicros();
 
       case TIMESTAMP_MILLIS:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG)));
+        return HoodieSchema.createTimestampMillis();
 
       case LOCAL_TIMESTAMP_MICROS:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)));
+        return HoodieSchema.createLocalTimestampMicros();
 
       case LOCAL_TIMESTAMP_MILLIS:
-        return HoodieSchema.fromAvroSchema(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)));
+        return HoodieSchema.createLocalTimestampMillis();
 
       case STRING:
         return HoodieSchema.create(HoodieSchemaType.STRING);
@@ -530,13 +527,8 @@ public class InternalSchemaConverter {
       case BINARY:
         return HoodieSchema.create(HoodieSchemaType.BYTES);
 
-      case UUID: {
-        // NOTE: All schemas corresponding to Hoodie's type [[FIXED]] are generated
-        //       with the "fixed" name to stay compatible w/ [[SchemaConverters]]
-        String name = recordName + FIELD_NAME_DELIMITER + "fixed";
-        Schema fixedSchema = Schema.createFixed(name, null, null, 16);
-        return HoodieSchema.fromAvroSchema(LogicalTypes.uuid().addToSchema(fixedSchema));
-      }
+      case UUID:
+        return HoodieSchema.createUUID();
 
       case FIXED: {
         Types.FixedType fixed = (Types.FixedType) primitive;

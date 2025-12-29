@@ -20,6 +20,7 @@ package org.apache.hudi.common;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -64,7 +65,7 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
-    return Option.of(jsonConverter.convert(getJsonData(), schema));
+    return Option.of(jsonConverter.convert(getJsonData(), HoodieSchema.fromAvroSchema(schema)));
   }
 
   private String getJsonData() throws IOException {
