@@ -131,7 +131,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       HoodieSchema recordSchema,
       HoodieReaderContext<RowData> readerContext,
       boolean sortOutput) throws IOException {
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema.toAvroSchema());
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
     try (ClosableIterator<RowData> iterator = fileGroupReader.getClosableIterator()) {
       while (iterator.hasNext()) {
         RowData rowData = rowDataSerializer.copy(iterator.next());
@@ -148,7 +148,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieSchema localSchema = getRecordSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
     AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
-        RowDataAvroQueryContexts.fromAvroSchema(localSchema.getAvroSchema()).getAvroToRowDataConverter();
+        RowDataAvroQueryContexts.fromSchema(localSchema).getAvroToRowDataConverter();
     List<RowData> rowDataList = recordList.stream().map(record -> {
       try {
         return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema, CollectionUtils.emptyProps()).get().getData());
@@ -169,7 +169,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     TestData.assertRowDataEquals(
         Collections.singletonList(actual),
         Collections.singletonList(expected),
-        RowDataAvroQueryContexts.fromAvroSchema(schema.toAvroSchema()).getRowType());
+        RowDataAvroQueryContexts.fromSchema(schema).getRowType());
   }
 
   @Override
@@ -324,7 +324,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   private static HoodieSchema getRecordSchema(String schemaStr) {
-    HoodieSchema recordSchema = new HoodieSchema.Parser().parse(schemaStr);
-    return HoodieSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromAvroSchema(recordSchema.getAvroSchema()).getRowType().getLogicalType());
+    HoodieSchema recordSchema = HoodieSchema.parse(schemaStr);
+    return HoodieSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromSchema(recordSchema).getRowType().getLogicalType());
   }
 }

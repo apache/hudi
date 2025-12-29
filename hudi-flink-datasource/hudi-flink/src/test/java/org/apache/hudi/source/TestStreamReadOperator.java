@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -253,13 +253,13 @@ public class TestStreamReadOperator {
     } catch (Exception e) {
       throw new HoodieException("Get table avro schema error", e);
     }
-    final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableSchema.getAvroSchema());
+    final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
         rowType,
         TestConfigurations.ROW_TYPE,
         tableSchema.toString(),
-        AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
+        HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
         Collections.emptyList());
     MergeOnReadInputFormat inputFormat = MergeOnReadInputFormat.builder()
         .config(conf)

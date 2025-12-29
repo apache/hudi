@@ -19,9 +19,11 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
@@ -37,6 +39,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -249,43 +253,6 @@ public class TestHoodieSchemaConverter {
   }
 
   @Test
-  public void testCompareWithAvroConversion() {
-    // Test that HoodieSchemaConverter produces the same result as
-    // AvroSchemaConverter + HoodieSchema.fromAvroSchema()
-
-    RowType flinkRowType = (RowType) DataTypes.ROW(
-        DataTypes.FIELD("id", DataTypes.BIGINT().notNull()),
-        DataTypes.FIELD("name", DataTypes.STRING().nullable()),
-        DataTypes.FIELD("timestamp", DataTypes.TIMESTAMP(3).notNull()),
-        DataTypes.FIELD("decimal_val", DataTypes.DECIMAL(10, 2).notNull())
-    ).notNull().getLogicalType();
-
-    // Method 1: Direct HoodieSchema conversion
-    HoodieSchema directSchema = HoodieSchemaConverter.convertToSchema(flinkRowType, "TestRecord");
-
-    // Method 2: Via Avro conversion
-    HoodieSchema viaAvroSchema = HoodieSchema.fromAvroSchema(
-        AvroSchemaConverter.convertToSchema(flinkRowType, "TestRecord"));
-
-    // Both should produce equivalent schemas
-    assertNotNull(directSchema);
-    assertNotNull(viaAvroSchema);
-    assertEquals(HoodieSchemaType.RECORD, directSchema.getType());
-    assertEquals(HoodieSchemaType.RECORD, viaAvroSchema.getType());
-    assertEquals(4, directSchema.getFields().size());
-    assertEquals(4, viaAvroSchema.getFields().size());
-
-    // Verify field types match
-    for (int i = 0; i < 4; i++) {
-      assertEquals(
-          viaAvroSchema.getFields().get(i).schema().getType(),
-          directSchema.getFields().get(i).schema().getType(),
-          "Field " + i + " type mismatch"
-      );
-    }
-  }
-
-  @Test
   public void testComplexNestedStructure() {
     LogicalType complexType = DataTypes.ROW(
         DataTypes.FIELD("id", DataTypes.STRING().notNull()),
@@ -315,26 +282,6 @@ public class TestHoodieSchemaConverter {
     HoodieSchema nestedRecord = complexSchema.getFields().get(3).schema();
     assertEquals(HoodieSchemaType.RECORD, nestedRecord.getType());
     assertEquals(2, nestedRecord.getFields().size());
-  }
-
-  @Test
-  public void testNativeConversionMatchesAvroPath() {
-    // Verify native conversion produces same result as Avro path
-    RowType originalRowType = (RowType) DataTypes.ROW(
-        DataTypes.FIELD("id", DataTypes.BIGINT().notNull()),
-        DataTypes.FIELD("name", DataTypes.STRING().nullable()),
-        DataTypes.FIELD("age", DataTypes.INT().notNull())
-    ).notNull().getLogicalType();
-
-    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(originalRowType, "TestRecord");
-
-    // Native conversion
-    DataType nativeResult = HoodieSchemaConverter.convertToDataType(hoodieSchema);
-
-    // Avro path (for comparison)
-    DataType avroResult = AvroSchemaConverter.convertToDataType(hoodieSchema.getAvroSchema());
-
-    assertEquals(avroResult.getLogicalType(), nativeResult.getLogicalType());
   }
 
   @Test
@@ -527,5 +474,62 @@ public class TestHoodieSchemaConverter {
     HoodieSchema fixedSchema = HoodieSchema.createFixed("MD5", null, null, 16);
     DataType dataType = HoodieSchemaConverter.convertToDataType(fixedSchema);
     assertTrue(dataType.getLogicalType() instanceof VarBinaryType);
+  }
+
+  @Test
+  void testUnionSchemaWithMultipleRecordTypes() {
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieMetadataRecord.SCHEMA$);
+    DataType dataType = HoodieSchemaConverter.convertToDataType(schema);
+    int pos = HoodieMetadataRecord.SCHEMA$.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).pos();
+    final String expected = "ROW<"
+        + "`fileName` STRING, "
+        + "`columnName` STRING, "
+        + "`minValue` ROW<`wrapper` RAW('java.lang.Object', ?) NOT NULL>, "
+        + "`maxValue` ROW<`wrapper` RAW('java.lang.Object', ?) NOT NULL>, "
+        + "`valueCount` BIGINT, "
+        + "`nullCount` BIGINT, "
+        + "`totalSize` BIGINT, "
+        + "`totalUncompressedSize` BIGINT, "
+        + "`isDeleted` BOOLEAN NOT NULL, "
+        + "`isTightBound` BOOLEAN NOT NULL, "
+        + "`valueType` ROW<`typeOrdinal` INT NOT NULL, `additionalInfo` STRING>>";
+    assertThat(dataType.getChildren().get(pos).toString(), is(expected));
+  }
+
+  @Test
+  void testLocalTimestampType() {
+    DataType dataType = DataTypes.ROW(
+        DataTypes.FIELD("f_localtimestamp_millis", DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(3)),
+        DataTypes.FIELD("f_localtimestamp_micros", DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(6))
+    );
+    // convert to avro schema
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(dataType.getLogicalType());
+    final String expectedSchema = ""
+        + "[ \"null\", {\n"
+        + "  \"type\" : \"record\",\n"
+        + "  \"name\" : \"record\",\n"
+        + "  \"fields\" : [ {\n"
+        + "    \"name\" : \"f_localtimestamp_millis\",\n"
+        + "    \"type\" : [ \"null\", {\n"
+        + "      \"type\" : \"long\",\n"
+        + "      \"logicalType\" : \"local-timestamp-millis\"\n"
+        + "    } ],\n"
+        + "    \"default\" : null\n"
+        + "  }, {\n"
+        + "    \"name\" : \"f_localtimestamp_micros\",\n"
+        + "    \"type\" : [ \"null\", {\n"
+        + "      \"type\" : \"long\",\n"
+        + "      \"logicalType\" : \"local-timestamp-micros\"\n"
+        + "    } ],\n"
+        + "    \"default\" : null\n"
+        + "  } ]\n"
+        + "} ]";
+    assertThat(schema.toString(true), is(expectedSchema));
+    // convert it back
+    DataType convertedDataType = HoodieSchemaConverter.convertToDataType(schema);
+    final String expectedDataType = "ROW<"
+        + "`f_localtimestamp_millis` TIMESTAMP_LTZ(3), "
+        + "`f_localtimestamp_micros` TIMESTAMP_LTZ(6)>";
+    assertThat(convertedDataType.toString(), is(expectedDataType));
   }
 }

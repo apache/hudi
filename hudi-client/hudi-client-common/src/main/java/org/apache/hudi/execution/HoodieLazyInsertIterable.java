@@ -97,7 +97,7 @@ public abstract class HoodieLazyInsertIterable<T>
   }
 
   public static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformerInternal(HoodieSchema schema,
-                                                                                                                HoodieWriteConfig writeConfig) {
+                                                                                                               HoodieWriteConfig writeConfig) {
     // NOTE: Whether record have to be cloned here is determined based on the executor type used
     //       for writing: executors relying on an inner queue, will be keeping references to the records
     //       and therefore in the environments where underlying buffer holding the record could be

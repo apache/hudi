@@ -37,7 +37,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.Getter;
 import org.apache.flink.table.types.DataType;
@@ -157,8 +157,8 @@ public class InternalSchemaManager implements Serializable {
     }
     List<Integer> selectedFieldList = IntStream.of(selectedFields).boxed().collect(Collectors.toList());
     // mergeSchema is built with useColumnTypeFromFileSchema = true
-    List<DataType> mergeSchemaAsDataTypes = AvroSchemaConverter.convertToDataType(
-        InternalSchemaConverter.convert(mergeSchema, "tableName").toAvroSchema()).getChildren();
+    List<DataType> mergeSchemaAsDataTypes = HoodieSchemaConverter.convertToDataType(
+        InternalSchemaConverter.convert(mergeSchema, "tableName")).getChildren();
     DataType[] fileFieldTypes = new DataType[queryFieldTypes.length];
     for (int i = 0; i < queryFieldTypes.length; i++) {
       // position of ChangedType in querySchema

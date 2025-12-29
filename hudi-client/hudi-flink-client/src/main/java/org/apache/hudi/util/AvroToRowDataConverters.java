@@ -198,7 +198,7 @@ public class AvroToRowDataConverters {
     final AvroToRowDataConverter keyConverter =
         createConverter(DataTypes.STRING().getLogicalType(), utcTimezone);
     final AvroToRowDataConverter valueConverter =
-        createNullableConverter(AvroSchemaConverter.extractValueTypeToAvroMap(type), utcTimezone);
+        createNullableConverter(HoodieSchemaConverter.extractValueTypeToMap(type), utcTimezone);
 
     return avroObject -> {
       final Map<?, ?> map = (Map<?, ?>) avroObject;

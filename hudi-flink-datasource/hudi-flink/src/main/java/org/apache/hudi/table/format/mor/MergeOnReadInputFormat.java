@@ -190,9 +190,9 @@ public class MergeOnReadInputFormat
             + "flink partition Index: " + split.getSplitNumber()
             + "merge type: " + split.getMergeType());
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(
-        HoodieSchema.parse(tableState.getAvroSchema()));
+        HoodieSchema.parse(tableState.getTableSchema()));
     final HoodieSchema requiredSchema = HoodieSchemaCache.intern(
-        HoodieSchema.parse(tableState.getRequiredAvroSchema()));
+        HoodieSchema.parse(tableState.getRequiredSchema()));
     return getSplitRowIterator(split, tableSchema, requiredSchema, mergeType, emitDelete);
   }
 

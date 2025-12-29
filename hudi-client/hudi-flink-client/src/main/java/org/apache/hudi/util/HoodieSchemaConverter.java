@@ -458,4 +458,25 @@ public class HoodieSchemaConverter {
     int numFields = types.get(0).getFields().size();
     return types.stream().allMatch(s -> s.getFields().size() == numFields);
   }
+
+  public static LogicalType extractValueTypeToMap(LogicalType type) {
+    LogicalType keyType;
+    LogicalType valueType;
+    if (type instanceof MapType) {
+      MapType mapType = (MapType) type;
+      keyType = mapType.getKeyType();
+      valueType = mapType.getValueType();
+    } else {
+      MultisetType multisetType = (MultisetType) type;
+      keyType = multisetType.getElementType();
+      valueType = new IntType();
+    }
+    if (!isFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
+      throw new UnsupportedOperationException(
+          "Avro format doesn't support non-string as key type of map. "
+              + "The key type is: "
+              + keyType.asSummaryString());
+    }
+    return valueType;
+  }
 }

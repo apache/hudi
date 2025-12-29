@@ -106,7 +106,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
+    DataType rowType = RowDataAvroQueryContexts.fromSchema(dataSchema).getRowType();
     return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
   }
 
@@ -203,7 +203,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     // For e.g, if the pk fields are [a, b] but user only select a, then the pk
     // semantics is lost.
     RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
-        pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema.toAvroSchema()).getRowType().getLogicalType());
+        pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
   }
 

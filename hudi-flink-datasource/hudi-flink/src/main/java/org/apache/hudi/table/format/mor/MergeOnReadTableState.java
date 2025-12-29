@@ -36,21 +36,21 @@ public class MergeOnReadTableState implements Serializable {
 
   private final RowType rowType;
   private final RowType requiredRowType;
-  private final String avroSchema;
-  private final String requiredAvroSchema;
+  private final String tableSchema;
+  private final String requiredSchema;
   private final List<MergeOnReadInputSplit> inputSplits;
   private final int operationPos;
 
   public MergeOnReadTableState(
       RowType rowType,
       RowType requiredRowType,
-      String avroSchema,
-      String requiredAvroSchema,
+      String tableSchema,
+      String requiredSchema,
       List<MergeOnReadInputSplit> inputSplits) {
     this.rowType = rowType;
     this.requiredRowType = requiredRowType;
-    this.avroSchema = avroSchema;
-    this.requiredAvroSchema = requiredAvroSchema;
+    this.tableSchema = tableSchema;
+    this.requiredSchema = requiredSchema;
     this.inputSplits = inputSplits;
     this.operationPos = rowType.getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
   }

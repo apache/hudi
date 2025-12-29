@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
@@ -26,7 +27,6 @@ import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
@@ -42,20 +42,20 @@ import java.util.function.Function;
  * Maintains auxiliary utilities for row data fields handling.
  */
 public class RowDataAvroQueryContexts {
-  private static final Map<Pair<Schema, Boolean>, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
+  private static final Map<Pair<HoodieSchema, Boolean>, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
 
   // BinaryRowWriter in RowDataSerializer are reused, and it's not thread-safe.
-  private static final ThreadLocal<Map<Schema, RowDataSerializer>> ROWDATA_SERIALIZER_CACHE = ThreadLocal.withInitial(HashMap::new);
+  private static final ThreadLocal<Map<HoodieSchema, RowDataSerializer>> ROWDATA_SERIALIZER_CACHE = ThreadLocal.withInitial(HashMap::new);
 
-  private static final Map<Triple<Schema, Schema, Map<String, String>>, RowProjection> ROW_PROJECTION_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Triple<HoodieSchema, HoodieSchema, Map<String, String>>, RowProjection> ROW_PROJECTION_CACHE = new ConcurrentHashMap<>();
 
-  public static RowDataQueryContext fromAvroSchema(Schema avroSchema) {
-    return fromAvroSchema(avroSchema, true);
+  public static RowDataQueryContext fromSchema(HoodieSchema schema) {
+    return fromSchema(schema, true);
   }
 
-  public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone) {
-    return QUERY_CONTEXT_MAP.computeIfAbsent(Pair.of(avroSchema, utcTimezone), k -> {
-      DataType dataType = AvroSchemaConverter.convertToDataType(avroSchema);
+  public static RowDataQueryContext fromSchema(HoodieSchema schema, boolean utcTimezone) {
+    return QUERY_CONTEXT_MAP.computeIfAbsent(Pair.of(schema, utcTimezone), k -> {
+      DataType dataType = HoodieSchemaConverter.convertToDataType(schema);
       RowType rowType = (RowType) dataType.getLogicalType();
       RowType.RowField[] rowFields = rowType.getFields().toArray(new RowType.RowField[0]);
       RowData.FieldGetter[] fieldGetters = new RowData.FieldGetter[rowFields.length];
@@ -72,18 +72,18 @@ public class RowDataAvroQueryContexts {
     });
   }
 
-  public static RowDataSerializer getRowDataSerializer(Schema avroSchema) {
-    return ROWDATA_SERIALIZER_CACHE.get().computeIfAbsent(avroSchema, schema -> {
-      RowType rowType = (RowType) fromAvroSchema(schema).getRowType().getLogicalType();
+  public static RowDataSerializer getRowDataSerializer(HoodieSchema schema) {
+    return ROWDATA_SERIALIZER_CACHE.get().computeIfAbsent(schema, providedSchema -> {
+      RowType rowType = (RowType) fromSchema(providedSchema).getRowType().getLogicalType();
       return new RowDataSerializer(rowType);
     });
   }
 
-  public static RowProjection getRowProjection(Schema from, Schema to, Map<String, String> renameCols) {
-    Triple<Schema, Schema, Map<String, String>> cacheKey = Triple.of(from, to, renameCols);
+  public static RowProjection getRowProjection(HoodieSchema from, HoodieSchema to, Map<String, String> renameCols) {
+    Triple<HoodieSchema, HoodieSchema, Map<String, String>> cacheKey = Triple.of(from, to, renameCols);
     return ROW_PROJECTION_CACHE.computeIfAbsent(cacheKey, key -> {
-      RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
-      RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
+      RowType fromType = (RowType) RowDataAvroQueryContexts.fromSchema(from).getRowType().getLogicalType();
+      RowType toType =  (RowType) RowDataAvroQueryContexts.fromSchema(to).getRowType().getLogicalType();
       return SchemaEvolvingRowDataProjection.instance(fromType, toType, renameCols);
     });
   }

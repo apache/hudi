@@ -67,7 +67,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieConfig config,
       HoodieSchema schema) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
-    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(schema.getAvroSchema()).getRowType().getLogicalType();
+    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromSchema(schema).getRowType().getLogicalType();
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(
             storage.getConf().unwrapAs(Configuration.class), rowType, null);
@@ -94,7 +94,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
-    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(schema.getAvroSchema()).getRowType().getLogicalType();
+    final RowType rowType = (RowType) RowDataAvroQueryContexts.fromSchema(schema).getRowType().getLogicalType();
     return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier);
   }
 

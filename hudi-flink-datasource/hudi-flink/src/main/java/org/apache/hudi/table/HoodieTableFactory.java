@@ -31,8 +31,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -436,7 +436,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private static void inferAvroSchema(Configuration conf, LogicalType rowType) {
     if (!conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()
         && !conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
-      String inferredSchema = AvroSchemaConverter.convertToSchema(rowType, AvroSchemaUtils.getAvroRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME))).toString();
+      String inferredSchema = HoodieSchemaConverter.convertToSchema(rowType, AvroSchemaUtils.getAvroRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME))).toString();
       conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
     }
   }
