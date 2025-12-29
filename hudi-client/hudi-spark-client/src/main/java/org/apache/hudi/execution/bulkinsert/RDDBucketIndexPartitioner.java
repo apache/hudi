@@ -19,15 +19,15 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.table.BucketIndexBulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -87,7 +87,7 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndCustomColumnSort(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     final String[] sortColumns = sortColumnNames;
-    final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
+    final SerializableSchema schema = new SerializableSchema(HoodieSchemaUtils.addMetadataFields((HoodieSchema.parse(table.getConfig().getSchema()))).getAvroSchema());
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
       FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(utf8StringFactory.wrapArrayOfObjects(
           t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled)));

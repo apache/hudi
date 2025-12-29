@@ -931,7 +931,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Override
     public Object getValue(InternalRow record, HoodieSchema schema, String fieldName) {
-      return getFieldValueFromInternalRow(record, schema.toAvroSchema(), fieldName);
+      return getFieldValueFromInternalRow(record, schema, fieldName);
     }
 
     @Override

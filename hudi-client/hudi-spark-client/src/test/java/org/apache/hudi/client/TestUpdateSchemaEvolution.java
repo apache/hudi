@@ -41,7 +41,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -145,8 +144,8 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
   }
 
   private List<HoodieRecord> buildUpdateRecords(String recordStr, String insertFileId, String schema) throws IOException {
-    Schema avroSchema = new Schema.Parser().parse(schema);
-    GenericRecord data = new GenericData.Record(avroSchema);
+    HoodieSchema hoodieSchema = HoodieSchema.parse(schema);
+    GenericRecord data = new GenericData.Record(hoodieSchema.getAvroSchema());
     Map<String, Object> json = JsonUtils.getObjectMapper().readValue(recordStr, Map.class);
     json.forEach(data::put);
     String key = json.get("_row_key").toString();

@@ -62,7 +62,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -520,15 +519,15 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
-      Schema writerSchema  =
-          TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath());
+      HoodieSchema writerSchema  =
+          HoodieSchema.fromAvroSchema(TableSchemaResolver.readSchemaFromLogFile(storage, logFile.getPath()));
       if (writerSchema == null) {
         // not a data block
         continue;
       }
 
       try (HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(storage,
-          new HoodieLogFile(pathInfoList.get(0).getPath()), HoodieSchema.fromAvroSchema(writerSchema))) {
+          new HoodieLogFile(pathInfoList.get(0).getPath()), writerSchema)) {
         while (logFileReader.hasNext()) {
           HoodieLogBlock logBlock = logFileReader.next();
           if (logBlock instanceof HoodieDataBlock) {

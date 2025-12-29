@@ -80,7 +80,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
-    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema.toAvroSchema)
+    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files

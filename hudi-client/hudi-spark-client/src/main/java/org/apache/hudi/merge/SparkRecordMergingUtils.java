@@ -145,7 +145,7 @@ public class SparkRecordMergingUtils {
    */
   public static Map<Integer, StructField> getCachedFieldIdToFieldMapping(HoodieSchema providedSchema) {
     return FIELD_ID_TO_FIELD_MAPPING_CACHE.computeIfAbsent(providedSchema, schema -> {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Map<Integer, StructField> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
 
@@ -164,7 +164,7 @@ public class SparkRecordMergingUtils {
    */
   public static Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema providedSchema) {
     return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(providedSchema, schema -> {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
 

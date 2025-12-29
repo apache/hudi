@@ -34,6 +34,9 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -53,7 +56,6 @@ import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -88,10 +90,10 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Properties properties = new Properties();
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
-    List<Schema.Field> fields = new ArrayList<>();
-    fields.add(new Schema.Field(FIELD_1, Schema.create(Schema.Type.STRING), null, null));
-    fields.add(new Schema.Field(FIELD_2, Schema.create(Schema.Type.STRING), null, null));
-    Schema simpleSchema = Schema.createRecord("simpleSchema", null, null, false, fields);
+    List<HoodieSchemaField> fields = new ArrayList<>();
+    fields.add(HoodieSchemaField.of(FIELD_1, HoodieSchema.create(HoodieSchemaType.STRING)));
+    fields.add(HoodieSchemaField.of(FIELD_2, HoodieSchema.create(HoodieSchemaType.STRING)));
+    HoodieSchema simpleSchema = HoodieSchema.createRecord("simpleSchema", null, null, false, fields);
 
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
@@ -106,7 +108,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
             .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
         .withTableServicesEnabled(true)
-        .withSchema(simpleSchema.toString())
+        .withSchema(simpleSchema.toAvroSchema().toString())
         .build();
 
     writeClient = getHoodieWriteClient(writeConfig);

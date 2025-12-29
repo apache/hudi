@@ -21,10 +21,9 @@ package org.apache.hudi.client.bootstrap;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.apache.avro.Schema;
 
 import java.util.List;
 
@@ -45,10 +44,10 @@ public abstract class HoodieBootstrapSchemaProvider {
    * @param partitions  List of partitions with files within them
    * @return Avro Schema
    */
-  public final Schema getBootstrapSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
+  public final HoodieSchema getBootstrapSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
     if (writeConfig.getSchema() != null) {
       // Use schema specified by user if set
-      Schema userSchema = new Schema.Parser().parse(writeConfig.getSchema());
+      HoodieSchema userSchema = HoodieSchema.parse(writeConfig.getSchema());
       if (!HoodieAvroUtils.getNullSchema().equals(userSchema)) {
         return userSchema;
       }
@@ -63,7 +62,7 @@ public abstract class HoodieBootstrapSchemaProvider {
    * @param partitions  List of partitions with files within them
    * @return Avro Schema
    */
-  protected abstract Schema getBootstrapSourceSchema(HoodieEngineContext context,
+  protected abstract HoodieSchema getBootstrapSourceSchema(HoodieEngineContext context,
       List<Pair<String, List<HoodieFileStatus>>> partitions);
 
 }

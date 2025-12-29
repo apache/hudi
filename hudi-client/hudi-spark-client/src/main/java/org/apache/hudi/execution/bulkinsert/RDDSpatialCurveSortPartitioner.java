@@ -89,7 +89,7 @@ public class RDDSpatialCurveSortPartitioner<T>
             return hoodieRecord;
           });
     } else if (recordType == HoodieRecordType.SPARK) {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Dataset<Row> sourceDataset = SparkConversionUtils.createDataFrame(records.rdd(),
           sparkEngineContext.getSqlContext().sparkSession(), structType);
       Dataset<Row> sortedDataset = reorder(sourceDataset, outputSparkPartitions);
