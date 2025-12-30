@@ -11,7 +11,7 @@ tags:
   - performance
 ---
 
-The Hudi community is excited to announce the [release of Hudi 1.1](https://hudi.apache.org/releases/release-1.1.1), a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.
+The Hudi community is excited to announce the [release of Hudi 1.1](https://hudi.apache.org/releases/release-1.1#release-111), a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.
 
 Hudi continues to evolve rapidly, with contributions from a vibrant community of developers and users. The 1.1 release brings over 800 commits addressing performance bottlenecks, expanding engine support, and introducing new capabilities that make Hudi tables more reliable, faster, and easier to operate. Let’s dive into the highlights.
 
@@ -153,7 +153,7 @@ The default behavior is adaptive: if no ordering field (`hoodie.table.ordering.f
 
 ### Custom Mergers—The Flexible Approach
 
-For complex merging logic—such as field-level reconciliation, aggregating counters, or preserving audit fields—the `HoodieRecordMerger` interface provides a modern, engine-native alternative to payload classes. You need to set the merge mode to `CUSTOM` and provide your own implementation of `HoodieRecordMerger`. By using the new API, you can achieve consistent merging across all code paths: precombine, updating writes, compaction, and snapshot reads—you are strongly encouraged to migrate to the new APIs. See [the docs](https://hudi.apache.org/docs/record_merger) for more details. For migration guidance, see the [release notes](https://hudi.apache.org/releases/release-1.1.1/) and [RFC-97](https://github.com/apache/hudi/pull/13499).
+For complex merging logic—such as field-level reconciliation, aggregating counters, or preserving audit fields—the `HoodieRecordMerger` interface provides a modern, engine-native alternative to payload classes. You need to set the merge mode to `CUSTOM` and provide your own implementation of `HoodieRecordMerger`. By using the new API, you can achieve consistent merging across all code paths: precombine, updating writes, compaction, and snapshot reads—you are strongly encouraged to migrate to the new APIs. See [the docs](https://hudi.apache.org/docs/record_merger) for more details. For migration guidance, see the [release notes](https://hudi.apache.org/releases/release-1.1#release-111) and [RFC-97](https://github.com/apache/hudi/pull/13499).
 
 ## Apache Spark Integration Improvements
 
@@ -235,4 +235,4 @@ Hudi 1.1 introduces [native integration with Polaris](https://hudi.apache.org/do
 
 The future of Hudi is incredibly exciting, and we're building it together with a vibrant, global community of contributors. Building on the strong foundation of 1.1, we're actively developing transformative AI/ML-focused capabilities for Hudi 1.2 and beyond—unstructured data types and column groups for efficient storage of embeddings and documents, Lance, Vortex, blob-optimized Parquet support, and vector search capabilities for lakehouse tables. This is just the beginning—we're reimagining what's possible in the lakehouse, from multi-format interoperability to next-generation AI/ML workloads, and we need your ideas, code, and creativity to make it happen.
 
-Join us in building the future. Check out the [1.1 release notes](https://hudi.apache.org/releases/release-1.1.1) to get started, join our [Slack space](https://hudi.apache.org/slack/), follow us on [LinkedIn](https://www.linkedin.com/company/apache-hudi) and [X (twitter)](http://x.com/apachehudi), and subscribe (send an empty email) to the [mailing list](mailto:dev@hudi.apache.org)—let's build the next generation of Hudi together.
+Join us in building the future. Check out the [1.1 release notes](https://hudi.apache.org/releases/release-1.1#release-111) to get started, join our [Slack space](https://hudi.apache.org/slack/), follow us on [LinkedIn](https://www.linkedin.com/company/apache-hudi) and [X (twitter)](http://x.com/apachehudi), and subscribe (send an empty email) to the [mailing list](mailto:dev@hudi.apache.org)—let's build the next generation of Hudi together.

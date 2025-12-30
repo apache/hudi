@@ -1,7 +1,16 @@
 ---
-title: "Release 1.1.1"
+title: "Release 1.1"
 layout: releases
 toc: true
+last_modified_at: 2024-05-02T18:00:00-08:00
+---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+This page contains release notes for all Apache Hudi 1.1.x releases, including:
+
+- [Release 1.1.1](#release-111)
+
 ---
 
 ## [Release 1.1.1](https://github.com/apache/hudi/releases/tag/release-1.1.1)
@@ -369,9 +378,3 @@ Bucket index now supports only UPSERT operations and cannot be used with append 
 As of this release, Hudi versions prior to 0.14.0 have reached end of life. Users on these older versions should plan to upgrade to 1.1.1 or later to receive ongoing support, bug fixes, and new features. The Hudi community will focus support efforts on versions 0.14.0 and later.
 
 For more details, see the [community discussion](https://github.com/apache/hudi/discussions/13847).
-
----
-
-## Contributors
-
-Hudi 1.1.1 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.

@@ -1,41 +1,48 @@
 ---
-title: "Release 1.0.0"
+title: "Release 1.0"
 layout: releases
 toc: true
 ---
-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0)
+This page contains release notes for all Apache Hudi 1.0.x releases, including:
 
-Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features 
+- [Release 1.0.0](#release-100)
+- [Release 1.0.1](#release-101)
+- [Release 1.0.2](#release-102)
+
+---
+
+## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) {#release-100}
+
+Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features
 as we will see below.
 
 ## Migration Guide
 
 We encourage users to try the **1.0.0** features on new tables first. The 1.0 general availability (GA) release will
 support automatic table upgrades from 0.x versions while also ensuring full backward compatibility when reading 0.x
-Hudi tables using 1.0, ensuring a seamless migration experience. 
+Hudi tables using 1.0, ensuring a seamless migration experience.
 
 This release comes with **backward compatible writes** i.e. 1.0.0 can write in both the table version 8 (latest) and older
 table version 6 (corresponds to 0.14 & above) formats. Automatic upgrades for tables from 0.x versions are fully
-supported, minimizing migration challenges. Until all the readers are upgraded, users can still deploy 1.0.0 binaries 
+supported, minimizing migration challenges. Until all the readers are upgraded, users can still deploy 1.0.0 binaries
 for the writers and leverage backward compatible writes to continue writing the tables in the older format. Once the readers
-are fully upgraded, users can switch to the latest format through a config change. We recommend users to follow the upgrade 
+are fully upgraded, users can switch to the latest format through a config change. We recommend users to follow the upgrade
 steps mentioned in the [migration guide](/docs/deployment#upgrading-to-100) to ensure a smooth transition.
 
 :::caution
-Most things are seamlessly handled by the auto upgrade process, but there are some limitations. Please read through the 
-limitations of the upgrade downgrade process before proceeding to migrate. Please check the [migration guide](/docs/deployment#upgrading-to-100) 
+Most things are seamlessly handled by the auto upgrade process, but there are some limitations. Please read through the
+limitations of the upgrade downgrade process before proceeding to migrate. Please check the [migration guide](/docs/deployment#upgrading-to-100)
 and [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#support-matrix-for-different-readers-and-writers) for more details.
 :::
 
 ## Bundle Updates
 
- - Same bundles supported in the [0.15.0 release](release-0.15.0#new-spark-bundles) are still supported.
- - New Flink Bundles to support Flink 1.19 and Flink 1.20.
- - In this release, we have deprecated support for Spark 3.2 or lower version in Spark 3.
+- Same bundles supported in the [0.15.0 release](release-0.15#new-spark-bundles) are still supported.
+- New Flink Bundles to support Flink 1.19 and Flink 1.20.
+- In this release, we have deprecated support for Spark 3.2 or lower version in Spark 3.
 
 ## Highlights
 
@@ -171,10 +178,91 @@ experience the new features and enhancements.
 
 ## Known Regressions
 - We discovered a regression in Hudi 1.0.0 release for backwards compatible writer for MOR table.
-It can silently deletes committed data after upgrade when new data is ingested to the table.
-- We also have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and multiple fields as partition fields.
+  It can silently deletes committed data after upgrade when new data is ingested to the table.
+- We also have a ComplexKeyGenerator related regression reported [here](release-0.14#known-regressions). Please refrain from migrating, if you have single field as record key and multiple fields as partition fields.
 
 :::tip
-Avoid upgrading any existing table to 1.0.0 if any of the above scenario matches your workload. Incase of backwards compatible writer for MOR table, you are good to upgrade to 1.0.2 release. 
+Avoid upgrading any existing table to 1.0.0 if any of the above scenario matches your workload. Incase of backwards compatible writer for MOR table, you are good to upgrade to 1.0.2 release.
 :::
 
+---
+
+## [Release 1.0.1](https://github.com/apache/hudi/releases/tag/release-1.0.1) {#release-101}
+
+## Migration Guide
+
+* This release (1.0.1) does not introduce any new table version, thus no migration is needed if you are on 1.0.0.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically
+  the upgrade instructions in [0.6.0](/releases/release-0.6.0),
+  [0.9.0](/releases/release-0.9.0), [0.10.0](/releases/release-0.10.0),
+  [0.11.0](/releases/release-0.11.0), [0.12.0](/releases/release-0.12.0), [0.13.0](/releases/release-0.13.0),
+  [0.14.0](/releases/release-0.14#release-0140) and [1.0.0](/releases/release-1.0#release-100)
+
+### Bug fixes
+
+1.0.1 release is mainly intended for bug fixes and stability. The fixes span across many components, including
+
+* Hudi Streamer
+* Spark SQL
+* Spark datasource writer
+* Table services
+* Backwards compatible writer
+* Flink engine
+* Unit, functional, integration tests and CI
+
+## Known Regressions
+We have a ComplexKeyGenerator related regression reported [here](release-0.14#known-regressions). Please refrain from migrating, if you have single field as record key and multiple partition fields.
+
+:::tip
+Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key configured.
+:::
+
+## Raw Release Notes
+
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12355195)
+
+:::tip
+1.0.1 release also contains all the new features and bug fixes from 1.0.0, of which the release notes are [here](/releases/release-1.0#release-100)
+:::
+
+---
+
+## [Release 1.0.2](https://github.com/apache/hudi/releases/tag/release-1.0.2) {#release-102}
+
+## Migration Guide
+
+* This release (1.0.2) does not introduce any new table version, thus no migration is needed if you are on 1.0.1.
+* If migrating from an older release, please check the migration guide from the previous release notes, specifically
+  the upgrade instructions in [0.6.0](/releases/release-0.6.0),
+  [0.9.0](/releases/release-0.9.0), [0.10.0](/releases/release-0.10.0),
+  [0.11.0](/releases/release-0.11.0), [0.12.0](/releases/release-0.12.0), [0.13.0](/releases/release-0.13.0),
+  [0.14.0](/releases/release-0.14#release-0140) and [1.0.0](/releases/release-1.0#release-100)
+
+### Bug fixes
+
+The 1.0.2 release primarily focuses on bug fixes, stability enhancements, and critical improvements, particularly around migration and backwards compatibility. The changes span across various components, including:
+
+* **Metadata Table (MDT):** Numerous fixes and improvements related to validation, writing, reading, compaction, indexing (column stats), and backwards compatibility (especially for table version 6).
+* **Spark Integration:** Enhancements and fixes for Spark SQL (MERGE INTO, query behavior), datasource reader/writer, schema handling, performance, and backward compatibility.
+* **Backwards Compatibility:** Significant effort ensuring compatibility with older table versions (specifically v6) and smoother upgrades from 0.x versions, including dedicated writers/readers.
+* **File Group Reader:** Validation, fixes, and feature completeness improvements, including making it default for table version 6.
+* **Flink Engine:** Fixes and improvements related to streamer checkpoints and bundle validation.
+* **Compaction and Table Services:** Fixes related to compaction scheduling, execution (especially with global index or RLI), archival, and cleanup.
+* **Indexing:** Fixes and enhancements for Column Stats, Record Level Index (RLI), and Bloom Filters.
+* **Performance:** Optimizations in areas like log file writing, schema reuse, and metadata initialization.
+* **Testing, CI, and Dependencies:** Fixes for flaky tests, improved code coverage, bundle validation, dependency cleanup (HBase removal), and extensive release testing.
+
+## Known Regressions
+We have a ComplexKeyGenerator related regression reported [here](release-0.14#known-regressions). Please refrain from migrating, if you have single field as record key and mutiple partition fields.
+
+:::tip
+Avoid upgrading any existing table to 1.0.2 if you are using ComplexKeyGenerator with single record key configured.
+:::
+
+## Raw Release Notes
+
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12355558)
+
+:::tip
+1.0.2 release also contains all the new features and bug fixes from 1.0.1, of which the release notes are [here](/releases/release-1.0#release-101)
+:::
