@@ -1,7 +1,7 @@
 ---
 title: "Apache Hudi - The Data Lake Platform"
 excerpt: "It's been called many things. But, we have always been building a data lake platform"
-author: vinoth
+authors: [vinoth-chandar]
 category: blog
 image: /assets/images/blog/hudi_streaming.png
 tags:
