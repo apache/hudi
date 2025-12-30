@@ -104,8 +104,8 @@ variables:
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
-  JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
-  SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
+  JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false'
+  SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -Dsurefire.failIfNoSpecifiedTests=false'
   JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}
   JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
   MVN_ARG_FUNCTIONAL_PACKAGE_TEST: "-Dtest=\"$(JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER)\""
@@ -380,8 +380,8 @@ stages:
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -pl hudi-utilities"
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
@@ -517,9 +517,9 @@ stages:
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -DfailIfNoTests=false $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -DfailIfNoTests=false  $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dsurefire.failIfNoSpecifiedTests=false $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dsurefire.failIfNoSpecifiedTests=false  $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:
