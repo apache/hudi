@@ -61,12 +61,12 @@
 <img src="https://hudi.apache.org/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/12-content-highlights.png" alt="drawing" style="width:100%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
 <p>Featured adoption stories:</p>
 <ul>
-<li class="">Uber: <a href="https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake" target="_blank" rel="noopener noreferrer" class="">From Batch to Streaming: Accelerating Data Freshness in Uber’s Data Lake</a></li>
-<li class="">Amazon: <a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi/" target="_blank" rel="noopener noreferrer" class="">Powering Amazon Unit Economics at Scale Using Apache Hudi</a></li>
-<li class="">Kuaishou: <a href="https://youtu.be/Iv-2Gj-sHOw?si=QGqbLKdE-NiZ8Jnj" target="_blank" rel="noopener noreferrer" class="">Hudi Lakehouse: The Evolution of Data Infrastructure for AI workloads</a></li>
-<li class="">Southwest Airlines: <a href="https://youtu.be/X3FW4IYmYE4?si=3rqNpu83pig5FJKU" target="_blank" rel="noopener noreferrer" class="">Modernizing Data Infrastructure using Apache Hudi</a></li>
-<li class="">Halodoc: <a href="https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency" target="_blank" rel="noopener noreferrer" class="">Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing &amp; Concurrency</a></li>
-<li class="">Uptycs: <a href="https://hudi.apache.org/blog/2025/03/26/uptycs/" target="_blank" rel="noopener noreferrer" class="">From Transactional Bottlenecks to Lightning-Fast Analytics</a></li>
+<li class=""><strong>Uber</strong>: <a href="https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake" target="_blank" rel="noopener noreferrer" class="">From Batch to Streaming: Accelerating Data Freshness in Uber's Data Lake</a></li>
+<li class=""><strong>Amazon</strong>: <a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi/" target="_blank" rel="noopener noreferrer" class="">Powering Amazon Unit Economics at Scale Using Apache Hudi</a></li>
+<li class=""><strong>Kuaishou</strong>: <a href="https://youtu.be/Iv-2Gj-sHOw?si=QGqbLKdE-NiZ8Jnj" target="_blank" rel="noopener noreferrer" class="">Hudi Lakehouse: The Evolution of Data Infrastructure for AI workloads</a></li>
+<li class=""><strong>Southwest Airlines</strong>: <a href="https://youtu.be/X3FW4IYmYE4?si=3rqNpu83pig5FJKU" target="_blank" rel="noopener noreferrer" class="">Modernizing Data Infrastructure using Apache Hudi</a></li>
+<li class=""><strong>Halodoc</strong>: <a href="https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency" target="_blank" rel="noopener noreferrer" class="">Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing &amp; Concurrency</a></li>
+<li class=""><strong>Uptycs</strong>: <a href="https://hudi.apache.org/blog/2025/03/26/uptycs/" target="_blank" rel="noopener noreferrer" class="">From Transactional Bottlenecks to Lightning-Fast Analytics</a></li>
 </ul>
 <p>The community also published noteworthy content:</p>
 <ul>
