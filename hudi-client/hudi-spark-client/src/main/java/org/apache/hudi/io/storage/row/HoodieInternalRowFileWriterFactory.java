@@ -21,9 +21,11 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
@@ -94,7 +96,13 @@ public class HoodieInternalRowFileWriterFactory {
                                                                            HoodieTable table,
                                                                            StructType structType)
       throws IOException {
-    return new HoodieInternalRowLanceWriter(path, structType, table.getStorage());
+    return new HoodieSparkLanceWriter(
+        path,
+        structType,
+        "0",  // instantTime unused for InternalRowFileWriter
+        new LocalTaskContextSupplier(),
+        table.getStorage(),
+        false);  // metadata pre-embedded by caller
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
