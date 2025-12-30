@@ -11,17 +11,17 @@ tags:
 
 <img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/00-og.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
-As we close out 2025, it's clear that this was a transformative year for Apache Hudi. The community continued to grow, delivered major advances in interoperability and performance, published "The Definitive Guide" book, and expanded our global reach through meetups, conferences, and growing adoption worldwide.
+As we close out 2025, it's clear that this has been a transformative year for Apache Hudi. The community continued to grow, delivered major advances in interoperability and performance, published "The Definitive Guide" book, and expanded our global reach through meetups, conferences, and adoption worldwide.
 
 ## Community and Growth
 
-2025 brought steady momentum in contributions and expanding community engagement.
+2025 brought steady momentum in contributions and community engagement.
 
 <img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/01-pr-history.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
 GitHub pull request activities remained steady throughout 2025, reflecting consistent development momentum. GitHub contributors reached over 500. Community engagement also grew — followers across social media platforms (LinkedIn, X, YouTube, and WeChat) increased to about 35,000, while Slack community users grew to close to 5,000.
 
-The project celebrated new milestones in contributor recognition. [Yue Zhang](https://people.apache.org/committer-index.html#zhangyue19921010) joined the Project Management Committee (PMC) for driving several major RFCs and features, evangelizing Hudi at meetups, and leading the effort to productionize hundreds of petabytes at JD.COM. [Tim Brown](https://people.apache.org/committer-index.html#timbrown) was nominated as a committer for modernizing read/write operations behind Hudi 1.1's performance gains. [Shawn Chang](https://people.apache.org/committer-index.html#schang) was nominated as a committer for strengthening Spark integration and expanding Hudi adoption on AWS EMR.
+The project celebrated new milestones in contributor recognition. [Yue Zhang](https://people.apache.org/committer-index.html#zhangyue19921010) was elected to the Project Management Committee (PMC) for driving several major RFCs and features, evangelizing Hudi at meetups, and leading the effort to productionize hundreds of petabytes at JD.COM. [Tim Brown](https://people.apache.org/committer-index.html#timbrown) was nominated as a committer for modernizing read/write operations behind Hudi 1.1's performance gains. [Shawn Chang](https://people.apache.org/committer-index.html#schang) was nominated as a committer for strengthening Spark integration and expanding Hudi adoption on AWS EMR.
 
 ## Development Highlights
 
@@ -31,7 +31,7 @@ The project celebrated new milestones in contributor recognition. [Yue Zhang](ht
 
 Performance saw major gains across the board. Parquet binary copy for clustering delivered 10-15x faster execution with 95% compute reduction. Apache Flink writer achieved 2-3x improved throughput with Avro conversion eliminated in the write path. Apache Spark metadata-table streaming ran ~18% faster for update-heavy workloads. Indexing enhancements — partitioned record index, partition-level bucket index, HFile caching, and Bloom filters — delivered up to 4x speedup for lookups on massive tables.
 
-Spark 4.0 and Flink 2.0 support were added. [Apache Polaris (Incubating)](https://polaris.apache.org/) catalog integration enabled multi-engine queries with unified governance. Operational simplicity improved with storage-based locking that eliminated external dependencies. New merge modes replaced legacy payload classes with declarative options, and SQL procedures enhanced table management directly in Spark SQL. See more details in the [release blog](https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement/).
+Spark 4.0 and Flink 2.0 support was added. [Apache Polaris (Incubating)](https://polaris.apache.org/) catalog integration enabled multi-engine queries with unified governance. Operational simplicity improved with storage-based locking that eliminated external dependencies. New merge modes replaced legacy payload classes with declarative options, and SQL procedures enhanced table management directly in Spark SQL. See more details in the [release blog](https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement/).
 
 [Hudi-rs](https://github.com/apache/hudi-rs) expanded its feature support — release 0.3.0 introduced Merge-on-Read and incremental queries, while 0.4.0 added C++ bindings and Avro log file support. The native Rust implementation now powers Ray Data and Daft integrations for ML and multi-cloud analytics.
 
@@ -67,7 +67,7 @@ JD.com hosted the [second Asia meetup](https://hudi.apache.org/blog/2025/12/01/a
 
 ### CMU Database Seminar
 
-Vinoth Chandar, Hudi PMC Chair, presented "[Apache Hudi: A Database Layer Over Cloud Storage for Fast Mutations & Queries](https://youtu.be/AYaw06_Xazo)" at Carnegie Mellon University's [Future Data Systems Seminar](https://db.cs.cmu.edu/events/futuredata-apache-hudi/). The talk covered how Hudi brings database-like abstractions to data lakes — enabling efficient mutations, transaction management, and fast incremental reads through storage layout, indexing, and concurrency control design decisions. A must-watch for learning Hudi's design concepts and what problems it solves, covering both breadth and depth.
+Vinoth Chandar, Hudi PMC Chair, presented "[Apache Hudi: A Database Layer Over Cloud Storage for Fast Mutations & Queries](https://youtu.be/AYaw06_Xazo)" at Carnegie Mellon University's [Future Data Systems Seminar](https://db.cs.cmu.edu/events/futuredata-apache-hudi/). The talk covered how Hudi brings database-like abstractions to data lakes — enabling efficient mutations, transaction management, and fast incremental reads through storage layout, indexing, and concurrency control design decisions. A must-watch that covers both the breadth and depth of Hudi's design concepts and what problems it solves.
 
 <img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/07-cmu-talk.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
