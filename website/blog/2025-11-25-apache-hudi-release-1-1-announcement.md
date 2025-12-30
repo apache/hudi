@@ -13,7 +13,7 @@ tags:
 
 The Hudi community is excited to announce the [release of Hudi 1.1](https://hudi.apache.org/releases/release-1.1#release-111), a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.
 
-Hudi continues to evolve rapidly, with contributions from a vibrant community of developers and users. The 1.1 release brings over 700 commits addressing performance bottlenecks, expanding engine support, and introducing new capabilities that make Hudi tables more reliable, faster, and easier to operate. Let’s dive into the highlights.
+Hudi continues to evolve rapidly, with contributions from a vibrant community of developers and users. The 1.1 release brings over 800 commits addressing performance bottlenecks, expanding engine support, and introducing new capabilities that make Hudi tables more reliable, faster, and easier to operate. Let’s dive into the highlights.
 
 ## Pluggable Table Format—The Foundation for Multi-Format Support
 
