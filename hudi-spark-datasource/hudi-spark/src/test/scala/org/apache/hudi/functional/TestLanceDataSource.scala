@@ -29,7 +29,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 
-import scala.jdk.CollectionConverters.asScalaIteratorConverter
+import scala.collection.JavaConverters._
 
 /**
  * Basic functional tests for Lance file format with Hudi Spark datasource.
@@ -165,38 +165,45 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .format("hudi")
       .load(tablePath)
       .where("age > 30")
-      .orderBy("id")
-      .collect()
+      .select("id", "name", "age", "score")
 
-    assertEquals(2, filteredByAge.length, "Should filter to 2 records with age > 30")
-    assertEquals("Charlie", filteredByAge(0).getAs[String]("name"))
-    assertEquals(35, filteredByAge(0).getAs[Int]("age"))
-    assertEquals("Eve", filteredByAge(1).getAs[String]("name"))
-    assertEquals(32, filteredByAge(1).getAs[Int]("age"))
+    val expectedFilteredByAge = spark.createDataFrame(Seq(
+      (3, "Charlie", 35, 92.1),
+      (5, "Eve", 32, 91.4)
+    )).toDF("id", "name", "age", "score")
+
+    assertTrue(expectedFilteredByAge.except(filteredByAge).isEmpty)
+    assertTrue(filteredByAge.except(expectedFilteredByAge).isEmpty)
 
     // Test 2: WHERE clause on string column
     val filteredByName = spark.read
       .format("hudi")
       .load(tablePath)
       .where("name = 'Bob'")
-      .collect()
+      .select("id", "name", "age", "score")
 
-    assertEquals(1, filteredByName.length, "Should filter to 1 record with name = Bob")
-    assertEquals(2, filteredByName(0).getAs[Int]("id"))
-    assertEquals(25, filteredByName(0).getAs[Int]("age"))
+    val expectedFilteredByName = spark.createDataFrame(Seq(
+      (2, "Bob", 25, 87.3)
+    )).toDF("id", "name", "age", "score")
+
+    assertTrue(expectedFilteredByName.except(filteredByName).isEmpty)
+    assertTrue(filteredByName.except(expectedFilteredByName).isEmpty)
 
     // Test 3: Complex WHERE with multiple conditions
     val filteredComplex = spark.read
       .format("hudi")
       .load(tablePath)
       .where("age >= 28 AND score > 90")
-      .orderBy("id")
-      .collect()
+      .select("id", "name", "age", "score")
 
-    assertEquals(3, filteredComplex.length, "Should filter to 3 records")
-    assertEquals("Alice", filteredComplex(0).getAs[String]("name"))
-    assertEquals("Charlie", filteredComplex(1).getAs[String]("name"))
-    assertEquals("Eve", filteredComplex(2).getAs[String]("name"))
+    val expectedFilteredComplex = spark.createDataFrame(Seq(
+      (1, "Alice", 30, 95.5),
+      (3, "Charlie", 35, 92.1),
+      (5, "Eve", 32, 91.4)
+    )).toDF("id", "name", "age", "score")
+
+    assertTrue(expectedFilteredComplex.except(filteredComplex).isEmpty)
+    assertTrue(filteredComplex.except(expectedFilteredComplex).isEmpty)
   }
 
   @Test
@@ -274,7 +281,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(3, commitCount, "Should have 3 completed commits (one per insert)")
 
     // Verify that all commits are bulk_insert commits
-    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala.toList
     assertEquals(3, commits.size, "Should have exactly 3 commits")
 
     // Check that each commit is a COMMIT action (bulk_insert creates COMMIT actions)
@@ -287,31 +294,22 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .format("hudi")
       .load(tablePath)
 
-    val result = readDf.select("id", "name", "age", "score")
-      .orderBy("id")
-      .collect()
+    val actual = readDf.select("id", "name", "age", "score")
 
-    // Verify we have all 9 records
-    assertEquals(9, result.length, "Should read 9 records from all 3 inserts")
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1),
+      (4, "David", 28, 88.9),
+      (5, "Eve", 32, 91.4),
+      (6, "Frank", 27, 85.7),
+      (7, "Grace", 29, 93.2),
+      (8, "Henry", 31, 89.6),
+      (9, "Iris", 26, 94.8)
+    )).toDF("id", "name", "age", "score")
 
-    // Spot check a few records from each insert
-    // From first insert
-    assertEquals(1, result(0).getInt(0))
-    assertEquals("Alice", result(0).getString(1))
-    assertEquals(30, result(0).getInt(2))
-    assertEquals(95.5, result(0).getDouble(3), 0.01)
-
-    // From second insert
-    assertEquals(5, result(4).getInt(0))
-    assertEquals("Eve", result(4).getString(1))
-    assertEquals(32, result(4).getInt(2))
-    assertEquals(91.4, result(4).getDouble(3), 0.01)
-
-    // From third insert
-    assertEquals(9, result(8).getInt(0))
-    assertEquals("Iris", result(8).getString(1))
-    assertEquals(26, result(8).getInt(2))
-    assertEquals(94.8, result(8).getDouble(3), 0.01)
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 
   @Test
@@ -365,7 +363,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .setBasePath(tablePath)
       .build()
 
-    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala.toList
     assertEquals(2, commits.size, "Should have 2 commits after second insert")
     val secondCommitTime = commits(1).requestedTime()
 
@@ -395,23 +393,19 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .option("as.of.instant", secondCommitTime)
       .load(tablePath)
 
-    val result = timeTravelDf.select("id", "name", "age", "score")
-      .orderBy("id")
-      .collect()
+    val actual = timeTravelDf.select("id", "name", "age", "score")
 
-    // Verify we have exactly 6 records (from first two commits)
-    assertEquals(6, result.length, "Should read 6 records from first two commits")
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1),
+      (4, "David", 28, 88.9),
+      (5, "Eve", 32, 91.4),
+      (6, "Frank", 27, 85.7)
+    )).toDF("id", "name", "age", "score")
 
-    // Verify we have records 1-6 (not 7-9 from third commit)
-    for (i <- 0 until 6) {
-      assertEquals(i + 1, result(i).getInt(0), s"Record $i should have id ${i + 1}")
-    }
-
-    // Spot check a couple of records
-    assertEquals("Alice", result(0).getString(1))
-    assertEquals(95.5, result(0).getDouble(3), 0.01)
-    assertEquals("Frank", result(5).getString(1))
-    assertEquals(85.7, result(5).getDouble(3), 0.01)
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 
   @Test
@@ -469,7 +463,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(2, commitCount, "Should have 2 completed commits (one per insert)")
 
     // Verify that all commits are insert commits
-    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala.toList
     assertEquals(2, commits.size, "Should have exactly 2 commits")
 
     // Check that each commit is a COMMIT action (insert creates COMMIT actions)
@@ -482,34 +476,19 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .format("hudi")
       .load(tablePath)
 
-    val result = readDf.select("id", "name", "age", "score")
-      .orderBy("id")
-      .collect()
+    val actual = readDf.select("id", "name", "age", "score")
 
-    // Verify we have all 6 records
-    assertEquals(6, result.length, "Should read 6 records from both inserts")
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1),
+      (4, "David", 28, 88.9),
+      (5, "Eve", 32, 91.4),
+      (6, "Frank", 27, 85.7)
+    )).toDF("id", "name", "age", "score")
 
-    // Spot check records from first insert
-    assertEquals(1, result(0).getInt(0))
-    assertEquals("Alice", result(0).getString(1))
-    assertEquals(30, result(0).getInt(2))
-    assertEquals(95.5, result(0).getDouble(3), 0.01)
-
-    assertEquals(3, result(2).getInt(0))
-    assertEquals("Charlie", result(2).getString(1))
-    assertEquals(35, result(2).getInt(2))
-    assertEquals(92.1, result(2).getDouble(3), 0.01)
-
-    // Spot check records from second insert
-    assertEquals(4, result(3).getInt(0))
-    assertEquals("David", result(3).getString(1))
-    assertEquals(28, result(3).getInt(2))
-    assertEquals(88.9, result(3).getDouble(3), 0.01)
-
-    assertEquals(6, result(5).getInt(0))
-    assertEquals("Frank", result(5).getString(1))
-    assertEquals(27, result(5).getInt(2))
-    assertEquals(85.7, result(5).getDouble(3), 0.01)
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 
   @Test
@@ -585,34 +564,17 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Read and verify data
     val readDf = spark.read.format("hudi").load(tablePath)
-    val result = readDf.select("id", "name", "age", "score").orderBy("id").collect()
+    val actual = readDf.select("id", "name", "age", "score")
 
-    // Should have exactly 4 records (no duplicates)
-    assertEquals(4, result.length, "Should have exactly 4 records after second upsert")
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice", 45, 98.5),
+      (2, "Bob", 40, 95.0),
+      (3, "Charlie", 35, 92.1),
+      (4, "David", 28, 88.0)
+    )).toDF("id", "name", "age", "score")
 
-    // Verify Alice was updated
-    assertEquals(1, result(0).getInt(0))
-    assertEquals("Alice", result(0).getString(1))
-    assertEquals(45, result(0).getInt(2), "Alice's age should be updated to 45")
-    assertEquals(98.5, result(0).getDouble(3), 0.01, "Alice's score should be updated to 98.5")
-
-    // Verify Bob was updated (from first upsert)
-    assertEquals(2, result(1).getInt(0))
-    assertEquals("Bob", result(1).getString(1))
-    assertEquals(40, result(1).getInt(2), "Bob's age should be updated to 40")
-    assertEquals(95.0, result(1).getDouble(3), 0.01, "Bob's score should be updated to 95.0")
-
-    // Verify Charlie unchanged
-    assertEquals(3, result(2).getInt(0))
-    assertEquals("Charlie", result(2).getString(1))
-    assertEquals(35, result(2).getInt(2))
-    assertEquals(92.1, result(2).getDouble(3), 0.01)
-
-    // Verify David was inserted
-    assertEquals(4, result(3).getInt(0))
-    assertEquals("David", result(3).getString(1))
-    assertEquals(28, result(3).getInt(2))
-    assertEquals(88.0, result(3).getDouble(3), 0.01)
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 
   @Test
@@ -673,33 +635,16 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Read and verify data
     val readDf = spark.read.format("hudi").load(tablePath)
-    val result = readDf.select("id", "name", "age", "score").orderBy("id").collect()
+    val actual = readDf.select("id", "name", "age", "score")
 
-    // Should have exactly 3 records (5 original - 2 deleted)
-    assertEquals(3, result.length, "Should have exactly 3 records after delete")
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice", 30, 95.5),
+      (3, "Charlie", 35, 92.1),
+      (5, "Eve", 32, 91.4)
+    )).toDF("id", "name", "age", "score")
 
-    // Verify Alice is still present
-    assertEquals(1, result(0).getInt(0))
-    assertEquals("Alice", result(0).getString(1))
-    assertEquals(30, result(0).getInt(2))
-    assertEquals(95.5, result(0).getDouble(3), 0.01)
-
-    // Verify Bob (id=2) was deleted - Charlie should be second record now
-    assertEquals(3, result(1).getInt(0), "Second record should be Charlie (id=3) after Bob was deleted")
-    assertEquals("Charlie", result(1).getString(1))
-    assertEquals(35, result(1).getInt(2))
-    assertEquals(92.1, result(1).getDouble(3), 0.01)
-
-    // Verify David (id=4) was deleted - Eve should be third record now
-    assertEquals(5, result(2).getInt(0), "Third record should be Eve (id=5) after David was deleted")
-    assertEquals("Eve", result(2).getString(1))
-    assertEquals(32, result(2).getInt(2))
-    assertEquals(91.4, result(2).getDouble(3), 0.01)
-
-    // Verify Bob and David are NOT in the results
-    val ids = result.map(_.getInt(0)).toSet
-    assert(!ids.contains(2), "Bob (id=2) should be deleted")
-    assert(!ids.contains(4), "David (id=4) should be deleted")
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 
   @Test
@@ -753,7 +698,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .setBasePath(tablePath)
       .build()
 
-    val commitsAfterSecond = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val commitsAfterSecond = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala.toList
     assertEquals(2, commitsAfterSecond.size, "Should have 2 commits after second insert")
     val secondCommitTime = commitsAfterSecond(1).getCompletionTime
 
@@ -779,7 +724,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Reload metaClient to get latest commits
     metaClient.reloadActiveTimeline()
-    val allCommits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val allCommits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala.toList
     assertEquals(3, allCommits.size, "Should have 3 commits after third insert")
     val thirdCommitTime = allCommits(2).getCompletionTime
 
@@ -791,27 +736,15 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .option("hoodie.datasource.read.end.instanttime", thirdCommitTime)
       .load(tablePath)
 
-    val result = incrementalDf.select("id", "name", "age", "score")
-      .orderBy("id")
-      .collect()
+    val actual = incrementalDf.select("id", "name", "age", "score")
 
-    // Verify we have exactly 3 records (only from third commit)
-    assertEquals(3, result.length, "Should only read last 3 records from incremental query (c2 to c3)")
+    val expectedDf = spark.createDataFrame(Seq(
+      (7, "Grace", 29, 93.2),
+      (8, "Henry", 31, 89.6),
+      (9, "Iris", 26, 94.8)
+    )).toDF("id", "name", "age", "score")
 
-    // Verify we have records 7-9 (from third commit only)
-    assertEquals(7, result(0).getInt(0))
-    assertEquals("Grace", result(0).getString(1))
-    assertEquals(29, result(0).getInt(2))
-    assertEquals(93.2, result(0).getDouble(3), 0.01)
-
-    assertEquals(8, result(1).getInt(0))
-    assertEquals("Henry", result(1).getString(1))
-    assertEquals(31, result(1).getInt(2))
-    assertEquals(89.6, result(1).getDouble(3), 0.01)
-
-    assertEquals(9, result(2).getInt(0))
-    assertEquals("Iris", result(2).getString(1))
-    assertEquals(26, result(2).getInt(2))
-    assertEquals(94.8, result(2).getDouble(3), 0.01)
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
 }
