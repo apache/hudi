@@ -364,7 +364,7 @@ class HoodieSparkSqlWriterInternal {
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas
       val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s =>
-        (s.getName, toScalaOption(s.getNamespace).orNull(null)))
+        (s.getName, toScalaOption(s.getNamespace).orNull))
         .getOrElse(getRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToHoodieSchema(df.schema, avroRecordName, avroRecordNamespace)

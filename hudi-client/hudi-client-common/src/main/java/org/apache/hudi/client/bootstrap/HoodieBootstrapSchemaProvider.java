@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -48,7 +47,7 @@ public abstract class HoodieBootstrapSchemaProvider {
     if (writeConfig.getSchema() != null) {
       // Use schema specified by user if set
       HoodieSchema userSchema = HoodieSchema.parse(writeConfig.getSchema());
-      if (!HoodieAvroUtils.getNullSchema().equals(userSchema)) {
+      if (!HoodieSchema.NULL_SCHEMA.equals(userSchema)) {
         return userSchema;
       }
     }
