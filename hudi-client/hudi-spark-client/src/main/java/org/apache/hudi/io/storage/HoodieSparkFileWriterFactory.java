@@ -109,7 +109,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newLanceFileWriter(String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
                                                 TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.getAvroSchema());
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
 
     return new HoodieSparkLanceWriter(path, structType, instantTime, taskContextSupplier, storage, populateMetaFields);
   }
