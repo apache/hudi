@@ -31,7 +31,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.AccessLevel;
@@ -150,7 +149,7 @@ public class WriteProfiles {
       case COPY_ON_WRITE:
         return metadata.getFileIdToInfo(basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToInfo(new HoodieHadoopStorage(basePath, hadoopConf), basePath);
+        return metadata.getFullPathToInfo(HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf)), basePath);
       default:
         throw new AssertionError();
     }

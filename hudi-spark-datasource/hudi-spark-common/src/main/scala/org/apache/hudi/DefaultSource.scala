@@ -31,7 +31,6 @@ import org.apache.hudi.exception.{HoodieException, HoodieSchemaNotFoundException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
@@ -232,7 +231,7 @@ class DefaultSource extends RelationProvider
     val storageConf = HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf())
     val tablePath: StoragePath = {
       val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-      val fs = new HoodieHadoopStorage(path, storageConf)
+      val fs = HoodieStorageUtils.getStorage(path, storageConf)
       TablePathUtils.getTablePath(fs, path).get()
     }
     val metaClient = HoodieTableMetaClient.builder()

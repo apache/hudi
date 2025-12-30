@@ -27,9 +27,10 @@ import org.apache.hudi.common.table.{HoodieTableConfig, ParquetTableSchemaResolv
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieIOFactory
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
@@ -309,7 +310,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   }
 
   private def getListType(hadoopConf: Configuration, path: StoragePath): String = {
-    val reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, new HadoopStorageConfiguration(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
+    val reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, HadoopFSUtils.getStorageConf(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
     //TODO boundary to revisit in later pr to use HoodieSchema directly
     val schema = ParquetTableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema.toAvroSchema, hadoopConf)
 
