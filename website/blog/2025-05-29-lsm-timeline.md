@@ -1,7 +1,7 @@
 ---
 title: "Exploring Apache Hudi’s New Log-Structured Merge (LSM) Timeline"
 excerpt: "What is the new LSM timeline in Hudi & how is it implemented"
-author: Dipankar Mazumdar
+authors: [dipankar-mazumdar]
 category: blog
 image: /assets/images/blog/lsm-1200x600.jpg
 tags:

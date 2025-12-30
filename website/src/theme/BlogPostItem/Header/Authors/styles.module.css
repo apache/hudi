@@ -1,22 +1,21 @@
-.authorCol {
-  max-width: inherit !important;
-}
-
-.imageOnlyAuthorRow {
-  display: flex;
-  flex-flow: row wrap;
-}
-
-.imageOnlyAuthorCol {
-  margin-left: 0.3rem;
-  margin-right: 0.3rem;
-}
-
 .authorWrapper {
   margin-left: 10px;
-  .avatar__name {
-    span {
-      font-weight: 600 !important;
-    }
-  }
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.authorImage {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.authorName {
+  font-weight: 600;
+  font-size: 1.1rem;
 }
