@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
@@ -60,7 +59,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
           if (PARQUET.getFileExtension().equals(extension)) {
             return getBootstrapSourceSchemaParquet(writeConfig, context, filePath);
           } else if (ORC.getFileExtension().equals(extension)) {
-            return HoodieSchema.fromAvroSchema(getBootstrapSourceSchemaOrc(writeConfig, context, filePath));
+            return getBootstrapSourceSchemaOrc(writeConfig, context, filePath);
           } else {
             throw new HoodieException("Could not determine schema from the data files, supported file formats: [ORC, PARQUET].");
           }
@@ -89,7 +88,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(parquetSchema, structName, recordNamespace);
   }
 
-  private static Schema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
+  private static HoodieSchema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
     Reader orcReader = null;
     try {
       orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions(context.getStorageConf().unwrapAs(Configuration.class)));
@@ -100,7 +99,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
-    return AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true);
+    return HoodieSchema.fromAvroSchema(AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true));
   }
   
 }

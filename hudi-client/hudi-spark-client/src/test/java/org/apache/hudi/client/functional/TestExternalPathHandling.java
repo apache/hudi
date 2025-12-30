@@ -108,7 +108,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
             .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
         .withTableServicesEnabled(true)
-        .withSchema(simpleSchema.toAvroSchema().toString())
+        .withSchema(simpleSchema.toString())
         .build();
 
     writeClient = getHoodieWriteClient(writeConfig);
