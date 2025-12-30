@@ -32,7 +32,6 @@ import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -120,7 +119,8 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
         return Pair.of(false, null);
       }
 
-      if (schema.getType() == HoodieSchemaType.FIXED && value instanceof List<?>) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
+      if (decimalSchema.isFixed() && value instanceof List<?>) {
         // Case 1: Input is a list. It is expected to be raw Fixed byte array input, and we only support
         // parsing it to Fixed type.
         JsonFieldProcessor processor = generateFixedTypeHandler();
@@ -142,7 +142,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
       }
 
       // Case 2: Input is a number or String number or base64 encoded string number
-      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, schema);
+      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, decimalSchema);
       return Pair.of(parseResult.getLeft(), parseResult.getRight());
     }
   }

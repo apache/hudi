@@ -294,7 +294,7 @@ public class MercifulJsonConverter {
 
       // Case 2: Input is a number or String number.
       LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.toAvroSchema().getLogicalType();
-      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, schema);
+      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, decimalSchema);
       if (Boolean.FALSE.equals(parseResult.getLeft())) {
         return Pair.of(false, null);
       }
