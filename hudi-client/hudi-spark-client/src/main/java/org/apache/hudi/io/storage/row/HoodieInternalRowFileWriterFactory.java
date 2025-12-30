@@ -99,10 +99,8 @@ public class HoodieInternalRowFileWriterFactory {
     return new HoodieSparkLanceWriter(
         path,
         structType,
-        "0",  // instantTime unused for InternalRowFileWriter
         new LocalTaskContextSupplier(),
-        table.getStorage(),
-        false);  // metadata pre-embedded by caller
+        table.getStorage());
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {

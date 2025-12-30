@@ -92,6 +92,22 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     };
   }
 
+  /**
+   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata.
+   *
+   * @param file Path where Lance file will be written
+   * @param sparkSchema Spark schema for the data
+   * @param taskContextSupplier Task context supplier for partition ID
+   * @param storage HoodieStorage instance
+   * @throws IOException if writer initialization fails
+   */
+  public HoodieSparkLanceWriter(StoragePath file,
+                                StructType sparkSchema,
+                                TaskContextSupplier taskContextSupplier,
+                                HoodieStorage storage) throws IOException {
+    this(file, sparkSchema, "0", taskContextSupplier, storage, false);
+  }
+
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
     if (populateMetaFields) {
