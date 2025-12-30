@@ -95,6 +95,7 @@
 <p>A huge thank you to everyone who contributed to Hudi's growth this year. With such a strong foundation, 2026 promises to be our most exciting year yet.</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="apache hudi" term="apache hudi"/>
         <category label="community" term="community"/>
@@ -293,6 +294,7 @@
 <p>The result: maximum throughput for concurrent writes in Hudi pipelines. Long-running jobs complete without being starved, multiple ingestion pipelines coexist without contention, and your data platform scales without coordination overhead. Stop retrying, start scaling—see <a href="https://hudi.apache.org/docs/overview" target="_blank" rel="noopener noreferrer" class="">the docs</a> to get started.</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="data lakehouse" term="data lakehouse"/>
@@ -410,6 +412,7 @@
 <p>The optimizations in Hudi 1.1 around writer performance for Flink have brought significant, multi-fold improvements to streaming ingestion throughput. These enhancements are transparent and backward-compatible, allowing users to seamlessly upgrade their jobs from earlier Hudi versions to the latest version and enjoy the substantial performance gains without any additional operational overhead.</p>]]></content>
         <author>
             <name>Shuo Cheng</name>
+            <uri>https://www.linkedin.com/in/shuo-cheng-317b82aa/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="flink" term="flink"/>
@@ -609,6 +612,7 @@
 <p>Join us in building the future. Check out the <a href="https://hudi.apache.org/releases/release-1.1#release-111" target="_blank" rel="noopener noreferrer" class="">1.1 release notes</a> to get started, join our <a href="https://hudi.apache.org/slack/" target="_blank" rel="noopener noreferrer" class="">Slack space</a>, follow us on <a href="https://www.linkedin.com/company/apache-hudi" target="_blank" rel="noopener noreferrer" class="">LinkedIn</a> and <a href="http://x.com/apachehudi" target="_blank" rel="noopener noreferrer" class="">X (twitter)</a>, and subscribe (send an empty email) to the <a href="mailto:dev@hudi.apache.org" target="_blank" rel="noopener noreferrer" class="">mailing list</a>—let's build the next generation of Hudi together.</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="release" term="release"/>
@@ -686,6 +690,7 @@
 <p>As Hudi continues to evolve, the indexing subsystem is designed for extensibility. Upcoming features like the bitmap index for low-cardinality columns and vector search index for AI workloads will further expand its capabilities. By understanding these indexing patterns and following the configuration guidelines in this series, you can build lakehouse tables that deliver the query performance your analytics and data pipelines demand.</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="indexing" term="indexing"/>
@@ -874,6 +879,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>In practice, the defaults are a strong starting point. Keep the metadata table enabled and explicitly list only the columns you frequently filter on via <code>hoodie.metadata.index.column.stats.column.list</code> to control metadata overhead. In <a href="https://hudi.apache.org/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2/" target="_blank" rel="noopener noreferrer" class="">part 2</a>, we’ll go deeper into accelerating equality‑matching and expression‑based predicates using the record, secondary, and expression indexes, and discuss how asynchronous index maintenance keeps writers unblocked while indexes build in the background.</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="indexing" term="indexing"/>
@@ -937,7 +943,12 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/10/22/Partition_Stats_Enhancing_Column_Stats_in_Hudi_1.0#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
 <p>The new partition stats index is a powerful addition to Hudi's multimodal indexing subsystem, directly addressing the challenge of query performance on large-scale partitioned tables. By working in concert with the existing column stats index, it provides a crucial layer of coarse-grained pruning, allowing the query engine to eliminate entire partitions from consideration <em>before</em> inspecting individual files. As our benchmark showed, this two-level pruning strategy—first by partition, then by file—is not just a minor tweak. It results in a dramatic reduction in I/O, slashing query runtimes by over 93% and enabling near-interactive query speeds. This feature solidifies Hudi's data-skipping capabilities, making it even more efficient to run demanding analytical queries directly on the data lakehouse, saving both time and computation costs.</p>]]></content>
         <author>
-            <name>Aditya Goenka and Shiyan Xu</name>
+            <name>Aditya Goenka</name>
+            <uri>https://www.linkedin.com/in/aditya-goenka-66a7b448/</uri>
+        </author>
+        <author>
+            <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="indexing" term="indexing"/>
@@ -1183,6 +1194,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>Hudi’s first-class support for record keys provides a database-like experience for lakehouses, enabling powerful features such as record-level indexing, merge modes, and CDC. The introduction of automatic record key generation thoughtfully extends the record key support, removing a barrier for teams performing append-only writes. By following the design principles of uniqueness, idempotency, and efficiency, the feature allows more users to easily adopt Hudi and benefit from its rich set of lakehouse capabilities without the initial overhead of manual key generation. This enhancement reinforces Hudi’s position as a versatile and user-friendly platform for building modern data lakehouses.</p>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="hudi" term="hudi"/>
         <category label="record key generation" term="record key generation"/>
@@ -1198,6 +1210,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/building-a-rag-based-ai-recommender-147">here</a></span>]]></content>
         <author>
             <name>Shiyan Xu</name>
+            <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
         <category label="blog" term="blog"/>
         <category label="Apache Hudi" term="Apache Hudi"/>
@@ -1371,6 +1384,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <hr>]]></content>
         <author>
             <name>Dipankar Mazumdar</name>
+            <uri>https://www.linkedin.com/in/dipankar-mazumdar/</uri>
         </author>
         <category label="Apache Hudi" term="Apache Hudi"/>
         <category label="Merge-on-Read (MoR)" term="Merge-on-Read (MoR)"/>

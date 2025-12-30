@@ -12,7 +12,8 @@
             "summary": "As we close out 2025, it's clear that this has been a transformative year for Apache Hudi. The community continued to grow, delivered major advances in interoperability and performance, published \"The Definitive Guide\" book, and expanded our global reach through meetups, conferences, and adoption worldwide.",
             "date_modified": "2025-12-29T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "apache hudi",
@@ -44,7 +45,8 @@
             "summary": "Data lakehouses often run multiple concurrent writers—streaming ingestion, batch ETL, maintenance jobs. The default approach, Optimistic Concurrency Control (OCC), assumes conflicts are rare and handles them through retries. That assumption breaks down in increasingly common scenarios, such as running maintenance batch jobs on tables receiving streaming writes. When conflicts become the norm, retries pile up with OCC, and the write throughput tanks.",
             "date_modified": "2025-12-16T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "hudi",
@@ -79,7 +81,8 @@
             "summary": "---",
             "date_modified": "2025-12-10T00:00:00.000Z",
             "author": {
-                "name": "Shuo Cheng"
+                "name": "Shuo Cheng",
+                "url": "https://www.linkedin.com/in/shuo-cheng-317b82aa/"
             },
             "tags": [
                 "hudi",
@@ -151,7 +154,8 @@
             "summary": "The Hudi community is excited to announce the release of Hudi 1.1, a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.",
             "date_modified": "2025-11-25T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "hudi",
@@ -168,7 +172,8 @@
             "summary": "In part 1, we explored how Hudi's metadata table functions as a self-managed, multimodal indexing subsystem. We covered its internal architecture—a partitioned Hudi Merge-on-Read (MOR) table using HFile format for efficient key lookups—and how the files, column stats, and partition stats indexes work together to implement powerful data skipping. These indexes dramatically reduce I/O by pruning partitions and files that don't contain the data your query needs.",
             "date_modified": "2025-11-12T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "hudi",
@@ -202,7 +207,8 @@
             "summary": "For decades, databases have relied on indexes—specialized data structures—to dramatically improve read and write performance by quickly locating specific records. Apache Hudi extends this fundamental principle to the data lakehouse with a unique and powerful approach. Every Hudi table contains a self-managed metadata table that functions as an indexing subsystem, enabling efficient data skipping and fast record lookups across a wide range of read and write scenarios.",
             "date_modified": "2025-10-29T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "hudi",
@@ -219,7 +225,8 @@
             "summary": "For those tracking Apache Hudi's performance enhancements, the introduction of the column stats index was a significant development, as detailed in this blog. It represented a major advancement for query optimization by implementing a straightforward yet highly effective concept: storing lightweight, file-level statistics (such as min/max values and null counts) for specific columns. This provided Hudi's query engine a substantial performance improvement.",
             "date_modified": "2025-10-22T00:00:00.000Z",
             "author": {
-                "name": "Aditya Goenka and Shiyan Xu"
+                "name": "Aditya Goenka",
+                "url": "https://www.linkedin.com/in/aditya-goenka-66a7b448/"
             },
             "tags": [
                 "hudi",
@@ -269,7 +276,8 @@
             "summary": "In database systems, the primary key is a foundational design principle for managing data at the record level. Its function is to provide each record with a unique and stable logical identifier, which decouples the record's identity from its physical location on storage. While using direct physical address pointers (e.g., position inside a file being used as a key) can be convenient, the physical address can change when records are moved around within the table for things like clustering or z-ordering (called out here).",
             "date_modified": "2025-09-17T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "hudi",
@@ -286,7 +294,8 @@
             "summary": "Redirecting... please wait!!",
             "date_modified": "2025-08-29T00:00:00.000Z",
             "author": {
-                "name": "Shiyan Xu"
+                "name": "Shiyan Xu",
+                "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
                 "blog",
@@ -308,7 +317,8 @@
             "summary": "TL;DR",
             "date_modified": "2025-07-21T00:00:00.000Z",
             "author": {
-                "name": "Dipankar Mazumdar"
+                "name": "Dipankar Mazumdar",
+                "url": "https://www.linkedin.com/in/dipankar-mazumdar/"
             },
             "tags": [
                 "Apache Hudi",
