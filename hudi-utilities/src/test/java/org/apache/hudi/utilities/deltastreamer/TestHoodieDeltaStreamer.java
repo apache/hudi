@@ -2809,13 +2809,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions, String schemaStr) {
     if (createTopic) {
       try {
-        testUtils.createTopic(topicName, numPartitions);
+        createTopic(topicName, numPartitions);
       } catch (TopicExistsException e) {
         // no op
       }
     }
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topicName,
+    sendMessages(topicName,
         UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions(
             dataGenerator.generateInsertsAsPerSchema(
                 "000", numRecords, schemaStr), numPartitions));
@@ -2936,7 +2936,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName, Map<String, String> extraProps, boolean shouldAddOffsets) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
-    populateAllCommonProps(props, basePath, testUtils.brokerAddress());
+    populateAllCommonProps(props, basePath, brokerAddress());
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.embed.timeline.server", "false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");

@@ -58,17 +58,26 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -76,6 +85,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -83,6 +93,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
@@ -140,30 +152,100 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   protected static String topicName;
   protected static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   protected static int testNum = 1;
-
-  Map<String, String> hudiOpts = new HashMap<>();
-  public KafkaTestUtils testUtils;
+  private static final DockerImageName KAFKA_IMAGE = DockerImageName.parse("confluentinc/cp-kafka:7.7.1");
+  private static ConfluentKafkaContainer kafkaContainer;
+  private final List<String> createdTopics = new ArrayList<>();
+  protected Map<String, String> hudiOpts = new HashMap<>();
 
   @BeforeEach
   protected void prepareTestSetup() throws IOException {
     setupTest();
-    testUtils = new KafkaTestUtils();
-    testUtils.setup();
     topicName = "topic" + testNum;
-    prepareInitialConfigs(storage, basePath, testUtils.brokerAddress());
+    prepareInitialConfigs(storage, basePath, kafkaContainer.getBootstrapServers());
     // reset TestDataSource recordInstantTime which may be set by any other test
     TestDataSource.recordInstantTime = Option.empty();
   }
 
   @AfterEach
   public void cleanupKafkaTestUtils() {
-    if (testUtils != null) {
-      testUtils.teardown();
-      testUtils = null;
-    }
     if (hudiOpts != null) {
       hudiOpts = null;
     }
+    deleteTopics();
+  }
+
+  /**
+   * Creates a Kafka topic with the specified name and number of partitions.
+   * Compatible with the old KafkaTestUtils.createTopic() API.
+   */
+  public void createTopic(String topic, int numPartitions) throws TopicExistsException {
+    Properties adminProps = getAdminProps();
+
+    try (AdminClient adminClient = AdminClient.create(adminProps)) {
+      createdTopics.add(topic);
+      NewTopic newTopic = new NewTopic(topic, numPartitions, (short) 1);
+      adminClient.createTopics(Collections.singleton(newTopic)).all().get();
+    } catch (Exception e) {
+      if (e.getCause() instanceof TopicExistsException) {
+        throw (TopicExistsException) e.getCause();
+      }
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void createTopic(String topic) throws Exception {
+    createTopic(topic, 1);
+  }
+
+  private static Properties getAdminProps() {
+    Properties adminProps = new Properties();
+    adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
+    return adminProps;
+  }
+
+  protected void deleteTopics() {
+    if (createdTopics.isEmpty()) {
+      return;
+    }
+    try (AdminClient adminClient = AdminClient.create(getAdminProps())) {
+      adminClient.deleteTopics(createdTopics).all().get();
+    } catch (Exception e) {
+      LOG.warn("Failed to delete topics: {}", StringUtils.join(createdTopics, ","), e);
+    }
+  }
+
+  public void sendMessages(String topic, String[] messages) {
+    try (KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProps())) {
+      for (String message : messages) {
+        producer.send(new ProducerRecord<>(topic, message));
+      }
+      producer.flush();
+    }
+  }
+
+  public void sendMessages(String topic, Tuple2<String, String>[] keyValuePairs) {
+    try (KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProps())) {
+      for (Tuple2<String, String> kv : keyValuePairs) {
+        producer.send(new ProducerRecord<>(topic, kv._1, kv._2));
+      }
+      producer.flush();
+    }
+  }
+
+  private Properties getProducerProps() {
+    Properties producerProps = new Properties();
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+    return producerProps;
+  }
+
+  /**
+   * Returns the broker address for the Kafka container.
+   * Compatible with the old KafkaTestUtils.brokerAddress() API.
+   */
+  public String brokerAddress() {
+    return kafkaContainer.getBootstrapServers();
   }
 
   @BeforeAll
@@ -173,10 +255,16 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     PARQUET_SOURCE_ROOT = basePath + "parquetFiles";
     ORC_SOURCE_ROOT = basePath + "orcFiles";
     JSON_KAFKA_SOURCE_ROOT = basePath + "jsonKafkaFiles";
+    kafkaContainer = new ConfluentKafkaContainer(KAFKA_IMAGE);
+    kafkaContainer.start();
   }
 
   @AfterAll
   public static void tearDown() {
+    if (kafkaContainer != null) {
+      kafkaContainer.stop();
+      kafkaContainer = null;
+    }
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -453,7 +541,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected void prepareAvroKafkaDFSSource(String propsFileName,  Long maxEventsToReadFromKafkaSource, String topicName, String partitionPath, TypedProperties extraProps) throws IOException {
     TypedProperties props = TypedProperties.copy(extraProps);
-    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
+    props.setProperty("bootstrap.servers", kafkaContainer.getBootstrapServers());
     props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "false");
     props.setProperty("auto.offset.reset", "earliest");
     props.setProperty("include", "base.properties");
