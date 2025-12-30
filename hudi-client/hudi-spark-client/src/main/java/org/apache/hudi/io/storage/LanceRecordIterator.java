@@ -129,7 +129,7 @@ public class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
     }
     InternalRow row = rowIterator.next();
     // Convert to UnsafeRow immediately while batch is still open
-    return projection.apply(row);
+    return projection.apply(row).copy();
   }
 
   @Override
