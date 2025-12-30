@@ -346,6 +346,18 @@ public class InternalSchemaConverter {
         return Types.DateType.get();
       case NULL:
         return null;
+      case VARIANT:
+        // Variant is represented as a record with value and metadata binary fields
+        // Convert it to the internal schema representation as a RecordType
+        // Since Variant is treated as a primitive here but needs to be a record,
+        // we return a RecordType with the appropriate structure
+        List<Types.Field> variantFields = new ArrayList<>(2);
+        // Assign field IDs: these are used for schema evolution tracking
+        // Use negative IDs: indicate these are system-generated for Variant type
+        // TODO (voon): Check if we can remove the magic numbers?
+        variantFields.add(Types.Field.get(-1, false, "value", Types.BinaryType.get(), "Variant value component"));
+        variantFields.add(Types.Field.get(-2, false, "metadata", Types.BinaryType.get(), "Variant metadata component"));
+        return Types.RecordType.get(variantFields);
       default:
         throw new UnsupportedOperationException("Unsupported primitive type: " + schema.getType());
     }
@@ -441,6 +453,38 @@ public class InternalSchemaConverter {
    */
   private static HoodieSchema visitInternalRecordToBuildHoodieRecord(Types.RecordType recordType, List<HoodieSchema> fieldSchemas, String recordNameFallback) {
     List<Types.Field> fields = recordType.fields();
+
+    // Check if this RecordType is actually a Variant type
+    // Unshredded Variant types are marked by having exactly 2 fields with negative IDs and specific names
+    if (fields.size() == 2) {
+      Types.Field field0 = fields.get(0);
+      Types.Field field1 = fields.get(1);
+
+      // Check if both fields have negative IDs (system-generated for Variant)
+      boolean hasNegativeIds = field0.fieldId() < 0 && field1.fieldId() < 0;
+
+      // Check if fields are named "value" and "metadata" (order may vary)
+      boolean hasVariantFields = (field0.name().equals("value") && field1.name().equals("metadata"))
+          || (field0.name().equals("metadata") && field1.name().equals("value"));
+
+      if (hasNegativeIds && hasVariantFields) {
+        // Variant type: Determine if it is shredded or unshredded based on value field's optionality
+        // TODO (voon): This is incomplete for now, we are only handling unshredded, fields size of == 2 should always mean this is unshredded
+        String recordName = Option.ofNullable(recordType.name()).orElse(recordNameFallback);
+        Types.Field valueField = field0.name().equals("value") ? field0 : field1;
+
+        if (valueField.isOptional()) {
+          // Optional value field indicates shredded variant
+          // Note: We don't have the typed_value schema here, so pass null for typedValueSchema
+          return HoodieSchema.createVariantShredded(recordName, null, null, null);
+        } else {
+          // Required value field indicates unshredded variant
+          return HoodieSchema.createVariant(recordName, null, null);
+        }
+      }
+    }
+
+    // Not a Variant, create regular record
     List<HoodieSchemaField> schemaFields = new ArrayList<>(fields.size());
     for (int i = 0; i < fields.size(); i++) {
       Types.Field f = fields.get(i);

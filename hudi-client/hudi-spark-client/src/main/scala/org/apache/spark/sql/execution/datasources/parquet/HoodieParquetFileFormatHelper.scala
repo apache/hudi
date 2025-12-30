@@ -35,3 +35,4 @@ object HoodieParquetFileFormatHelper {
     SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
   }
 }
+

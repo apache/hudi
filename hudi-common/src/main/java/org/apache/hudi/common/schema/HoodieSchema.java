@@ -563,7 +563,8 @@ public class HoodieSchema implements Serializable {
         null
     );
 
-    List<HoodieSchemaField> fields = Arrays.asList(metadataField, valueField);
+    // IMPORTANT: Field order must match VariantVal(value, metadata) constructor
+    List<HoodieSchemaField> fields = Arrays.asList(valueField, metadataField);
 
     Schema recordSchema = Schema.createRecord(variantName, doc, namespace, false);
     List<Schema.Field> avroFields = fields.stream()
@@ -603,20 +604,21 @@ public class HoodieSchema implements Serializable {
 
     List<HoodieSchemaField> fields = new ArrayList<>();
 
-    // Create metadata field (required bytes)
-    fields.add(HoodieSchemaField.of(
-        Variant.VARIANT_METADATA_FIELD,
-        HoodieSchema.create(HoodieSchemaType.BYTES),
-        "Variant metadata component",
-        null
-    ));
-
-    // Create value field (nullable bytes for shredded)
+    // IMPORTANT: Field order must match VariantVal(value, metadata) constructor
+    // Create value field first (nullable bytes for shredded)
     fields.add(HoodieSchemaField.of(
         Variant.VARIANT_VALUE_FIELD,
         HoodieSchema.createNullable(HoodieSchemaType.BYTES),
         "Variant value component",
         NULL_VALUE
+    ));
+
+    // Create metadata field second (required bytes)
+    fields.add(HoodieSchemaField.of(
+        Variant.VARIANT_METADATA_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant metadata component",
+        null
     ));
 
     // Add typed_value field if provided
