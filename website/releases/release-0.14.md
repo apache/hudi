@@ -7,11 +7,11 @@ last_modified_at: 2024-05-02T18:00:00-08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## Version 0.14 Release Notes
-
 This page contains release notes for all Apache Hudi 0.14.x releases, including:
+
 - [Release 0.14.1](#release-0141)
 - [Release 0.14.0](#release-0140)
+
 ---
 
 ## [Release 0.14.1](https://github.com/apache/hudi/releases/tag/release-0.14.1) {#release-0141}
@@ -52,7 +52,6 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 :::tip
 0.14.1 release also contains all the new features and bug fixes from 0.14.0, of which the release notes are [here](/releases/release-0.14#release-0140)
 :::
-
 
 ---
 
@@ -372,13 +371,13 @@ UPDATE hudi_table SET age=19 WHERE UUID in ('id1', 'id2');
 DELETE FROM hudi_table WHERE age > 23;
 ```
 
-
-
 ### Java Enhancements
+
 Lot of write operations have been extended to support Java engine to bring it to parity with other engines. For eg,
 compaction, clustering, and metadata table support has been added to Java Engine with 0.14.0.
 
 ## Known Regressions
+
 In Hudi 0.14.0, when querying a table that uses ComplexKeyGenerator or CustomKeyGenerator, partition values are returned
 as string. Note that there is no type change on the storage i.e. partition fields are written in the user-defined type
 on storage. However, this is a breaking change for the aforementioned key generators and will be fixed in 0.14.1 -
