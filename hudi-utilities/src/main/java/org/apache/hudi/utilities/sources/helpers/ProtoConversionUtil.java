@@ -152,7 +152,7 @@ public class ProtoConversionUtil {
     private static final HoodieSchema STRING_SCHEMA = HoodieSchema.create(HoodieSchemaType.STRING);
     // The max unsigned long value has 20 digits, so a decimal with precision 20 and scale 0 is required to represent all possible values.
     // A byte array of length N can store at most floor(log_10(2^(8 × N - 1) - 1)) base 10 digits so we require N = 9.
-    private static final HoodieSchema UNSIGNED_LONG_SCHEMA = HoodieSchema.createDecimal("unsigned_long", null, "org.apache.hudi.protos", 20, 0, 9);
+    private static final HoodieSchema UNSIGNED_LONG_SCHEMA = HoodieSchema.createDecimal("unsigned_long", "org.apache.hudi.protos", null, 20, 0, 9);
     private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
     private static final String OVERFLOW_DESCRIPTOR_FIELD_NAME = "descriptor_full_name";
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
@@ -163,7 +163,7 @@ public class ProtoConversionUtil {
     private static final Map<SchemaCacheKey, HoodieSchema> SCHEMA_CACHE = new ConcurrentHashMap<>();
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
     // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
-    private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Pair<HoodieSchema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
     private static final Set<Descriptors.Descriptor> WRAPPER_DESCRIPTORS_TO_TYPE = CollectionUtils.createImmutableSet(
         StringValue.getDescriptor(),
         Int32Value.getDescriptor(),
@@ -219,7 +219,7 @@ public class ProtoConversionUtil {
       for (Descriptors.EnumValueDescriptor valueDescriptor : enumDescriptor.getValues()) {
         symbols.add(valueDescriptor.getName());
       }
-      return HoodieSchema.createEnum(enumDescriptor.getName(), null, getNamespace(enumDescriptor.getFullName()), symbols);
+      return HoodieSchema.createEnum(enumDescriptor.getName(), getNamespace(enumDescriptor.getFullName()), null, symbols);
     }
 
     /**
@@ -247,7 +247,7 @@ public class ProtoConversionUtil {
         HoodieSchema fieldSchema = getFieldSchema(fieldDescriptor, new CopyOnWriteMap<>(recursionDepths), path);
         fields.add(HoodieSchemaField.of(fieldDescriptor.getName(), fieldSchema, null, getDefault(fieldSchema, fieldDescriptor)));
       }
-      return HoodieSchema.createRecord(descriptor.getName(), null, path, fields);
+      return HoodieSchema.createRecord(descriptor.getName(), path, null, fields);
     }
 
     private HoodieSchema getFieldSchema(Descriptors.FieldDescriptor fieldDescriptor, CopyOnWriteMap<Descriptors.Descriptor, Integer> recursionDepths, String path) {
@@ -358,11 +358,11 @@ public class ProtoConversionUtil {
       }
     }
 
-    private static Descriptors.FieldDescriptor[] getOrderedFields(Schema schema, Message message) {
+    private static Descriptors.FieldDescriptor[] getOrderedFields(HoodieSchema schema, Message message) {
       Descriptors.Descriptor descriptor = message.getDescriptorForType();
       return FIELD_CACHE.computeIfAbsent(Pair.of(schema, descriptor), key -> {
         Descriptors.FieldDescriptor[] fields = new Descriptors.FieldDescriptor[key.getLeft().getFields().size()];
-        for (Schema.Field f : key.getLeft().getFields()) {
+        for (HoodieSchemaField f : key.getLeft().getFields()) {
           fields[f.pos()] = key.getRight().findFieldByName(f.name());
         }
         return fields;
@@ -474,7 +474,7 @@ public class ProtoConversionUtil {
         case RECORD:
           GenericData.Record newRecord = new GenericData.Record(schema.toAvroSchema());
           Message messageValue = (Message) value;
-          Descriptors.FieldDescriptor[] orderedFields = getOrderedFields(schema.toAvroSchema(), messageValue);
+          Descriptors.FieldDescriptor[] orderedFields = getOrderedFields(schema, messageValue);
           for (HoodieSchemaField field : schema.getFields()) {
             int position = field.pos();
             Descriptors.FieldDescriptor fieldDescriptor = orderedFields[position];
@@ -485,7 +485,7 @@ public class ProtoConversionUtil {
             if (fieldSchema.getType() == HoodieSchemaType.UNION && (fieldDescriptor == null || (!fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)))) {
               convertedValue = null;
             } else {
-              convertedValue = convertObject(fieldSchema, fieldDescriptor == null ? field.defaultVal() : messageValue.getField(fieldDescriptor));
+              convertedValue = convertObject(fieldSchema, fieldDescriptor == null ? field.defaultVal().orElse(null) : messageValue.getField(fieldDescriptor));
             }
             newRecord.put(position, convertedValue);
           }
