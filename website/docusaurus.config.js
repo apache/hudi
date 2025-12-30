@@ -157,8 +157,6 @@ module.exports = {
               "/releases/release-1.0.2",
               "/releases/release-1.0.1",
               "/releases/release-1.0.0",
-              "/releases/release-1.0.0-beta2",
-              "/releases/release-1.0.0-beta1",
             ],
             to: "/releases/release-1.0",
           },

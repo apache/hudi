@@ -2,7 +2,6 @@
 title: "Release 0.15"
 layout: releases
 toc: true
-last_modified_at: 2024-05-02T18:00:00-08:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
