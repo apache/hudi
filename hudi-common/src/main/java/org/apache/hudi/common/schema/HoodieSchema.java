@@ -90,6 +90,11 @@ public class HoodieSchema implements Serializable {
   private Schema avroSchema;
   private HoodieSchemaType type;
 
+  // Register the Variant logical type with Avro
+  static {
+    LogicalTypes.register(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME, new VariantLogicalTypeFactory());
+  }
+
   /**
    * Creates a new HoodieSchema wrapping the given Avro schema.
    *
@@ -123,6 +128,8 @@ public class HoodieSchema implements Serializable {
       } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros
           || logicalType instanceof LogicalTypes.LocalTimestampMillis || logicalType instanceof LogicalTypes.LocalTimestampMicros) {
         return new HoodieSchema.Timestamp(avroSchema);
+      } else if (logicalType == VariantLogicalType.variant()) {
+        return new HoodieSchema.Variant(avroSchema);
       }
     }
     return new HoodieSchema(avroSchema);
@@ -479,6 +486,120 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Creates an unshredded Variant schema.
+   * Unshredded variants have both metadata and value fields as required (non-nullable) binary fields.
+   *
+   * @return a new HoodieSchema.Variant representing an unshredded variant
+   */
+  public static HoodieSchema.Variant createVariant() {
+    return createVariant(null, null, null);
+  }
+
+  /**
+   * Creates an unshredded Variant schema with the specified name and namespace.
+   *
+   * @param name      the variant record name (can be null, defaults to "variant")
+   * @param namespace the namespace (can be null)
+   * @param doc       the documentation (can be null)
+   * @return a new HoodieSchema.Variant representing an unshredded variant
+   */
+  public static HoodieSchema.Variant createVariant(String name, String namespace, String doc) {
+    String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
+
+    // Create metadata field (required bytes)
+    HoodieSchemaField metadataField = HoodieSchemaField.of(
+        Variant.VARIANT_METADATA_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant metadata component",
+        null
+    );
+
+    // Create value field (required bytes)
+    HoodieSchemaField valueField = HoodieSchemaField.of(
+        Variant.VARIANT_VALUE_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant value component",
+        null
+    );
+
+    List<HoodieSchemaField> fields = Arrays.asList(metadataField, valueField);
+
+    Schema recordSchema = Schema.createRecord(variantName, doc, namespace, false);
+    List<Schema.Field> avroFields = fields.stream()
+        .map(HoodieSchemaField::getAvroField)
+        .collect(Collectors.toList());
+    recordSchema.setFields(avroFields);
+
+    // Add Variant logical type
+    VariantLogicalType.variant().addToSchema(recordSchema);
+
+    return new HoodieSchema.Variant(recordSchema);
+  }
+
+  /**
+   * Creates a shredded Variant schema with an optional typed_value field.
+   * Shredded variants have metadata (required), value (optional/nullable), and typed_value (optional) fields.
+   *
+   * @param typedValueSchema the schema for the typed_value field (can be null if typed_value is not needed)
+   * @return a new HoodieSchema.Variant representing a shredded variant
+   */
+  public static HoodieSchema.Variant createVariantShredded(HoodieSchema typedValueSchema) {
+    return createVariantShredded(null, null, null, typedValueSchema);
+  }
+
+  /**
+   * Creates a shredded Variant schema with the specified name, namespace, and typed_value field.
+   *
+   * @param name             the variant record name (can be null, defaults to "variant")
+   * @param namespace        the namespace (can be null)
+   * @param doc              the documentation (can be null)
+   * @param typedValueSchema the schema for the typed_value field (can be null if typed_value is not needed)
+   * @return a new HoodieSchema.Variant representing a shredded variant
+   */
+  public static HoodieSchema.Variant createVariantShredded(String name, String namespace, String doc, HoodieSchema typedValueSchema) {
+    String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
+
+    List<HoodieSchemaField> fields = new ArrayList<>();
+
+    // Create metadata field (required bytes)
+    fields.add(HoodieSchemaField.of(
+        Variant.VARIANT_METADATA_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant metadata component",
+        null
+    ));
+
+    // Create value field (nullable bytes for shredded)
+    fields.add(HoodieSchemaField.of(
+        Variant.VARIANT_VALUE_FIELD,
+        HoodieSchema.createNullable(HoodieSchemaType.BYTES),
+        "Variant value component",
+        NULL_VALUE
+    ));
+
+    // Add typed_value field if provided
+    if (typedValueSchema != null) {
+      fields.add(HoodieSchemaField.of(
+          Variant.VARIANT_TYPED_VALUE_FIELD,
+          typedValueSchema,
+          "Typed value for shredded variant",
+          null
+      ));
+    }
+
+    Schema recordSchema = Schema.createRecord(variantName, doc, namespace, false);
+    List<Schema.Field> avroFields = fields.stream()
+        .map(HoodieSchemaField::getAvroField)
+        .collect(Collectors.toList());
+    recordSchema.setFields(avroFields);
+
+    // Add Variant logical type
+    VariantLogicalType.variant().addToSchema(recordSchema);
+
+    return new HoodieSchema.Variant(recordSchema);
+  }
+
+  /**
    * Returns the Hudi schema version information.
    *
    * @return version string of the Hudi schema system
@@ -585,14 +706,24 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the fields of this record schema.
+   * Checks if this schema type supports field access.
+   * Only RECORD and VARIANT types can have fields.
+   *
+   * @return true if this type can have fields (RECORD or VARIANT)
+   */
+  public boolean hasFields() {
+    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT;
+  }
+
+  /**
+   * Returns the fields of this record or variant schema.
    *
    * @return list of HoodieSchemaField objects
-   * @throws IllegalStateException if this is not a record schema
+   * @throws IllegalStateException if this schema type does not support fields
    */
   public List<HoodieSchemaField> getFields() {
-    if (type != HoodieSchemaType.RECORD) {
-      throw new IllegalStateException("Cannot get fields from non-record schema: " + type);
+    if (!hasFields()) {
+      throw new IllegalStateException("Cannot get fields from schema type: " + type);
     }
 
     return avroSchema.getFields().stream()
@@ -601,14 +732,14 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Sets the fields for this record schema.
+   * Sets the fields for this record or variant schema.
    *
    * @param fields the list of fields to set
-   * @throws IllegalStateException if this is not a record schema
+   * @throws IllegalStateException if this schema type does not support fields
    */
   public void setFields(List<HoodieSchemaField> fields) {
-    if (type != HoodieSchemaType.RECORD) {
-      throw new IllegalStateException("Cannot set fields on non-record schema: " + type);
+    if (!hasFields()) {
+      throw new IllegalStateException("Cannot set fields on schema type: " + type);
     }
     ValidationUtils.checkArgument(fields != null, "Fields cannot be null");
 
@@ -624,11 +755,11 @@ public class HoodieSchema implements Serializable {
    *
    * @param name the field name to look up
    * @return Option containing the field, or Option.empty() if not found
-   * @throws IllegalStateException if this is not a record schema
+   * @throws IllegalStateException if this schema type does not support fields
    */
   public Option<HoodieSchemaField> getField(String name) {
-    if (type != HoodieSchemaType.RECORD) {
-      throw new IllegalStateException("Cannot get field from non-record schema: " + type);
+    if (!hasFields()) {
+      throw new IllegalStateException("Cannot get field from schema type: " + type);
     }
 
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
@@ -901,6 +1032,9 @@ public class HoodieSchema implements Serializable {
       try {
         Schema avroSchema = avroParser.parse(jsonSchema);
         return fromAvroSchema(avroSchema);
+      } catch (IllegalArgumentException e) {
+        // Wrap validation exceptions to preserve the detailed error message
+        throw new HoodieAvroSchemaException(e.getMessage(), e);
       } catch (Exception e) {
         throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
       }
@@ -921,6 +1055,9 @@ public class HoodieSchema implements Serializable {
         return fromAvroSchema(avroSchema);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse schema from InputStream", e);
+      } catch (IllegalArgumentException e) {
+        // Wrap validation exceptions to preserve the detailed error message
+        throw new HoodieAvroSchemaException(e.getMessage(), e);
       } catch (Exception e) {
         throw new HoodieAvroSchemaException("Failed to parse schema", e);
       }
@@ -1341,6 +1478,263 @@ public class HoodieSchema implements Serializable {
   public enum TimePrecision {
     MILLIS,
     MICROS
+  }
+
+  /**
+   * Custom Avro LogicalType for Variant.
+   * This logical type is applied to RECORD schemas that represent Variant types.
+   *
+   * <p>This is a singleton type - use {@link #variant()} to get the instance.</p>
+   */
+  public static class VariantLogicalType extends LogicalType {
+
+    private static final String VARIANT_LOGICAL_TYPE_NAME = "variant";
+    // Eager initialization of singleton
+    private static final VariantLogicalType INSTANCE = new VariantLogicalType();
+
+    private VariantLogicalType() {
+      super(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME);
+    }
+
+    /**
+     * Returns the singleton instance of VariantLogicalType.
+     *
+     * @return the Variant logical type instance
+     */
+    public static VariantLogicalType variant() {
+      return INSTANCE;
+    }
+
+    @Override
+    public void validate(Schema schema) {
+      super.validate(schema);
+      if (schema.getType() != Schema.Type.RECORD) {
+        throw new IllegalArgumentException("Variant logical type can only be applied to RECORD schemas, got: " + schema.getType());
+      }
+    }
+  }
+
+  /**
+   * Factory for creating VariantLogicalType instances.
+   */
+  private static class VariantLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+    @Override
+    public LogicalType fromSchema(Schema schema) {
+      return VariantLogicalType.variant();
+    }
+
+    @Override
+    public String getTypeName() {
+      return VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
+    }
+  }
+
+  /**
+   * Variant schema type representing semi-structured data that can store values of different types.
+   *
+   * <p>According to the Parquet specification, a Variant is represented as a record/group with binary fields:
+   * <ul>
+   *   <li>metadata: Binary field containing the Variant metadata component (always required)</li>
+   *   <li>value: Binary field containing the Variant value component (required for unshredded, optional for shredded)</li>
+   *   <li>typed_value: Optional field for shredded variants, stores values matching a specific type (type varies)</li>
+   * </ul>
+   * </p>
+   *
+   * <p>This implementation supports both:</p>
+   * <ul>
+   *   <li><b>Unshredded Variant</b>: metadata (required) and value (required) fields.</li>
+   *   <li><b>Shredded Variant</b>: metadata (required), value (optional), and typed_value (optional).</li>
+   * </ul>
+   *
+   * <p>Backwards compatibility:</p>
+   * <ul>
+   *   <li>Old Hudi versions will read it as a regular record with byte array fields</li>
+   *   <li>New Hudi versions can detect it as a Variant type via the Avro LogicalType mechanism</li>
+   * </ul>
+   */
+  public static class Variant extends HoodieSchema {
+
+    private static final String VARIANT_DEFAULT_NAME = "variant";
+    private static final String VARIANT_METADATA_FIELD = "metadata";
+    private static final String VARIANT_VALUE_FIELD = "value";
+    private static final String VARIANT_TYPED_VALUE_FIELD = "typed_value";
+
+    private final boolean isShredded;
+    private final Option<HoodieSchema> typedValueSchema;
+
+    /**
+     * Creates a new Variant HoodieSchema wrapping the given Avro schema.
+     *
+     * @param avroSchema the Avro schema to wrap, must be a valid Variant schema
+     * @throws IllegalArgumentException if avroSchema is null or not a valid Variant schema
+     */
+    private Variant(Schema avroSchema) {
+      super(avroSchema);
+      this.isShredded = determineIfShredded(avroSchema);
+      this.typedValueSchema = extractTypedValueSchema(avroSchema);
+      validateVariantSchema(avroSchema);
+    }
+
+    /**
+     * Determines if the variant schema is shredded based on the value field nullability or presence of typed_value.
+     *
+     * @param avroSchema the schema to check
+     * @return true if the value field is nullable or typed_value exists (shredded), false otherwise (unshredded)
+     */
+    private boolean determineIfShredded(Schema avroSchema) {
+      // Check if typed_value field exists
+      Schema.Field typedValueField = avroSchema.getField(VARIANT_TYPED_VALUE_FIELD);
+      if (typedValueField != null) {
+        return true;
+      }
+
+      // Check if value field is nullable
+      Schema.Field valueField = avroSchema.getField(VARIANT_VALUE_FIELD);
+      if (valueField == null) {
+        return false;
+      }
+      Schema valueSchema = valueField.schema();
+      if (valueSchema.getType() == Schema.Type.UNION) {
+        return valueSchema.getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.NULL);
+      }
+      return false;
+    }
+
+    /**
+     * Extracts the typed_value field schema if present.
+     *
+     * @param avroSchema the schema to extract from
+     * @return Option containing the typed_value schema, or Option.empty() if not present
+     */
+    private Option<HoodieSchema> extractTypedValueSchema(Schema avroSchema) {
+      Schema.Field typedValueField = avroSchema.getField(VARIANT_TYPED_VALUE_FIELD);
+      if (typedValueField != null) {
+        return Option.of(HoodieSchema.fromAvroSchema(typedValueField.schema()));
+      }
+      return Option.empty();
+    }
+
+    /**
+     * Validates that the given Avro schema conforms to the Variant specification.
+     *
+     * @param avroSchema the schema to validate
+     * @throws IllegalArgumentException if the schema is not a valid Variant schema
+     */
+    private void validateVariantSchema(Schema avroSchema) {
+      if (avroSchema.getType() != Schema.Type.RECORD) {
+        throw new IllegalArgumentException("Variant schema must be a RECORD type, got: " + avroSchema.getType());
+      }
+
+      // Check for metadata field (always required)
+      Schema.Field metadataField = avroSchema.getField(VARIANT_METADATA_FIELD);
+      if (metadataField == null) {
+        throw new IllegalArgumentException("Variant schema must have a '" + VARIANT_METADATA_FIELD + "' field");
+      }
+      if (metadataField.schema().getType() != Schema.Type.BYTES) {
+        throw new IllegalArgumentException("Variant metadata field must be BYTES type, got: " + metadataField.schema().getType());
+      }
+
+      // Check for value field
+      Schema.Field valueField = avroSchema.getField(VARIANT_VALUE_FIELD);
+      if (valueField == null) {
+        throw new IllegalArgumentException("Variant schema must have a '" + VARIANT_VALUE_FIELD + "' field");
+      }
+
+      Schema valueSchema = valueField.schema();
+      if (isShredded) {
+        // Shredded: value should be nullable (union with null and bytes)
+        if (valueSchema.getType() == Schema.Type.UNION) {
+          boolean hasNull = valueSchema.getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.NULL);
+          boolean hasBytes = valueSchema.getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.BYTES);
+          if (!hasNull || !hasBytes) {
+            throw new IllegalArgumentException("Shredded Variant value field should be a union of [null, bytes]");
+          }
+        } else if (valueSchema.getType() != Schema.Type.BYTES) {
+          // If not a union, it should at least be bytes (some shredded variants may have non-null value)
+          throw new IllegalArgumentException("Shredded Variant value field must be BYTES or nullable BYTES, got: " + valueSchema.getType());
+        }
+      } else {
+        // Unshredded: value must be non-nullable bytes
+        if (valueSchema.getType() != Schema.Type.BYTES) {
+          throw new IllegalArgumentException("Unshredded Variant value field must be BYTES type, got: " + valueSchema.getType());
+        }
+      }
+    }
+
+    /**
+     * Checks if the given Avro schema is a Variant schema.
+     * This checks for the Variant logical type.
+     *
+     * @param avroSchema the schema to check
+     * @return true if the schema has a Variant logical type
+     */
+    public static boolean isVariantSchema(Schema avroSchema) {
+      if (avroSchema == null || avroSchema.getType() != Schema.Type.RECORD) {
+        return false;
+      }
+      LogicalType logicalType = avroSchema.getLogicalType();
+      return logicalType instanceof VariantLogicalType;
+    }
+
+    /**
+     * Checks if this is a shredded variant (has typed_value field or nullable value field).
+     *
+     * @return true if this is a shredded variant, false for unshredded
+     */
+    public boolean isShredded() {
+      return isShredded;
+    }
+
+    /**
+     * Returns the metadata field schema.
+     *
+     * @return HoodieSchema for the metadata field (always BYTES)
+     */
+    public HoodieSchema getMetadataField() {
+      Schema.Field metadataField = getAvroSchema().getField(VARIANT_METADATA_FIELD);
+      return HoodieSchema.fromAvroSchema(metadataField.schema());
+    }
+
+    /**
+     * Returns the value field schema.
+     *
+     * @return HoodieSchema for the value field (BYTES for unshredded, nullable BYTES for shredded)
+     */
+    public HoodieSchema getValueField() {
+      Schema.Field valueField = getAvroSchema().getField(VARIANT_VALUE_FIELD);
+      return HoodieSchema.fromAvroSchema(valueField.schema());
+    }
+
+    /**
+     * Returns the typed_value field schema if present (shredded variants only).
+     *
+     * @return Option containing the typed_value schema, or Option.empty() if not present
+     */
+    public Option<HoodieSchema> getTypedValueField() {
+      return typedValueSchema;
+    }
+
+    @Override
+    public String getName() {
+      return VARIANT_DEFAULT_NAME;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      Variant variant = (Variant) o;
+      return isShredded == variant.isShredded && Objects.equals(typedValueSchema, variant.typedValueSchema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), isShredded, typedValueSchema);
+    }
   }
 
   private void writeObject(ObjectOutputStream oos) throws IOException {
