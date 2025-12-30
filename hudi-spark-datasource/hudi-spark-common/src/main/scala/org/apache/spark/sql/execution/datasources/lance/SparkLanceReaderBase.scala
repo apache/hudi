@@ -22,7 +22,7 @@ package org.apache.spark.sql.execution.datasources.lance
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
-import org.apache.hudi.io.storage.{LanceRecordIterator, HoodieSparkLanceReader}
+import org.apache.hudi.io.storage.{HoodieSparkLanceReader, LanceRecordIterator}
 import org.apache.hudi.storage.StorageConfiguration
 
 import com.lancedb.lance.file.LanceFileReader
