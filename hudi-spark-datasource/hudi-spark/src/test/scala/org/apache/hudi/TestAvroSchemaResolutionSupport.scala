@@ -23,11 +23,12 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
-
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -818,8 +819,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testNestedTypeVectorizedReadWithTypeChange(isCow: Boolean): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testNestedTypeVectorizedReadWithTypeChange(tableType: String): Unit = {
     // test to change the value type of a MAP in a column of ARRAY< MAP<k,v> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -836,7 +837,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     df1.show(false)
 
     // recreate table
-    initialiseTable(df1, tempRecordPath, isCow)
+    initialiseTable(df1, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
 
     // read out the table, will not throw any exception
     readTable(tempRecordPath)
@@ -855,14 +856,18 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     df2.printSchema()
     df2.show(false)
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
 
     // after implicit type change, read the table with vectorized read enabled
     if (HoodieSparkUtils.gteqSpark3_3) {
-      assertThrows(classOf[SparkException]){
+      assertThrows(classOf[SparkException]) {
         withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
           readTable(tempRecordPath)
         }
+      }
+    } else {
+      withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+        readTable(tempRecordPath)
       }
     }
 

@@ -80,7 +80,11 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       )
     }
   }
-  private lazy val hasTimestampMillisFieldInTableSchema = true
+  private lazy val hasTimestampMillisFieldInTableSchema = if (avroTableSchema == null) {
+    true
+  } else {
+    AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
+  }
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
