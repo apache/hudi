@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -100,6 +101,11 @@ public class HoodieSchema implements Serializable {
    * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
+
+  /**
+   * The Avro logical type name used for Variant schemas.
+   */
+  public static final String VARIANT_TYPE_NAME = VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
   /**
    * Parses a type descriptor string for custom Hudi logical types such as VECTOR and BLOB.
@@ -674,14 +680,6 @@ public class HoodieSchema implements Serializable {
   public static HoodieSchema.Variant createVariant(String name, String namespace, String doc) {
     String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
-    // Create metadata field (required bytes)
-    HoodieSchemaField metadataField = HoodieSchemaField.of(
-        Variant.VARIANT_METADATA_FIELD,
-        HoodieSchema.create(HoodieSchemaType.BYTES),
-        "Variant metadata component",
-        null
-    );
-
     // Create value field (required bytes)
     HoodieSchemaField valueField = HoodieSchemaField.of(
         Variant.VARIANT_VALUE_FIELD,
@@ -690,7 +688,17 @@ public class HoodieSchema implements Serializable {
         null
     );
 
-    List<HoodieSchemaField> fields = Arrays.asList(metadataField, valueField);
+    // Create metadata field (required bytes)
+    HoodieSchemaField metadataField = HoodieSchemaField.of(
+        Variant.VARIANT_METADATA_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant metadata component",
+        null
+    );
+
+    // IMPORTANT: Field order is (value, metadata) to match Spark's VariantVal(value, metadata) constructor.
+    // The Parquet spec lists metadata first, but fields are accessed by name, not position.
+    List<HoodieSchemaField> fields = Arrays.asList(valueField, metadataField);
 
     Schema recordSchema = Schema.createRecord(variantName, doc, namespace, false);
     List<Schema.Field> avroFields = fields.stream()
@@ -730,20 +738,22 @@ public class HoodieSchema implements Serializable {
 
     List<HoodieSchemaField> fields = new ArrayList<>();
 
-    // Create metadata field (required bytes)
-    fields.add(HoodieSchemaField.of(
-        Variant.VARIANT_METADATA_FIELD,
-        HoodieSchema.create(HoodieSchemaType.BYTES),
-        "Variant metadata component",
-        null
-    ));
-
-    // Create value field (nullable bytes for shredded)
+    // IMPORTANT: Field order is (value, metadata) to match Spark's VariantVal(value, metadata) constructor.
+    // The Parquet spec lists metadata first, but fields are accessed by name, not position.
+    // Create value field first (nullable bytes for shredded)
     fields.add(HoodieSchemaField.of(
         Variant.VARIANT_VALUE_FIELD,
         HoodieSchema.createNullable(HoodieSchemaType.BYTES),
         "Variant value component",
         NULL_VALUE
+    ));
+
+    // Create metadata field second (required bytes)
+    fields.add(HoodieSchemaField.of(
+        Variant.VARIANT_METADATA_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant metadata component",
+        null
     ));
 
     // Add typed_value field if provided
@@ -2306,10 +2316,17 @@ public class HoodieSchema implements Serializable {
   public static class Variant extends HoodieSchema {
 
     private static final String VARIANT_DEFAULT_NAME = "variant";
-    private static final String VARIANT_METADATA_FIELD = "metadata";
-    private static final String VARIANT_VALUE_FIELD = "value";
-    private static final String VARIANT_TYPED_VALUE_FIELD = "typed_value";
+    public static final String VARIANT_METADATA_FIELD = "metadata";
+    public static final String VARIANT_VALUE_FIELD = "value";
+    public static final String VARIANT_TYPED_VALUE_FIELD = "typed_value";
 
+    /**
+     * -- GETTER --
+     *  Checks if this is a shredded variant (has typed_value field or nullable value field).
+     *
+     * @return true if this is a shredded variant, false for unshredded
+     */
+    @Getter
     private final boolean isShredded;
     private final Option<HoodieSchema> typedValueSchema;
 
@@ -2418,15 +2435,6 @@ public class HoodieSchema implements Serializable {
     }
 
     /**
-     * Checks if this is a shredded variant (has typed_value field or nullable value field).
-     *
-     * @return true if this is a shredded variant, false for unshredded
-     */
-    public boolean isShredded() {
-      return isShredded;
-    }
-
-    /**
      * Returns the metadata field schema.
      *
      * @return HoodieSchema for the metadata field (always BYTES)
@@ -2458,6 +2466,20 @@ public class HoodieSchema implements Serializable {
     @Override
     public String getName() {
       return VARIANT_DEFAULT_NAME;
+    }
+
+    /**
+     * Returns the type of this schema.
+     * Note: This override is not strictly necessary as the base class constructor
+     * already sets the type correctly via HoodieSchemaType.fromAvro() which detects
+     * the VariantLogicalType. This explicit override is provided for consistency
+     * with other logical type subclasses (e.g., Blob) and for clarity.
+     *
+     * @return HoodieSchemaType.VARIANT
+     */
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.VARIANT;
     }
 
     @Override

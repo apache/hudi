@@ -20,7 +20,6 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.Spark40HoodieFileScanRDD
 import org.apache.hudi.common.schema.HoodieSchema
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._

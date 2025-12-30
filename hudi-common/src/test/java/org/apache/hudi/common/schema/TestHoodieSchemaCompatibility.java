@@ -852,4 +852,102 @@ public class TestHoodieSchemaCompatibility {
     assertThrows(SchemaBackwardsCompatibilityException.class,
         () -> HoodieSchemaCompatibility.checkValidEvolution(incomingSchema, tableSchema));
   }
+
+  @Test
+  public void testVariantUnshreddedCompatible() {
+    HoodieSchema.Variant writer = HoodieSchema.createVariant();
+    HoodieSchema.Variant reader = HoodieSchema.createVariant();
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writer, reader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(reader, writer, true, false));
+  }
+
+  @Test
+  public void testVariantShreddedSameTypedValueCompatible() {
+    HoodieSchema typedValue = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema.Variant writer = HoodieSchema.createVariantShredded(typedValue);
+    HoodieSchema.Variant reader = HoodieSchema.createVariantShredded(typedValue);
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writer, reader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(reader, writer, true, false));
+  }
+
+  @Test
+  public void testVariantShreddedDifferentTypedValueCompatible() {
+    // Variant is self-describing, so different typed_value schemas are still compatible
+    HoodieSchema.Variant writer = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema.Variant reader = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.INT));
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writer, reader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(reader, writer, true, false));
+  }
+
+  @Test
+  public void testVariantUnshreddedVsShreddedCompatible() {
+    // Shredding is a storage optimization, not a semantic difference
+    HoodieSchema.Variant unshredded = HoodieSchema.createVariant();
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(unshredded, shredded, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(shredded, unshredded, true, false));
+  }
+
+  @Test
+  public void testVariantShreddedWithoutTypedValueCompatible() {
+    HoodieSchema.Variant withTypedValue = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema.Variant withoutTypedValue = HoodieSchema.createVariantShredded(null);
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(withTypedValue, withoutTypedValue, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(withoutTypedValue, withTypedValue, true, false));
+  }
+
+  @Test
+  public void testVariantVsNonVariantIncompatible() {
+    HoodieSchema.Variant variant = HoodieSchema.createVariant();
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(variant, stringSchema, true, false));
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(stringSchema, variant, true, false));
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(variant, intSchema, true, false));
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(intSchema, variant, true, false));
+  }
+
+  @Test
+  public void testVariantInNullableUnionCompatible() {
+    HoodieSchema.Variant writer = HoodieSchema.createVariant();
+    HoodieSchema.Variant reader = HoodieSchema.createVariant();
+
+    HoodieSchema nullableWriter = HoodieSchema.createNullable(writer);
+    HoodieSchema nullableReader = HoodieSchema.createNullable(reader);
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(nullableWriter, nullableReader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(nullableReader, nullableWriter, true, false));
+  }
+
+  @Test
+  public void testVariantNestedInRecordCompatible() {
+    HoodieSchema.Variant writerVariant = HoodieSchema.createVariant();
+    HoodieSchema.Variant readerVariant = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+
+    HoodieSchema writerRecord = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("data", writerVariant, null, null)
+        ));
+
+    HoodieSchema readerRecord = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("data", readerVariant, null, null)
+        ));
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerRecord, readerRecord, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(readerRecord, writerRecord, true, false));
+  }
 }

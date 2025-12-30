@@ -66,3 +66,4 @@ object HoodieParquetFileFormatHelper {
     new MessageType(schema.getName, fields.asJava)
   }
 }
+

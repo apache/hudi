@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,8 @@ import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNullable
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createPrimitiveField;
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestInternalSchemaConverter {
@@ -84,6 +87,100 @@ public class TestInternalSchemaConverter {
   public static List<String> getDeeplyNestedFieldSchemaExpectedColumnNames() {
     return Arrays.asList("field1", "field2.field2nestarray.element.field21",
         "field2.field2nestarray.element.field22", "field3");
+  }
+
+  @Test
+  public void testVariantConvertToInternalType() {
+    // Create a schema with a variant field
+    HoodieSchema variantSchema = createRecord("variantRecord",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        HoodieSchemaField.of("data", HoodieSchema.createVariant(), null, null));
+
+    // Convert HoodieSchema -> InternalSchema, exercising the VARIANT case in visitPrimitiveToBuildInternalType
+    Type internalType = InternalSchemaConverter.convertToField(variantSchema);
+    assertInstanceOf(Types.RecordType.class, internalType);
+    Types.RecordType recordType = (Types.RecordType) internalType;
+
+    // The record should have 2 fields: id and data
+    assertEquals(2, recordType.fields().size());
+    Types.Field dataField = recordType.fields().get(1);
+    assertEquals("data", dataField.name());
+
+    // The variant field should be represented as a RecordType with sentinel negative IDs
+    assertInstanceOf(Types.RecordType.class, dataField.type());
+    Types.RecordType variantRecordType = (Types.RecordType) dataField.type();
+    List<Types.Field> variantFields = variantRecordType.fields();
+    assertEquals(2, variantFields.size());
+    assertEquals(HoodieSchema.Variant.VARIANT_VALUE_FIELD, variantFields.get(0).name());
+    assertEquals(HoodieSchema.Variant.VARIANT_METADATA_FIELD, variantFields.get(1).name());
+    assertEquals(InternalSchemaConverter.VARIANT_VALUE_FIELD_ID, variantFields.get(0).fieldId());
+    assertEquals(InternalSchemaConverter.VARIANT_METADATA_FIELD_ID, variantFields.get(1).fieldId());
+    assertFalse(variantFields.get(0).isOptional());
+    assertFalse(variantFields.get(1).isOptional());
+    assertEquals(Type.TypeID.BINARY, variantFields.get(0).type().typeId());
+    assertEquals(Type.TypeID.BINARY, variantFields.get(1).type().typeId());
+
+    // Round-trip: convert back to HoodieSchema and verify it's a Variant
+    HoodieSchema roundTripped = InternalSchemaConverter.convert(recordType, "variantRecord");
+    HoodieSchemaField roundTrippedDataField = roundTripped.getField("data").get();
+    assertEquals(HoodieSchemaType.VARIANT, roundTrippedDataField.schema().getType());
+    assertInstanceOf(HoodieSchema.Variant.class, roundTrippedDataField.schema());
+  }
+
+  @Test
+  public void testVariantDetectionValueFirstOrder() {
+    // value first, metadata second — covers lines 464-465 and line 471
+    List<Types.Field> variantFields = Arrays.asList(
+        Types.Field.get(InternalSchemaConverter.VARIANT_VALUE_FIELD_ID, false,
+            HoodieSchema.Variant.VARIANT_VALUE_FIELD, Types.BinaryType.get(), null),
+        Types.Field.get(InternalSchemaConverter.VARIANT_METADATA_FIELD_ID, false,
+            HoodieSchema.Variant.VARIANT_METADATA_FIELD, Types.BinaryType.get(), null));
+    Types.RecordType variantRecord = Types.RecordType.get(variantFields);
+
+    HoodieSchema result = InternalSchemaConverter.convert(variantRecord, "test");
+    assertInstanceOf(HoodieSchema.Variant.class, result);
+  }
+
+  @Test
+  public void testVariantDetectionMetadataFirstOrder() {
+    // metadata first, value second — covers lines 466-467
+    List<Types.Field> variantFields = Arrays.asList(
+        Types.Field.get(InternalSchemaConverter.VARIANT_METADATA_FIELD_ID, false,
+            HoodieSchema.Variant.VARIANT_METADATA_FIELD, Types.BinaryType.get(), null),
+        Types.Field.get(InternalSchemaConverter.VARIANT_VALUE_FIELD_ID, false,
+            HoodieSchema.Variant.VARIANT_VALUE_FIELD, Types.BinaryType.get(), null));
+    Types.RecordType variantRecord = Types.RecordType.get(variantFields);
+
+    HoodieSchema result = InternalSchemaConverter.convert(variantRecord, "test");
+    assertInstanceOf(HoodieSchema.Variant.class, result);
+  }
+
+  @Test
+  public void testVariantDetectionNegativeIdsWrongNames() {
+    // Negative IDs but wrong field names — hasVariantFields is false, should produce a regular record
+    List<Types.Field> fields = Arrays.asList(
+        Types.Field.get(-1, false, "foo", Types.BinaryType.get(), null),
+        Types.Field.get(-2, false, "bar", Types.BinaryType.get(), null));
+    Types.RecordType record = Types.RecordType.get(fields);
+
+    HoodieSchema result = InternalSchemaConverter.convert(record, "test");
+    assertFalse(result instanceof HoodieSchema.Variant);
+    assertEquals(HoodieSchemaType.RECORD, result.getType());
+  }
+
+  @Test
+  public void testVariantDetectionCorrectNamesPositiveIds() {
+    // Correct variant field names but positive IDs — hasNegativeIds is false, should produce a regular record
+    List<Types.Field> fields = Arrays.asList(
+        Types.Field.get(0, false,
+            HoodieSchema.Variant.VARIANT_VALUE_FIELD, Types.BinaryType.get(), null),
+        Types.Field.get(1, false,
+            HoodieSchema.Variant.VARIANT_METADATA_FIELD, Types.BinaryType.get(), null));
+    Types.RecordType record = Types.RecordType.get(fields);
+
+    HoodieSchema result = InternalSchemaConverter.convert(record, "test");
+    assertFalse(result instanceof HoodieSchema.Variant);
+    assertEquals(HoodieSchemaType.RECORD, result.getType());
   }
 
   @Test

@@ -73,6 +73,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 import scala.Enumeration;
 import scala.Function1;
@@ -285,6 +286,19 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.BinaryType) {
       return (row, ordinal) -> recordConsumer.addBinary(
           Binary.fromReusedByteArray(row.getBinary(ordinal)));
+    } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
+      // Maps VariantType to a Parquet group with 'value' and 'metadata' binary fields.
+      // Field order follows Spark's VariantVal(value, metadata) constructor; fields are accessed
+      // by name at the Parquet level, so this is compatible with the Parquet spec (which lists metadata first).
+      // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
+      BiConsumer<SpecializedGetters, Integer> variantWriter = SparkAdapterSupport$.MODULE$.sparkAdapter().createVariantValueWriter(
+          dataType,
+          valueBytes -> consumeField(HoodieSchema.Variant.VARIANT_VALUE_FIELD, 0, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(valueBytes))),
+          metadataBytes -> consumeField(HoodieSchema.Variant.VARIANT_METADATA_FIELD, 1, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(metadataBytes)))
+      );
+      return (row, ordinal) -> {
+        consumeGroup(() -> variantWriter.accept(row, ordinal));
+      };
     } else if (dataType instanceof DecimalType) {
       return (row, ordinal) -> {
         int precision = ((DecimalType) dataType).precision();
@@ -523,6 +537,13 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           .as(LogicalTypeAnnotation.stringType()).named(structField.name());
     } else if (dataType == DataTypes.BinaryType) {
       return Types.primitive(BINARY, repetition).named(structField.name());
+    } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().convertVariantFieldToParquetType(
+          dataType,
+          structField.name(),
+          resolvedSchema,
+          repetition
+      );
     } else if (dataType instanceof DecimalType) {
       int precision = ((DecimalType) dataType).precision();
       int scale = ((DecimalType) dataType).scale();
