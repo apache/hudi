@@ -1,0 +1,155 @@
+---
+title: "Apache Hudi 2025: A Year In Review"
+excerpt: ""
+author: Shiyan Xu
+category: blog
+image: /assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/00-og.png
+tags:
+- apache hudi
+- community
+---
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/00-og.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+As we close out 2025, it's clear that this was a transformative year for Apache Hudi. The community continued to grow, delivered major advances in interoperability and performance, published "The Definitive Guide" book, and expanded our global reach through meetups, conferences, and growing adoption worldwide.
+
+## Community and Growth
+
+2025 brought steady momentum in contributions and expanding community engagement.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/01-pr-history.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+GitHub pull request activities remained steady throughout 2025, reflecting consistent development momentum. GitHub contributors reached over 500. Community engagement also grew — followers across social media platforms (LinkedIn, X, YouTube, and WeChat) increased to about 35,000, while Slack community users grew to close to 5,000.
+
+The project celebrated new milestones in contributor recognition. [Yue Zhang](https://people.apache.org/committer-index.html#zhangyue19921010) joined the Project Management Committee (PMC) for driving several major RFCs and features, evangelizing Hudi at meetups, and leading the effort to productionize hundreds of petabytes at JD.COM. [Tim Brown](https://people.apache.org/committer-index.html#timbrown) was nominated as a committer for modernizing read/write operations behind Hudi 1.1's performance gains. [Shawn Chang](https://people.apache.org/committer-index.html#schang) was nominated as a committer for strengthening Spark integration and expanding Hudi adoption on AWS EMR.
+
+## Development Highlights
+
+[Hudi 1.1](https://hudi.apache.org/releases/release-1.1.1) landed with over 800 commits from 50+ contributors. The headline feature is the pluggable table format framework — Hudi's storage engine is now pluggable, allowing its battle-tested transaction management, indexing, and concurrency control to work while storing data in Hudi's native format or other table formats like [Apache Iceberg](https://iceberg.apache.org/) via [Apache XTable (incubating)](https://xtable.apache.org/).
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/03-hudi11.jpg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+Performance saw major gains across the board. Parquet binary copy for clustering delivered 10-15x faster execution with 95% compute reduction. Apache Flink writer achieved 2-3x improved throughput with Avro conversion eliminated in the write path. Apache Spark metadata-table streaming ran ~18% faster for update-heavy workloads. Indexing enhancements — partitioned record index, partition-level bucket index, HFile caching, and Bloom filters — delivered up to 4x speedup for lookups on massive tables.
+
+Spark 4.0 and Flink 2.0 support were added. [Apache Polaris (incubating)](https://polaris.apache.org/) catalog integration enabled multi-engine queries with unified governance. Operational simplicity improved with storage-based locking that eliminated external dependencies. New merge modes replaced legacy payload classes with declarative options, and SQL procedures enhanced table management directly in Spark SQL. See more details in the [release blog](https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement/).
+
+[Hudi-rs](https://github.com/apache/hudi-rs) expanded its feature support — release 0.3.0 introduced Merge-on-Read and incremental queries, while 0.4.0 added C++ bindings and Avro log file support. The native Rust implementation now powers Ray Data and Daft integrations for ML and multi-cloud analytics.
+
+## New Book Published
+
+[Apache Hudi: The Definitive Guide](https://www.onehouse.ai/whitepaper/apache-hudi-the-definitive-guide), published by O'Reilly, distills Hudi's 8+ years of innovation from 500+ contributors into a comprehensive resource for data engineers and architects.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/02-book-cover.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+Across 10 chapters, the guide covers writing and reading patterns, indexing strategies, table maintenance, concurrency handling, streaming pipelines with Hudi Streamer, and production deployment. With practical examples spanning batch, interactive, and streaming analytics, it takes you from getting started to building end-to-end lakehouse solutions at enterprise scale.
+
+## Meetups and Conferences
+
+Community events brought together thousands of attendees across meetups and conferences worldwide.
+
+### Bangalore Hudi Community Meetup
+
+A full-house gathering took place at Onehouse's India office in January, featuring deep dives into Hudi 1.0 and lakehouse architecture. The event connected developers, contributors, and enthusiasts from India's growing data engineering community.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/04-bgl-meetup.png" alt="drawing" style={{width:'90%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### 1st Hudi Asia Meetup by Kuaishou
+
+Our first-ever Asia meetup in March, organized by Kuaishou, drew 231 in-person attendees and 16,673 total platform views. The event featured discussions on Hudi's roadmap, lakehouse architecture patterns, and adoption stories from leading Chinese tech companies.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/05-kuaishou-meetup.png" alt="drawing" style={{width:'90%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### 2nd Hudi Asia Meetup by JD.com
+
+JD.com hosted the [second Asia meetup](https://hudi.apache.org/blog/2025/12/01/apache-hudi-JD-meetup-asia-2025-recap/) in October, bringing together contributors and adopters for talks on real-world lakehouse implementations, streaming ingestion at scale, and roadmap discussions.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/06-jd-meetup.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### CMU Database Seminar
+
+Vinoth Chandar, Hudi PMC Chair, presented "[Apache Hudi: A Database Layer Over Cloud Storage for Fast Mutations & Queries](https://youtu.be/AYaw06_Xazo)" at Carnegie Mellon University's [Future Data Systems Seminar](https://db.cs.cmu.edu/events/futuredata-apache-hudi/). The talk covered how Hudi brings database-like abstractions to data lakes — enabling efficient mutations, transaction management, and fast incremental reads through storage layout, indexing, and concurrency control design decisions. A must-watch for learning Hudi's design concepts and what problems it solves, covering both breadth and depth.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/07-cmu-talk.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### OpenXData
+
+Amazon engineers presented "[Powering Amazon Unit Economics at Scale Using Hudi](https://www.youtube.com/watch?v=KmAeQ57AGmc)" at [OpenXData](https://www.openxdata.ai/), sharing how they built Nexus — a scalable, configuration-driven platform with Hudi as the cornerstone of its data lake architecture. The talk highlighted how Hudi enables Amazon to tackle the massive challenge of understanding and improving unit-level profitability across their ever-growing businesses.  
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/08-openxdata-amzn-talk.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### VeloxCon
+
+Shiyan Xu, Hudi PMC member, presented on [Hudi integration with Velox and Gluten](https://www.youtube.com/watch?v=N5RIWNEIBNQ) for accelerating query performance, and on how Hudi-rs, the native Rust implementation with multi-language bindings such as Python and C++, can enable high-performance analytics across the open lakehouse ecosystem.  
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/09-veloxcon.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### Data Streaming Summit
+
+Two talks showcased Hudi's streaming capabilities. Zhenqiu Huang shared [how Uber runs 5,000+ Flink-Hudi pipelines](https://www.youtube.com/watch?v=FDeP0JKe7RQ), ingesting 600TB daily with P90 freshness under 15 minutes. Shiyan Xu presented on [Hudi's high-throughput streaming capabilities](https://www.youtube.com/watch?v=GUMiY44iy74) such as record-level indexing, async table services, and the non-blocking concurrency control mechanism introduced in Hudi 1.0.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/10-dsssf.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### Open Source Data Summit
+
+Shiyan Xu presented on [streaming-first lakehouse designs](https://opensourcedatasummit.com/streaming-lakehouse/), covering Merge-on-Read table type, record-level indexing, auto-file sizing, async compaction strategies, and non-blocking concurrency control that enable streaming lakehouses with optimized mutable data handling.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/11-osds.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+## Content Highlights
+
+Throughout 2025, organizations across industries showcased their production adoption and implementation journeys through community syncs and blogs. These stories highlight Hudi's versatility as a lakehouse platform.
+
+<img src="/assets/images/blog/2025-12-29-apache-hudi-2025-a-year-in-review/12-content-highlights.png" alt="drawing" style={{width:'100%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+Featured adoption stories:
+
+- Uber: [From Batch to Streaming: Accelerating Data Freshness in Uber’s Data Lake](https://hudi.apache.org/blog/2025/12/12/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake)
+- Amazon: [Powering Amazon Unit Economics at Scale Using Apache Hudi](https://hudi.apache.org/blog/2025/03/31/amazon-hudi/)
+- Kuaishou: [Hudi Lakehouse: The Evolution of Data Infrastructure for AI workloads](https://youtu.be/Iv-2Gj-sHOw?si=QGqbLKdE-NiZ8Jnj)
+- Southwest Airlines: [Modernizing Data Infrastructure using Apache Hudi](https://youtu.be/X3FW4IYmYE4?si=3rqNpu83pig5FJKU)
+- Halodoc: [Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing & Concurrency](https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency)
+- Uptycs: [From Transactional Bottlenecks to Lightning-Fast Analytics](https://hudi.apache.org/blog/2025/03/26/uptycs/)
+
+The community also published noteworthy content:
+
+- [21 Unique Reasons Why Apache Hudi Should Be Your Next Data Lakehouse](https://hudi.apache.org/blog/2025/03/05/hudi-21-unique-differentiators/)
+- [The Future of Data Lakehouses: A Fireside Chat with Vinoth Chandar](https://hudi.apache.org/blog/2025/01/08/the-future-of-data-lakehouses-a-fireside)
+- Deep Dive into Hudi's Indexing Subsystem: [part 1](https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2) and [part 2](https://hudi.apache.org/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2)
+- [Hudi 1.1 Deep Dive: Optimizing Streaming Ingestion with Flink](https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink/)
+- [Maximizing Throughput with Apache Hudi NBCC: Stop Retrying, Start Scaling](https://hudi.apache.org/blog/2025/12/16/maximizing-throughput-nbcc/)
+- [Exploring Apache Hudi’s New Log-Structured Merge (LSM) Timeline](https://hudi.apache.org/blog/2025/05/29/lsm-timeline/)
+- [Introducing Secondary Index in Apache Hudi](https://hudi.apache.org/blog/2025/04/02/secondary-index/)
+- Lakehouse Chronicles YouTube episodes: [ep. 5](https://youtu.be/IxMSgPVcugs?si=lWBQuBqtbimUo-3Y), [ep. 6](https://youtu.be/t_LtUTt3DXE?si=TzWoSgXtcgVnvjkq), and [ep. 7](https://youtu.be/CdnYdw-dyTI?si=DMoc0ci7Ix8jl0F4)
+- [Interactive Jupyter Notebooks for hands-on learning](https://hudi.apache.org/docs/notebooks)
+
+## Looking Ahead
+
+The upcoming releases in 2026 will bring AI/ML-focused capabilities — including unstructured data types, column groups for embeddings, vector search, and Lance/Vortex format support. We'll also continue expanding multi-format interoperability through the pluggable table format framework and advancing streaming-first optimizations for real-time ingestion and sub-minute freshness. See the full [roadmap](https://hudi.apache.org/roadmap) for details.
+
+Whether you're contributing code, sharing feedback, or spreading the word — we'd love to have you involved:
+
+- Contribute on GitHub: [Hudi](https://github.com/apache/hudi/contribute) & [Hudi-rs](https://github.com/apache/hudi-rs/contribute)
+- Join our [Slack community](https://hudi.apache.org/slack)
+- Follow us on [LinkedIn](https://www.linkedin.com/company/apache-hudi/) and [X (Twitter)](https://x.com/apachehudi)
+- Subscribe to our [YouTube channel](https://www.youtube.com/@apachehudi)
+- Follow WeChat account "ApacheHudi" for news and content in Chinese
+- Participate in the [developer syncs](https://hudi.apache.org/contribute/developer-sync-call), [community syncs](https://hudi.apache.org/community/syncs), and [office hours](https://hudi.apache.org/community/office_hours)
+- Subscribe to the dev mailing list (by sending an empty email): [dev-subscribe@hudi.apache.org](mailto:dev-subscribe@hudi.apache.org)
+
+A huge thank you to everyone who contributed to Hudi's growth this year. With such a strong foundation, 2026 promises to be our most exciting year yet.
+
+
+<!--refs
+- Hudi 1.1 Release Blog: https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement/
+- Vinoth Chandar's Hudi 1.1 Post: https://www.linkedin.com/posts/vinothchandar_apachehudi-dataengineering-lakehouse-activity-7399139980138311680-YkU-/
+- Yue Zhang PMC Announcement: https://www.linkedin.com/posts/apache-hudi_apachehudi-opensource-dataengineering-activity-7368712944081125378-tdUq/
+- Tim Brown & Shawn Chang Committer Announcement: https://www.linkedin.com/feed/update/urn:li:activity:7409677366752579584/
+- Definitive Guide Book Announcement: https://www.linkedin.com/posts/vinothchandar_apachehudi-dataengineering-datalakehouse-activity-7391527330994839554-nAc4/
+- Hudi Newsletter #11 (Bangalore Meetup): https://hudinewsletter.substack.com/p/hudi-newsletter11-january-2025
+- Hudi Newsletter #13 (Kuaishou Meetup): https://hudinewsletter.substack.com/p/hudi-newsletter13-march-2025
+- Hudi Newsletter #20 (JD.com Meetup): https://hudinewsletter.substack.com/p/hudi-newsletter-20-october-2025
+- JD.com Meetup Recap Blog: https://hudi.apache.org/blog/2025/12/01/apache-hudi-JD-meetup-asia-2025-recap/
+- JD.com Meetup LinkedIn Post: https://www.linkedin.com/posts/apache-hudi_apachehudi-datalakehouse-bi-activity-7401716166509170689-Umop/
+- Hudi Newsletter #19 (CMU Seminar): https://hudinewsletter.substack.com/p/hudi-newsletter-19-september-2025
+- CMU Future Data Systems Seminar: https://db.cs.cmu.edu/events/futuredata-apache-hudi/
+-->
