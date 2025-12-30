@@ -20,9 +20,8 @@ package org.apache.spark.sql
 
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
-
-import org.apache.hudi.HoodieSchemaConversionUtils.convertHoodieSchemaToStructType
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.HoodieSchemaConversionUtils.convertHoodieSchemaToStructType
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
@@ -35,7 +34,6 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.util.concurrent.ConcurrentHashMap
 import java.util.function.{Supplier, Function => JFunction}
 import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
