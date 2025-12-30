@@ -14,9 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-FROM --platform=linux/amd64 adoptopenjdk/openjdk11:alpine
+FROM --platform=linux/amd64 maven:3.9-eclipse-temurin-11-alpine
 
-RUN apk add --no-cache --upgrade bash curl jq git maven
+RUN apk add --no-cache --upgrade bash curl jq git
 
 # Install thrift 0.13.0 from source (compiler only, skip library)
 RUN apk add --no-cache libstdc++ \
