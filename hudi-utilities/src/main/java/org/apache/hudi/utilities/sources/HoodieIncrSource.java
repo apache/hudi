@@ -39,7 +39,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
@@ -201,7 +202,8 @@ public class HoodieIncrSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
-    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(new HoodieHadoopStorage(srcPath, sparkContext.hadoopConfiguration()), srcPath).getTableVersion();
+    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(
+        HoodieStorageUtils.getStorage(srcPath, HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration())), srcPath).getTableVersion();
     if (sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
     } else {
