@@ -78,7 +78,11 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       )
     }
   }
-  private lazy val hasTimestampMillisFieldInTableSchema = true
+  private lazy val hasTimestampMillisFieldInTableSchema = if (avroTableSchema == null) {
+    true
+  } else {
+    AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
+  }
   private lazy val supportBatchWithTableSchema = !hasTimestampMillisFieldInTableSchema
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
@@ -95,7 +99,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
-    ParquetUtils.isBatchReadSupportedForSchema(conf, schema)
+    ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
