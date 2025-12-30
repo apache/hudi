@@ -430,14 +430,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   override def inferSchema(sparkSession: SparkSession, options: Map[String, String], files: Seq[FileStatus]): Option[StructType] = {
     if (isMultipleBaseFileFormatsEnabled || hoodieFileFormat == HoodieFileFormat.PARQUET) {
       ParquetUtils.inferSchema(sparkSession, options, files)
-    } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
-      OrcUtils.inferSchema(sparkSession, files, options)
-    } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
-      // TODO: Implement Lance schema inference
-      // For now, throw an exception will revisit
-      throw new HoodieNotSupportedException("Need to implement infer schema for Lance")
     } else {
-      throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
+      OrcUtils.inferSchema(sparkSession, files, options)
     }
   }
 

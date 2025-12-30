@@ -22,7 +22,7 @@ package org.apache.spark.sql.execution.datasources.lance
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
-import org.apache.hudi.io.storage.{HoodieLanceRecordIterator, HoodieSparkLanceReader}
+import org.apache.hudi.io.storage.{LanceRecordIterator, HoodieSparkLanceReader}
 import org.apache.hudi.storage.StorageConfiguration
 
 import com.lancedb.lance.file.LanceFileReader
@@ -103,8 +103,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           LanceArrowUtils.fromArrowSchema(arrowSchema)
         }
 
-        // Create iterator using shared HoodieLanceRecordIterator
-        val lanceIterator = new HoodieLanceRecordIterator(
+        // Create iterator using shared LanceRecordIterator
+        val lanceIterator = new LanceRecordIterator(
           allocator,
           lanceReader,
           arrowReader,

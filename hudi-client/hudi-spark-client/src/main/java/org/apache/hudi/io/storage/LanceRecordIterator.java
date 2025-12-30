@@ -51,7 +51,7 @@ import java.util.Iterator;
  * <p>Records are converted to {@link UnsafeRow} using {@link UnsafeProjection} for efficient
  * serialization and memory management.
  */
-public class HoodieLanceRecordIterator implements ClosableIterator<UnsafeRow> {
+public class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
   private final BufferAllocator allocator;
   private final LanceFileReader lanceReader;
   private final ArrowReader arrowReader;
@@ -72,11 +72,11 @@ public class HoodieLanceRecordIterator implements ClosableIterator<UnsafeRow> {
    * @param schema Spark schema for the records
    * @param path File path (for error messages)
    */
-  public HoodieLanceRecordIterator(BufferAllocator allocator,
-                                   LanceFileReader lanceReader,
-                                   ArrowReader arrowReader,
-                                   StructType schema,
-                                   String path) {
+  public LanceRecordIterator(BufferAllocator allocator,
+                             LanceFileReader lanceReader,
+                             ArrowReader arrowReader,
+                             StructType schema,
+                             String path) {
     this.allocator = allocator;
     this.lanceReader = lanceReader;
     this.arrowReader = arrowReader;

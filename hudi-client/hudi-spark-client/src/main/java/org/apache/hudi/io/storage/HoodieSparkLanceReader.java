@@ -149,7 +149,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       // Read only the requested columns from Lance file for efficiency
       ArrowReader arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE);
 
-      return new HoodieLanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path.toString());
+      return new LanceRecordIterator(allocator, lanceReader, arrowReader, requestedSparkSchema, path.toString());
     } catch (Exception e) {
       allocator.close();
       throw new HoodieException("Failed to create Lance reader for: " + path, e);
