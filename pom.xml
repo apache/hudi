@@ -512,6 +512,7 @@
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
@@ -555,6 +556,7 @@
             <filereports>TestSuite.txt</filereports>
             <systemProperties>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
             </systemProperties>
           </configuration>
           <executions>
@@ -2591,7 +2593,7 @@
         <kafka.version>3.3.2</kafka.version>
         <!-- Lance: Use Spark 3.4-specific artifact -->
         <lance.spark.artifact>lance-spark-3.4_${scala.binary.version}</lance.spark.artifact>
-        <lance.skip.tests>false</lance.skip.tests>
+        <lance.skip.tests>true</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are

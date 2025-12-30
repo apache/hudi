@@ -133,6 +133,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
       schema.forall(s => OrcUtils.supportColumnarReads(
         s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
+    // TODO: Implement columnar batch reading https://github.com/apache/hudi/issues/17736
+    val lanceBatchSupported = false
 
     val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
       parquetBatchSupported && orcBatchSupported
@@ -140,6 +142,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       parquetBatchSupported
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       orcBatchSupported
+    } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
+      lanceBatchSupported
     } else {
       throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }
@@ -306,6 +310,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
+    } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
+      sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else {
       throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }
