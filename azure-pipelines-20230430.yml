@@ -378,6 +378,7 @@ stages:
               command: 'run'
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
+                -v $PWD:$PWD -w $PWD -v /var/run/docker.sock:/var/run/docker.sock
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities
@@ -515,6 +516,7 @@ stages:
               command: 'run'
               arguments: >
                 -v $(Build.SourcesDirectory):/hudi
+                -v $PWD:$PWD -w $PWD -v /var/run/docker.sock:/var/run/docker.sock
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
                 && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dsurefire.failIfNoSpecifiedTests=false $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
