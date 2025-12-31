@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
