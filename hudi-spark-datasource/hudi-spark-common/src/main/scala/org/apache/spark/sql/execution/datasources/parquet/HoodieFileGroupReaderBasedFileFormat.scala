@@ -214,6 +214,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val exclusionFields = new java.util.HashSet[String]()
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
+    // QQ: How do we add nested partitioned fields to this without any field id's?
     val requestedStructType = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedStructType, sanitizedTableName), exclusionFields)
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructType, sanitizedTableName), exclusionFields)
