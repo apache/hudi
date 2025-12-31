@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSchemaConversionUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
@@ -41,7 +41,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -108,7 +108,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getHoodieReaderContext(tablePath: String, schema: HoodieSchema, storageConf: StorageConfiguration[_], metaClient: HoodieTableMetaClient): HoodieReaderContext[InternalRow] = {
     val parquetReader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema)
+    val dataSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     val orcReader = sparkAdapter.createOrcFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]), dataSchema)
     val multiFormatReader = new MultipleColumnarFileFormatReader(parquetReader, orcReader)
     new SparkFileFormatInternalRowReaderContext(multiFormatReader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
@@ -138,7 +138,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def assertRecordsEqual(schema: HoodieSchema, expected: InternalRow, actual: InternalRow): Unit = {
     assertEquals(expected.numFields, actual.numFields)
-    val expectedStruct = HoodieSparkAvroSchemaConverters.toSqlType(schema.toAvroSchema)._1.asInstanceOf[StructType]
+    val expectedStruct = HoodieSparkSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
 
     expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).zipWithIndex.foreach {
       case ((v1, v2), i) =>

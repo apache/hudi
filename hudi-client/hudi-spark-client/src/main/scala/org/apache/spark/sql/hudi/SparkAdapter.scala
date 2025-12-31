@@ -23,8 +23,7 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
-import org.apache.avro.Schema
+import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.parquet.schema.MessageType
@@ -166,7 +165,7 @@ trait SparkAdapter extends Serializable {
    */
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
-                     schema: Schema,
+                     schema: HoodieSchema,
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
