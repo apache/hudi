@@ -468,7 +468,7 @@ public class AvroOrcUtils {
    *
    * @param type        ORC schema of the object to read.
    * @param colVector   The column vector to read.
-   * @param schema  Avro schema of the object to read.
+   * @param schema      Schema of the object to read.
    *                    Only used to check logical types for timestamp unit conversion.
    * @param vectorPos   The position in the vector where the value to read is stored at.
    * @return            The object being read.
