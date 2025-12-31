@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils}
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
-import org.apache.avro.Schema
+import org.apache.avro.{AvroRuntimeException, Schema}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
@@ -138,6 +138,7 @@ object HoodieSchemaConversionUtils {
     try {
       HoodieSparkSchemaConverters.toHoodieType(structType, nullable, structName, recordNamespace)
     } catch {
+      case a: AvroRuntimeException => throw new HoodieSchemaException(a.getMessage, a)
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert struct type to HoodieSchema: $structType", e)
     }
