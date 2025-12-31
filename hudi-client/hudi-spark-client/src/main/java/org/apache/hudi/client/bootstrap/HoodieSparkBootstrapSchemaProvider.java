@@ -99,7 +99,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
-    return HoodieSchema.fromAvroSchema(AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true));
+    return AvroOrcUtils.createSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true);
   }
   
 }

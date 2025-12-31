@@ -398,10 +398,6 @@ public class HoodieAvroUtils {
     return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
-  public static String addMetadataColumnTypes(String hiveColumnTypes) {
-    return "string,string,string,string,string," + hiveColumnTypes;
-  }
-
   public static Schema makeFieldNonNull(Schema schema, String fieldName, Object fieldDefaultValue) {
     ValidationUtils.checkArgument(fieldDefaultValue != null);
     List<Schema.Field> filteredFields = schema.getFields()
