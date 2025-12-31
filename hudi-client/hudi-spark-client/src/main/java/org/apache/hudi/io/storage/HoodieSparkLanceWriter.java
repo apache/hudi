@@ -105,7 +105,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 StructType sparkSchema,
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage) throws IOException {
-    this(file, sparkSchema, "0", taskContextSupplier, storage, false);
+    this(file, sparkSchema, null, taskContextSupplier, storage, false);
   }
 
   @Override
