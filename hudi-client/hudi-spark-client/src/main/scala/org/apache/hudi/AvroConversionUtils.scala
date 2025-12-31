@@ -28,7 +28,6 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
-import org.apache.spark.sql.avro.HoodieSparkAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 
@@ -37,7 +36,6 @@ import java.util.concurrent.ConcurrentHashMap
 object AvroConversionUtils {
   private val ROW_TO_AVRO_CONVERTER_CACHE =
     new ConcurrentHashMap[Tuple3[StructType, Schema, Boolean], Function1[InternalRow, GenericRecord]]
-  private val AVRO_SCHEMA_CACHE = new ConcurrentHashMap[Schema, StructType]
 
   /**
    * Creates converter to transform Avro payload into Spark's Catalyst one
@@ -115,28 +113,12 @@ object AvroConversionUtils {
     ss.createDataFrame(rdd.mapPartitions { records =>
       if (records.isEmpty) Iterator.empty
       else {
-        val schema = new Schema.Parser().parse(schemaStr)
-        val dataType = convertAvroSchemaToStructType(schema)
-        val converter = createConverterToRow(schema, dataType)
+        val schema = HoodieSchema.parse(schemaStr)
+        val dataType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
+        val converter = createConverterToRow(schema.toAvroSchema, dataType)
         records.map { r => converter(r) }
       }
-    }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
-  }
-
-  /**
-   * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
-   */
-  def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    val loader: java.util.function.Function[Schema, StructType] = key => {
-      try {
-        HoodieSparkAvroSchemaConverters.toSqlType(key) match {
-          case (dataType, _) => dataType.asInstanceOf[StructType]
-        }
-      } catch {
-        case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
-      }
-    }
-    AVRO_SCHEMA_CACHE.computeIfAbsent(avroSchema, loader)
+    }, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchema.parse(schemaStr)))
   }
 
   /**

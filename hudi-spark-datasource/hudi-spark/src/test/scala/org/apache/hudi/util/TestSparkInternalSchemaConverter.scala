@@ -25,7 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.internal.schema.convert.TestInternalSchemaConverter._
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
-import org.apache.spark.sql.avro.{HoodieSparkAvroSchemaConverters, HoodieSparkSchemaConverters}
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test

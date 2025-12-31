@@ -22,11 +22,15 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils}
 import org.apache.hudi.internal.schema.HoodieSchemaException
+
+import org.apache.avro.Schema
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
+
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.JavaConverters._
 
@@ -37,6 +41,8 @@ import scala.collection.JavaConverters._
  * handling defaults and nullability alignment.
  */
 object HoodieSchemaConversionUtils {
+  private val SCHEMA_CACHE = new ConcurrentHashMap[HoodieSchema, StructType]
+
 
   /**
    * Converts HoodieSchema to Catalyst's StructType.
@@ -46,14 +52,20 @@ object HoodieSchemaConversionUtils {
    * @throws HoodieSchemaException if conversion fails
    */
   def convertHoodieSchemaToStructType(hoodieSchema: HoodieSchema): StructType = {
-    try {
-      HoodieSparkSchemaConverters.toSqlType(hoodieSchema) match {
-        case (dataType, _) => dataType.asInstanceOf[StructType]
+    val loader: java.util.function.Function[HoodieSchema, StructType] =
+      new java.util.function.Function[HoodieSchema, StructType]() {
+        override def apply(schema: HoodieSchema): StructType = {
+          try {
+            HoodieSparkSchemaConverters.toSqlType(schema) match {
+              case (dataType, _) => dataType.asInstanceOf[StructType]
+            }
+          } catch {
+            case e: Exception => throw new HoodieSchemaException(
+              s"Failed to convert HoodieSchema to StructType: $schema", e)
+          }
+        }
       }
-    } catch {
-      case e: Exception => throw new HoodieSchemaException(
-        s"Failed to convert HoodieSchema to StructType: $hoodieSchema", e)
-    }
+    SCHEMA_CACHE.computeIfAbsent(hoodieSchema, loader)
   }
 
   /**

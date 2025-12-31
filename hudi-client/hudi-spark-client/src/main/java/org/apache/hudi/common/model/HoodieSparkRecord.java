@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.model.HoodieInternalRow;
@@ -323,7 +324,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     if (data == null) {
       return Option.empty();
     }
-    StructType structType = schema == null ? AvroConversionUtils.convertAvroSchemaToStructType(recordSchema) : schema;
+    StructType structType = schema == null ? HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchema.fromAvroSchema(recordSchema)) : schema;
     GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
     return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
   }
