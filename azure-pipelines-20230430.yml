@@ -126,7 +126,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT hudi-hadoop-common & UT FT client/spark-client
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -180,7 +180,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FTA hudi-spark
-        timeoutInMinutes: '180'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -250,7 +250,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT spark-datasource Java Test 2
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -285,7 +285,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_5
         displayName: UT spark-datasource DML
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -320,7 +320,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_6
         displayName: UT spark-datasource DDL & Others
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -355,7 +355,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
         displayName: UT Hudi Streamer & FT utilities
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -405,7 +405,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
         displayName: UT FT Spark and SQL (additional)
-        timeoutInMinutes: '110'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -458,7 +458,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_9
         displayName: FT spark 2
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -493,7 +493,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_10
         displayName: UT FT common & other modules
-        timeoutInMinutes: '180'
+        timeoutInMinutes: '120'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
