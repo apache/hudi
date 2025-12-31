@@ -156,16 +156,12 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     //create topics for each table
     String topicName1 = "topic" + testNum++;
     String topicName2 = "topic" + testNum;
-    try {
-      createTopic(topicName1, 2);
-      createTopic(topicName2, 2);
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to create topics", e);
-    }
+    testUtils.createTopic(topicName1, 2);
+    testUtils.createTopic(topicName2, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 5, HoodieTestDataGenerator.TRIP_SCHEMA, 0L)));
-    sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA, 0L)));
+    testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 5, HoodieTestDataGenerator.TRIP_SCHEMA, 0L)));
+    testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA, 0L)));
 
     HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, basePath + "/config", JsonKafkaSource.class.getName(), false, false, null);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
@@ -190,9 +186,9 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertRecordCount(10, targetBasePath2, sqlContext);
 
     //insert updates for already existing records in kafka topics
-    sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateUniqueUpdatesStream("001", 5, HoodieTestDataGenerator.TRIP_SCHEMA, 0L)
+    testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateUniqueUpdatesStream("001", 5, HoodieTestDataGenerator.TRIP_SCHEMA, 0L)
         .collect(Collectors.toList())));
-    sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateUniqueUpdatesStream("001", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA, 0L)
+    testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateUniqueUpdatesStream("001", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA, 0L)
         .collect(Collectors.toList())));
 
     streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);

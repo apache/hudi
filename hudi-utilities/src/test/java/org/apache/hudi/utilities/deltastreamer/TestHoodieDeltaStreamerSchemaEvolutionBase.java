@@ -246,11 +246,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected void addKafkaData(Dataset<Row> df, Boolean isFirst) {
     if (isFirst && !createdTopicNames.contains(topicName)) {
-      try {
-        createTopic(topicName);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to create topic: " + topicName, e);
-      }
+      testUtils.createTopic(topicName);
       createdTopicNames.add(topicName);
     }
     List<GenericRecord> records = HoodieSparkUtils.createRdd(df, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD().collect();
@@ -263,7 +259,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected Properties getProducerProperties() {
     Properties props = new Properties();
-    props.put("bootstrap.servers", brokerAddress());
+    props.put("bootstrap.servers", testUtils.brokerAddress());
     props.put("value.serializer", ByteArraySerializer.class.getName());
     props.put("value.deserializer", ByteArraySerializer.class.getName());
     // Key serializer is required.
