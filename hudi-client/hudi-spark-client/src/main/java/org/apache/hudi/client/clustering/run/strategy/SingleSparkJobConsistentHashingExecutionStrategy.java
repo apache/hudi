@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyConcatenatingIterator;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -49,7 +49,6 @@ import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucket
 import org.apache.hudi.util.ExecutorFactory;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -71,13 +70,13 @@ import java.util.function.Supplier;
 public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
 
   private final String indexKeyFields;
-  private final Schema readerSchema;
+  private final HoodieSchema readerSchema;
 
   public SingleSparkJobConsistentHashingExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
                                                           HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
-    this.readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+    this.readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(writeConfig.getSchema()));
   }
 
   @Override
@@ -147,10 +146,10 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     private final boolean recordsSorted;
     private final Map<String/*fileIdPrefix*/, HoodieWriteHandle> writeHandles;
     private final Function<HoodieRecord, String> fileIdPrefixExtractor;
-    private final Schema schema;
+    private final HoodieSchema schema;
 
     public InsertHandler(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier,
-                         WriteHandleFactory writeHandleFactory, boolean recordsSorted, Function<HoodieRecord, String> fileIdPrefixExtractor, Schema schema) {
+                         WriteHandleFactory writeHandleFactory, boolean recordsSorted, Function<HoodieRecord, String> fileIdPrefixExtractor, HoodieSchema schema) {
       this.config = config;
       this.instantTime = instantTime;
       this.hoodieTable = hoodieTable;
@@ -175,7 +174,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
         handle = writeHandleFactory.create(config, instantTime, hoodieTable, record.getPartitionPath(), fileIdPrefix, taskContextSupplier);
         writeHandles.put(fileIdPrefix, handle);
       }
-      handle.write(record, HoodieSchema.fromAvroSchema(schema), config.getProps());
+      handle.write(record, schema, config.getProps());
     }
 
     @Override

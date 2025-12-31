@@ -29,7 +29,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SPARK_VERSION
@@ -202,9 +201,9 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       if (recs.isEmpty) {
         Iterator.empty
       } else {
-        val schema = new Schema.Parser().parse(serializedTargetSchema)
+        val schema = HoodieSchema.parse(serializedTargetSchema)
         val transform: GenericRecord => Either[GenericRecord, String] = record => try {
-          Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
+          Left(HoodieAvroUtils.rewriteRecordDeep(record, schema.toAvroSchema, true))
         } catch {
           case _: Throwable => Right(HoodieAvroUtils.safeAvroToJsonString(record))
         }

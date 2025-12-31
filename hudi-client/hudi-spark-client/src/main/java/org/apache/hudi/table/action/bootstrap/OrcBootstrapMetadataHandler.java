@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -57,28 +58,29 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+  HoodieSchema getSchema(StoragePath sourceFilePath) throws IOException {
     Reader orcReader = OrcFile.createReader(
         new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = orcReader.getSchema();
-    return AvroOrcUtils.createAvroSchema(orcSchema);
+    Schema schema = AvroOrcUtils.createAvroSchema(orcSchema);
+    return HoodieSchema.fromAvroSchema(schema);
   }
 
   @Override
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
                         StoragePath sourceFilePath, KeyGeneratorInterface keyGenerator,
-                        String partitionPath, Schema avroSchema) throws Exception {
+                        String partitionPath, HoodieSchema schema) throws Exception {
     // TODO support spark orc reader
     if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
       throw new UnsupportedOperationException();
     }
     Reader orcReader = OrcFile.createReader(
         new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
-    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
+    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema.getAvroSchema());
     HoodieExecutor<Void> executor = null;
     RecordReader reader = orcReader.rows(new Reader.Options((Configuration) table.getStorageConf().unwrap()).schema(orcSchema));
     try {
-      executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, avroSchema, orcSchema),
+      executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, schema.getAvroSchema(), orcSchema),
           new BootstrapRecordConsumer(bootstrapHandle), inp -> {
             String recKey = keyGenerator.getKey(inp).getRecordKey();
             GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());

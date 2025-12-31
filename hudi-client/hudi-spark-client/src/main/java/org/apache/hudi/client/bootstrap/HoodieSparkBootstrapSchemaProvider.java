@@ -18,19 +18,19 @@
 
 package org.apache.hudi.client.bootstrap;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.OrcFile;
@@ -52,8 +52,8 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   }
 
   @Override
-  protected Schema getBootstrapSourceSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
-    Schema schema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
+  protected HoodieSchema getBootstrapSourceSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
+    HoodieSchema schema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
           Path filePath = HadoopFSUtils.toPath(fs.getPath());
           String extension = FSUtils.getFileExtension(filePath.getName());
           if (PARQUET.getFileExtension().equals(extension)) {
@@ -69,7 +69,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     return schema;
   }
 
-  private static Schema getBootstrapSourceSchemaParquet(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
+  private static HoodieSchema getBootstrapSourceSchemaParquet(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
     // NOTE: The type inference of partition column in the parquet table is turned off explicitly,
     // to be consistent with the existing bootstrap behavior, where the partition column is String
     // typed in Hudi table.
@@ -85,10 +85,10 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
 
-    return AvroConversionUtils.convertStructTypeToAvroSchema(parquetSchema, structName, recordNamespace);
+    return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(parquetSchema, structName, recordNamespace);
   }
 
-  private static Schema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
+  private static HoodieSchema getBootstrapSourceSchemaOrc(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
     Reader orcReader = null;
     try {
       orcReader = OrcFile.createReader(filePath, OrcFile.readerOptions(context.getStorageConf().unwrapAs(Configuration.class)));
@@ -99,7 +99,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
-    return AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true);
+    return HoodieSchema.fromAvroSchema(AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true));
   }
   
 }
