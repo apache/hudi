@@ -45,6 +45,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -88,7 +89,7 @@ import static org.mockito.Mockito.when;
 public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
-  private HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
   private static KafkaTestUtils testUtils;
 
   @BeforeAll
@@ -100,6 +101,11 @@ public class TestKafkaOffsetGen {
   @AfterAll
   public static void teardown() throws Exception {
     testUtils.teardown();
+  }
+
+  @AfterEach
+  void cleanupTopics() {
+    testUtils.deleteTopics();
   }
 
   private TypedProperties getConsumerConfigs(String autoOffsetReset, String kafkaCheckpointType) {

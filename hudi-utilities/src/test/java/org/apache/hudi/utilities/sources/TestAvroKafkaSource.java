@@ -51,6 +51,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -98,6 +99,11 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   @AfterAll
   public static void tearDown() {
     testUtils.teardown();
+  }
+
+  @AfterEach
+  void cleanupTopics() {
+    testUtils.deleteTopics();
   }
 
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {

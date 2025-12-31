@@ -40,6 +40,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -73,6 +74,11 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
   public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
     testUtils.teardown();
+  }
+
+  @AfterEach
+  void cleanupTopics() {
+    testUtils.deleteTopics();
   }
 
   private TypedProperties createPropsForJsonSource() {

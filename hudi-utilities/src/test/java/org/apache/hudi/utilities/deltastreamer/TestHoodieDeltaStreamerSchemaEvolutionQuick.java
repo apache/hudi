@@ -247,8 +247,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     assertRecordCount(numRecords);
 
     df = sparkSession.read().format("hudi").load(tableBasePath);
-    df.show(100,false);
     df.cache();
+    // assert data can be read
+    df.limit(100).collect();
     assertDataType(df, "tip_history", DataTypes.createArrayType(DataTypes.LongType));
     assertDataType(df, "fare", DataTypes.createStructType(new StructField[]{
         new StructField("amount", DataTypes.StringType, true, Metadata.empty()),
