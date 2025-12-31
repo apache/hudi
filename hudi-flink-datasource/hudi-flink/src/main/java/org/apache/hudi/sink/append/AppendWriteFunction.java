@@ -129,7 +129,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");
     }
-    this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+    this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(false), this.writeClient.getConfig(),
         instant, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), RuntimeContextUtils.getAttemptNumber(getRuntimeContext()),
         this.rowType, false, Option.of(writeMetrics));
   }

@@ -460,6 +460,10 @@ public class HoodieFlinkWriteClient<T>
     return HoodieFlinkTable.create(config, context);
   }
 
+  public HoodieFlinkTable<T> getHoodieTable(boolean loadActiveTimelineOnLoad) {
+    return HoodieFlinkTable.create(config, context, loadActiveTimelineOnLoad);
+  }
+
   public Map<String, List<String>> getPartitionToReplacedFileIds(
       WriteOperationType writeOperationType,
       List<WriteStatus> writeStatuses) {

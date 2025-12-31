@@ -110,7 +110,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunctionAdapter<Hoodi
       HoodieConsistentHashingMetadata metadata = null;
       while (retryCount <= maxRetries) {
         try {
-          metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.writeClient.getHoodieTable(), p, bucketNum);
+          metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.writeClient.getHoodieTable(false), p, bucketNum);
           break;
         } catch (Exception e) {
           if (retryCount >= maxRetries) {
