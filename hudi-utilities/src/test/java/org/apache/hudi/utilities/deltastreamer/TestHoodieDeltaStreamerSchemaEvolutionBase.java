@@ -136,6 +136,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   public void teardown() throws Exception {
     super.teardown();
     TestSchemaProvider.resetTargetSchema();
+    if (deltaStreamer != null) {
+      deltaStreamer.shutdownGracefully();
+    }
   }
 
   @AfterAll

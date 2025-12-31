@@ -108,6 +108,7 @@ public class KafkaTestUtils {
     }
     try (AdminClient adminClient = AdminClient.create(getAdminProps())) {
       adminClient.deleteTopics(createdTopics).all().get();
+      createdTopics.clear();
     } catch (Exception e) {
       LOG.warn("Failed to delete topics: {}", StringUtils.join(createdTopics, ","), e);
     }

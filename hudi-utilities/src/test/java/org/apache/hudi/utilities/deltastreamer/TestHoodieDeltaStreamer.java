@@ -193,6 +193,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -433,11 +434,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                                     String expectedKeyGeneratorClassName) throws Exception {
     String[] splitNames = propsFilename.split("\\.");
     String tableBasePath = basePath + "/" + splitNames[0];
-    HoodieDeltaStreamer deltaStreamer =
-        new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
+    syncOnce(TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
             Collections.singletonList(TripsWithDistanceTransformer.class.getName()),
-            propsFilename, false), jsc);
-    deltaStreamer.sync();
+            propsFilename, false));
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
     assertEquals(
@@ -461,9 +460,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testTableCreation() throws Exception {
     Exception e = assertThrows(TableNotFoundException.class, () -> {
       fs.mkdirs(new Path(basePath + "/not_a_table"));
-      HoodieDeltaStreamer deltaStreamer =
-          new HoodieDeltaStreamer(TestHelpers.makeConfig(basePath + "/not_a_table", WriteOperationType.BULK_INSERT), jsc);
-      deltaStreamer.sync();
+      syncOnce(TestHelpers.makeConfig(basePath + "/not_a_table", WriteOperationType.BULK_INSERT));
     }, "Should error out when pointed out at a dir thats not a table");
     // expected
     LOG.debug("Expected error during table creation", e);
@@ -483,6 +480,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable()));
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
+    deltaStreamer.shutdownGracefully();
   }
 
   @ParameterizedTest
@@ -498,6 +496,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     String expectedPartitionFields = version.equals(HoodieTableVersion.SIX) ? "partition_path" : "partition_path:simple";
     assertEquals(expectedPartitionFields, metaClient.getTableConfig().getString(HoodieTableConfig.PARTITION_FIELDS));
+    deltaStreamer.shutdownGracefully();
   }
 
   @ParameterizedTest
@@ -539,17 +538,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.bootstrap.parallelism=5");
     cfg.configs.add(String.format("%s=false", HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     cfg.targetBasePath = newDatasetBasePath;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
-    LOG.info("Schema :");
-    res.printSchema();
+    LOG.info("Schema : {}", res.schema());
 
     assertRecordCount(1950, newDatasetBasePath, sqlContext);
     res.registerTempTable("bootstrapped");
     assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
     // NOTE: To fetch record's count Spark will optimize the query fetching minimal possible amount
     //       of data, which might not provide adequate amount of test coverage
-    sqlContext.sql("select * from bootstrapped").show();
+    assertDoesNotThrow(() -> sqlContext.sql("select * from bootstrapped").collect());
 
     StructField[] fields = res.schema().fields();
     List<String> fieldNames = Arrays.asList(res.schema().fieldNames());
@@ -592,7 +590,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void syncAndAssertRecordCount(HoodieDeltaStreamer.Config cfg, Integer expected, String tableBasePath, String metadata, Integer totalCommits) throws Exception {
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(expected, tableBasePath, sqlContext);
     assertDistanceCount(expected, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata(metadata, tableBasePath, totalCommits);
@@ -615,7 +613,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
 
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
 
     assertRecordCount(1000, tableBasePath, sqlContext);
@@ -628,7 +626,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1450, tableBasePath, sqlContext);
@@ -653,7 +651,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
     }
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     // again, 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1900, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00002", tableBasePath, 3);
@@ -694,7 +692,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
 
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
@@ -714,7 +712,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
     cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(1450, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
@@ -755,7 +753,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
       cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
-      new HoodieDeltaStreamer(cfg, jsc).sync();
+      syncOnce(cfg);
       assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1000, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
@@ -775,7 +773,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
       cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
-      new HoodieDeltaStreamer(cfg, jsc).sync();
+      syncOnce(cfg);
       assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1450, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
@@ -819,7 +817,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       prepareJsonKafkaDFSFilesWithSchema(
           1000, true, topicName, schemaStr);
       HoodieDeltaStreamer.Config cfg = getConfigForLogicalTypesWithJsonSource(tableBasePath, WriteOperationType.INSERT, hasTransformer);
-      new HoodieDeltaStreamer(cfg, jsc).sync();
+      syncOnce(cfg);
       // Validate.
       assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(1000, tableBasePath, sqlContext);
@@ -835,7 +833,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       prepareJsonKafkaDFSFilesWithSchema(
           1000, false, topicName, schemaStr);
       cfg = getConfigForLogicalTypesWithJsonSource(tableBasePath, WriteOperationType.UPSERT, hasTransformer);
-      new HoodieDeltaStreamer(cfg, jsc).sync();
+      syncOnce(cfg);
       // Validate.
       assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
       assertRecordCount(2000, tableBasePath, sqlContext);
@@ -905,7 +903,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.forceDisableCompaction = true;
       cfg.sourceLimit = 100_000;
       cfg.ignoreCheckpoint = "12345";
-      new HoodieDeltaStreamer(cfg, jsc).sync();
+      syncOnce(cfg);
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
     });
   }
@@ -1044,8 +1042,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       Option<TypedProperties> propt = Option.of(properties);
 
-      new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "456"), jsc, propt).sync();
-
+      syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "456"), propt);
 
       inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
       propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
@@ -1055,7 +1052,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         propt.get().setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
         propt.get().setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
       }
-      new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "789"), jsc, propt).sync();
+      syncOnce(prepCfgForCowLogicalRepair(tableBasePath, "789"), propt);
 
       String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
       try {
@@ -1165,7 +1162,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       Option<TypedProperties> propt = Option.of(properties);
 
-      new HoodieStreamer(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), jsc, propt).sync();
+      syncOnce(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), propt);
 
       String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
       try {
@@ -1375,8 +1372,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=%s", HoodieMetricsConfig.TURN_METRICS_ON.key(), "true"));
     cfg.configs.add(String.format("%s=%s", HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), MetricsReporterType.INMEMORY.name()));
     cfg.continuousMode = false;
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+    syncOnce(cfg);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
@@ -1405,8 +1401,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=%s", HoodieMetricsConfig.TURN_METRICS_ON.key(), "true"));
     cfg.configs.add(String.format("%s=%s", HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), MetricsReporterType.INMEMORY.name()));
     cfg.continuousMode = false;
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+    syncOnce(cfg);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
@@ -1545,8 +1540,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.continuousMode = false;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+    syncOnce(cfg);
     // assert ingest successful
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
 
@@ -1561,8 +1555,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // do another ingestion with inline clustering enabled
     cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "true", "2", "", ""));
     cfg.retryLastPendingInlineClusteringJob = true;
-    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
-    ds2.sync();
+    syncOnce(cfg);
     String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().requestedTime();
     assertEquals(clusteringRequest.requestedTime(), completeClusteringTimeStamp);
     TestHelpers.assertAtLeastNCommits(2, tableBasePath);
@@ -1595,6 +1588,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     TestHelpers.assertAtleastNDeltaCommits(2, tableBasePath);
     TestHelpers.assertAtleastNCompactionCommits(1, tableBasePath);
+    deltaStreamer.shutdownGracefully();
 
     // delete compaction commit
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
@@ -1611,6 +1605,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     timeline = meta.getActiveTimeline().getRollbackTimeline();
     assertEquals(1, timeline.getInstants().size());
+    deltaStreamer.shutdownGracefully();
   }
 
   @ParameterizedTest
@@ -1649,10 +1644,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         replacedTimeline.readReplaceCommitMetadata(firstReplaceHoodieInstant.get());
     Map<String, List<String>> partitionToReplaceFileIds = firstReplaceMetadata.getPartitionToReplaceFileIds();
     String partitionName = null;
-    List replacedFileIDs = null;
-    for (Map.Entry entry : partitionToReplaceFileIds.entrySet()) {
+    List<String> replacedFileIDs = null;
+    for (Map.Entry<String, List<String>> entry : partitionToReplaceFileIds.entrySet()) {
       partitionName = String.valueOf(entry.getKey());
-      replacedFileIDs = (List) entry.getValue();
+      replacedFileIDs = entry.getValue();
     }
 
     assertNotNull(partitionName);
@@ -1696,8 +1691,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // timeline as of now. no cleaner and archival kicked in.
     // c1, c2, rc3, c4, c5, rc6,
 
-    ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+    syncOnce(cfg);
     // after 1 round of sync, timeline will be as follows
     // just before clean
     // c1, c2, rc3, c4, c5, rc6, c7
@@ -1740,9 +1734,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.continuousMode = false;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
-    ds.shutdownGracefully();
+    syncOnce(cfg);
     // assert ingest successful
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
 
@@ -2151,8 +2143,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "false", "0", "false", "0"));
     cfg.configs.addAll(getAllMultiWriterConfigs());
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+    syncOnce(cfg);
 
     // assert ingest successful
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
@@ -2162,8 +2153,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     schedule.cluster(0);
 
     // do another ingestion
-    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
-    ds2.sync();
+    syncOnce(cfg);
 
     // convert clustering request into inflight, Simulate the last clustering failed scenario
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
@@ -2282,18 +2272,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         useSchemaProvider, 100000, false, null, null, "timestamp", null, false, hoodieTableVersion);
     cfg.configs.add(DataSourceWriteOptions.ENABLE_ROW_WRITER().key() + "=true");
     cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + hoodieTableVersion.versionCode());
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
-    deltaStreamer.sync();
+    syncOnce(cfg);
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-    deltaStreamer.shutdownGracefully();
 
+    HoodieStreamer deltaStreamer = null;
     try {
       if (testEmptyBatch) {
         prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
             PARQUET_SOURCE_ROOT, false, "partition_path", "0");
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-        deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
-        deltaStreamer.sync();
+        syncOnce(cfg);
         // since we mimic'ed empty batch, total records should be same as first sync().
         assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
         HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
@@ -2305,7 +2293,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         compareLatestTwoSchemas(metaClient);
         prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
             PARQUET_SOURCE_ROOT, false, "partition_path", "");
-        deltaStreamer.shutdownGracefully();
       }
 
       int recordsSoFar = 100;
@@ -2356,7 +2343,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             "false", ""), true);
   }
 
-  private void testBulkInsertRowWriterContinuousMode(Boolean useSchemaProvider, List<String> transformerClassNames,
+  private void testBulkInsertRowWriterContinuousMode(boolean useSchemaProvider, List<String> transformerClassNames,
                                                      boolean testEmptyBatch, List<String> customConfigs, boolean makeDatesAmbiguous) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
     int parquetRecordsCount = 100;
@@ -2371,13 +2358,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         int counter = 2;
         while (counter < 100) { // lets keep going. if the test times out, we will cancel the future within finally. So, safe to generate 100 batches.
-          LOG.info("Generating data for batch " + counter);
+          LOG.info("Generating data for batch {}", counter);
           prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(counter) + ".parquet", false, null, null, makeDatesAmbiguous);
           counter++;
           Thread.sleep(2000);
         }
       } catch (Exception ex) {
-        LOG.warn("Input data generation failed", ex.getMessage());
+        LOG.warn("Input data generation failed", ex);
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
@@ -2440,7 +2427,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath, WriteOperationType.BULK_INSERT,
             true, null);
     addRecordMerger(recordType, downstreamCfg.configs);
-    new HoodieDeltaStreamer(downstreamCfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(downstreamCfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, downstreamTableBasePath, sqlContext);
@@ -2448,7 +2435,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // No new data => no commits for upstream table
     cfg.sourceLimit = 0;
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(1000, tableBasePath, sqlContext);
     assertDistanceCount(1000, tableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, tableBasePath, sqlContext);
@@ -2458,7 +2445,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config downstreamCfg1 =
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
             WriteOperationType.BULK_INSERT, true, DummySchemaProvider.class.getName());
-    new HoodieDeltaStreamer(downstreamCfg1, jsc).sync();
+    syncOnce(downstreamCfg1);
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, downstreamTableBasePath, sqlContext);
@@ -2467,7 +2454,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // upsert() #1 on upstream hudi table
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(1950, tableBasePath, sqlContext);
     assertDistanceCount(1950, tableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1950, tableBasePath, sqlContext);
@@ -2481,7 +2468,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             false, null);
     addRecordMerger(recordType, downstreamCfg.configs);
     downstreamCfg.sourceLimit = 2000;
-    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+    syncOnce(downstreamCfg);
     assertRecordCount(2000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(2000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(2000, downstreamTableBasePath, sqlContext);
@@ -2499,16 +2486,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .setBasePath(tableBasePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, metaClient);
-    final String tableName = hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME);
-    assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
-    assertEquals(3, hiveClient.getAllPartitions(tableName).size(),
-        "Table partitions should match the number of partitions we wrote");
-    assertEquals(lastInstantForUpstreamTable.requestedTime(),
-        hiveClient.getLastCommitTimeSynced(tableName).get(),
-        "The last commit that was synced should be updated in the TBLPROPERTIES");
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, downstreamTableBasePath);
+    try (HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, metaClient)) {
+      final String tableName = hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME);
+      assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
+      assertEquals(3, hiveClient.getAllPartitions(tableName).size(),
+          "Table partitions should match the number of partitions we wrote");
+      assertEquals(lastInstantForUpstreamTable.requestedTime(),
+          hiveClient.getLastCommitTimeSynced(tableName).get(),
+          "The last commit that was synced should be updated in the TBLPROPERTIES");
+      UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+      UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, downstreamTableBasePath);
+    }
   }
 
   @Test
@@ -2518,7 +2506,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         false, false, null, null);
     Exception e = assertThrows(HoodieException.class, () -> {
-      new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+      syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     }, "Should error out when schema provider is not provided");
     LOG.debug("Expected error during reading data from source ", e);
     assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. "
@@ -2534,7 +2522,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, false, null, "MERGE_ON_READ");
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(1000, dataSetBasePath, sqlContext);
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
@@ -2556,7 +2544,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, true, PartialUpdateAvroPayload.class.getName(), "MERGE_ON_READ");
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(1000, dataSetBasePath, sqlContext);
 
     //now assert that hoodie.properties file now has updated payload class name
@@ -2571,7 +2559,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, false, null, null);
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(1000, dataSetBasePath, sqlContext);
 
     Properties props = new Properties();
@@ -2624,7 +2612,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.filterDupes = true;
     cfg.sourceOrderingFields = sourceOrderingField;
     addRecordMerger(recordType, cfg.configs);
-    new HoodieStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
 
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
@@ -2652,7 +2640,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 
     TestDataSource.recordInstantTime = Option.of("002");
-    new HoodieStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
@@ -2698,7 +2686,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 
     TestDataSource.recordInstantTime = Option.of("001");
-    new HoodieStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
@@ -2708,7 +2696,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestDataSource.recordInstantTime = Option.of("002");
       runStreamSync(cfg, false, 10, WriteOperationType.UPSERT);
     });
-    assertTrue(e.getMessage().equals("Configured ordering fields: timestamp do not match table ordering fields: [timestamp, rider]"));
+    assertEquals("Configured ordering fields: timestamp do not match table ordering fields: [timestamp, rider]", e.getMessage());
   }
 
   private static long getNumUpdates(HoodieCommitMetadata metadata) {
@@ -2724,7 +2712,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
@@ -2759,7 +2747,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg2.filterDupes = true;
     cfg2.operation = WriteOperationType.UPSERT;
     try {
-      new HoodieDeltaStreamer(cfg2, jsc).sync();
+      syncOnce(cfg2);
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
     }
@@ -2771,7 +2759,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.filterDupes = filterDupes;
     cfg.sourceLimit = numberOfRecords;
     cfg.operation = operationType;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
   }
 
   @ParameterizedTest
@@ -2919,12 +2907,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, storage, basePath + "/" + PROPS_FILENAME_TEST_ORC);
 
     String tableBasePath = basePath + "/test_orc_source_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+    syncOnce(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
             ORCDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_ORC, false,
-            useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
-    deltaStreamer.sync();
+            useSchemaProvider, 100000, false, null, null, "timestamp", null));
     assertRecordCount(ORC_NUM_RECORDS, tableBasePath, sqlContext);
     testNum++;
   }
@@ -2999,6 +2986,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     assertRecordCount(totalExpectedRecords, tableBasePath, sqlContext);
     testNum++;
+    deltaStreamer.shutdownGracefully();
   }
 
   @Test
@@ -3020,6 +3008,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     prepareJsonKafkaDFSFiles(records, false, topicName);
     deltaStreamer.sync();
     assertRecordCount(totalRecords, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
   }
 
   @Test
@@ -3032,11 +3021,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     prepareJsonKafkaDFSFiles(numRecords, true, topicName, numPartitions);
     prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName, null, true);
     String tableBasePath = basePath + "/test_json_kafka_offsets_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+    syncOnce(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
             Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null, null, "timestamp", null), jsc);
-    deltaStreamer.sync();
+            true, 100000, false, null, null, "timestamp", null));
     sqlContext.clearCache();
     Dataset<Row> ds = sqlContext.read().format("org.apache.hudi").load(tableBasePath);
     assertEquals(numRecords, ds.count());
@@ -3085,6 +3073,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
     deltaStreamer.sync();
     assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
   }
 
   @Disabled("HUDI-6609")
@@ -3229,17 +3218,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     config.schemaProviderClassName = NullValueSchemaProvider.class.getName();
     config.sourceClassName = TestParquetDFSSourceEmptyBatch.class.getName();
-    HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(config, jsc);
-    deltaStreamer1.sync();
-    deltaStreamer1.shutdownGracefully();
+    syncOnce(config);
     assertRecordCount(0, tableBasePath, sqlContext);
 
     config.schemaProviderClassName = null;
     config.sourceClassName = ParquetDFSSource.class.getName();
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-    HoodieDeltaStreamer deltaStreamer2 = new HoodieDeltaStreamer(config, jsc);
-    deltaStreamer2.sync();
-    deltaStreamer2.shutdownGracefully();
+    syncOnce(config);
     //since first batch has empty schema, only records from the second batch should be written
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
   }
@@ -3264,11 +3249,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         PARQUET_SOURCE_ROOT, false, "partition_path", "0");
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+    syncOnce(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testInitFailure ? TestParquetDFSSourceEmptyBatch.class.getName() : ParquetDFSSource.class.getName(),
             null, PROPS_FILENAME_TEST_PARQUET, false,
-            useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
-    deltaStreamer.sync();
+            useSchemaProvider, 100000, false, null, null, "timestamp", null));
 
     if (testInitFailure) {
       FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/timeline/"));
@@ -3285,17 +3269,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // restart the pipeline.
     if (testInitFailure) { // should succeed.
-      deltaStreamer = new HoodieDeltaStreamer(
+      syncOnce(
           TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
               null, PROPS_FILENAME_TEST_PARQUET, false,
-              useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
-      deltaStreamer.sync();
+              useSchemaProvider, 100000, false, null, null, "timestamp", null));
       assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     } else {
-      assertThrows(HoodieIOException.class, () -> new HoodieDeltaStreamer(
+      assertThrows(HoodieIOException.class, () -> syncOnce(
           TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
               null, PROPS_FILENAME_TEST_PARQUET, false,
-              useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc));
+              useSchemaProvider, 100000, false, null, null, "timestamp", null)));
     }
     testNum++;
   }
@@ -3373,12 +3356,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     prepareCsvDFSSource(hasHeader, sep, useSchemaProvider, transformerClassNames != null);
     String tableBasePath = basePath + "/test_csv_table" + testNum;
     String sourceOrderingField = (hasHeader || useSchemaProvider) ? "timestamp" : "_c0";
-    HoodieDeltaStreamer deltaStreamer =
-        new HoodieDeltaStreamer(TestHelpers.makeConfig(
+    syncOnce(TestHelpers.makeConfig(
             tableBasePath, WriteOperationType.INSERT, CsvDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
-            useSchemaProvider, 1000, false, null, null, sourceOrderingField, null), jsc);
-    deltaStreamer.sync();
+            useSchemaProvider, 1000, false, null, null, sourceOrderingField, null));
     assertRecordCount(CSV_NUM_RECORDS, tableBasePath, sqlContext);
     testNum++;
   }
@@ -3513,6 +3494,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     deltaStreamer.sync();
     assertRecordCount(SQL_SOURCE_NUM_RECORDS * 2, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
   }
 
   @Test
@@ -3563,7 +3545,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         TestHelpers.makeConfigForHudiIncrSrc(tableBasePath, downstreamTableBasePath,
             WriteOperationType.BULK_INSERT, true, null);
     downstreamCfg.configs.add("hoodie.streamer.source.hoodieincr.num_instants=1");
-    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+    syncOnce(downstreamCfg);
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
@@ -3578,8 +3560,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //Adding this conf to make testing easier :)
     downstreamCfg.configs.add("hoodie.streamer.source.hoodieincr.num_instants=10");
     downstreamCfg.operation = WriteOperationType.UPSERT;
-    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
-    new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
+    syncOnce(downstreamCfg);
+    syncOnce(downstreamCfg);
 
     long baseTableRecords = sqlContext.read().format("org.apache.hudi").load(tableBasePath).count();
     long downStreamTableRecords = sqlContext.read().format("org.apache.hudi").load(downstreamTableBasePath).count();
@@ -3598,7 +3580,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.test.source.generate.inserts=true");
 
     for (int i = 0; i < count; i++) {
-      new HoodieDeltaStreamer(cfg, jsc).sync();
+      syncOnce(cfg);
     }
   }
 
@@ -3645,6 +3627,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // There should not be any fileIDs in the deleted partition
     assertTrue(getAllFileIDsInTable(tableBasePath, Option.of(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).isEmpty());
+    deltaStreamer.shutdownGracefully();
   }
 
   @Test
@@ -3680,7 +3663,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.operation = operationType;
     // No new data => no commits.
     cfg.sourceLimit = 0;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
 
     if (operationType == WriteOperationType.INSERT_OVERWRITE) {
       assertRecordCount(1000, tableBasePath, sqlContext);
@@ -3698,7 +3681,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     cfg.sourceLimit = 1000;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(950, tableBasePath, sqlContext);
     assertDistanceCount(950, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
@@ -3747,8 +3730,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     addRecordMerger(recordType, cfg.configs);
     cfg.configs.add(String.format("%s=%s", HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), "true"));
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    ds.sync();
+    syncOnce(cfg);
     // assert ingest successful
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
 
@@ -3774,7 +3756,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.enableMetaSync = true;
     cfg.forceEmptyMetaSync = true;
 
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     assertRecordCount(0, tableBasePath, sqlContext);
 
     // make sure hive table is present
@@ -3785,9 +3767,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .setBasePath(tableBasePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, metaClient);
-    final String tableName = hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME);
-    assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
+    try (HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, metaClient)) {
+      final String tableName = hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME);
+      assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
+    }
   }
 
   @Test
@@ -3795,7 +3778,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = basePath + "/test_resume_checkpoint_after_changing_cow_to_mor";
     // default table type is COW
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
@@ -3817,7 +3800,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // continue deltastreamer
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1450, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
@@ -3828,7 +3811,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtleastNDeltaCommits(1, tableBasePath);
 
     // test the table type is already mor
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     // total records should be 1900 now
     assertRecordCount(1900, tableBasePath, sqlContext);
@@ -3849,7 +3832,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     // change table type to MOR
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
     TestHelpers.assertAtLeastNCommits(1, tableBasePath);
@@ -3859,7 +3842,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
     cfg.configs.add("hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy");
     cfg.configs.add("hoodie.compact.inline.max.delta.commits=1");
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1450, tableBasePath, sqlContext);
     // totalCommits: 1 deltacommit(bulk_insert) + 1 deltacommit(upsert) + 1 commit(compaction)
@@ -3888,7 +3871,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // continue deltastreamer
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1900, tableBasePath, sqlContext);
     // the checkpoint now should be 00002
@@ -3898,7 +3881,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtLeastNCommits(4, tableBasePath);
 
     // test the table type is already cow
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    syncOnce(cfg);
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     // total records should be 2350 now
     assertRecordCount(2350, tableBasePath, sqlContext);
@@ -3937,6 +3920,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount + 200, tableBasePath, sqlContext);
     testNum++;
+    deltaStreamer.shutdownGracefully();
   }
 
   @ParameterizedTest
@@ -4264,5 +4248,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Arguments.of(WriteOperationType.UPSERT, false),
         Arguments.of(WriteOperationType.UPSERT, true)
     );
+  }
+
+  private void syncOnce(HoodieDeltaStreamer.Config cfg) throws Exception {
+    HoodieStreamer streamer = new HoodieDeltaStreamer(cfg, jsc);
+    streamer.sync();
+    streamer.shutdownGracefully();
+  }
+
+  private void syncOnce(HoodieStreamer streamer) throws Exception {
+    try {
+      streamer.sync();
+    } finally {
+      streamer.shutdownGracefully();
+    }
+  }
+
+  private void syncOnce(HoodieStreamer.Config cfg, Option<TypedProperties> properties) throws Exception {
+    syncOnce(new HoodieStreamer(cfg, jsc, properties));
   }
 }

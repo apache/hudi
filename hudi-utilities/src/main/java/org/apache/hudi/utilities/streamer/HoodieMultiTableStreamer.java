@@ -460,8 +460,10 @@ public class HoodieMultiTableStreamer {
   public void sync() {
     for (TableExecutionContext context : tableExecutionContexts) {
       try {
-        new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
+        HoodieStreamer streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
+        streamer.sync();
         successTables.add(Helpers.getTableWithDatabase(context));
+        streamer.shutdownGracefully();
       } catch (Exception e) {
         LOG.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
         failedTables.add(Helpers.getTableWithDatabase(context));
