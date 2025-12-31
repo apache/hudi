@@ -840,4 +840,22 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       assertTrue(minExpectedCommits <= numCommits, "Got=" + numCommits + ", exp >=" + minExpectedCommits);
     }
   }
+
+  protected void syncOnce(HoodieDeltaStreamer.Config cfg) throws Exception {
+    HoodieStreamer streamer = new HoodieDeltaStreamer(cfg, jsc);
+    streamer.sync();
+    streamer.shutdownGracefully();
+  }
+
+  protected void syncOnce(HoodieStreamer streamer) throws Exception {
+    try {
+      streamer.sync();
+    } finally {
+      streamer.shutdownGracefully();
+    }
+  }
+
+  protected void syncOnce(HoodieStreamer.Config cfg, Option<TypedProperties> properties) throws Exception {
+    syncOnce(new HoodieStreamer(cfg, jsc, properties));
+  }
 }

@@ -4249,22 +4249,4 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Arguments.of(WriteOperationType.UPSERT, true)
     );
   }
-
-  private void syncOnce(HoodieDeltaStreamer.Config cfg) throws Exception {
-    HoodieStreamer streamer = new HoodieDeltaStreamer(cfg, jsc);
-    streamer.sync();
-    streamer.shutdownGracefully();
-  }
-
-  private void syncOnce(HoodieStreamer streamer) throws Exception {
-    try {
-      streamer.sync();
-    } finally {
-      streamer.shutdownGracefully();
-    }
-  }
-
-  private void syncOnce(HoodieStreamer.Config cfg, Option<TypedProperties> properties) throws Exception {
-    syncOnce(new HoodieStreamer(cfg, jsc, properties));
-  }
 }
