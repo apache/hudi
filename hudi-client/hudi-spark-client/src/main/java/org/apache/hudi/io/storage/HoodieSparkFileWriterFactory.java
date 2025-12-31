@@ -57,7 +57,6 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     if (compressionCodecName.isEmpty()) {
       compressionCodecName = null;
     }
-    //TODO boundary to revisit in follow up to use HoodieSchema directly
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema,
         config, enableBloomFilter(populateMetaFields, config));
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,

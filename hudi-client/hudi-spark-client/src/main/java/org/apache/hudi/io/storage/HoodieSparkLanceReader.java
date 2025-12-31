@@ -184,9 +184,4 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       throw new HoodieException("Failed to get row count from Lance file: " + path, e);
     }
   }
-
-  /**
-   * Iterator implementation that reads Lance file batches and converts to UnsafeRows.
-   * Keeps ColumnarBatch alive while iterating to avoid unnecessary data copying.
-   */
 }

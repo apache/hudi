@@ -21,9 +21,11 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
@@ -33,6 +35,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
@@ -59,6 +62,8 @@ public class HoodieInternalRowFileWriterFactory {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+    } else if (LANCE.getFileExtension().equals(extension)) {
+      return newLanceInternalRowFileWriter(path, hoodieTable, schema);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -85,6 +90,17 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));
+  }
+
+  private static HoodieInternalRowFileWriter newLanceInternalRowFileWriter(StoragePath path,
+                                                                           HoodieTable table,
+                                                                           StructType structType)
+      throws IOException {
+    return new HoodieSparkLanceWriter(
+        path,
+        structType,
+        new LocalTaskContextSupplier(),
+        table.getStorage());
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.HFileUtils;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.OrcUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -111,6 +112,8 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
         return new OrcUtils();
       case HFILE:
         return new HFileUtils();
+      case LANCE:
+        return new LanceUtils();
       default:
         throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
     }
