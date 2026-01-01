@@ -21,6 +21,7 @@ package org.apache.hudi.functional;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -28,10 +29,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -59,6 +59,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -73,13 +74,12 @@ public class TestSparkSizeBasedClusteringWithFloorLimit extends HoodieSparkClien
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
     Properties props = getPropertiesForKeyGen(true);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     props.setProperty("hoodie.metadata.enable", "false");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, props);
     config = getConfigBuilder().withProps(props)
-        .withAutoCommit(false)
         .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(maxFileSize).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanStrategyClass(SparkSizeBasedClusteringPlanStrategy.class.getName())
@@ -113,13 +113,13 @@ public class TestSparkSizeBasedClusteringWithFloorLimit extends HoodieSparkClien
     String partition2 = partitions[1];  // For files within eligible range
     String partition3 = partitions[2];  // For files above small file limit which are not in range
 
-    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime1 = InProcessTimeGenerator.createNewInstantTime();
     writeRecordsToPartition(commitTime1, 50, partition1, true);
 
-    String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime2 = InProcessTimeGenerator.createNewInstantTime();
     writeRecordsToPartition(commitTime2, 500, partition2, true);
 
-    String commitTime3 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime3 = InProcessTimeGenerator.createNewInstantTime();
     writeRecordsToPartition(commitTime3, 5000, partition3, true);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -154,7 +154,7 @@ public class TestSparkSizeBasedClusteringWithFloorLimit extends HoodieSparkClien
 
     // Get clustering plan
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
-        metaClient, HoodieTimeline.getReplaceCommitRequestedInstant(clusteringTime.get()))
+        metaClient, INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringTime.get()))
         .map(Pair::getRight).get();
 
     // Validate that ONLY eligible medium files from partition 2 are in the plan
@@ -210,11 +210,11 @@ public class TestSparkSizeBasedClusteringWithFloorLimit extends HoodieSparkClien
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);  // Force single RDD partition to create one file
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     List<WriteStatus> writeStatues = writeClient.insert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      assertTrue(writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1),
+      assertTrue(writeClient.commitStats(commitTime,
           writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType()));
     }
