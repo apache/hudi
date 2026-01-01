@@ -482,7 +482,7 @@ public class ProtoConversionUtil {
             HoodieSchema fieldSchema = field.schema();
             // if incoming message does not contain the field, fieldDescriptor will be null
             // if the field schema is a union, it is nullable
-            if (fieldSchema.getType() == HoodieSchemaType.UNION && (fieldDescriptor == null || (!fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)))) {
+            if (fieldSchema.isNullable() && (fieldDescriptor == null || (!fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)))) {
               convertedValue = null;
             } else {
               convertedValue = convertObject(fieldSchema, fieldDescriptor == null ? field.defaultVal().orElse(null) : messageValue.getField(fieldDescriptor));

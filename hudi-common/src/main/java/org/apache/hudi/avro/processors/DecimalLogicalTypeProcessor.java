@@ -71,7 +71,7 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
       if (bigDecimal == null) {
         bigDecimal = new BigDecimal(obj.toString(), new MathContext(schema.getPrecision(), RoundingMode.UNNECESSARY)).setScale(schema.getScale(), RoundingMode.UNNECESSARY);
       }
-    } catch (java.lang.NumberFormatException | ArithmeticException ignored) {
+    } catch (NumberFormatException | ArithmeticException ignored) {
       /* ignore */
     }
 
