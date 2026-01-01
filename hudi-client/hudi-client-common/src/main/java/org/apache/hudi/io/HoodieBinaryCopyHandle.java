@@ -69,7 +69,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       // All files should have the same schema in this case
       try {
         ParquetUtils parquetUtils = new ParquetUtils();
-        MessageType fileSchema = parquetUtils.readSchema(table.getStorage(), inputFiles.get(0));
+        MessageType fileSchema = parquetUtils.readMessageType(table.getStorage(), inputFiles.get(0));
         log.info("Binary copy schema evolution disabled. Using schema from input file: " + inputFiles.get(0));
         return fileSchema;
       } catch (Exception e) {

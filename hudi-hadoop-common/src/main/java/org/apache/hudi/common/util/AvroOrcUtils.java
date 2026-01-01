@@ -79,7 +79,7 @@ public class AvroOrcUtils {
    *
    * @param type        ORC schema of the value Object.
    * @param colVector   The column vector to store the value Object.
-   * @param schema  Avro schema of the value Object.
+   * @param schema      Schema of the value Object.
    *                    Only used to check logical types for timestamp unit conversion.
    * @param value       Object to be added to the column vector
    * @param vectorPos   The position in the vector where value will be stored at.
@@ -657,6 +657,15 @@ public class AvroOrcUtils {
         }
       case TIMESTAMP:
         HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
+        // NOTE: Preserving old behavior from before HoodieSchema refactoring:
+        // - UTC-adjusted timestamps (TimestampMillis/Micros) are converted to ORC Timestamp
+        // - Local timestamps (LocalTimestampMillis/Micros) are converted to ORC Long
+        // This is because the old code did not handle LocalTimestamp logical types explicitly,
+        // causing them to fall through to the base type (LONG) conversion.
+        if (!timestampSchema.isUtcAdjusted()) {
+          // Local timestamp - treat as ORC Long (old behavior)
+          return TypeDescription.createLong();
+        }
         if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
           // The timestamp-millis logical type represents an instant on the global timeline, independent of a
           // particular time zone or calendar, with a precision of one millisecond.

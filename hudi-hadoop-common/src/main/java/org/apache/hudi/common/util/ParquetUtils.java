@@ -242,7 +242,7 @@ public class ParquetUtils extends FileFormatUtils {
   /**
    * Get the schema of the given parquet file.
    */
-  public MessageType readSchema(HoodieStorage storage, StoragePath parquetFilePath) {
+  public MessageType readMessageType(HoodieStorage storage, StoragePath parquetFilePath) {
     return readFileMetadataOnly(storage, parquetFilePath).getFileMetaData().getSchema();
   }
   
@@ -253,7 +253,7 @@ public class ParquetUtils extends FileFormatUtils {
   public static Integer readSchemaHash(HoodieStorage storage, StoragePath parquetFilePath) {
     try {
       ParquetUtils parquetUtils = new ParquetUtils();
-      MessageType schema = parquetUtils.readSchema(storage, parquetFilePath);
+      MessageType schema = parquetUtils.readMessageType(storage, parquetFilePath);
       return schema.hashCode();
     } catch (Exception e) {
       log.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
@@ -279,8 +279,8 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public HoodieSchema readHoodieSchema(HoodieStorage storage, StoragePath filePath) {
-    MessageType parquetSchema = readSchema(storage, filePath);
+  public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
+    MessageType parquetSchema = readMessageType(storage, filePath);
     return getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 

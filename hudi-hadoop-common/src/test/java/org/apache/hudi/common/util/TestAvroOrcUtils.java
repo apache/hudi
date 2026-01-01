@@ -22,6 +22,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.apache.orc.TypeDescription;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Tests {@link AvroOrcUtils}.
  */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
+
   public static final TypeDescription ORC_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA));
   public static final TypeDescription ORC_TRIP_SCHEMA = AvroOrcUtils.createOrcSchema(HoodieSchema.parse(TRIP_SCHEMA));
 
@@ -80,5 +82,35 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
   public void testCreateOrcSchema(HoodieSchema avroSchema, TypeDescription orcSchema) {
     TypeDescription convertedSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     assertEquals(orcSchema, convertedSchema);
+  }
+
+  /**
+   * Tests that LocalTimestamp types are converted to ORC Long (not Timestamp) to preserve old behavior.
+   * This ensures backward compatibility with the pre-HoodieSchema refactoring implementation
+   * where LocalTimestamp logical types were not explicitly handled and fell through to LONG conversion.
+   */
+  @Test
+  public void testLocalTimestampConvertedToLong() {
+    // Create HoodieSchemas for all timestamp types
+    HoodieSchema timestampMillis = HoodieSchema.createTimestampMillis();
+    HoodieSchema timestampMicros = HoodieSchema.createTimestampMicros();
+    HoodieSchema localTimestampMillis = HoodieSchema.createLocalTimestampMillis();
+    HoodieSchema localTimestampMicros = HoodieSchema.createLocalTimestampMicros();
+
+    // UTC-adjusted timestamps should convert to ORC Timestamp
+    TypeDescription orcTimestampMillis = AvroOrcUtils.createOrcSchema(timestampMillis);
+    TypeDescription orcTimestampMicros = AvroOrcUtils.createOrcSchema(timestampMicros);
+    assertEquals(TypeDescription.Category.TIMESTAMP, orcTimestampMillis.getCategory(),
+        "TimestampMillis should convert to ORC Timestamp");
+    assertEquals(TypeDescription.Category.TIMESTAMP, orcTimestampMicros.getCategory(),
+        "TimestampMicros should convert to ORC Timestamp");
+
+    // Local timestamps should convert to ORC Long (old behavior)
+    TypeDescription orcLocalTimestampMillis = AvroOrcUtils.createOrcSchema(localTimestampMillis);
+    TypeDescription orcLocalTimestampMicros = AvroOrcUtils.createOrcSchema(localTimestampMicros);
+    assertEquals(TypeDescription.Category.LONG, orcLocalTimestampMillis.getCategory(),
+        "LocalTimestampMillis should convert to ORC Long (preserving old behavior)");
+    assertEquals(TypeDescription.Category.LONG, orcLocalTimestampMicros.getCategory(),
+        "LocalTimestampMicros should convert to ORC Long (preserving old behavior)");
   }
 }

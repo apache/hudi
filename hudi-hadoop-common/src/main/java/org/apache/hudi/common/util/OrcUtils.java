@@ -242,7 +242,7 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public HoodieSchema readHoodieSchema(HoodieStorage storage, StoragePath filePath) {
+  public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
     try (Reader reader = OrcFile.createReader(
         convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       if (reader.hasMetadataValue("orc.avro.schema")) {

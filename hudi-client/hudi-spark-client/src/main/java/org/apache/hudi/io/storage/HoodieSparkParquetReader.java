@@ -189,7 +189,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   private MessageType getFileSchema() {
     if (fileSchemaOption.isEmpty()) {
-      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      MessageType messageType = ((ParquetUtils) parquetUtils).readMessageType(storage, path);
       fileSchemaOption = Option.of(messageType);
     }
     return fileSchemaOption.get();

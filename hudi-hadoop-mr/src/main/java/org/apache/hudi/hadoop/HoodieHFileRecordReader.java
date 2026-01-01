@@ -63,7 +63,6 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, storageConf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
 
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);
   }

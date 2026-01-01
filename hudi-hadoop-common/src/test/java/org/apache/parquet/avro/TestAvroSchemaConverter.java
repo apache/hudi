@@ -20,10 +20,10 @@
 package org.apache.parquet.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -58,6 +58,7 @@ import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96;
 import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestAvroSchemaConverter {
@@ -281,7 +282,7 @@ public class TestAvroSchemaConverter {
   public void testOptionalFields() throws Exception {
     HoodieSchema optionalInt = HoodieSchema.createNullable(HoodieSchemaType.INT);
     HoodieSchema schema = HoodieSchema.createRecord("record1", null, null, false,
-        Collections.singletonList(HoodieSchemaField.of("myint", optionalInt, null, JsonProperties.NULL_VALUE)));
+        Collections.singletonList(HoodieSchemaField.of("myint", optionalInt, null, HoodieSchema.NULL_VALUE)));
     testRoundTripConversion(schema, "message record1 {\n" + "  optional int32 myint;\n" + "}\n");
   }
 
@@ -303,7 +304,7 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testOptionalArrayElement() throws Exception {
-    HoodieSchema optionalIntArray = HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)));
+    HoodieSchema optionalIntArray = HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchemaType.INT));
     HoodieSchema schema = HoodieSchema.createRecord("record1", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myintarray", optionalIntArray, null, null)));
     testRoundTripConversion(
@@ -324,7 +325,7 @@ public class TestAvroSchemaConverter {
             HoodieSchema.create(HoodieSchemaType.INT),
             HoodieSchema.create(HoodieSchemaType.FLOAT)));
     HoodieSchema schema = HoodieSchema.createRecord("record2", null, null, false,
-        Collections.singletonList(HoodieSchemaField.of("myunion", multipleTypes, null, JsonProperties.NULL_VALUE)));
+        Collections.singletonList(HoodieSchemaField.of("myunion", multipleTypes, null, HoodieSchema.NULL_VALUE)));
 
     // Avro union is modelled using optional data members of the different
     // types. This does not translate back into an Avro union
@@ -341,12 +342,11 @@ public class TestAvroSchemaConverter {
   public void testArrayOfOptionalRecords() throws Exception {
     HoodieSchema optionalString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
     List<HoodieSchemaField> innerRecordFields = Arrays.asList(
-        HoodieSchemaField.of("s1", optionalString, null, JsonProperties.NULL_VALUE),
-        HoodieSchemaField.of("s2", optionalString, null, JsonProperties.NULL_VALUE));
+        HoodieSchemaField.of("s1", optionalString, null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("s2", optionalString, null, HoodieSchema.NULL_VALUE));
     HoodieSchema innerRecord = HoodieSchema.createRecord("element", null, null, false, innerRecordFields);
     HoodieSchema schema = HoodieSchema.createRecord("HasArray", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myarray", HoodieSchema.createArray(HoodieSchema.createNullable(innerRecord)), null, null)));
-    System.err.println("Avro schema: " + schema.toString(true));
 
     testRoundTripConversion(
         NEW_BEHAVIOR,
@@ -371,7 +371,6 @@ public class TestAvroSchemaConverter {
     HoodieSchema innerRecord = HoodieSchema.createRecord("InnerRecord", null, null, false, innerRecordFields);
     HoodieSchema schema = HoodieSchema.createRecord("HasArray", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myarray", HoodieSchema.createArray(HoodieSchema.createNullable(innerRecord)), null, null)));
-    System.err.println("Avro schema: " + schema.toString(true));
 
     // Cannot use round-trip assertion because InnerRecord optional is removed
     testAvroToParquetConversion(
@@ -390,7 +389,6 @@ public class TestAvroSchemaConverter {
     HoodieSchema listOfLists = HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))));
     HoodieSchema schema = HoodieSchema.createRecord("AvroCompatListInList", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("listOfLists", listOfLists, null, HoodieSchema.NULL_VALUE)));
-    System.err.println("Avro schema: " + schema.toString(true));
 
     testRoundTripConversion(
         schema,
@@ -417,7 +415,6 @@ public class TestAvroSchemaConverter {
     HoodieSchema listOfLists = HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))));
     HoodieSchema schema = HoodieSchema.createRecord("ThriftCompatListInList", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("listOfLists", listOfLists, null, HoodieSchema.NULL_VALUE)));
-    System.err.println("Avro schema: " + schema.toString(true));
 
     // Cannot use round-trip assertion because repeated group names differ
     testParquetToAvroConversion(
@@ -448,7 +445,6 @@ public class TestAvroSchemaConverter {
     HoodieSchema listOfLists = HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))));
     HoodieSchema schema = HoodieSchema.createRecord("UnknownTwoLevelListInList", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("listOfLists", listOfLists, null, HoodieSchema.NULL_VALUE)));
-    System.err.println("Avro schema: " + schema.toString(true));
 
     // Cannot use round-trip assertion because repeated group names differ
     testParquetToAvroConversion(
@@ -850,8 +846,7 @@ public class TestAvroSchemaConverter {
     testAvroToParquetConversion(fromSchema, parquet);
     testParquetToAvroConversion(toSchema, parquet);
 
-    assertEquals(
-        COMPATIBLE, checkReaderWriterCompatibility(fromSchema.toAvroSchema(), toSchema.toAvroSchema()).getType());
+    assertTrue(HoodieSchemaCompatibility.areSchemasCompatible(fromSchema, toSchema));
   }
 
   @Test

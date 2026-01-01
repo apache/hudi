@@ -79,7 +79,7 @@ public class TestHoodieBaseParquetWriter {
         BloomFilterTypeCode.DYNAMIC_V0.name());
     StorageConfiguration conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
 
-    HoodieSchema schema = HoodieSchema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    HoodieSchema schema = HoodieTestDataGenerator.HOODIE_SCHEMA;
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()),
         schema, Option.of(filter), new Properties());
 

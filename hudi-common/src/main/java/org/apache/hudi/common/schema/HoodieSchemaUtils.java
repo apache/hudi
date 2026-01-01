@@ -659,7 +659,7 @@ public final class HoodieSchemaUtils {
    * @return HoodieSchema containing record key and partition path fields
    */
   public static HoodieSchema getRecordKeyPartitionPathSchema() {
-    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>();
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(2);
 
     HoodieSchemaField recordKeyField =
         createNewSchemaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);

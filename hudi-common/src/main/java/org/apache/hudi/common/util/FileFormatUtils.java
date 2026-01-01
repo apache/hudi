@@ -288,7 +288,7 @@ public abstract class FileFormatUtils {
           List<String> fields = new ArrayList<>();
           fields.addAll(keyGenerator.getRecordKeyFieldNames());
           fields.addAll(keyGenerator.getPartitionPathFields());
-          return HoodieSchemaUtils.projectSchema(readHoodieSchema(storage, filePath), fields);
+          return HoodieSchemaUtils.projectSchema(readSchema(storage, filePath), fields);
         })
         .orElse(partitionPath.isPresent() ? HoodieSchemaUtils.getRecordKeySchema() : HoodieSchemaUtils.getRecordKeyPartitionPathSchema());
   }
@@ -314,7 +314,7 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return the Avro schema of the data file.
    */
-  public abstract HoodieSchema readHoodieSchema(HoodieStorage storage, StoragePath filePath);
+  public abstract HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath);
 
   /**
    * Reads column statistics stored in the metadata.

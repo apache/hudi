@@ -107,7 +107,6 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema schema) throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
     return getIndexedRecordIteratorInternal(schema, Collections.emptyMap());
   }
 
@@ -119,15 +118,12 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
     return getIndexedRecordIteratorInternal(requestedSchema, renamedColumns);
   }
 
   @Override
   public HoodieSchema getSchema() {
-    if (fileSchema.isEmpty()) {
-      fileSchema = Option.ofNullable(parquetUtils.readHoodieSchema(storage, path));
-    }
+    fileSchema = fileSchema.or(() -> Option.ofNullable(parquetUtils.readSchema(storage, path)));
     return fileSchema.get();
   }
 

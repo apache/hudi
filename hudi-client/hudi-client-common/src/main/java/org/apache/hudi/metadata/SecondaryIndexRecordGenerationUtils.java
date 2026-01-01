@@ -263,7 +263,7 @@ public class SecondaryIndexRecordGenerationUtils {
       if (dataFilePath.isPresent()) {
         readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getFileFormatUtils(baseFileFormat)
-            .readHoodieSchema(metaClient.getStorage(), dataFilePath.get());
+            .readSchema(metaClient.getStorage(), dataFilePath.get());
       } else {
         readerSchema = tableSchema;
       }

@@ -65,6 +65,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -295,7 +296,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   private HoodieSchema getSchema(String recordKeyField, String partitionPathField, String dataField) {
-    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>();
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(3);
 
     HoodieSchemaField recordKeySchemaField =
         HoodieSchemaField.of(recordKeyField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE);
@@ -357,10 +358,10 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   private static HoodieSchema getSchemaWithFields(List<String> fields) {
-    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>();
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(fields.size());
     for (String field: fields) {
       HoodieSchemaField schemaField =
-          HoodieSchemaField.of(field, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", JsonProperties.NULL_VALUE);
+          HoodieSchemaField.of(field, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
       toBeAddedFields.add(schemaField);
     }
     return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, toBeAddedFields);
@@ -399,7 +400,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadSchemaHash() throws Exception {
+  public void testReadMessageTypeHash() throws Exception {
     // Given: Create a parquet file with a specific schema
     List<String> rowKeys = Arrays.asList("row1", "row2", "row3");
     String filePath = Paths.get(basePath, "test_schema_hash.parquet").toUri().toString();
@@ -420,7 +421,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadSchemaHash_DifferentSchemas() throws Exception {
+  public void testReadMessageTypeHash_DifferentSchemas() throws Exception {
     // Given: Create two parquet files with different schemas
     List<String> rowKeys = Arrays.asList("row1", "row2");
     
@@ -442,7 +443,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadSchemaHash_NonExistentFile() throws Exception {
+  public void testReadMessageTypeHash_NonExistentFile() throws Exception {
     // Given: Non-existent file path
     StoragePath nonExistentPath = new StoragePath("/non/existent/file.parquet");
     
@@ -464,7 +465,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     
     // When: Reading schema hash vs direct schema read
     Integer schemaHashFromUtils = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath), storagePath);
-    MessageType directSchema = parquetUtils.readSchema(HoodieTestUtils.getStorage(filePath), storagePath);
+    MessageType directSchema = parquetUtils.readMessageType(HoodieTestUtils.getStorage(filePath), storagePath);
     Integer directSchemaHash = directSchema.hashCode();
     
     // Then: Hash from utility method should match direct schema hash
@@ -474,7 +475,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
   private void writeParquetFileWithExtendedSchema(String filePath, List<String> rowKeys) throws Exception {
     // Create an extended schema with an additional field
-    List<HoodieSchemaField> fields = new ArrayList<>();
+    List<HoodieSchemaField> fields = new ArrayList<>(4);
     fields.add(HoodieSchemaField.of("_row_key", HoodieSchema.create(HoodieSchemaType.STRING), "", (Object) null));
     fields.add(HoodieSchemaField.of("time", HoodieSchema.create(HoodieSchemaType.LONG), "", (Object) null));
     fields.add(HoodieSchemaField.of("number", HoodieSchema.create(HoodieSchemaType.LONG), "", (Object) null));

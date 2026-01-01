@@ -136,7 +136,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    return orcUtils.readHoodieSchema(storage, path);
+    return orcUtils.readSchema(storage, path);
   }
 
   @Override

@@ -152,7 +152,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public HoodieSchema readHoodieSchema(HoodieStorage storage, StoragePath filePath) {
+  public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
     LOG.info("Reading schema from {}", filePath);
 
     try (HoodieFileReader fileReader =

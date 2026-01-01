@@ -127,10 +127,10 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
   }
 
   private List<Type> convertFields(List<HoodieSchemaField> fields, String schemaPath) {
-    List<Type> types = new ArrayList<Type>();
+    List<Type> types = new ArrayList<Type>(fields.size());
     for (HoodieSchemaField field : fields) {
       if (field.schema().getType() == HoodieSchemaType.NULL) {
-        continue; // Avro nulls are not encoded, unless they are null unions
+        continue; // Nulls are not encoded, unless they are null unions
       }
       types.add(convertField(field, appendPath(schemaPath, field.name())));
     }
@@ -145,100 +145,114 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
   private Type convertField(String fieldName, HoodieSchema schema, Type.Repetition repetition, String schemaPath) {
     Types.PrimitiveBuilder<PrimitiveType> builder;
     HoodieSchemaType type = schema.getType();
-    if (type == HoodieSchemaType.BOOLEAN) {
-      builder = Types.primitive(BOOLEAN, repetition);
-    } else if (type == HoodieSchemaType.INT) {
-      builder = Types.primitive(INT32, repetition);
-    } else if (type == HoodieSchemaType.LONG) {
-      builder = Types.primitive(INT64, repetition);
-    } else if (type == HoodieSchemaType.FLOAT) {
-      builder = Types.primitive(FLOAT, repetition);
-    } else if (type == HoodieSchemaType.DOUBLE) {
-      builder = Types.primitive(DOUBLE, repetition);
-    } else if (type == HoodieSchemaType.BYTES) {
-      builder = Types.primitive(BINARY, repetition);
-    } else if (type == HoodieSchemaType.STRING) {
-      builder = Types.primitive(BINARY, repetition).as(stringType());
-    } else if (type == HoodieSchemaType.UUID) {
-      if (writeParquetUUID) {
-        builder = Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition)
-            .length(LogicalTypeAnnotation.UUIDLogicalTypeAnnotation.BYTES)
-            .as(uuidType());
-      } else {
+    switch (type) {
+      case BOOLEAN:
+        builder = Types.primitive(BOOLEAN, repetition);
+        break;
+      case INT:
+        builder = Types.primitive(INT32, repetition);
+        break;
+      case LONG:
+        builder = Types.primitive(INT64, repetition);
+        break;
+      case FLOAT:
+        builder = Types.primitive(FLOAT, repetition);
+        break;
+      case DOUBLE:
+        builder = Types.primitive(DOUBLE, repetition);
+        break;
+      case BYTES:
+        builder = Types.primitive(BINARY, repetition);
+        break;
+      case STRING:
         builder = Types.primitive(BINARY, repetition).as(stringType());
-      }
-    } else if (type == HoodieSchemaType.DECIMAL) {
-      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
-      if (decimalSchema.isFixed()) {
-        builder = Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition)
-            .length(decimalSchema.getFixedSize())
-            .as(decimalType(decimalSchema.getScale(), decimalSchema.getPrecision()));
-      } else {
-        builder = Types.primitive(BINARY, repetition)
-            .as(decimalType(decimalSchema.getScale(), decimalSchema.getPrecision()));
-      }
-    } else if (type == HoodieSchemaType.DATE) {
-      builder = Types.primitive(INT32, repetition).as(dateType());
-    } else if (type == HoodieSchemaType.TIME) {
-      HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
-      switch (timeSchema.getPrecision()) {
-        case MILLIS:
-          builder = Types.primitive(INT32, repetition)
-              .as(timeType(true, MILLIS));
-          break;
-        case MICROS:
-          builder = Types.primitive(INT64, repetition)
-              .as(timeType(true, MICROS));
-          break;
-        default:
-          throw new IllegalArgumentException("Unsupported precision: " + timeSchema.getPrecision());
-      }
-    } else if (type == HoodieSchemaType.TIMESTAMP) {
-      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
-      switch (timestampSchema.getPrecision()) {
-        case MILLIS:
-          builder = Types.primitive(INT64, repetition)
-              .as(timestampType(timestampSchema.isUtcAdjusted(), MILLIS));
-          break;
-        case MICROS:
-          builder = Types.primitive(INT64, repetition)
-              .as(timestampType(timestampSchema.isUtcAdjusted(), MICROS));
-          break;
-        default:
-          throw new IllegalArgumentException("Unsupported precision: " + timestampSchema.getPrecision());
-      }
-    } else if (type == HoodieSchemaType.RECORD) {
-      return new GroupType(repetition, fieldName, convertFields(schema.getFields(), schemaPath));
-    } else if (type == HoodieSchemaType.ENUM) {
-      builder = Types.primitive(BINARY, repetition).as(enumType());
-    } else if (type == HoodieSchemaType.ARRAY) {
-      if (writeOldListStructure) {
-        return ConversionPatterns.listType(repetition, fieldName,
-            convertField("array", schema.getElementType(), REPEATED, schemaPath));
-      } else {
-        return ConversionPatterns.listOfElements(repetition, fieldName,
-            convertField(AvroWriteSupport.LIST_ELEMENT_NAME, schema.getElementType(), schemaPath));
-      }
-    } else if (type == HoodieSchemaType.MAP) {
-      Type valType = convertField("value", schema.getValueType(), schemaPath);
-      // avro map key type is always string
-      return ConversionPatterns.stringKeyMapType(repetition, fieldName, valType);
-    } else if (type == HoodieSchemaType.FIXED) {
-      if (pathsToInt96.contains(schemaPath)) {
-        if (schema.getFixedSize() != 12) {
-          throw new IllegalArgumentException(
-              "The size of the fixed type field " + schemaPath + " must be 12 bytes for INT96 conversion");
+        break;
+      case UUID:
+        if (writeParquetUUID) {
+          builder = Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition)
+              .length(LogicalTypeAnnotation.UUIDLogicalTypeAnnotation.BYTES)
+              .as(uuidType());
+        } else {
+          builder = Types.primitive(BINARY, repetition).as(stringType());
         }
-        builder = Types.primitive(PrimitiveTypeName.INT96, repetition);
-      } else {
-        builder = Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition).length(schema.getFixedSize());
-      }
-    } else if (type == HoodieSchemaType.UNION) {
-      return convertUnion(fieldName, schema, repetition, schemaPath);
-    } else {
-      throw new UnsupportedOperationException("Cannot convert Avro type " + type);
+        break;
+      case DECIMAL:
+        HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
+        if (decimalSchema.isFixed()) {
+          builder = Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition)
+              .length(decimalSchema.getFixedSize())
+              .as(decimalType(decimalSchema.getScale(), decimalSchema.getPrecision()));
+        } else {
+          builder = Types.primitive(BINARY, repetition)
+              .as(decimalType(decimalSchema.getScale(), decimalSchema.getPrecision()));
+        }
+        break;
+      case DATE:
+        builder = Types.primitive(INT32, repetition).as(dateType());
+        break;
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
+        switch (timeSchema.getPrecision()) {
+          case MILLIS:
+            builder = Types.primitive(INT32, repetition)
+                .as(timeType(true, MILLIS));
+            break;
+          case MICROS:
+            builder = Types.primitive(INT64, repetition)
+                .as(timeType(true, MICROS));
+            break;
+          default:
+            throw new IllegalArgumentException("Unsupported precision: " + timeSchema.getPrecision());
+        }
+        break;
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
+        switch (timestampSchema.getPrecision()) {
+          case MILLIS:
+            builder = Types.primitive(INT64, repetition)
+                .as(timestampType(timestampSchema.isUtcAdjusted(), MILLIS));
+            break;
+          case MICROS:
+            builder = Types.primitive(INT64, repetition)
+                .as(timestampType(timestampSchema.isUtcAdjusted(), MICROS));
+            break;
+          default:
+            throw new IllegalArgumentException("Unsupported precision: " + timestampSchema.getPrecision());
+        }
+        break;
+      case RECORD:
+        return new GroupType(repetition, fieldName, convertFields(schema.getFields(), schemaPath));
+      case ENUM:
+        builder = Types.primitive(BINARY, repetition).as(enumType());
+        break;
+      case ARRAY:
+        if (writeOldListStructure) {
+          return ConversionPatterns.listType(repetition, fieldName,
+              convertField("array", schema.getElementType(), REPEATED, schemaPath));
+        } else {
+          return ConversionPatterns.listOfElements(repetition, fieldName,
+              convertField(AvroWriteSupport.LIST_ELEMENT_NAME, schema.getElementType(), schemaPath));
+        }
+      case MAP:
+        Type valType = convertField("value", schema.getValueType(), schemaPath);
+        // avro map key type is always string
+        return ConversionPatterns.stringKeyMapType(repetition, fieldName, valType);
+      case FIXED:
+        if (pathsToInt96.contains(schemaPath)) {
+          if (schema.getFixedSize() != 12) {
+            throw new IllegalArgumentException(
+                "The size of the fixed type field " + schemaPath + " must be 12 bytes for INT96 conversion");
+          }
+          builder = Types.primitive(PrimitiveTypeName.INT96, repetition);
+        } else {
+          builder = Types.primitive(FIXED_LEN_BYTE_ARRAY, repetition).length(schema.getFixedSize());
+        }
+        break;
+      case UNION:
+        return convertUnion(fieldName, schema, repetition, schemaPath);
+      default:
+        throw new UnsupportedOperationException("Cannot convert Avro type " + type);
     }
-
     return builder.named(fieldName);
   }
 
@@ -295,7 +309,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
   }
 
   private HoodieSchema convertFields(String name, List<Type> parquetFields, Map<String, Integer> names) {
-    List<HoodieSchemaField> fields = new ArrayList<>();
+    List<HoodieSchemaField> fields = new ArrayList<>(parquetFields.size());
     Integer nameCount = names.merge(name, 1, (oldValue, value) -> oldValue + 1);
     for (Type parquetType : parquetFields) {
       HoodieSchema fieldSchema = convertField(parquetType, names);
