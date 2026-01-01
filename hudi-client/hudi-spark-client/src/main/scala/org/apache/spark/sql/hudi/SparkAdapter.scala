@@ -21,12 +21,13 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.storage.StorageConfiguration
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -47,7 +48,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -375,4 +376,32 @@ trait SparkAdapter extends Serializable {
    * @return A streaming [[DataFrame]]
    */
   def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame
+
+  /**
+   * Creates a [[HoodieMemoryStream]] wrapper around Spark's MemoryStream.
+   * This abstracts the package differences between Spark versions:
+   * - Spark 3.x/4.0: org.apache.spark.sql.execution.streaming.MemoryStream
+   * - Spark 4.1+: org.apache.spark.sql.execution.streaming.runtime.MemoryStream
+   *
+   * @param id           ID for the MemoryStream
+   * @param sparkSession [[SparkSession]] object
+   * @param encoder      Implicit encoder for type T
+   * @return A [[HoodieMemoryStream]] wrapper
+   */
+  def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T]
+}
+
+/**
+ * Wrapper trait for Spark's MemoryStream to abstract package differences across Spark versions.
+ */
+trait HoodieMemoryStream[T] {
+  /**
+   * Add data to the stream.
+   */
+  def addData(data: TraversableOnce[T]): Unit
+
+  /**
+   * Convert the stream to a Dataset.
+   */
+  def toDS(): Dataset[T]
 }
