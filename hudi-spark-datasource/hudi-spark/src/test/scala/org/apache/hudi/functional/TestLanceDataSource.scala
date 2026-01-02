@@ -550,7 +550,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .mode(SaveMode.Append)
       .save(tablePath)
 
-    // Second upsert - modify Alice (id=1) and insert David (id=4)
+    // Second upsert - modify Alice (id=1) and insert David (id=4) made it pass first upsert
     val records3 = Seq(
       (1, "Alice", 45, 98.5),  // Update Alice: age 30->45, score 95.5->98.5
       (4, "David", 28, 88.0)   // Insert new record
@@ -598,7 +598,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       (4, "David", 28, 88.0)
     )).toDF("id", "name", "age", "score")
 
-    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(expectedDf.except(actual).isEmpty) //fails here
     assertTrue(actual.except(expectedDf).isEmpty)
   }
 
