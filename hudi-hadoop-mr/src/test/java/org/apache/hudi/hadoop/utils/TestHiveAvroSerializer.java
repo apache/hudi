@@ -588,7 +588,6 @@ public class TestHiveAvroSerializer {
 
     HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMillis);
     List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
-    System.out.println(columnTypes);
     assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
     // The second column should be int type
     assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(1));

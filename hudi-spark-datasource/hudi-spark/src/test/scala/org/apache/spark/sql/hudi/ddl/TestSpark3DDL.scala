@@ -604,7 +604,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                |  orderingFields = 'ts'
                | )
              """.stripMargin)
-          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"show create table ${tableName}").collect
           spark.sql(s"insert into ${tableName} values (1, 'jack', 0.9, 1000)")
           spark.sql(s"update ${tableName} set price = 1.9  where id =  1")
 
@@ -714,7 +714,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                |  orderingFields = 'ts'
                | )
              """.stripMargin)
-          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"show create table ${tableName}").collect
           spark.sql(s"insert into ${tableName} values (1, 'aaa', 'bbb', 1000)")
 
           // Rename to a previously existing column name + insert
@@ -769,7 +769,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         // drop column
         spark.sql(s"alter table ${tableName} drop columns(name, userx.name, userx.score)")
 
-        spark.sql(s"select * from ${tableName}").show(false)
+        spark.sql(s"select * from ${tableName}").collect()
 
         // add cols back, and adjust cols position
         spark.sql(s"alter table ${tableName} add columns(name string comment 'add name back' after userx," +
@@ -798,7 +798,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
         spark.sql(s"alter table ${tableName} alter column mxp.value type double")
         spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
-        spark.sql(s"select * from $tableName").show(false)
+        spark.sql(s"select * from $tableName").collect
         checkAnswer(spark.sql(s"select mxp from ${tableName} order by id").collect())(
           Seq(null),
           Seq(Map("t1" -> 10.0d))
@@ -809,7 +809,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table ${tableName} rename column us.age to age1")
 
         spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
-        spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").show()
         checkAnswer(spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").collect())(
           Seq(null, 29),
           Seq(null, 291)
@@ -941,7 +940,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             Seq(checkRowKey, "new")
           )
 
-          spark.sql(s"select * from  hudi_trips_snapshot").show(false)
+          spark.sql(s"select * from  hudi_trips_snapshot").collect
           //  test insert_over_write  + update again
           val overwrite = QuickstartUtils.convertToStringList(dataGen.generateInserts(10)).asScala.toSeq
           val dfOverWrite = spark.
@@ -960,7 +959,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option(DataSourceWriteOptions.TABLE_NAME.key(), tableName).
             mode("append").
             save(tablePath)
-          spark.read.format("hudi").load(tablePath).show(false)
+          spark.read.format("hudi").load(tablePath).collect
 
           val updatesAgain = QuickstartUtils.convertToStringList(dataGen.generateUpdates(10)).asScala.toSeq
           val dfAgain = spark.read.json(spark.sparkContext.parallelize(updatesAgain, 2)).

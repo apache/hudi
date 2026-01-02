@@ -75,14 +75,6 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     initHoodieStorage()
   }
 
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   // TODO add test-case for upcasting
 
   @ParameterizedTest

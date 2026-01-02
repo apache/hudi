@@ -317,7 +317,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
   // Ensure the partition column (i.e 'city') can be read back
   val tripsDF = spark.read.format("hudi").load(tempBasePath)
-  tripsDF.show()
+  tripsDF.collect()
   tripsDF.select("city").foreach(row => {
     assertNotNull(row)
   })
@@ -329,7 +329,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     partitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
   }
   val rawFileDf = spark.sqlContext.read.parquet(partitionPaths(0), partitionPaths(1), partitionPaths(2))
-  rawFileDf.show()
+  rawFileDf.collect()
   rawFileDf.select("city").foreach(row => {
     assertNull(row.get(0))
   })
@@ -939,7 +939,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val recordsToDelete = spark.emptyDataFrame
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
     val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
-    snapshotDF3.show()
+    snapshotDF3.count()
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       expectedPartitions.count(p => partitionPath.equals(p)) != 1
