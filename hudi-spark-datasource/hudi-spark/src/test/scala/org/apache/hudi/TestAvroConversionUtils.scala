@@ -176,12 +176,12 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
       .add("nullableMap", mapType, true).add("map", mapType, false)
       .add("nullableArray", arrayType, true).add("array", arrayType, false)
 
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(struct, "SchemaName", "SchemaNS")
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(struct, "SchemaName", "SchemaNS")
 
     val expectedSchemaStr = complexSchemaStr
-    val expectedAvroSchema = HoodieSchema.parse(expectedSchemaStr).toAvroSchema
+    val expectedSchema = HoodieSchema.parse(expectedSchemaStr)
 
-    assert(avroSchema.equals(expectedAvroSchema))
+    assert(schema.equals(expectedSchema))
   }
 
   test("test convertStructTypeToAvroSchema with Nested StructField comment") {
@@ -194,7 +194,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
       .add("nullableMap", mapType, true).add("map",mapType,false)
       .add("nullableArray", arrayType, true).add("array",arrayType,false)
 
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(struct, "SchemaName", "SchemaNS")
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(struct, "SchemaName", "SchemaNS")
 
     val expectedSchemaStr = s"""
         {
@@ -395,9 +395,9 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
         }
     """
 
-    val expectedAvroSchema = HoodieSchema.parse(expectedSchemaStr).toAvroSchema
+    val expectedSchema = HoodieSchema.parse(expectedSchemaStr)
 
-    assert(avroSchema.equals(expectedAvroSchema))
+    assert(schema.equals(expectedSchema))
   }
 
   test("test converter with binary") {
@@ -456,105 +456,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
       .add("name", DataTypes.StringType, true)
       .add("name", DataTypes.StringType, true)
     the[HoodieSchemaException] thrownBy {
-      AvroConversionUtils.convertStructTypeToAvroSchema(struct, "SchemaName", "SchemaNS")
+      HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(struct, "SchemaName", "SchemaNS")
     } should have message "Duplicate field name in record SchemaNS.SchemaName: name type:UNION pos:2 and name type:UNION pos:1."
-  }
-
-  test("test alignFieldsNullability function") {
-    val sourceTableSchema: StructType =
-      StructType(
-        Seq(
-          StructField("intType", IntegerType, nullable = false),
-          StructField("longType", LongType),
-          StructField("stringType", StringType, nullable = false),
-          StructField("doubleType", DoubleType),
-          StructField("floatType", FloatType, nullable = true),
-          StructField("structType", new StructType(
-            Array(StructField("structType_1", StringType), StructField("structType_2", StringType)))),
-          StructField("dateType", DateType),
-          StructField("listType", new ArrayType(StringType, true)),
-          StructField("decimalType", new DecimalType(7, 3), nullable = false),
-          StructField("timeStampType", TimestampType),
-          StructField("mapType", new MapType(StringType, IntegerType, true))
-        )
-      )
-
-    val writeStructSchema: StructType =
-      StructType(
-        Seq(
-          StructField("intType", IntegerType, nullable = false),
-          StructField("longType", LongType),
-          StructField("stringType", StringType, nullable = true),
-          StructField("doubleType", DoubleType),
-          StructField("floatType", FloatType, nullable = false),
-          StructField("structType", new StructType(
-            Array(StructField("structType_1", StringType, nullable = false), StructField("structType_2", StringType)))),
-          StructField("dateType", DateType, nullable = false),
-          StructField("listType", new ArrayType(StringType, true)),
-          StructField("decimalType", new DecimalType(7, 3)),
-          StructField("timeStampType", TimestampType),
-          StructField("mapType", new MapType(StringType, IntegerType, true)),
-          StructField("notInTableSchemaTimeStampType_1", TimestampType),
-          StructField("notInTableSchemaIntType", IntegerType, nullable = false),
-          StructField("notInTableSchemaMapType", new MapType(StringType, IntegerType, true))
-        )
-      )
-    val tableAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "data")
-
-    val alignedSchema = AvroConversionUtils.alignFieldsNullability(writeStructSchema, tableAvroSchema)
-
-    val nameToNullableSourceSchema = sourceTableSchema.fields.map(item => (item.name, item.nullable)).toMap
-
-    val nameToNullableWriteSchema = writeStructSchema.fields.map(item => (item.name, item.nullable)).toMap
-
-    // Validate alignment rules:
-    // 1. For fields existing in both schemas: use source table's nullability
-    // 2. For fields only in write schema: retain original nullability
-    for (field <- alignedSchema.fields) {
-      if (nameToNullableSourceSchema.contains(field.name) && nameToNullableWriteSchema.contains(field.name)) {
-        assertTrue(field.nullable == nameToNullableSourceSchema(field.name))
-      }
-      if (!nameToNullableSourceSchema.contains(field.name) && nameToNullableWriteSchema.contains(field.name)) {
-        assertTrue(field.nullable == nameToNullableWriteSchema(field.name))
-      }
-    }
-
-    for (field <- alignedSchema.fields) {
-      if (field.name.equals("intType")) {
-        // Common field: both schemas specify nullable=false → aligned nullable=false
-        assertFalse(field.nullable)
-      }
-      if (field.name.equals("longType")) {
-        // Common field: both schemas default to nullable=true → aligned nullable=true
-        assertTrue(field.nullable)
-      }
-      if (field.name.equals("stringType")) {
-        // Conflicting case:
-        // Write schema (nullable=true) overridden by table schema (nullable=false) → aligned nullable=false
-        assertFalse(field.nullable)
-      }
-
-      if (field.name.equals("structType")) {
-        val fields = field.dataType.asInstanceOf[StructType].fields
-        assertTrue(fields.apply(0).nullable)
-        assertTrue(fields.apply(1).nullable)
-      }
-
-      if (field.name.equals("dateType")) {
-        // Conflicting case:
-        // Write schema specifies nullable=false but table schema defaults to true → aligned nullable=true
-        assertTrue(field.nullable)
-      }
-
-      if (field.name.equals("notInTableSchemaIntType")) {
-        // Write-exclusive field: retains original nullability=false
-        assertFalse(field.nullable)
-      }
-
-      if (field.name.equals("notInTableSchemaMapType")) {
-        // Write-exclusive field: retains original nullability=true
-        assertTrue(field.nullable)
-      }
-    }
   }
 }

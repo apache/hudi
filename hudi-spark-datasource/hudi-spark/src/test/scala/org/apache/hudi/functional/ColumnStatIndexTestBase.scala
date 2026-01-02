@@ -374,7 +374,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       assertEquals(asJson(sort(pExpectedColStatsIndexTableDf.drop(colsToDrop: _*), pValidationSortColumns)),
         asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
 
-      val convertedSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroConversionUtils.convertStructTypeToAvroSchema(pExpectedColStatsSchema, "col_stats_schema"))
+      val convertedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(pExpectedColStatsSchema, "col_stats_schema"))
 
       if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
         val manualColStatsTableDF =
