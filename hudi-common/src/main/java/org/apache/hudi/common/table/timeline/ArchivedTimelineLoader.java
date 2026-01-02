@@ -35,7 +35,8 @@ public interface ArchivedTimelineLoader extends Serializable {
    * Loads the instants from the timeline.
    *
    * @param metaClient     The meta client.
-   * @param filter         The time range filter where the target instant belongs to.
+   * @param filter         The time range filter where the target instant belongs to. This will only be applied at the file level.
+   *                       If strict filtering is required for the records, the commitsFilter should be used as well.
    * @param loadMode       The load mode.
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
@@ -53,7 +54,8 @@ public interface ArchivedTimelineLoader extends Serializable {
    * Loads the instants from the timeline with optional limit for early termination.
    *
    * @param metaClient     The meta client.
-   * @param filter         The time range filter where the target instant belongs to.
+   * @param filter         The time range filter where the target instant belongs to. This will only be applied at the file level.
+   *                       If strict filtering is required for the records, the commitsFilter should be used as well.
    * @param loadMode       The load mode.
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
