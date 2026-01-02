@@ -31,10 +31,17 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.SafeProjection;
+import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
+import org.apache.spark.sql.catalyst.util.GenericArrayData;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
+
+import java.math.BigDecimal;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -136,6 +143,141 @@ public class TestHoodieSparkLanceReader {
 
     // Write and read back
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_all_types.lance");
+    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
+      assertNotNull(reader.getSchema(), "Schema should not be null");
+      List<InternalRow> actualRows = readAllRows(reader, schema);
+      assertEquals(expectedRows, actualRows);
+    }
+  }
+
+  @Test
+  public void testReadDecimalType() throws Exception {
+    // Create schema with decimal types of different precision and scale
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("decimal_small", DataTypes.createDecimalType(10, 2), false)
+        .add("decimal_large", DataTypes.createDecimalType(20, 5), false)
+        .add("decimal_zero_scale", DataTypes.createDecimalType(10, 0), false);
+
+    // Create test data with 3 records
+    List<InternalRow> expectedRows = new ArrayList<>();
+    expectedRows.add(createRow(1, Decimal.apply(new BigDecimal("999.99"), 10, 2),
+        Decimal.apply(new BigDecimal("123456789.12345"), 20, 5), Decimal.apply(12345L, 10, 0)));
+    expectedRows.add(createRow(2, Decimal.apply(new BigDecimal("-123.45"), 10, 2),
+        Decimal.apply(new BigDecimal("-987654.54321"), 20, 5), Decimal.apply(-5000L, 10, 0)));
+    expectedRows.add(createRow(3, Decimal.apply(0L, 10, 2),
+        Decimal.apply(0L, 20, 5), Decimal.apply(0L, 10, 0)));
+
+    // Write and read back
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_decimal.lance");
+    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
+      assertNotNull(reader.getSchema(), "Schema should not be null");
+      List<InternalRow> actualRows = readAllRows(reader, schema);
+      assertEquals(expectedRows, actualRows);
+    }
+  }
+
+  @Test
+  public void testReadTimestampAndDateTypes() throws Exception {
+    // Create schema with timestamp and date types
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("timestamp_field", DataTypes.TimestampType, false)
+        .add("date_field", DataTypes.DateType, false);
+
+    // Create test data with 3 records
+    // Timestamps are microseconds since Unix epoch, dates are days since Unix epoch
+    List<InternalRow> expectedRows = new ArrayList<>();
+    expectedRows.add(createRow(1, 1609459200000000L, 18628));  // 2021-01-01
+    expectedRows.add(createRow(2, 1640995200000000L, 18993));  // 2022-01-01
+    expectedRows.add(createRow(3, 0L, 0));  // 1970-01-01 (epoch)
+
+    // Write and read back
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_timestamp_date.lance");
+    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
+      assertNotNull(reader.getSchema(), "Schema should not be null");
+      List<InternalRow> actualRows = readAllRows(reader, schema);
+      assertEquals(expectedRows, actualRows);
+    }
+  }
+
+  @Test
+  public void testReadArrayType() throws Exception {
+    // Create schema with array types
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("int_array", DataTypes.createArrayType(DataTypes.IntegerType, false), false)
+        .add("string_array", DataTypes.createArrayType(DataTypes.StringType, false), false);
+
+    // Create test data with 3 records
+    List<InternalRow> expectedRows = new ArrayList<>();
+    expectedRows.add(createRow(1, new Object[]{}, new Object[]{}));  // Empty arrays
+    expectedRows.add(createRow(2, new Object[]{42}, new Object[]{"Alice"}));  // Single element
+    expectedRows.add(createRow(3, new Object[]{1, 2, 3, 4, 5}, new Object[]{"Bob", "Charlie", "David"}));  // Multi-element
+
+    // Write and read back
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_array.lance");
+    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
+      assertNotNull(reader.getSchema(), "Schema should not be null");
+      List<InternalRow> actualRows = readAllRows(reader, schema);
+      assertEquals(expectedRows, actualRows);
+    }
+  }
+
+  @Disabled
+  @Test
+  public void testReadMapType() throws Exception {
+    // Currently map type is not supported in current lance version: https://github.com/lance-format/lance/issues/3620
+    // To re-enable test once lance java file writer default supports map type
+
+    // Create schema with map types
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("string_to_int_map", DataTypes.createMapType(DataTypes.StringType, DataTypes.IntegerType, false), false)
+        .add("int_to_string_map", DataTypes.createMapType(DataTypes.IntegerType, DataTypes.StringType, false), false);
+
+    // Create test data with 3 records
+    List<InternalRow> expectedRows = new ArrayList<>();
+    expectedRows.add(createRow(1,
+        new ArrayBasedMapData(new GenericArrayData(new Object[]{}), new GenericArrayData(new Object[]{})),
+        new ArrayBasedMapData(new GenericArrayData(new Object[]{}), new GenericArrayData(new Object[]{}))));
+    expectedRows.add(createRow(2,
+        new ArrayBasedMapData(new GenericArrayData(new Object[]{"key1"}), new GenericArrayData(new Object[]{100})),
+        new ArrayBasedMapData(new GenericArrayData(new Object[]{1}), new GenericArrayData(new Object[]{"value1"}))));
+    expectedRows.add(createRow(3,
+        new ArrayBasedMapData(new GenericArrayData(new Object[]{"alpha", "beta", "gamma"}), new GenericArrayData(new Object[]{10, 20, 30})),
+        new ArrayBasedMapData(new GenericArrayData(new Object[]{100, 200, 300}), new GenericArrayData(new Object[]{"hundred", "two hundred", "three hundred"}))));
+
+    // Write and read back
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_map.lance");
+    try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
+      assertNotNull(reader.getSchema(), "Schema should not be null");
+      List<InternalRow> actualRows = readAllRows(reader, schema);
+      assertEquals(expectedRows, actualRows);
+    }
+  }
+
+  @Test
+  public void testReadStructType() throws Exception {
+    // Create schema with nested struct
+    StructType addressSchema = new StructType()
+        .add("street", DataTypes.StringType, false)
+        .add("city", DataTypes.StringType, false)
+        .add("zipcode", DataTypes.IntegerType, false);
+
+    StructType schema = new StructType()
+        .add("id", DataTypes.IntegerType, false)
+        .add("name", DataTypes.StringType, false)
+        .add("address", addressSchema, true);
+
+    // Create test data with 3 records
+    List<InternalRow> expectedRows = new ArrayList<>();
+    expectedRows.add(createRow(1, "Alice", createRow("123 Main St", "New York", 10001)));
+    expectedRows.add(createRow(2, "Bob", createRow("456 Oak Ave", "Los Angeles", 90001)));
+    expectedRows.add(createRow(3, "Charlie", createRow("789 Pine Rd", "Chicago", 60601)));
+
+    // Write and read back
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_struct.lance");
     try (HoodieSparkLanceReader reader = writeAndCreateReader(path, schema, expectedRows)) {
       assertNotNull(reader.getSchema(), "Schema should not be null");
       List<InternalRow> actualRows = readAllRows(reader, schema);
