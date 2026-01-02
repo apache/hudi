@@ -37,7 +37,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -308,8 +307,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     toBeAddedFields.add(recordKeySchemaField);
     toBeAddedFields.add(partitionPathSchemaField);
     toBeAddedFields.add(dataSchemaField);
-    HoodieSchema recordSchema = HoodieSchema.createRecord("HoodieRecord", "", "", false, toBeAddedFields);
-    return recordSchema;
+    return HoodieSchema.createRecord("HoodieRecord", "", "", false, toBeAddedFields);
   }
 
   private void validateColumnRangeMetadata(HoodieColumnRangeMetadata metadata,

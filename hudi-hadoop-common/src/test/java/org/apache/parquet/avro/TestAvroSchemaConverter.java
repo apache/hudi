@@ -39,8 +39,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
-import static org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.schema.OriginalType.DATE;
