@@ -191,7 +191,8 @@ public class TestCompletionTimeQueryView {
       assertEquals(instantRequestedAndCompletionTime.get(6).getLeft(), view.getCursorInstant());
       // fetch completion time for the first archived instant should update the cursor instant to it.
       assertEquals(instantRequestedAndCompletionTime.get(5).getRight(), view.getCompletionTime(instantRequestedAndCompletionTime.get(5).getLeft()).get());
-      assertEquals(instantRequestedAndCompletionTime.get(5).getLeft(), view.getCursorInstant());
+      // cursor will be updated to the earliest instant present in the files read from the archived timeline (not simply the oldest instant)
+      assertEquals(instantRequestedAndCompletionTime.get(4).getLeft(), view.getCursorInstant());
     }
   }
 

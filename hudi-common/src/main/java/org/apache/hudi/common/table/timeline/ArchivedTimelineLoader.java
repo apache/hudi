@@ -19,10 +19,9 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
-
-import org.apache.hudi.common.util.Option;
 
 import javax.annotation.Nullable;
 
@@ -40,8 +39,10 @@ public interface ArchivedTimelineLoader extends Serializable {
    * @param loadMode       The load mode.
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
+   *
+   * @return The last instant time loaded, null if no instant is loaded.
    */
-  void loadInstants(
+  String loadInstants(
       HoodieTableMetaClient metaClient,
       @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,
@@ -57,8 +58,10 @@ public interface ArchivedTimelineLoader extends Serializable {
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
    * @param limit          Optional maximum number of instants to load. Empty for no limit.
+   *
+   * @return the last instant time loaded, null if no instant is loaded.
    */
-  default void loadInstants(
+  default String loadInstants(
       HoodieTableMetaClient metaClient,
       @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,
@@ -66,6 +69,6 @@ public interface ArchivedTimelineLoader extends Serializable {
       BiConsumer<String, GenericRecord> recordConsumer,
       Option<Integer> limit) {
     // Default implementation calls the method without limit for backward compatibility
-    loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer);
+    return loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer);
   }
 }

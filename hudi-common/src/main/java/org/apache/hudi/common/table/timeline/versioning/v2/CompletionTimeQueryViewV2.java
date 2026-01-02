@@ -280,14 +280,14 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // This operation is resource costly.
     synchronized (this) {
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
-        metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
+        String oldestStartTime = metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
             new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
             HoodieArchivedTimeline.LoadMode.TIME,
             r -> true,
             this::readCompletionTime);
+        // refresh the start instant
+        this.cursorInstant = InstantComparison.minTimestamp(startTime, oldestStartTime);
       }
-      // refresh the start instant
-      this.cursorInstant = startTime;
     }
   }
 
@@ -302,6 +302,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   }
 
   private void readCompletionTime(String instantTime, GenericRecord record) {
+    // TODO use field index for better performance
     final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
     setCompletionTime(instantTime, completionTime);
   }

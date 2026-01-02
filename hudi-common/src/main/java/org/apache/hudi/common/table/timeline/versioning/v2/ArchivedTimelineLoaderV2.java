@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -42,9 +43,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
@@ -53,21 +56,21 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
   private static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
 
   @Override
-  public void loadInstants(HoodieTableMetaClient metaClient,
-                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                           HoodieArchivedTimeline.LoadMode loadMode,
-                           Function<GenericRecord, Boolean> commitsFilter,
-                           BiConsumer<String, GenericRecord> recordConsumer) {
-    loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, Option.empty());
+  public String loadInstants(HoodieTableMetaClient metaClient,
+                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                             HoodieArchivedTimeline.LoadMode loadMode,
+                             Function<GenericRecord, Boolean> commitsFilter,
+                             BiConsumer<String, GenericRecord> recordConsumer) {
+    return loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
-  public void loadInstants(HoodieTableMetaClient metaClient,
-                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                           HoodieArchivedTimeline.LoadMode loadMode,
-                           Function<GenericRecord, Boolean> commitsFilter,
-                           BiConsumer<String, GenericRecord> recordConsumer,
-                           Option<Integer> limit) {
+  public String loadInstants(HoodieTableMetaClient metaClient,
+                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                             HoodieArchivedTimeline.LoadMode loadMode,
+                             Function<GenericRecord, Boolean> commitsFilter,
+                             BiConsumer<String, GenericRecord> recordConsumer,
+                             Option<Integer> limit) {
     try {
       // List all files
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
@@ -84,19 +87,17 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
 
       // Sort files in reverse chronological order if limit is specified (newest first for limit queries)
       if (hasLimit) {
-        filteredFiles.sort(Comparator.comparing((String fileName) -> {
-          return LSMTimeline.getMaxInstantTime(fileName);
-        }).reversed());
+        filteredFiles.sort(Comparator.comparing(LSMTimeline::getMaxInstantTime).reversed());
       }
 
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
       // Use serial stream when limit is involved to guarantee order
-      java.util.stream.Stream<String> fileStream = hasLimit
+      Stream<String> fileStream = hasLimit
           ? filteredFiles.stream()
           : filteredFiles.parallelStream();
-      fileStream.forEach(fileName -> {
+      return fileStream.map(fileName -> {
         if (hasLimit && loadedCount.get() >= limit.get()) {
-          return;
+          return null;
         }
         // Read the archived file
         try (HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
@@ -104,12 +105,12 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
             .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
           //TODO boundary to revisit in later pr to use HoodieSchema directly
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()),
-                  HoodieSchema.fromAvroSchema(readSchema))) {            
+                  HoodieSchema.fromAvroSchema(readSchema))) {
+            int instantTimeFieldPosition = readSchema.getField(INSTANT_TIME_ARCHIVED_META_FIELD).pos();
             while (iterator.hasNext() && (!hasLimit || loadedCount.get() < limit.get())) {
               GenericRecord record = (GenericRecord) iterator.next();
-              String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
-              if ((filter == null || filter.isInRange(instantTime))
-                  && commitsFilter.apply(record)) {
+              String instantTime = record.get(instantTimeFieldPosition).toString();
+              if (commitsFilter.apply(record)) {
                 recordConsumer.accept(instantTime, record);
                 if (hasLimit) {
                   loadedCount.incrementAndGet();
@@ -117,11 +118,12 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
               }
             }
           }
+          return LSMTimeline.getMinInstantTime(fileName);
         } catch (IOException ioException) {
           throw new HoodieIOException("Error open file reader for path: "
               + new StoragePath(metaClient.getArchivePath(), fileName));
         }
-      });
+      }).filter(Objects::nonNull).reduce(InstantComparison::minTimestamp).orElse(null);
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);

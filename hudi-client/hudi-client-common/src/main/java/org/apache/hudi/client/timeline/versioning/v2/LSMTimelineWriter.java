@@ -140,7 +140,7 @@ public class LSMTimelineWriter {
     }
     try (HoodieFileWriter writer = openWriter(filePath)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
-      log.info("Writing schema " + wrapperSchema.toString());
+      log.debug("Writing schema {}", wrapperSchema.toString());
       HoodieSchema schema = HoodieSchema.fromAvroSchema(wrapperSchema);
       for (ActiveAction activeAction : activeActions) {
         try {

@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -55,6 +56,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -65,40 +67,38 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
   private static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
-  private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
-  private static final String ACTION_TYPE_KEY = "actionType";
   private static final Logger LOG = LoggerFactory.getLogger(ArchivedTimelineLoaderV1.class);
 
   @Override
-  public void loadInstants(HoodieTableMetaClient metaClient,
+  public String loadInstants(HoodieTableMetaClient metaClient,
                            @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
-    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
+    return loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
-  public void loadInstants(HoodieTableMetaClient metaClient,
-                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                           HoodieArchivedTimeline.LoadMode loadMode,
-                           Function<GenericRecord, Boolean> commitsFilter,
-                           BiConsumer<String, GenericRecord> recordConsumer,
-                           Option<Integer> limit) {
-    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
+  public String loadInstants(HoodieTableMetaClient metaClient,
+                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                             HoodieArchivedTimeline.LoadMode loadMode,
+                             Function<GenericRecord, Boolean> commitsFilter,
+                             BiConsumer<String, GenericRecord> recordConsumer,
+                             Option<Integer> limit) {
+    return loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
   }
 
-  public void loadInstants(HoodieTableMetaClient metaClient,
-                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                           Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,
-                           HoodieArchivedTimeline.LoadMode loadMode,
-                           Function<GenericRecord, Boolean> commitsFilter,
-                           BiConsumer<String, GenericRecord> recordConsumer,
-                           Option<Integer> limit) {
+  public String loadInstants(HoodieTableMetaClient metaClient,
+                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                             Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,
+                             HoodieArchivedTimeline.LoadMode loadMode,
+                             Function<GenericRecord, Boolean> commitsFilter,
+                             BiConsumer<String, GenericRecord> recordConsumer,
+                             Option<Integer> limit) {
     Set<String> instantsInRange = new HashSet<>();
     AtomicInteger loadedCount = new AtomicInteger(0);
     boolean hasLimit = limit.isPresent() && limit.get() > 0;
-    
+    AtomicReference<String> lastInstantTime = new AtomicReference<>(null);
     try {
       // List all files
       List<StoragePathInfo> entryList = metaClient.getStorage().globEntries(
@@ -127,6 +127,8 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
               // TODO If we can store additional metadata in datablock, we can skip parsing records
               // (such as startTime, endTime of records in the block)
               try (ClosableIterator<HoodieRecord<IndexedRecord>> itr = avroBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+                int commitTimeFieldPosition = avroBlock.getSchema().getField(HoodieTableMetaClient.COMMIT_TIME_KEY).map(HoodieSchemaField::pos)
+                    .orElseThrow(() -> new HoodieIOException("Unable to find commit time field in archived timeline"));
                 StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
                     // Filter blocks in desired time window
                     .map(r -> (GenericRecord) r.getData())
@@ -135,10 +137,12 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                       if (hasLimit && loadedCount.get() >= limit.get()) {
                         return;
                       }
-                      String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
+                      String instantTime = r.get(commitTimeFieldPosition).toString();
                       if (filter == null || filter.isInRange(instantTime)) {
                         boolean isNewInstant = instantsInRange.add(instantTime);
                         recordConsumer.accept(instantTime, r);
+                        // Oldest instant will be the first one processed
+                        lastInstantTime.compareAndSet(null, instantTime);
                         if (hasLimit && isNewInstant) {
                           loadedCount.incrementAndGet();
                         }
@@ -182,6 +186,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
     }
+    return lastInstantTime.get();
   }
 
   /**
