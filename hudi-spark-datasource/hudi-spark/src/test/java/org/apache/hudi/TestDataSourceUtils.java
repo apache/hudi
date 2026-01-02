@@ -42,7 +42,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
@@ -125,8 +124,7 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   public void testAvroRecordsFieldConversion() {
 
     HoodieSchema schema = HoodieSchema.parse(avroSchemaString);
-    Schema avroSchema = schema.toAvroSchema();
-    GenericRecord record = new GenericData.Record(avroSchema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("event_date1", 18000);
     record.put("event_date2", 18001);
     record.put("event_date3", 18002);
@@ -134,9 +132,9 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
     record.put("event_organizer", "Hudi PMC");
 
     BigDecimal bigDecimal = new BigDecimal("123.184331");
-    Schema decimalSchema = avroSchema.getField("event_cost1").schema().getTypes().get(0);
+    HoodieSchema decimalSchema = schema.getField("event_cost1").get().schema().getNonNullType();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
+    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema.toAvroSchema(), LogicalTypes.decimal(10, 6));
     record.put("event_cost1", genericFixed);
     record.put("event_cost2", genericFixed);
     record.put("event_cost3", genericFixed);
