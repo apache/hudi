@@ -40,6 +40,7 @@ import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.MetadataWriterTestUtils;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -158,7 +159,7 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
     LOG.info("Created commit metadata with {} files per partition", filesPerPartition);
 
-    // STEP 3: Write the /files partition of metadata table using the same file structure from STEP 2. 
+    // STEP 3: Write the /files partition of metadata table using the same file structure from STEP 2.
     HoodieWriteConfig mdtConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
         dataConfig,
         HoodieFailedWritesCleaningPolicy.EAGER,
@@ -171,12 +172,34 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
           Option.empty(),
           dataMetaClient.getTableConfig())) {
       
+      // STEP 3a: Check if /files partition exists and initialize if needed
+      String metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(metadataBasePath)
+          .setConf(context.getStorageConf().newInstance())
+          .build();
+      
+      boolean filesPartitionExists = metadataMetaClient.getTableConfig()
+          .isMetadataPartitionAvailable(MetadataPartitionType.FILES);
+      
+      LOG.info("BEFORE initialization - Metadata table exists: {}, partitions: {}",
+          filesPartitionExists,
+          metadataMetaClient.getTableConfig().getMetadataPartitions());
+      
+      if (!filesPartitionExists) {
+        // Mark partition as inflight in table config - this is required for tagRecordsWithLocation
+        // to work with isInitializing=true
+        dataMetaClient.getTableConfig().setMetadataPartitionsInflight(
+            dataMetaClient, MetadataPartitionType.FILES);
+        LOG.info("Marked /files partition as inflight for initialization");
+      }
+      
       // Convert commit metadata to files partition records
       @SuppressWarnings("unchecked")
-      List<HoodieRecord<HoodieMetadataPayload>> filesRecords = (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>) HoodieTableMetadataUtil
-          .convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
+      List<HoodieRecord<HoodieMetadataPayload>> filesRecords = (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>) 
+          HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
 
-      // Write files partition records
+      // STEP 3b: Tag records with location and write them
       String mdtCommitTime = InProcessTimeGenerator.createNewInstantTime();
       try (SparkRDDWriteClient<HoodieMetadataPayload> mdtWriteClient = new SparkRDDWriteClient<>(context,
           mdtConfig)) {
@@ -196,23 +219,54 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
             (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
                 .of(filesRDD));
         
+        // Tag records - use isInitializing=true if partition was just marked as inflight
         @SuppressWarnings("rawtypes")
-        Pair<org.apache.hudi.common.data.HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedResult = MetadataWriterTestUtils
-            .tagRecordsWithLocation(
+        Pair<org.apache.hudi.common.data.HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedResult = 
+            MetadataWriterTestUtils.tagRecordsWithLocation(
                 sparkMetadataWriter,
                 partitionRecordsMap,
-                false // not initializing
+                !filesPartitionExists // isInitializing = true if we just marked it as inflight
             );
+        
+        // Check metadata table state after tagging
+        metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+        LOG.info("AFTER tagging - Metadata table exists: {}, partitions: {}",
+            metadataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
+            metadataMetaClient.getTableConfig().getMetadataPartitions());
+
+        // Print current location for the first 10 tagged records
+        @SuppressWarnings("unchecked")
+        List<HoodieRecord<HoodieMetadataPayload>> taggedRecordList =
+            (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>) HoodieJavaRDD.getJavaRDD(taggedResult.getKey()).take(10);
+        for (int i = 0; i < taggedRecordList.size(); i++) {
+          HoodieRecord<HoodieMetadataPayload> rec = taggedRecordList.get(i);
+          LOG.info("Tagged record {} location: {}", i, rec.getCurrentLocation());
+        }
         
         // Convert back to JavaRDD (with proper type casting)
         @SuppressWarnings("unchecked")
-        JavaRDD<HoodieRecord<HoodieMetadataPayload>> taggedRDD = (JavaRDD<HoodieRecord<HoodieMetadataPayload>>) (JavaRDD) HoodieJavaRDD
-            .getJavaRDD(taggedResult.getKey());
-        filesRDD = taggedRDD;
+        JavaRDD<HoodieRecord<HoodieMetadataPayload>> taggedRDD = 
+            (JavaRDD<HoodieRecord<HoodieMetadataPayload>>) (JavaRDD) HoodieJavaRDD
+                .getJavaRDD(taggedResult.getKey());
 
-        JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.upsertPreppedRecords(filesRDD, mdtCommitTime);
+        // Write the tagged records
+        JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.upsertPreppedRecords(taggedRDD, mdtCommitTime);
         List<WriteStatus> statusList = writeStatuses.collect();
         mdtWriteClient.commit(mdtCommitTime, writeStatuses);
+        
+        // Mark partition as completed if we initialized it
+        if (!filesPartitionExists) {
+          dataMetaClient.getTableConfig().setMetadataPartitionState(
+              dataMetaClient, MetadataPartitionType.FILES.getPartitionPath(), true);
+          LOG.info("Marked /files partition as completed");
+        }
+        
+        // Verify final state
+        metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+        LOG.info("AFTER commit - Metadata table exists: {}, partitions: {}",
+            metadataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
+            metadataMetaClient.getTableConfig().getMetadataPartitions());
+        
         LOG.info("Wrote {} files partition records to metadata table", filesRecords.size());
       }
     }
