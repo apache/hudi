@@ -353,7 +353,7 @@ public class AvroOrcUtils {
    *
    * @param unionVector       The vector to store value.
    * @param unionChildTypes   All possible types for the value Object.
-   * @param schema            Avro union schema for the value Object.
+   * @param schema            Union schema for the value Object.
    * @param value             Object to be added to the unionVector
    * @param vectorPos         The position in the vector where value will be stored at.
    * @return                  succeeded or failed
@@ -801,7 +801,7 @@ public class AvroOrcUtils {
    * the nullability of an Avro type. To achieve consistency between the Avro and ORC schema,
    * non-NULL types are extracted from the union type.
    * @param unionSchema       A schema of union type.
-   * @return  An Avro schema that is either NULL or a UNION without NULL fields.
+   * @return  A schema that is either NULL or a UNION without NULL fields.
    */
   private static HoodieSchema getActualSchemaType(HoodieSchema unionSchema) {
     final List<HoodieSchema> nonNullMembers = unionSchema.getTypes().stream()

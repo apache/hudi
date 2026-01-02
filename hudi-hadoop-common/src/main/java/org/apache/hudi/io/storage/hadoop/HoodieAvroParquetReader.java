@@ -112,7 +112,6 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
     return getIndexedRecordIteratorInternal(requestedSchema, Collections.emptyMap());
   }
 
@@ -123,8 +122,13 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    fileSchema = fileSchema.or(() -> Option.ofNullable(parquetUtils.readSchema(storage, path)));
-    return fileSchema.get();
+    // Lazy initialization with caching: read schema from parquet file footer on first call,
+    // then cache it in fileSchema to avoid repeated I/O on subsequent calls
+    return fileSchema.orElseGet(() -> {
+      HoodieSchema schema = parquetUtils.readSchema(storage, path);
+      fileSchema = Option.ofNullable(schema);
+      return schema;
+    });
   }
 
   @Override
