@@ -185,7 +185,7 @@ object TestHoodieRecordSerialization {
   private def convertToAvroRecord(row: Row): GenericRecord = {
     val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(row.schema, "testRecord", "testNamespace")
 
-    createInternalRowToAvroConverter(row.schema, schema.toAvroSchema, nullable = false)
+    createInternalRowToAvroConverter(row.schema, schema, nullable = false)
       .apply(toUnsafeRow(row, row.schema))
   }
 

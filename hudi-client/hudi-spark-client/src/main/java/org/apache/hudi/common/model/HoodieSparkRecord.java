@@ -321,7 +321,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       return Option.empty();
     }
     StructType structType = schema == null ? HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(recordSchema) : schema;
-    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema.toAvroSchema(), false).apply(data);
+    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
     return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
   }
 
