@@ -69,12 +69,6 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     initHoodieStorage()
   }
 
-  @AfterEach override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-  }
-
   protected def cdcDataFrame(basePath: String, startingInstant: String, endingInstant: String): DataFrame = {
     val reader = spark.read.format("hudi")
       .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)

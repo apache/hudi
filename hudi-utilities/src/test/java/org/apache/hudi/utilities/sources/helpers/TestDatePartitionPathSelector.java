@@ -25,7 +25,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -72,11 +71,6 @@ public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness 
     initPath();
     initHoodieStorage();
     context = new HoodieSparkEngineContext(jsc);
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    cleanupResources();
   }
 
   /*

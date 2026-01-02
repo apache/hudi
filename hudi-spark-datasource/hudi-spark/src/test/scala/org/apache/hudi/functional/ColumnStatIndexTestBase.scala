@@ -84,12 +84,6 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
   }
 
-  @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
-  }
-
   protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams, addNestedFiled : Boolean = false): Unit = {
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource(params.dataSourcePath).toString

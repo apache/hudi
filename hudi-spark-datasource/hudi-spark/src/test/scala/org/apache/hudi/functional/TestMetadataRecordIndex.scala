@@ -76,12 +76,6 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
   }
 
-  @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
-  }
-
   protected def withRDDPersistenceValidation(f: => Unit): Unit = {
     org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
       override def run(): Unit = f

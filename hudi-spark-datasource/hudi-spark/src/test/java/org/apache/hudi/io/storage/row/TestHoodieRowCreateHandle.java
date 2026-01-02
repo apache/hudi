@@ -32,7 +32,6 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,11 +66,6 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     initTestDataGenerator();
     initMetaClient();
     initTimelineService();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @ParameterizedTest

@@ -71,7 +71,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -79,7 +78,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -193,11 +191,6 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
       properties.put(HoodieTableConfig.ORDERING_FIELDS.key(), "number");
     }
     return properties;
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
   }
 
   private static List<HoodieRecord> getInserts() {

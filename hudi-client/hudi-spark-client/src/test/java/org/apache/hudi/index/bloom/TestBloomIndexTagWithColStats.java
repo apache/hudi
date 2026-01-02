@@ -43,7 +43,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -58,11 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
 
   private static final HoodieSchema SCHEMA = getSchemaFromResource(TestBloomIndexTagWithColStats.class, "/exampleSchema.avsc", true);
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
-  }
 
   private void init(Properties props) throws Exception {
     initSparkContexts();

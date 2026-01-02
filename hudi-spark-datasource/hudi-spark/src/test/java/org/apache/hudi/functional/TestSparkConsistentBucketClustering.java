@@ -60,7 +60,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -122,11 +121,6 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         .build();
 
     writeClient = getHoodieWriteClient(config);
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
   }
 
   /**

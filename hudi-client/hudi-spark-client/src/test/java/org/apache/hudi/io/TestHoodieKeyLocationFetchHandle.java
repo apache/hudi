@@ -43,12 +43,10 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -77,11 +75,6 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
     initPath();
     initTestDataGenerator();
     initHoodieStorage();
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
   }
 
   @ParameterizedTest

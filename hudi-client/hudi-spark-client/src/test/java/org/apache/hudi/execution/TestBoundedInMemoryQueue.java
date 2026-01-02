@@ -35,7 +35,6 @@ import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -76,11 +75,6 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initTestDataGenerator();
     initExecutorServiceWithFixedThreadPool(2);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   // Test to ensure that we are reading all records from queue iterator in the same order

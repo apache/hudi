@@ -34,7 +34,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -62,11 +61,6 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
     initSparkContexts("TestRDDSimpleBucketPartitioner");
     initHoodieStorage();
     initTimelineService();
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
   }
 
   @ParameterizedTest

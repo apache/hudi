@@ -54,7 +54,6 @@ import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -104,11 +103,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     initHoodieStorage();
     initMetaClient(tableType);
     initTestDataGenerator();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @Test

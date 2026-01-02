@@ -58,7 +58,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -97,11 +96,6 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     initTestDataGenerator();
     initMetaClient();
     initTimelineService();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @Test

@@ -40,7 +40,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.functions;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -82,13 +81,6 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     hudiBasePath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/hudiBasePath";
     bootstrapTargetPath = tmpFolder.toAbsolutePath() + "/" + randomUuid + "/bootstrapTargetPath";
     initSparkContexts(this.getClass().getSimpleName() + randomUuid);
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupSparkContexts();
-    cleanupClients();
-    cleanupTestDataGenerator();
   }
 
   protected Map<String, String> basicOptions() {

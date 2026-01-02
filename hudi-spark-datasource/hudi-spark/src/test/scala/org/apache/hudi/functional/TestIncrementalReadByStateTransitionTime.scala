@@ -27,7 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
+import org.junit.jupiter.api.{Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -55,13 +55,6 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
-  }
-
-  @AfterEach
-  override def tearDown(): Unit = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
   }
 
   @ParameterizedTest

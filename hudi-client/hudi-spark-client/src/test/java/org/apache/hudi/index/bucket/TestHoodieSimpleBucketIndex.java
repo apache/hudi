@@ -36,7 +36,6 @@ import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -64,11 +63,6 @@ public class TestHoodieSimpleBucketIndex extends HoodieSparkClientTestHarness {
     initHoodieStorage();
     // We have some records to be tagged (two different partitions)
     initMetaClient();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @Test

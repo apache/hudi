@@ -29,7 +29,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.types.StructType;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,11 +45,6 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   @BeforeEach
   void setUp() {
     initSparkContexts();
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    cleanupResources();
   }
 
   @Test

@@ -27,7 +27,6 @@ import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,11 +58,6 @@ public class TestConsistencyGuard extends HoodieSparkClientTestHarness {
   public void setup() {
     initPath();
     initFileSystemWithDefaultConfiguration();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @ParameterizedTest

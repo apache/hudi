@@ -31,8 +31,8 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -53,12 +53,6 @@ class TestNestedPartitionPathSchema extends HoodieSparkClientTestBase with Scala
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
-  }
-
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
   }
 
   def getWriterReaderOpts(recordType: HoodieRecordType, tableType: HoodieTableType): (Map[String, String], Map[String, String]) = {

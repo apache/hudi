@@ -30,9 +30,8 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
+import org.junit.jupiter.api.{Assertions, BeforeEach, Test}
 import org.junit.jupiter.api.function.Executable
-import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
 
@@ -43,7 +42,6 @@ import scala.collection.JavaConverters._
  */
 class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMixin {
   var spark: SparkSession = null
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -60,12 +58,6 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
-  }
-
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
   }
 
   override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =

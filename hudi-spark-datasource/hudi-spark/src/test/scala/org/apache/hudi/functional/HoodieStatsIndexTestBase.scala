@@ -34,7 +34,7 @@ import org.apache.hudi.util.JavaConversions
 
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions.{col, not}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -72,12 +72,6 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     instantTime = new AtomicInteger(1)
 
     spark = sqlContext.sparkSession
-  }
-
-  @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
   }
 
   protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {

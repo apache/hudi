@@ -58,11 +58,6 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     initHoodieStorage()
   }
 
-  @AfterEach override def tearDown() = {
-    spark = null
-    cleanupResources()
-  }
-
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testFailEarlyForIncrViewQueryForNonExistingFiles(tableType: HoodieTableType): Unit = {

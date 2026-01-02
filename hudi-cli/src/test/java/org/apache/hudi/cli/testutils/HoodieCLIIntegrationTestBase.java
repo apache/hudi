@@ -20,7 +20,6 @@ package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.common.model.HoodieTableType;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
@@ -32,12 +31,6 @@ public class HoodieCLIIntegrationTestBase extends HoodieCLIIntegrationTestHarnes
   @BeforeEach
   public void setup() throws Exception {
     initResources();
-  }
-
-  @Override
-  @AfterEach
-  public void teardown() throws Exception {
-    cleanupResources();
   }
 
   protected HoodieTableType getTableType() {

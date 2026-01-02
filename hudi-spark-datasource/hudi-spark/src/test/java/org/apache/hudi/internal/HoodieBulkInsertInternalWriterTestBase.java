@@ -32,7 +32,6 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.HashMap;
@@ -62,11 +61,6 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieSparkClientTes
     initTestDataGenerator();
     initMetaClient();
     initTimelineService();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   protected HoodieWriteConfig getWriteConfig(boolean populateMetaFields) {

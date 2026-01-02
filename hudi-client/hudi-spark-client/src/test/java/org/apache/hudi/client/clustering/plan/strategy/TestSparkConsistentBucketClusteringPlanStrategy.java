@@ -39,7 +39,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -62,11 +61,6 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     initSparkContexts();
     initHoodieStorage();
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
   }
 
   @Test

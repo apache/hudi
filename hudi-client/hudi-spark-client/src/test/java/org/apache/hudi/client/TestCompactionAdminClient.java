@@ -32,7 +32,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -61,11 +60,6 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     initSparkContexts();
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(context, basePath);
-  }
-
-  @AfterEach
-  public void cleanUp() throws Exception {
-    cleanupResources();
   }
 
   @Test

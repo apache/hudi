@@ -62,7 +62,6 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -101,11 +100,6 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     initSparkContexts();
     metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
     this.fs = (FileSystem) metaClient.getStorage().getFileSystem();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @Test

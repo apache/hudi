@@ -26,12 +26,10 @@ import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONObject;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
@@ -64,9 +62,6 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
   @Mock
   SqsClient sqs;
 
-  @Mock
-  private CloudObjectsSelector cloudObjectsSelector;
-
   @BeforeEach
   void setUp() {
     initSparkContexts();
@@ -78,12 +73,6 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
     sqsUrl = "test-queue";
     props.setProperty(S3_SOURCE_QUEUE_URL.key(), sqsUrl);
     props.setProperty(S3_SOURCE_QUEUE_REGION.key(), REGION_NAME);
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    Mockito.reset(cloudObjectsSelector);
-    cleanupResources();
   }
 
   @ParameterizedTest
