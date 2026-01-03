@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.HashMap;
@@ -53,6 +54,11 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
     initTestDataGenerator();
     initMetaClient();
     initTimelineService();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   Pair<WriteStatus, List<HoodieRecord>> createParquetFile(HoodieWriteConfig config, HoodieTable table, String partitionPath,

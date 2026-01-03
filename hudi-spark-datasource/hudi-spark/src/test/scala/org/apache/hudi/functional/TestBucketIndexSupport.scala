@@ -39,7 +39,7 @@ import org.apache.spark.sql.{BucketPartitionUtils, HoodieCatalystExpressionUtils
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
 import java.util
 
@@ -77,6 +77,11 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
     initMetaClient()
 
     spark = sqlContext.sparkSession
+  }
+
+  @AfterEach
+  override def tearDown() = {
+    cleanupSparkContexts()
   }
 
   @Test

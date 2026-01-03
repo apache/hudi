@@ -47,6 +47,7 @@ import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -118,6 +119,11 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         .withIndexConfig(indexBuilder.build())
         .build();
     writeClient = getHoodieWriteClient(config);
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   private HoodieWriteConfig makeConfig(

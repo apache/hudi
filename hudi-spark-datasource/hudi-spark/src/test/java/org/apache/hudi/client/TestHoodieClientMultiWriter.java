@@ -51,6 +51,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -62,7 +63,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
 import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -75,6 +75,7 @@ import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBased
 import org.apache.curator.test.TestingServer;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -169,6 +170,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ,
         HoodieFileFormat.PARQUET);
     initTestDataGenerator();
+  }
+
+  @AfterEach
+  public void clean() throws IOException {
+    cleanupResources();
   }
 
   private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(

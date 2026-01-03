@@ -29,7 +29,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{BeforeEach, Tag}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -74,6 +74,13 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
+  }
+
+  @AfterEach
+  override def tearDown() = {
+    cleanupSparkContexts()
+    cleanupTestDataGenerator()
+    cleanupFileSystem()
   }
 
   @ParameterizedTest

@@ -38,9 +38,11 @@ import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -77,6 +79,11 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         .withIndexConfig(indexBuilder.build())
         .build();
     writeClient = getHoodieWriteClient(config);
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   @Test

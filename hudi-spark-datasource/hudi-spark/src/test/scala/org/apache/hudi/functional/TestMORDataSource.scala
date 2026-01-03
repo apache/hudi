@@ -47,7 +47,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
@@ -90,6 +90,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
+  }
+
+  @AfterEach override def tearDown() = {
+    cleanupSparkContexts()
+    cleanupTestDataGenerator()
+    cleanupFileSystem()
   }
 
   override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =

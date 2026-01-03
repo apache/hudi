@@ -22,7 +22,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.sql.{Date, Timestamp}
@@ -50,6 +50,10 @@ class TestGenericRecordAndRowConsistency extends HoodieSparkClientTestBase {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
+  }
+
+  @AfterEach override def tearDown(): Unit = {
+    cleanupSparkContexts()
   }
 
   @Test

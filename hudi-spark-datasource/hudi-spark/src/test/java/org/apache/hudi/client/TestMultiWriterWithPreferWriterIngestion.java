@@ -42,6 +42,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -74,6 +75,11 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ,
         HoodieFileFormat.PARQUET);
     initTestDataGenerator();
+  }
+
+  @AfterEach
+  public void clean() throws IOException {
+    cleanupResources();
   }
 
   @ParameterizedTest

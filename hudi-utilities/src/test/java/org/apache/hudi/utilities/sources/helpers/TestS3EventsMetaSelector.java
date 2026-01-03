@@ -29,11 +29,13 @@ import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import org.apache.hadoop.fs.Path;
 import org.json.JSONObject;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
@@ -61,6 +63,9 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
   @Mock
   SqsClient sqs;
 
+  @Mock
+  private S3EventsMetaSelector s3EventsMetaSelector;
+
   @BeforeEach
   void setUp() {
     initSparkContexts();
@@ -72,6 +77,12 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
     sqsUrl = "test-queue";
     props.setProperty(S3_SOURCE_QUEUE_URL.key(), sqsUrl);
     props.setProperty(S3_SOURCE_QUEUE_REGION.key(), REGION_NAME);
+  }
+
+  @AfterEach
+  public void teardown() throws Exception {
+    Mockito.reset(s3EventsMetaSelector);
+    cleanupResources();
   }
 
   @ParameterizedTest

@@ -46,6 +46,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +72,11 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initResources();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   public HoodieSparkTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {

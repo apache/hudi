@@ -27,7 +27,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -59,6 +59,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
+  }
+
+  @AfterEach override def tearDown(): Unit = {
+    cleanupSparkContexts()
   }
 
   def castColToX(x: Int, colToCast: String, df: DataFrame): DataFrame = x match {
@@ -115,7 +119,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         try {
           // convert int to string first before conversion to binary
           val initDF = prepDataFrame(df1, colInitType)
-          initDF.schema.toString()
+          initDF.printSchema()
           initDF.collect
 
           // recreate table

@@ -74,6 +74,12 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
   }
 
+  @AfterEach
+  override def tearDown() = {
+    cleanupFileSystem()
+    cleanupSparkContexts()
+  }
+
   protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
     getLatestMetaClient(false).getActiveTimeline
       .filter(JavaConversions.getPredicate(s => Option(

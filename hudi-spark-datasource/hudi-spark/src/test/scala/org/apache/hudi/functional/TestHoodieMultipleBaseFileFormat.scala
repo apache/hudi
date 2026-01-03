@@ -67,6 +67,12 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     initHoodieStorage()
   }
 
+  @AfterEach override def tearDown() = {
+    cleanupSparkContexts()
+    cleanupTestDataGenerator()
+    cleanupFileSystem()
+  }
+
   @Test
   def testMultiFileFormatForCOWTableType(): Unit = {
     insertAndValidateSnapshot(basePath, HoodieTableType.COPY_ON_WRITE.name())

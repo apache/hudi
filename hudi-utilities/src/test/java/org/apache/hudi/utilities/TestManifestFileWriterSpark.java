@@ -25,9 +25,9 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -35,6 +35,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -60,6 +61,11 @@ public class TestManifestFileWriterSpark extends HoodieSparkClientTestHarness {
     initSparkContexts("TestHoodieMetadata");
     initHoodieStorage();
     initMetaClient(tableType);
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   @ParameterizedTest

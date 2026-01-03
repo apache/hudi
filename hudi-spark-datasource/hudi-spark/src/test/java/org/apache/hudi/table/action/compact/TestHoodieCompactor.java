@@ -59,6 +59,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import com.codahale.metrics.Counter;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -94,6 +95,11 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     storage = HoodieStorageUtils.getStorage(basePath, storageConf);
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     initTestDataGenerator();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   public HoodieWriteConfig getConfig() {

@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -48,6 +49,11 @@ public class  TestSimpleExecutionInSpark extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initTestDataGenerator();
     initExecutorServiceWithFixedThreadPool(2);
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   @Test

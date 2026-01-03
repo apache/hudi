@@ -49,6 +49,7 @@ import org.apache.hudi.timeline.service.TimelineService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -83,6 +84,16 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     initSparkContexts();
     initHoodieStorage();
     dataGen = new HoodieTestDataGenerator(0x1f86);
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupTimelineService();
+    cleanupClients();
+    cleanupSparkContexts();
+    cleanupFileSystem();
+    cleanupExecutorService();
+    dataGen = null;
   }
 
   @Override

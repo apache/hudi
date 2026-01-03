@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
@@ -31,10 +32,10 @@ import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -75,6 +76,11 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initTestDataGenerator();
     initExecutorServiceWithFixedThreadPool(2);
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   // Test to ensure that we are reading all records from queue iterator in the same order

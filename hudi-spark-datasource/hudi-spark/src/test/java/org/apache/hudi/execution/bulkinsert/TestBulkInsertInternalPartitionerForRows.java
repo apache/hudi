@@ -31,6 +31,7 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -63,6 +64,11 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieSparkClientT
     initSparkContexts("TestBulkInsertInternalPartitionerForRows");
     initPath();
     initHoodieStorage();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   private static Stream<Arguments> configParams() {

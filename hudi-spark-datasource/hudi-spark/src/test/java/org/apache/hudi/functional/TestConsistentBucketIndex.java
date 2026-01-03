@@ -52,6 +52,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -117,6 +118,11 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
         .build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   /**

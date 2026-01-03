@@ -34,12 +34,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.storage.StoragePath;
@@ -59,6 +59,7 @@ import org.apache.parquet.schema.Type;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -111,6 +112,11 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     context.getStorageConf().set(WRITE_OLD_LIST_STRUCTURE, "false");
 
     writeClient = getHoodieWriteClient(config);
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   @Test

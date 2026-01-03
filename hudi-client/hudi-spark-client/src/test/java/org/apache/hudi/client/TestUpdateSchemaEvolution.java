@@ -46,6 +46,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.io.InvalidRecordException;
 import org.apache.parquet.io.ParquetDecodingException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -76,6 +77,11 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     initSparkContexts("TestUpdateSchemaEvolution");
     initHoodieStorage();
     initTimelineService();
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   private WriteStatus prepareFirstRecordCommit(List<HoodieRecord> insertRecords) throws IOException {

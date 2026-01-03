@@ -29,7 +29,7 @@ import org.apache.hudi.table.storage.HoodieStorageLayout
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.JavaConverters._
@@ -61,6 +61,12 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
+  }
+
+  @AfterEach override def tearDown(): Unit = {
+    cleanupSparkContexts()
+    cleanupTestDataGenerator()
+    cleanupFileSystem()
   }
 
   @Test def testDoubleInsert(): Unit = {

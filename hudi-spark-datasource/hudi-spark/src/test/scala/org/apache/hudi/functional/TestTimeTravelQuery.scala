@@ -30,8 +30,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -56,6 +56,12 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
+  }
+
+  @AfterEach override def tearDown(): Unit = {
+    cleanupSparkContexts()
+    cleanupTestDataGenerator()
+    cleanupFileSystem()
   }
 
   @ParameterizedTest
