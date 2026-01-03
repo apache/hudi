@@ -48,7 +48,6 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -628,13 +627,13 @@ public abstract class AbstractHoodieLogRecordScanner {
         ? Option.empty()
         : Option.of(Pair.of(recordKeyField, partitionPathFieldOpt.orElse(null)));
 
-    Pair<ClosableIterator<HoodieRecord>, Schema> recordsIteratorSchemaPair =
+    Pair<ClosableIterator<HoodieRecord>, HoodieSchema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
 
     try (ClosableIterator<HoodieRecord> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         HoodieRecord completedRecord = recordIterator.next()
-            .wrapIntoHoodieRecordPayloadWithParams(HoodieSchema.fromAvroSchema(recordsIteratorSchemaPair.getRight()),
+            .wrapIntoHoodieRecordPayloadWithParams(recordsIteratorSchemaPair.getRight(),
                 hoodieTableMetaClient.getTableConfig().getProps(),
                 recordKeyPartitionPathFieldPair,
                 this.withOperationField,
@@ -799,7 +798,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     return validBlockInstants;
   }
 
-  private Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(
+  private Pair<ClosableIterator<HoodieRecord>, HoodieSchema> getRecordsIterator(
       HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     ClosableIterator<HoodieRecord> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {
@@ -810,7 +809,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       blockRecordsIterator = (ClosableIterator) dataBlock.getRecordIterator(recordType);
     }
 
-    Option<Pair<Function<HoodieRecord, HoodieRecord>, Schema>> schemaEvolutionTransformerOpt =
+    Option<Pair<Function<HoodieRecord, HoodieRecord>, HoodieSchema>> schemaEvolutionTransformerOpt =
         composeEvolvedSchemaTransformer(dataBlock);
 
     // In case when schema has been evolved original persisted records will have to be
@@ -819,8 +818,8 @@ public abstract class AbstractHoodieLogRecordScanner {
         schemaEvolutionTransformerOpt.map(Pair::getLeft)
             .orElse(Function.identity());
 
-    Schema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(() -> dataBlock.getSchema().toAvroSchema());
+    HoodieSchema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
+        .orElseGet(() -> dataBlock.getSchema());
 
     return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, transformer), schema);
   }
@@ -834,7 +833,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    * @param dataBlock current processed block
    * @return final read schema.
    */
-  private Option<Pair<Function<HoodieRecord, HoodieRecord>, Schema>> composeEvolvedSchemaTransformer(
+  private Option<Pair<Function<HoodieRecord, HoodieRecord>, HoodieSchema>> composeEvolvedSchemaTransformer(
       HoodieDataBlock dataBlock) {
     if (internalSchema.isEmptySchema()) {
       return Option.empty();
@@ -844,13 +843,13 @@ public abstract class AbstractHoodieLogRecordScanner {
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false).mergeSchema();
-    Schema mergedAvroSchema = InternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName()).toAvroSchema();
+    HoodieSchema mergedAvroSchema = InternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(
           dataBlock.getSchema(),
           this.hoodieTableMetaClient.getTableConfig().getProps(),
-          HoodieSchema.fromAvroSchema(mergedAvroSchema),
+          mergedAvroSchema,
           Collections.emptyMap());
     }, mergedAvroSchema));
   }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -26,6 +25,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -104,7 +104,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   @Override
   protected ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
-    Schema schema = AvroSchemaCache.intern(new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA)));
+    HoodieSchema schema = HoodieSchemaCache.intern(HoodieSchema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA)));
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (DataOutputStream output = new DataOutputStream(baos)) {
       // 1. Write out the log block version
@@ -119,7 +119,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
-          ByteArrayOutputStream data = s.getAvroBytes(HoodieSchema.fromAvroSchema(schema), props);
+          ByteArrayOutputStream data = s.getAvroBytes(schema, props);
           // Write the record size
           output.writeInt(data.size());
           // Write the content

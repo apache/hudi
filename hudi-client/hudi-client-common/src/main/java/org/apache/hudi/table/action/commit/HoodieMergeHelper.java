@@ -200,17 +200,17 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           .collect(Collectors.toList());
       InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
           true, false, false).mergeSchema();
-      Schema newWriterSchema = InternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName()).getAvroSchema();
+      HoodieSchema newWriterSchema = InternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName());
       Schema writeSchemaFromFile = InternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName()).getAvroSchema();
-      boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
-          || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+      boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size() || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema.toAvroSchema(),
+              writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
               recordSchema,
               writeConfig.getProps(),
-              HoodieSchema.fromAvroSchema(newWriterSchema), renameCols);
+              newWriterSchema, renameCols);
         });
       } else {
         return Option.empty();

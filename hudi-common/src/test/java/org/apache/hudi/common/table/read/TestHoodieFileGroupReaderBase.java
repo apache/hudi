@@ -713,8 +713,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                    String[] orderingFields) throws Exception {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema();
-    expectedHoodieRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieRecords, metaClient, schema.toAvroSchema());
-    expectedHoodieUnmergedRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieUnmergedRecords, metaClient, schema.toAvroSchema());
+    expectedHoodieRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieRecords, metaClient, schema);
+    expectedHoodieUnmergedRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieUnmergedRecords, metaClient, schema);
     List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, schema.toAvroSchema(), orderingFields);
     List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, schema.toAvroSchema(), orderingFields);
     validateOutputFromFileGroupReaderWithExistingRecords(
@@ -722,11 +722,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         expectedRecords, expectedUnmergedRecords);
   }
 
-  private static List<HoodieRecord> getExpectedHoodieRecordsWithOrderingValue(List<HoodieRecord> expectedHoodieRecords, HoodieTableMetaClient metaClient, Schema avroSchema) {
+  private static List<HoodieRecord> getExpectedHoodieRecordsWithOrderingValue(List<HoodieRecord> expectedHoodieRecords, HoodieTableMetaClient metaClient, HoodieSchema schema) {
     return expectedHoodieRecords.stream().map(rec -> {
       List<String> orderingFields = metaClient.getTableConfig().getOrderingFields();
       HoodieAvroIndexedRecord avroRecord = ((HoodieAvroIndexedRecord) rec);
-      Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(HoodieSchema.fromAvroSchema(avroSchema), field, new TypedProperties()));
+      Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(schema, field, new TypedProperties()));
       return new HoodieAvroIndexedRecord(rec.getKey(), avroRecord.getData(), orderingValue);
     }).collect(Collectors.toList());
   }

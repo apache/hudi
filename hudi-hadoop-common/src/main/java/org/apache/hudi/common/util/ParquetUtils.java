@@ -427,7 +427,6 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        //TODO boundary to revisit in follow up to use HoodieSchema directly
         HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
       for (HoodieRecord<?> record : records) {
         String recordKey = record.getRecordKey(readerSchema, keyFieldName);
