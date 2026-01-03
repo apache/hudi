@@ -34,8 +34,8 @@ import org.apache.hudi.util.JavaConversions
 
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions.{col, not}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.BeforeEach
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
