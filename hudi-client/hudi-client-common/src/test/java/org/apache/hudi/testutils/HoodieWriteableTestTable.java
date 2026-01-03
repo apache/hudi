@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -125,7 +126,8 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           contextSupplier, populateMetaFields)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
-          GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(schema, CollectionUtils.emptyProps(), schema).getData();
+          GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(HoodieSchema.fromAvroSchema(schema),
+                  CollectionUtils.emptyProps(), HoodieSchema.fromAvroSchema(schema)).getData();
           if (populateMetaFields) {
             HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
             HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
@@ -148,7 +150,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           config, schema, contextSupplier)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
-          GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();
+          GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(HoodieSchema.fromAvroSchema(schema), CollectionUtils.emptyProps()).get().getData();
           HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
           HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
           writer.writeAvro(record.getRecordKey(), avroRecord);

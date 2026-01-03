@@ -122,9 +122,9 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
 
   private Option<HoodieAvroIndexedRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
     if (usesCustomPayload) {
-      return record.toIndexedRecord(getWriterSchema().toAvroSchema(), payloadProps);
+      return record.toIndexedRecord(getWriterSchema(), payloadProps);
     } else {
-      return record.toIndexedRecord(getReaderSchema().toAvroSchema(), payloadProps);
+      return record.toIndexedRecord(getReaderSchema(), payloadProps);
     }
   }
 

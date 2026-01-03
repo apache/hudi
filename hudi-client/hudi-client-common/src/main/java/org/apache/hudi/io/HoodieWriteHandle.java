@@ -343,7 +343,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, HoodieSchema writerSchema, TypedProperties props) {
     try {
-      return record.toIndexedRecord(writerSchema.toAvroSchema(), props).map(HoodieAvroIndexedRecord::getData);
+      return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
     } catch (IOException e) {
       log.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
@@ -353,13 +353,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, HoodieSchema schema, Properties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     if (isTrackingEventTimeWatermark) {
-      Object eventTime = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
+      Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
       if (eventTime != null) {
         // Append event_time.
         Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTime = record.convertColumnValueForLogicalType(
-            field.get().schema().toAvroSchema(), eventTime, keepConsistentLogicalTimestamp);
+            field.get().schema(), eventTime, keepConsistentLogicalTimestamp);
         Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
         metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
         return Option.of(metadata);

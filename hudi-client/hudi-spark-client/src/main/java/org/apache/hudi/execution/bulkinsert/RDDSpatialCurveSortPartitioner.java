@@ -69,7 +69,7 @@ public class RDDSpatialCurveSortPartitioner<T>
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     if (recordType == HoodieRecordType.AVRO) {
       JavaRDD<GenericRecord> genericRecordsRDD =
-          records.map(f -> (GenericRecord) f.toIndexedRecord(schema.toAvroSchema(), new Properties()).get().getData());
+          records.map(f -> (GenericRecord) f.toIndexedRecord(schema, new Properties()).get().getData());
 
       Dataset<Row> sourceDataset =
           AvroConversionUtils.createDataFrame(

@@ -119,7 +119,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
-          ByteArrayOutputStream data = s.getAvroBytes(schema, props);
+          ByteArrayOutputStream data = s.getAvroBytes(HoodieSchema.fromAvroSchema(schema), props);
           // Write the record size
           output.writeInt(data.size());
           // Write the content
@@ -506,7 +506,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // 3. Write the records
       Iterator<HoodieRecord<?>> itr = records.iterator();
       while (itr.hasNext()) {
-        IndexedRecord s = itr.next().toIndexedRecord(schema, new Properties()).get().getData();
+        IndexedRecord s = itr.next().toIndexedRecord(HoodieSchema.fromAvroSchema(schema), new Properties()).get().getData();
         ByteArrayOutputStream temp = new ByteArrayOutputStream();
         Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
         try {

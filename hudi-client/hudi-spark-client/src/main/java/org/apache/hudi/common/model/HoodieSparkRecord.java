@@ -39,7 +39,6 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
@@ -169,22 +168,22 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(HoodieSchema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
     if (key != null) {
       return getRecordKey();
     }
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     return keyGeneratorOpt.isPresent()
         ? ((SparkKeyGeneratorInterface) keyGeneratorOpt.get()).getRecordKey(data, structType).toString()
         : data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal());
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, String keyFieldName) {
+  public String getRecordKey(HoodieSchema recordSchema, String keyFieldName) {
     if (key != null) {
       return getRecordKey();
     }
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     DataType dataType = structType.apply(keyFieldName).dataType();
     int pos = structType.fieldIndex(keyFieldName);
     return data.get(pos, dataType).toString();
@@ -196,8 +195,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+  public Object[] getColumnValues(HoodieSchema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     Object[] objects = new Object[columns.length];
     for (int i = 0; i < objects.length; i++) {
       objects[i] = getValue(structType, columns[i], data);
@@ -206,13 +205,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return getFieldValueFromInternalRowAsJava(data, HoodieSchema.fromAvroSchema(recordSchema), column);
+  public Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props) {
+    return getFieldValueFromInternalRowAsJava(data, recordSchema, column);
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
-    StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(targetSchema));
+  public HoodieRecord joinWith(HoodieRecord other, HoodieSchema targetSchema) {
+    StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
     UnsafeProjection projection =
         getCachedUnsafeProjection(targetStructType, targetStructType);
@@ -220,9 +219,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
-    StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(targetSchema));
+  public HoodieRecord prependMetaFields(HoodieSchema recordSchema, HoodieSchema targetSchema, MetadataValues metadataValues, Properties props) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
 
     HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
     updateMetadataValuesInternal(updatableRow, metadataValues);
@@ -231,17 +230,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+  public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
     updatableRow.update(ordinal, CatalystTypeConverters.convertToCatalyst(value));
     return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, false);
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
-    StructType newStructType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(newSchema));
+  public HoodieRecord rewriteRecordWithNewSchema(HoodieSchema recordSchema, Properties props, HoodieSchema newSchema, Map<String, String> renameCols) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols, Collections.emptyMap());
@@ -252,8 +251,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+  public HoodieRecord truncateRecordKey(HoodieSchema recordSchema, Properties props, String keyFieldName) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     int pos = structType.fieldIndex(keyFieldName);
     data.update(pos, CatalystTypeConverters.convertToCatalyst(StringUtils.EMPTY_STRING));
     return this;
@@ -269,22 +268,20 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+  public boolean shouldIgnore(HoodieSchema recordSchema, Properties props) throws IOException {
     return false;
   }
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
-      Schema recordSchema, Properties props,
+      HoodieSchema recordSchema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
       Boolean populateMetaFields,
-      Option<Schema> schemaWithoutMetaFields) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
-    Option<StructType> structTypeWithoutMetaFields = schemaWithoutMetaFields
-        .map(HoodieSchema::fromAvroSchema)
-        .map(HoodieInternalRowUtils::getCachedSchema);
+      Option<HoodieSchema> schemaWithoutMetaFields) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    Option<StructType> structTypeWithoutMetaFields = schemaWithoutMetaFields.map(HoodieInternalRowUtils::getCachedSchema);
     if (populateMetaFields) {
       return convertToHoodieSparkRecord(structType, this, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
@@ -295,8 +292,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(HoodieSchema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String key;
     String partition;
     boolean populateMetaFields = Boolean.parseBoolean(props.getOrDefault(POPULATE_META_FIELDS.key(),
@@ -320,17 +317,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(HoodieSchema recordSchema, Properties prop) {
     if (data == null) {
       return Option.empty();
     }
-    StructType structType = schema == null ? HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchema.fromAvroSchema(recordSchema)) : schema;
-    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
+    StructType structType = schema == null ? HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(recordSchema) : schema;
+    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema.toAvroSchema(), false).apply(data);
     return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
   }
 
   @Override
-  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+  public ByteArrayOutputStream getAvroBytes(HoodieSchema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException();
   }
 
@@ -344,8 +341,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(HoodieSchema.fromAvroSchema(recordSchema));
+  protected Comparable<?> doGetOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     if (orderingFields != null) {
       return OrderingValues.create(orderingFields, field -> {
         scala.Option<NestedFieldPath> cachedNestedFieldPath =
@@ -365,7 +362,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+  public Comparable<?> getOrderingValueAsJava(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     if (orderingFields == null) {
       return OrderingValues.getDefault();
     } else {
@@ -404,13 +401,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+  public Object convertColumnValueForLogicalType(HoodieSchema fieldSchema,
                                                  Object fieldValue,
                                                  boolean keepConsistentLogicalTimestamp) {
     if (fieldValue == null) {
       return null;
     }
-    LogicalType logicalType = fieldSchema.getLogicalType();
+    LogicalType logicalType = fieldSchema.toAvroSchema().getLogicalType();
 
     if (logicalType == LogicalTypes.date()) {
       return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());

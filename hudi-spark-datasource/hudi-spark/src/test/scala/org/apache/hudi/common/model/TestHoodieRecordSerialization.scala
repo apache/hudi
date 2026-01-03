@@ -92,7 +92,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
       val (cloned, originalBytes) = cloneUsingKryo(record)
 
       if (cloned.isInstanceOf[HoodieAvroIndexedRecord]) {
-        cloned.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema.toAvroSchema, new Properties())
+        cloned.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, new Properties())
         // by default avro is not eagerly deserialized.
         cloned.asInstanceOf[HoodieAvroIndexedRecord].getData.get(0)
       }

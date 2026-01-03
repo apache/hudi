@@ -634,7 +634,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     try (ClosableIterator<HoodieRecord> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         HoodieRecord completedRecord = recordIterator.next()
-            .wrapIntoHoodieRecordPayloadWithParams(recordsIteratorSchemaPair.getRight(),
+            .wrapIntoHoodieRecordPayloadWithParams(HoodieSchema.fromAvroSchema(recordsIteratorSchemaPair.getRight()),
                 hoodieTableMetaClient.getTableConfig().getProps(),
                 recordKeyPartitionPathFieldPair,
                 this.withOperationField,
@@ -848,9 +848,9 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(
-          dataBlock.getSchema().toAvroSchema(),
+          dataBlock.getSchema(),
           this.hoodieTableMetaClient.getTableConfig().getProps(),
-          mergedAvroSchema,
+          HoodieSchema.fromAvroSchema(mergedAvroSchema),
           Collections.emptyMap());
     }, mergedAvroSchema));
   }

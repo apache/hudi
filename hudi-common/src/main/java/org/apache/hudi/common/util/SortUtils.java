@@ -61,7 +61,7 @@ public class SortUtils {
       boolean consistentLogicalTimestampEnabled
   ) {
     if (record.getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
-      Object[] columnValues = record.getColumnValues(schema.toAvroSchema(), sortColumnNames, consistentLogicalTimestampEnabled);
+      Object[] columnValues = record.getColumnValues(schema, sortColumnNames, consistentLogicalTimestampEnabled);
       if (suffixRecordKey) {
         return FlatLists.ofComparableArray(
             prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues));
@@ -95,7 +95,7 @@ public class SortUtils {
       Function<Object[], Object[]> wrapUTF8StringFunc
   ) {
     if (record.getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
-      Object[] columnValues = record.getColumnValues(schema.toAvroSchema(), sortColumnNames, consistentLogicalTimestampEnabled);
+      Object[] columnValues = record.getColumnValues(schema, sortColumnNames, consistentLogicalTimestampEnabled);
       if (suffixRecordKey) {
         return FlatLists.ofComparableArray(wrapUTF8StringFunc.apply(
             prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues)));

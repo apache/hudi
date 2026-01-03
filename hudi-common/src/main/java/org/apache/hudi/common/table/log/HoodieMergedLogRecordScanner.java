@@ -291,7 +291,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
 
-      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema.toAvroSchema(), this.hoodieTableMetaClient.getTableConfig().getProps(), orderingFields);
+      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps(), orderingFields);
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order

@@ -94,7 +94,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     Option<Map<String, String>> recordMetadata = getRecordMetadata(record, schema, props);
     try {
       if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(deleteContext, config.getProps())) {
-        if (record.shouldIgnore(schema.toAvroSchema(), config.getProps())) {
+        if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
 
@@ -153,7 +153,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, config.getProps());
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
-      record = record.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), new MetadataValues(), config.getProps());
+      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
@@ -163,7 +163,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-    return record.prependMetaFields(schema.toAvroSchema(), targetSchema.toAvroSchema(), metadataValues, prop);
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
   @Override

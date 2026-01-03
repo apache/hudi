@@ -133,7 +133,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         if (schemaEvolutionTransformerOpt.isPresent()) {
           newRecord = schemaEvolutionTransformerOpt.get().apply(record);
         } else if (shouldRewriteInWriterSchema) {
-          newRecord = record.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), writeConfig.getProps(), writerSchema.toAvroSchema());
+          newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
         } else {
           newRecord = record;
         }
@@ -208,9 +208,9 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
-              recordSchema.toAvroSchema(),
+              recordSchema,
               writeConfig.getProps(),
-              newWriterSchema, renameCols);
+              HoodieSchema.fromAvroSchema(newWriterSchema), renameCols);
         });
       } else {
         return Option.empty();

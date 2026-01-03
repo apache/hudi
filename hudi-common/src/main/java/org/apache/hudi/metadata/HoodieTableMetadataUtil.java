@@ -334,12 +334,12 @@ public class HoodieTableMetadataUtil {
       }
 
     } else if (record.getRecordType() == HoodieRecordType.SPARK) {
-      fieldValue = record.getColumnValues(recordSchema.toAvroSchema(), new String[]{fieldName}, false)[0];
+      fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
       if (fieldValue != null && fieldSchemaType.equals(HoodieSchemaType.DATE)) {
         fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
       }
     } else if (record.getRecordType() == HoodieRecordType.FLINK) {
-      fieldValue = record.getColumnValueAsJava(recordSchema.toAvroSchema(), fieldName, properties);
+      fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
     } else {
       throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
     }
@@ -347,7 +347,7 @@ public class HoodieTableMetadataUtil {
   }
 
   private static Comparable<?> collectColumnRangeFieldValueV2(HoodieRecord record, ValueMetadata valueMetadata, String fieldName, HoodieSchema recordSchema, Properties properties) {
-    return valueMetadata.standardizeJavaTypeAndPromote(record.getColumnValueAsJava(recordSchema.toAvroSchema(), fieldName, properties));
+    return valueMetadata.standardizeJavaTypeAndPromote(record.getColumnValueAsJava(recordSchema, fieldName, properties));
   }
 
   private static HoodieColumnRangeMetadata<Comparable> colStatsToColRangeMetadata(String fieldName, HoodieSchema fieldSchema, ColumnStats colStats,

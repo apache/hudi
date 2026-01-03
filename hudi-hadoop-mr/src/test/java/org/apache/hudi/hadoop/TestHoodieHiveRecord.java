@@ -65,7 +65,7 @@ class TestHoodieHiveRecord {
     Schema dateSchema = Schema.create(Schema.Type.INT);
     LogicalTypes.date().addToSchema(dateSchema);
     
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(dateSchema, null, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(dateSchema), null, true);
     assertNull(result);
   }
 
@@ -75,7 +75,7 @@ class TestHoodieHiveRecord {
     LogicalTypes.date().addToSchema(dateSchema);
     
     IntWritable dateValue = new IntWritable(18628); // 2021-01-01
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(dateSchema, dateValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(dateSchema), dateValue, true);
     
     assertEquals(LocalDate.class, result.getClass());
     assertEquals("2021-01-01", String.valueOf(result));
@@ -87,7 +87,7 @@ class TestHoodieHiveRecord {
     LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
     
     LongWritable timestampValue = new LongWritable(1609459200000L); // 2021-01-01 00:00:00 UTC
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMillisSchema, timestampValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(timestampMillisSchema), timestampValue, true);
     
     assertEquals(Long.class, result.getClass());
     assertEquals("1609459200000", String.valueOf(result));
@@ -99,7 +99,7 @@ class TestHoodieHiveRecord {
     LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
     
     LongWritable timestampValue = new LongWritable(1609459200000L);
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMillisSchema, timestampValue, false);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(timestampMillisSchema), timestampValue, false);
     
     // Should return original value when keepConsistentLogicalTimestamp is false
     assertEquals(LongWritable.class, result.getClass());
@@ -112,7 +112,7 @@ class TestHoodieHiveRecord {
     LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
     
     LongWritable timestampValue = new LongWritable(1609459200000000L); // 2021-01-01 00:00:00 UTC in microseconds
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMicrosSchema, timestampValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(timestampMicrosSchema), timestampValue, true);
     
     assertEquals(Long.class, result.getClass());
     assertEquals("1609459200000", String.valueOf(result));
@@ -124,7 +124,7 @@ class TestHoodieHiveRecord {
     LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
     
     LongWritable timestampValue = new LongWritable(1609459200000000L);
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMicrosSchema, timestampValue, false);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(timestampMicrosSchema), timestampValue, false);
     
     // Should return original value when keepConsistentLogicalTimestamp is false
     assertEquals(LongWritable.class, result.getClass());
@@ -137,7 +137,7 @@ class TestHoodieHiveRecord {
     LogicalTypes.decimal(10, 2).addToSchema(decimalSchema);
     
     HiveDecimalWritable decimalValue = new HiveDecimalWritable("123.45");
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(decimalSchema, decimalValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(decimalSchema), decimalValue, true);
     
     assertEquals(BigDecimal.class, result.getClass());
     assertEquals("123.45", String.valueOf(result));
@@ -148,7 +148,7 @@ class TestHoodieHiveRecord {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     
     Text stringValue = new Text("test string");
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(stringSchema, stringValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(stringSchema), stringValue, true);
     
     // Should return original value for non-logical types
     assertEquals(Text.class, result.getClass());
@@ -160,7 +160,7 @@ class TestHoodieHiveRecord {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     
     IntWritable intValue = new IntWritable(42);
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(stringSchema, intValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(stringSchema), intValue, true);
     
     // Should return original value for non-logical types
     assertEquals(IntWritable.class, result.getClass());
@@ -172,7 +172,7 @@ class TestHoodieHiveRecord {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     
     LongWritable longValue = new LongWritable(12345L);
-    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(stringSchema, longValue, true);
+    Object result = hoodieHiveRecord.convertColumnValueForLogicalType(HoodieSchema.fromAvroSchema(stringSchema), longValue, true);
     
     // Should return original value for non-logical types
     assertEquals(LongWritable.class, result.getClass());

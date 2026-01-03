@@ -89,9 +89,9 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
     final HoodieSchema schema = HoodieSchemaUtils.addMetadataFields((HoodieSchema.parse(table.getConfig().getSchema())));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
       FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(utf8StringFactory.wrapArrayOfObjects(
-          t1.getColumnValues(schema.getAvroSchema(), sortColumns, consistentLogicalTimestampEnabled)));
+          t1.getColumnValues(schema, sortColumns, consistentLogicalTimestampEnabled)));
       FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(utf8StringFactory.wrapArrayOfObjects(
-          t2.getColumnValues(schema.getAvroSchema(), sortColumns, consistentLogicalTimestampEnabled)));
+          t2.getColumnValues(schema, sortColumns, consistentLogicalTimestampEnabled)));
       return obj1.compareTo(obj2);
     };
 

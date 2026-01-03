@@ -363,7 +363,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public abstract HoodieLogBlockType getBlockType();
 
   protected Option<String> getRecordKey(HoodieRecord record) {
-    return Option.ofNullable(record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName));
+    return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
   protected HoodieSchema getSchemaFromHeader() {

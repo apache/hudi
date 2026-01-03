@@ -41,13 +41,13 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
 
   @Override
   default void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
-    IndexedRecord avroPayload = record.toIndexedRecord(schema.getAvroSchema(), props).get().getData();
+    IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
     writeAvroWithMetadata(key, avroPayload);
   }
 
   @Override
   default void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
-    IndexedRecord avroPayload = record.toIndexedRecord(schema.getAvroSchema(), props).get().getData();
+    IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
     writeAvro(recordKey, avroPayload);
   }
 

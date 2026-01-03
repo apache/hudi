@@ -282,7 +282,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   protected static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, HoodieSchema schema) {
     return hoodieRecords.stream().map(r -> {
       try {
-        Option<HoodieAvroIndexedRecord> avroIndexedRecordOption = r.toIndexedRecord(schema.toAvroSchema(), CollectionUtils.emptyProps());
+        Option<HoodieAvroIndexedRecord> avroIndexedRecordOption = r.toIndexedRecord(schema, CollectionUtils.emptyProps());
         if (avroIndexedRecordOption.isPresent()) {
           // eager deser
           avroIndexedRecordOption.get().getData().get(0);
@@ -726,7 +726,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return expectedHoodieRecords.stream().map(rec -> {
       List<String> orderingFields = metaClient.getTableConfig().getOrderingFields();
       HoodieAvroIndexedRecord avroRecord = ((HoodieAvroIndexedRecord) rec);
-      Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(avroSchema, field, new TypedProperties()));
+      Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(HoodieSchema.fromAvroSchema(avroSchema), field, new TypedProperties()));
       return new HoodieAvroIndexedRecord(rec.getKey(), avroRecord.getData(), orderingValue);
     }).collect(Collectors.toList());
   }
@@ -962,7 +962,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           return new HoodieTestDataGenerator.RecordIdentifier(
               record.getRecordKey(),
               removeHiveStylePartition(record.getPartitionPath()),
-              record.getOrderingValue(schema.toAvroSchema(), props, orderingFields.toArray(new String[0])).toString(),
+              record.getOrderingValue(schema, props, orderingFields.toArray(new String[0])).toString(),
               readerContext.getRecordContext().getValue(data, schema, RIDER_FIELD_NAME).toString());
         })
         .collect(Collectors.toList());
