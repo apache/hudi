@@ -1806,7 +1806,7 @@ public class HoodieTableMetadataUtil {
       properties.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
       // Currently only avro is fully supported for extracting column ranges (see HUDI-8585)
       HoodieReaderContext readerContext = new HoodieAvroReaderContext(datasetMetaClient.getStorageConf(), datasetMetaClient.getTableConfig(), Option.empty(), Option.empty());
-      HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.newBuilder()
+      HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(datasetMetaClient)
           .withLogFiles(Stream.of(logFile))
@@ -2539,10 +2539,12 @@ public class HoodieTableMetadataUtil {
       final String partition = partitionAndBaseFile.getKey();
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
       if (!fileSlice.getBaseFile().isPresent()) {
-        HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+        HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.<T>builder()
             .withReaderContext(readerContextFactory.getContext())
             .withHoodieTableMetaClient(metaClient)
-            .withFileSlice(fileSlice)
+            .withBaseFileOption(fileSlice.getBaseFile())
+            .withLogFiles(fileSlice.getLogFiles())
+            .withPartitionPath(fileSlice.getPartitionPath())
             .withDataSchema(tableSchema)
             .withRequestedSchema(HoodieSchemaUtils.getRecordKeySchema())
             .withLatestCommitTime(latestCommitTime)

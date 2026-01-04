@@ -876,14 +876,16 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
-      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
-          .withFileSlice(fileSlice)
+          .withBaseFileOption(fileSlice.getBaseFile())
+          .withLogFiles(fileSlice.getLogFiles())
+          .withPartitionPath(fileSlice.getPartitionPath())
           .withLatestCommitTime(instantTime.get())
           .withDataSchema(dataSchema)
           .withRequestedSchema(requestedSchema)
-          .withInternalSchema(internalSchemaOption)
+          .withInternalSchemaOpt(internalSchemaOption)
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();

@@ -19,78 +19,38 @@
 
 package org.apache.hudi.common.table.read;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+
 /**
  * Parameters for how the reader should process the FileGroup while reading.
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Getter
+@Builder
 public class ReaderParameters {
+
   // Rely on the position of the record in the file instead of the record keys while merging data between base and log files
-  private final boolean useRecordPosition;
+  @Getter(AccessLevel.NONE)
+  @Builder.Default
+  private final boolean shouldUseRecordPosition = false;
   // Whether to emit delete records while reading
-  private final boolean emitDelete;
+  @Builder.Default
+  private final boolean emitDeletes = false;
   // Whether to sort the output records while reading, this implicitly requires the base file to be sorted
-  private final boolean sortOutput;
+  @Builder.Default
+  private final boolean sortOutputs = false;
   // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
   // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
   // and deleted keys from the log files written as part of active data commit. During the RLI update,
-  // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
+  // the inflightInstantsAllowed flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
-  private final boolean allowInflightInstants;
+  @Builder.Default
+  private final boolean inflightInstantsAllowed = false;
 
-  private ReaderParameters(boolean useRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants) {
-    this.useRecordPosition = useRecordPosition;
-    this.emitDelete = emitDelete;
-    this.sortOutput = sortOutput;
-    this.allowInflightInstants = allowInflightInstants;
-  }
-
-  public boolean useRecordPosition() {
-    return useRecordPosition;
-  }
-
-  public boolean emitDeletes() {
-    return emitDelete;
-  }
-
-  public boolean sortOutputs() {
-    return sortOutput;
-  }
-
-  public boolean allowInflightInstants() {
-    return allowInflightInstants;
-  }
-
-  static Builder builder() {
-    return new Builder();
-  }
-
-  static class Builder {
-    private boolean shouldUseRecordPosition = false;
-    private boolean emitDelete = false;
-    private boolean sortOutput = false;
-    private boolean allowInflightInstants = false;
-
-    public Builder shouldUseRecordPosition(boolean shouldUseRecordPosition) {
-      this.shouldUseRecordPosition = shouldUseRecordPosition;
-      return this;
-    }
-
-    public Builder emitDeletes(boolean emitDelete) {
-      this.emitDelete = emitDelete;
-      return this;
-    }
-
-    public Builder sortOutputs(boolean sortOutput) {
-      this.sortOutput = sortOutput;
-      return this;
-    }
-
-    public Builder allowInflightInstants(boolean allowInflightInstants) {
-      this.allowInflightInstants = allowInflightInstants;
-      return this;
-    }
-
-    public ReaderParameters build() {
-      return new ReaderParameters(shouldUseRecordPosition, emitDelete, sortOutput, allowInflightInstants);
-    }
+  public boolean shouldUseRecordPosition() {
+    return shouldUseRecordPosition;
   }
 }
