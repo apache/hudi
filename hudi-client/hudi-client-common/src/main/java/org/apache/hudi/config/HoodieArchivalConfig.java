@@ -102,6 +102,14 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
           + " If disabled, archival will stop at the earliest savepoint commit.");
 
+  public static final ConfigProperty<Boolean> TIMELINE_COMPACTION_FORCED = ConfigProperty
+      .key("hoodie.timeline.compaction.forced")
+      .defaultValue(true)
+      .markAdvanced()
+      .withDocumentation("If enabled, timeline compaction will be forced to run during archival of timeline."
+          + " This helps in reducing the number of files in the archived timeline, at the cost of"
+          + " additional compaction time during archival.");
+
   public static final ConfigProperty<Long> TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES = ConfigProperty
         .key("hoodie.timeline.compaction.target.file.max.bytes")
         .defaultValue(1000L * 1024 * 1024)
@@ -195,6 +203,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
 
     public Builder withArchiveBeyondSavepoint(boolean archiveBeyondSavepoint) {
       archivalConfig.setValue(ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(archiveBeyondSavepoint));
+      return this;
+    }
+
+    public Builder withTimelineCompactionForced(boolean timelineCompactionForced) {
+      archivalConfig.setValue(TIMELINE_COMPACTION_FORCED, String.valueOf(timelineCompactionForced));
       return this;
     }
 
