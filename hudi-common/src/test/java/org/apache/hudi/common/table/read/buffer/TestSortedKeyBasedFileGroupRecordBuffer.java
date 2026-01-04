@@ -141,7 +141,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
     when(inputSplit.getRecordIterator()).thenReturn(inputRecords.iterator());
     ReaderParameters readerParameters = mock(ReaderParameters.class);
-    when(readerParameters.sortOutputs()).thenReturn(true);
+    when(readerParameters.isSortOutputs()).thenReturn(true);
     SortedKeyBasedFileGroupRecordBuffer fileGroupRecordBuffer  = (SortedKeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader
         .getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit, Collections.singletonList("ts"), mockMetaClient, properties,
             readerParameters, readStats, Option.empty()).getKey();
