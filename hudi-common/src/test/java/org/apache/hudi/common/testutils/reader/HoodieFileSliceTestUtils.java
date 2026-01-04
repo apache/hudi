@@ -216,7 +216,7 @@ public class HoodieFileSliceTestUtils {
   public static HoodieDeleteBlock getDeleteBlock(
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      Schema schema,
+      HoodieSchema schema,
       Properties props,
       Map<String, Long> keyToPositionMap
   ) {
@@ -230,7 +230,7 @@ public class HoodieFileSliceTestUtils {
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(HoodieSchema.fromAvroSchema(schema), props, orderingFields)), r.getCurrentLocation().getPosition()))
+                r.getKey(), r.getOrderingValue(schema, props, orderingFields)), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
         header);
   }
@@ -310,7 +310,7 @@ public class HoodieFileSliceTestUtils {
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock =
-            getDeleteBlock(records, header, schema, PROPERTIES, keyToPositionMap);
+            getDeleteBlock(records, header, HoodieSchema.fromAvroSchema(schema), PROPERTIES, keyToPositionMap);
         writer.appendBlock(deleteBlock);
       }
     }

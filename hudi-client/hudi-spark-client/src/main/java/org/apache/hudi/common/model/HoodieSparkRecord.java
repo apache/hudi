@@ -24,6 +24,7 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -37,8 +38,6 @@ import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
@@ -407,15 +406,18 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     if (fieldValue == null) {
       return null;
     }
-    LogicalType logicalType = fieldSchema.toAvroSchema().getLogicalType();
+    HoodieSchemaType schemaType = fieldSchema.getType();
 
-    if (logicalType == LogicalTypes.date()) {
+    if (schemaType == HoodieSchemaType.DATE) {
       return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
-    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
-      return (Long) fieldValue;
-    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
-      return ((Long) fieldValue) / 1000;
-    } else if (logicalType instanceof LogicalTypes.Decimal) {
+    } else if (schemaType == HoodieSchemaType.TIMESTAMP && keepConsistentLogicalTimestamp) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
+      if (timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MILLIS)) {
+        return (Long) fieldValue;
+      } else if (timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MICROS)) {
+        return ((Long) fieldValue) / 1000;
+      }
+    } else if (schemaType == HoodieSchemaType.DECIMAL) {
       return ((Decimal) fieldValue).toJavaBigDecimal();
     }
     return fieldValue;

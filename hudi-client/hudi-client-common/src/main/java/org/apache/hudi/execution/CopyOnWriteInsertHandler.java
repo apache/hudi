@@ -21,7 +21,6 @@ package org.apache.hudi.execution;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
@@ -82,7 +81,7 @@ public class CopyOnWriteInsertHandler<T>
     String partitionPath = record.getPartitionPath();
     // just skip the ignored record，do not make partitions on fs
     try {
-      if (record.shouldIgnore(HoodieSchema.fromAvroSchema(genResult.schema), config.getProps())) {
+      if (record.shouldIgnore(genResult.schema, config.getProps())) {
         numSkippedRecords++;
         return;
       }
@@ -111,7 +110,7 @@ public class CopyOnWriteInsertHandler<T>
           record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
-    handle.write(record, HoodieSchema.fromAvroSchema(genResult.schema), config.getProps());
+    handle.write(record, genResult.schema, config.getProps());
   }
 
   @Override

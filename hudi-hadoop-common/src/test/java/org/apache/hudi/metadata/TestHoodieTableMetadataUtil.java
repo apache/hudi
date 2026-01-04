@@ -334,7 +334,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         HoodieRecord.HoodieRecordType.AVRO);
     for (HoodieRecord record : records) {
       writer.writeWithMetadata(record.getKey(),
-              //TODO boundary to revisit in follow up to use HoodieSchema directly
               record.rewriteRecordWithNewSchema(HOODIE_SCHEMA, CollectionUtils.emptyProps(), HOODIE_SCHEMA_WITH_METADATA_FIELDS),
               HOODIE_SCHEMA_WITH_METADATA_FIELDS);
     }
