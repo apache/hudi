@@ -335,7 +335,7 @@ public class SparkMetadataWriterUtils {
       baseFileOption = Option.empty();
       logFileStream = Stream.of(new HoodieLogFile(filePath));
     }
-    HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>newBuilder()
+    HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withDataSchema(tableSchema)

@@ -171,7 +171,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
           val requestedSchema = requiredSchema.schema
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
           val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
-          val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.newBuilder()
+          val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.builder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
@@ -181,13 +181,13 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withProps(properties)
             .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requestedSchema)
-            .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
-          val fileGroupReader = HoodieFileGroupReader.newBuilder()
+          val fileGroupReader = HoodieFileGroupReader.builder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
@@ -197,7 +197,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withProps(properties)
             .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requiredSchema.schema)
-            .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withInternalSchemaOpt(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)
         }

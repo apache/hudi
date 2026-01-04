@@ -47,7 +47,7 @@ abstract class LogScanningRecordBufferLoader {
         .withInstantRange(readerContext.getInstantRange())
         .withPartition(inputSplit.getPartitionPath())
         .withRecordBuffer(recordBuffer)
-        .withAllowInflightInstants(readerParameters.allowInflightInstants())
+        .withAllowInflightInstants(readerParameters.isInflightInstantsAllowed())
         .withMetaClient(hoodieTableMetaClient)
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
