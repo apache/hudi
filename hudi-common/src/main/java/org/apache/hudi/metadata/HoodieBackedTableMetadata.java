@@ -539,11 +539,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         baseFileReaders,
         fileGroupReaderProps);
 
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withDataSchema(SCHEMA)
         .withRequestedSchema(SCHEMA)
         .withProps(fileGroupReaderProps)
