@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
@@ -176,15 +175,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     super(context, writeConfig, timelineService);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
-    if (config.isMetricsOn()) {
-      // report userName and hudi version
-      final String version = HoodieVersion.get();
-      metrics.getMetrics().registerGauge(metrics.getMetricsName("userName", System.getProperty("user.name")), 1);
-      metrics.getMetrics().registerGauge(metrics.getMetricsName("version", StringUtils.isNullOrEmpty(version) ? "0.14.x" : version), 1);
-      metrics.getMetrics().registerGauge("version.major", HoodieVersion.majorAsInt());
-      metrics.getMetrics().registerGauge("version.minor", HoodieVersion.minorAsInt());
-      metrics.getMetrics().registerGauge("version.patch", HoodieVersion.patchAsInt());
-    }
+    this.metrics.emitVersionMetrics();
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
   }
 
