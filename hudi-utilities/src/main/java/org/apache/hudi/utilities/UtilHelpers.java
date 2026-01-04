@@ -85,6 +85,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
 import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
@@ -120,6 +121,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.utilities.streamer.HoodieStreamer.ENSURE_ALL_COLUMNS_NULLABLE_DEFAULT;
+import static org.apache.hudi.utilities.streamer.HoodieStreamer.ENSURE_ALL_COLUMNS_NULLABLE_KEY;
 
 /**
  * Bunch of helper methods.
@@ -624,6 +627,17 @@ public class UtilHelpers {
         props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
       }
     }
+  }
+
+  /**
+   * Extract and return the schema to use from a Dataset.
+   */
+  public static StructType extractSchemaFromDataset(Dataset dataset, TypedProperties props) {
+    StructType originalSchema = dataset.schema();
+
+    // Should we make all columns nullable?
+    final boolean allColsNullable = props.getBoolean(ENSURE_ALL_COLUMNS_NULLABLE_KEY, ENSURE_ALL_COLUMNS_NULLABLE_DEFAULT);
+    return allColsNullable ? originalSchema.asNullable() : originalSchema;
   }
 
   @FunctionalInterface
