@@ -139,4 +139,12 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("When enabled, the dataframe generated from reading source data is wrapped with an exception handler to explicitly surface exceptions.");
+
+  public static final ConfigProperty<Boolean> TRANSFORMED_ROW_NULLABLE = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "transformed.row.nullable")
+      .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "transformed.row.nullable")
+      .markAdvanced()
+      .withDocumentation("When set to true, all columns in the incoming dataset schema are made nullable. "
+          + "This is useful for maintaining backwards compatibility when new columns are added via SQL queries.");
 }

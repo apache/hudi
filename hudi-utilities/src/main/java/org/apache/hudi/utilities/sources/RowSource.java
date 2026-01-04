@@ -34,6 +34,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.ROW_THROW_EXPLICIT_EXCEPTIONS;
 
@@ -61,8 +62,8 @@ public abstract class RowSource extends Source<Dataset<Row>> {
     Pair<Option<Dataset<Row>>, Checkpoint> res = fetchNextBatch(lastCheckpoint, sourceLimit);
     return res.getKey().map(dsr -> {
       Dataset<Row> sanitizedRows = SanitizationUtils.sanitizeColumnNamesForAvro(dsr, props);
-      SchemaProvider rowSchemaProvider =
-          UtilHelpers.createRowBasedSchemaProvider(sanitizedRows.schema(), props, sparkContext);
+      StructType datasetSchema = UtilHelpers.extractSchemaFromDataset(sanitizedRows, props);
+      SchemaProvider rowSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(datasetSchema, props, sparkContext);
       Dataset<Row> wrappedDf = HoodieSparkUtils.maybeWrapDataFrameWithException(sanitizedRows, HoodieReadFromSourceException.class.getName(),
           "Failed to read from row source", ConfigUtils.getBooleanWithAltKeys(props, ROW_THROW_EXPLICIT_EXCEPTIONS));
       return new InputBatch<>(Option.of(wrappedDf), res.getValue(), rowSchemaProvider);
