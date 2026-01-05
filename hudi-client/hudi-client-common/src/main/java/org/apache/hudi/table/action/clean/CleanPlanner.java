@@ -260,7 +260,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, hoodieTable.getMetaClient(), config.getMetadataConfig());
+    List<String> allPartitionPaths;
+    try {
+      allPartitionPaths = hoodieTable.getMetadataTable().getAllPartitionPaths();
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Fetching all partitions failed ", ioe);
+    }
 
     String partitionSelected = config.getCleanerPartitionFilterSelected();
     String partitionRegex = config.getCleanerPartitionFilterRegex();
