@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -1413,6 +1414,12 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isEmbeddedTimelineServerReuseEnabled() {
     return getBoolean(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED);
+  }
+
+  public boolean isRemoteViewStorageType() {
+    FileSystemViewStorageType storageType = getViewStorageConfig().getStorageType();
+    return storageType == FileSystemViewStorageType.REMOTE_ONLY
+        || storageType == FileSystemViewStorageType.REMOTE_FIRST;
   }
 
   public int getEmbeddedTimelineServerPort() {
