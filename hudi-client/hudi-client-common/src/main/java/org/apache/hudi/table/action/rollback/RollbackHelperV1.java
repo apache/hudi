@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -312,8 +313,8 @@ public class RollbackHelperV1 extends RollbackHelper {
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
 
           HoodieLogFormat.WriterBuilder writerBuilder = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
-              .withFileId(fileId)
+              .withParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
+              .withLogFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
               .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
                   ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
