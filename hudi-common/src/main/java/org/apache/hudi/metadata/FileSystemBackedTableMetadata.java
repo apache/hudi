@@ -170,6 +170,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         }
       }, listingParallelism);
       pathsToList.clear();
+      engineContext.clearJobStatus();
 
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
@@ -200,6 +201,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                   }
                   return Pair.of(Option.empty(), Option.empty());
                 }, fileListingParallelism);
+        engineContext.clearJobStatus();
 
         partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
             .map(entry -> entry.getKey().get())
@@ -255,6 +257,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
               return Pair.of(partitionPathStr,
                   FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath));
             }, parallelism);
+    engineContext.clearJobStatus();
 
     return partitionToFiles.stream().collect(Collectors.toMap(pair -> pair.getLeft(),
         pair -> pair.getRight()));
