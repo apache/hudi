@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SamplingLogger;
@@ -174,7 +175,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public List<HoodieFileGroup> addFilesToView(List<StoragePathInfo> statuses) {
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
-        .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileStatus.getPath().getParent())));
+        .collect(Collectors.groupingBy(fileStatus -> {
+          String fileName = fileStatus.getPath().getName();
+          StoragePath parent = fileStatus.getPath().getParent();
+          // For external files with file group prefix, adjust parent to skip the prefix path
+          // because the prefix is part of the fileId, not the partition path
+          if (ExternalFilePathUtil.hasExternalFileGroupPrefix(fileName)) {
+            parent = parent.getParent();
+          }
+          return FSUtils.getRelativePartitionPath(metaClient.getBasePath(), parent);
+        }));
     return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue()))
         .flatMap(List::stream).collect(Collectors.toList());
   }

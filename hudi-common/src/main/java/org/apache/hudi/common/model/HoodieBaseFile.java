@@ -119,11 +119,28 @@ public class HoodieBaseFile extends BaseFile {
 
   private static String[] handleExternallyGeneratedFile(String fileName) {
     String[] values = new String[2];
-    // file name has format <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
-    int lastUnderscore = fileName.lastIndexOf(UNDERSCORE);
-    int secondToLastUnderscore = fileName.lastIndexOf(UNDERSCORE, lastUnderscore - 1);
-    values[0] = fileName.substring(0, secondToLastUnderscore);
-    values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
+
+    if (ExternalFilePathUtil.hasExternalFileGroupPrefix(fileName)) {
+      // New format: <originalName>_<commitTime>_fg%3D<prefix>_hudiext
+      Option<String> prefixOpt = ExternalFilePathUtil.getExternalFileGroupPrefix(fileName);
+      String prefix = prefixOpt.get();
+
+      int prefixMarkerStart = fileName.indexOf("_fg%3D");
+      String beforePrefix = fileName.substring(0, prefixMarkerStart);
+      int commitTimeStart = beforePrefix.lastIndexOf(UNDERSCORE);
+
+      String originalName = beforePrefix.substring(0, commitTimeStart);
+      String commitTime = beforePrefix.substring(commitTimeStart + 1);
+
+      values[0] = prefix + "/" + originalName;  // fileId includes prefix
+      values[1] = commitTime;
+    } else {
+      // Legacy format: <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
+      int lastUnderscore = fileName.lastIndexOf(UNDERSCORE);
+      int secondToLastUnderscore = fileName.lastIndexOf(UNDERSCORE, lastUnderscore - 1);
+      values[0] = fileName.substring(0, secondToLastUnderscore);
+      values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
+    }
     return values;
   }
 
@@ -141,8 +158,14 @@ public class HoodieBaseFile extends BaseFile {
       return null;
     }
     if (ExternalFilePathUtil.isExternallyCreatedFile(pathInfo.getPath().getName())) {
-      // fileId is the same as the original file name for externally created files
       StoragePath parent = pathInfo.getPath().getParent();
+
+      // For files with file group prefix in fileId, go up one more level
+      // because the prefix represents a subdirectory within the partition
+      if (ExternalFilePathUtil.hasExternalFileGroupPrefix(pathInfo.getPath().getName())) {
+        parent = parent.getParent();
+      }
+
       return new StoragePathInfo(
           new StoragePath(parent, fileId), pathInfo.getLength(), pathInfo.isDirectory(),
           pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime(), pathInfo.getLocations());
