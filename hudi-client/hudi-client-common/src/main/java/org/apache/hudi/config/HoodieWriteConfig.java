@@ -1822,8 +1822,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.CLEANER_INCREMENTAL_MODE_ENABLE);
   }
 
-  public String getCleanerPartitionRegex() {
+  public String getCleanerPartitionFilterRegex() {
     return getString(HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX);
+  }
+
+  public String getCleanerPartitionFilterSelected() {
+    return getString(HoodieCleanConfig.CLEANER_PARTITION_FILTER_SELECTED);
   }
 
   public boolean inlineCompactionEnabled() {
