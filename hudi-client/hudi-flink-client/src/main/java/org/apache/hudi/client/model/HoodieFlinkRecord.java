@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -40,8 +41,6 @@ import org.apache.hudi.util.RowProjection;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.DecimalData;
@@ -165,17 +164,20 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     if (fieldValue == null) {
       return null;
     }
-    LogicalType logicalType = fieldSchema.toAvroSchema().getLogicalType();
-
-    if (logicalType == LogicalTypes.date()) {
+    
+    HoodieSchemaType schemaType = fieldSchema.getType();
+    
+    if (schemaType == HoodieSchemaType.DATE) {
       return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
-    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+    } else if (schemaType == HoodieSchemaType.TIMESTAMP && keepConsistentLogicalTimestamp) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
       TimestampData ts = (TimestampData) fieldValue;
-      return ts.getMillisecond();
-    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
-      TimestampData ts = (TimestampData) fieldValue;
-      return ts.getMillisecond() / 1000;
-    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+        return ts.getMillisecond();
+      } else if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
+        return ts.getMillisecond() / 1000;
+      }
+    } else if (schemaType == HoodieSchemaType.DECIMAL) {
       return ((DecimalData) fieldValue).toBigDecimal();
     }
     return fieldValue;
