@@ -19,6 +19,8 @@
 
 package org.apache.hudi.client.timeline.versioning.v2;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.NativeTableFormat;
@@ -33,10 +35,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -255,6 +259,25 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       // the active timeline of metadata table to be extremely long, leading to performance issues
       // for loading the timeline.
       earliestInstantToRetainCandidates.add(qualifiedEarliestInstant);
+    }
+
+    // 6. If archival should consider `earliest retain instant` in the clean plan,
+    // we should add the earliest retain instant from the clean plan to the candidates.
+    if (config.shouldArchiveKeepCleanPlanRetainInstant()) {
+      Option<HoodieInstant> latestCleanInstantOpt = table.getActiveTimeline().getCleanerTimeline().lastInstant();
+      if (latestCleanInstantOpt.isPresent()) {
+        HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, latestCleanInstantOpt.get());
+        Option<String> earliestInstantTimeToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp);
+        if (earliestInstantTimeToRetain.isPresent() && !StringUtils.isNullOrEmpty(earliestInstantTimeToRetain.get())) {
+          HoodieActionInstant earliestInstantToRetainForCleaning = cleanerPlan.getEarliestInstantToRetain();
+          earliestInstantToRetainCandidates.add(
+                  Option.of(new HoodieInstant(
+                      HoodieInstant.State.valueOf(earliestInstantToRetainForCleaning.getState()),
+                      earliestInstantToRetainForCleaning.getAction(),
+                      earliestInstantToRetainForCleaning.getTimestamp(),
+                      InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
+        }
+      }
     }
 
     // Choose the instant in earliestInstantToRetainCandidates with the smallest
