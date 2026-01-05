@@ -201,6 +201,25 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+  public static final ConfigProperty<String> CLEANER_PARTITION_FILTER_REGEX = ConfigProperty
+      .key("hoodie.cleaner.partition.filter.regex")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When incremental clean is disabled, this regex can be used to filter the partitions to be cleaned. "
+          + "Only partitions matching this regex pattern will be cleaned. "
+          + "This can be useful for very large tables to avoid OOM issues during cleaning. "
+          + "If both this config and " + "hoodie.cleaner.partition.filter.selected" + " are set, the selected partitions take precedence.");
+
+  public static final ConfigProperty<String> CLEANER_PARTITION_FILTER_SELECTED = ConfigProperty
+      .key("hoodie.cleaner.partition.filter.selected")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When incremental clean is disabled, this comma-separated list of partitions can be used to filter the partitions to be cleaned. "
+          + "Only the specified partitions will be cleaned. "
+          + "This can be useful for very large tables to avoid OOM issues during cleaning. "
+          + "If both this config and " + "hoodie.cleaner.partition.filter.regex" + " are set, the selected partitions take precedence.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
