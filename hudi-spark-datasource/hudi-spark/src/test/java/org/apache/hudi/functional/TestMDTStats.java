@@ -50,9 +50,13 @@ import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import org.apache.hudi.common.model.FileSlice;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.expressions.Expression;
+import org.apache.spark.sql.execution.datasources.NoopCache$;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +72,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * Test for Hudi Metadata Table (MDT) column stats index.
@@ -175,6 +181,183 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     @SuppressWarnings("rawtypes")
     Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats = 
         writeFilesAndColumnStatsToMetadataTable(dataConfig, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig, NUM_COLUMNS);
+
+    // STEP 4: Print column stats for verification (up to 10 files per partition)
+    printColumnStatsForVerification(commitMetadata, expectedStats);
+
+    // STEP 5: Use HoodieFileIndex.filterFileSlices to query and verify
+    queryAndVerifyColumnStats(dataConfig, dataMetaClient, expectedStats, numFiles);
+  }
+
+  /**
+   * Print column stats for verification - shows min/max values for up to 10 files per partition.
+   * This helps verify that column stats were constructed properly before querying.
+   * 
+   * @param commitMetadata The commit metadata containing partition and file information
+   * @param expectedStats The expected column stats map (file name -> column name -> stats)
+   */
+  @SuppressWarnings("rawtypes")
+  private void printColumnStatsForVerification(
+      HoodieCommitMetadata commitMetadata,
+      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats) {
+    
+    LOG.info("=== STEP 4: Verifying column stats construction (max 10 files per partition) ===");
+    
+    Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
+    
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      String partitionPath = entry.getKey();
+      List<HoodieWriteStat> writeStats = entry.getValue();
+      
+      LOG.info("");
+      LOG.info("Partition: {} ({} files total)", partitionPath, writeStats.size());
+      LOG.info(String.format("%-50s %-15s %-15s %-15s %-15s",
+          "FileName", "age_min", "age_max", "salary_min", "salary_max"));
+      LOG.info(String.join("", Collections.nCopies(110, "-")));
+      
+      int filesDisplayed = 0;
+      for (HoodieWriteStat writeStat : writeStats) {
+        if (filesDisplayed >= 10) {
+          LOG.info("... and {} more files", writeStats.size() - 10);
+          break;
+        }
+        
+        String filePath = writeStat.getPath();
+        String fileName = new StoragePath(filePath).getName();
+        
+        Map<String, HoodieColumnRangeMetadata<Comparable>> fileStats = expectedStats.get(fileName);
+        if (fileStats != null) {
+          HoodieColumnRangeMetadata<Comparable> ageStats = fileStats.get("age");
+          HoodieColumnRangeMetadata<Comparable> salaryStats = fileStats.get("salary");
+          
+          String ageMin = (ageStats != null) ? String.valueOf(ageStats.getMinValue()) : "N/A";
+          String ageMax = (ageStats != null) ? String.valueOf(ageStats.getMaxValue()) : "N/A";
+          String salaryMin = (salaryStats != null) ? String.valueOf(salaryStats.getMinValue()) : "N/A";
+          String salaryMax = (salaryStats != null) ? String.valueOf(salaryStats.getMaxValue()) : "N/A";
+          
+          LOG.info(String.format("%-50s %-15s %-15s %-15s %-15s",
+              fileName.length() > 48 ? fileName.substring(0, 48) + ".." : fileName,
+              ageMin, ageMax, salaryMin, salaryMax));
+        } else {
+          LOG.info(String.format("%-50s %-15s", fileName, "NO STATS FOUND"));
+        }
+        
+        filesDisplayed++;
+      }
+    }
+    
+    LOG.info("");
+    LOG.info("Total files with stats: {}", expectedStats.size());
+  }
+
+  /**
+   * Query the column stats index using HoodieFileIndex.filterFileSlices and verify results.
+   * 
+   * @param dataConfig The write config for the data table
+   * @param dataMetaClient The meta client for the data table
+   * @param expectedStats The expected column stats for verification
+   * @param numFiles The total number of files in the commit
+   */
+  @SuppressWarnings("rawtypes")
+  private void queryAndVerifyColumnStats(
+      HoodieWriteConfig dataConfig,
+      HoodieTableMetaClient dataMetaClient,
+      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats,
+      int numFiles) throws Exception {
+    
+    LOG.info("=== STEP 5: Querying column stats index using HoodieFileIndex ===");
+    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
+
+    // Create HoodieFileIndex
+    Map<String, String> options = new HashMap<>();
+    options.put("path", dataConfig.getBasePath());
+    options.put("hoodie.datasource.read.data.skipping.enable", "true");
+
+    scala.Option<StructType> schemaOption = scala.Option.empty();
+    @SuppressWarnings("deprecation")
+    scala.collection.immutable.Map<String, String> scalaOptions = JavaConverters.mapAsScalaMap(options)
+        .toMap(scala.Predef$.MODULE$.<scala.Tuple2<String, String>>conforms());
+
+    org.apache.hudi.HoodieFileIndex fileIndex = new org.apache.hudi.HoodieFileIndex(
+        sparkSession,
+        dataMetaClient,
+        schemaOption,
+        scalaOptions,
+        NoopCache$.MODULE$,
+        false,
+        false);
+
+    // Create data filters for age and salary columns
+    List<Expression> dataFilters = new ArrayList<>();
+    Expression filter1 = sparkSession.sessionState().sqlParser().parseExpression("age > 30");
+    Expression filter2 = sparkSession.sessionState().sqlParser().parseExpression("salary > 100000");
+    dataFilters.add(filter1);
+    dataFilters.add(filter2);
+
+    List<Expression> partitionFilters = new ArrayList<>(); // Empty partition filters
+
+    LOG.info("Data filters: age > 30, salary > 100000");
+    LOG.info("Partition filters: (empty)");
+
+    // Convert to Scala Seq
+    scala.collection.immutable.List<Expression> dataFiltersList = JavaConverters.asScalaBuffer(dataFilters)
+        .toList();
+    scala.collection.Seq<Expression> dataFiltersSeq = dataFiltersList;
+    scala.collection.immutable.List<Expression> partitionFiltersList = JavaConverters
+        .asScalaBuffer(partitionFilters).toList();
+    scala.collection.Seq<Expression> partitionFiltersSeq = partitionFiltersList;
+
+    // Call filterFileSlices
+    scala.collection.Seq<scala.Tuple2<scala.Option<org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath>,
+        scala.collection.Seq<FileSlice>>> filteredSlices = fileIndex
+        .filterFileSlices(
+            dataFiltersSeq,
+            partitionFiltersSeq,
+            false);
+
+    // Print results
+    LOG.info("");
+    LOG.info("Filtered File Slices Min/Max Values:");
+    LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
+        "FileName", "age_min", "age_max", "salary_min", "salary_max"));
+    LOG.info(String.join("", Collections.nCopies(100, "-")));
+
+    int totalFileSlices = 0;
+    for (int j = 0; j < filteredSlices.size(); j++) {
+      scala.Tuple2<scala.Option<org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath>,
+          scala.collection.Seq<FileSlice>> tuple = filteredSlices.apply(j);
+      scala.collection.Seq<FileSlice> fileSliceSeq = tuple._2();
+      totalFileSlices += fileSliceSeq.size();
+
+      for (int k = 0; k < fileSliceSeq.size(); k++) {
+        FileSlice fileSlice = fileSliceSeq.apply(k);
+        String fileName = fileSlice.getBaseFile().get().getFileName();
+
+        Map<String, HoodieColumnRangeMetadata<Comparable>> fileExpectedStats = expectedStats.get(fileName);
+        if (fileExpectedStats != null) {
+          HoodieColumnRangeMetadata<Comparable> ageStats = fileExpectedStats.get("age");
+          HoodieColumnRangeMetadata<Comparable> salaryStats = fileExpectedStats.get("salary");
+
+          Object ageMin = (ageStats != null) ? ageStats.getMinValue() : "null";
+          Object ageMax = (ageStats != null) ? ageStats.getMaxValue() : "null";
+          Object salaryMin = (salaryStats != null) ? salaryStats.getMinValue() : "null";
+          Object salaryMax = (salaryStats != null) ? salaryStats.getMaxValue() : "null";
+
+          LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
+              fileName, ageMin.toString(), ageMax.toString(), salaryMin.toString(),
+              salaryMax.toString()));
+        }
+      }
+    }
+
+    LOG.info(String.join("", Collections.nCopies(100, "-")));
+    LOG.info("Total file slices returned: {}", totalFileSlices);
+    LOG.info("Total files in commit: {}", numFiles);
+    
+    if (numFiles > 0) {
+      double skippingRatio = ((double) (numFiles - totalFileSlices) / numFiles) * 100.0;
+      LOG.info("Data skipping ratio: {:.2f}%", skippingRatio);
+    }
   }
 
   /**
