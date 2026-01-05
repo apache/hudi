@@ -151,7 +151,7 @@ public class BulkInsertWriteFunction<I>
   private void initWriterHelperIfNeeded() {
     if (writerHelper == null) {
       String instant = instantToWrite();
-      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(false), this.writeClient.getConfig(),
           instant, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), RuntimeContextUtils.getAttemptNumber(getRuntimeContext()),
           this.rowType);
     }
