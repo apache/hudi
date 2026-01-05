@@ -40,6 +40,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
@@ -799,9 +800,13 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   }
 
   private Writer buildWriter(StoragePath archiveFilePath) throws IOException {
-    return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
-        .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-        .withStorage(metaClient.getStorage()).withInstantTime("").build();
+    return HoodieLogFormatWriter.builder()
+        .withParentPath(archiveFilePath.getParent())
+        .withLogFileId(archiveFilePath.getName())
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+        .withStorage(metaClient.getStorage())
+        .withInstantTime("")
+        .build();
   }
 
   private void writeArchiveLog(Writer writer, List<IndexedRecord> records) throws Exception {

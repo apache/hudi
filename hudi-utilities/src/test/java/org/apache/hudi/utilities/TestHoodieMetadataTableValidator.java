@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -925,10 +926,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
                                        String baseInstantTime,
                                        String instantTime,
                                        boolean writeDataBlock) throws IOException, InterruptedException {
-    try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(tempDir.toString()))
+    try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(tempDir.toString()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId(fileId)
+        .withLogFileId(fileId)
         .withInstantTime(instantTime)
         .withStorage(storage)
         .withSizeThreshold(Long.MAX_VALUE).build()) {
