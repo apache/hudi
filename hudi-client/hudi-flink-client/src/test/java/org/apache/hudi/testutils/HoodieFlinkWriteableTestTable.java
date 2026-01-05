@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.util.collection.Pair;
@@ -136,10 +137,13 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private Pair<String, HoodieLogFile> appendRecordsToLogFile(List<HoodieRecord> groupedRecords) throws Exception {
     String partitionPath = groupedRecords.get(0).getPartitionPath();
     HoodieRecordLocation location = groupedRecords.get(0).getCurrentLocation();
-    try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new StoragePath(basePath, partitionPath))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-        .withInstantTime(location.getInstantTime()).withStorage(storage).build()) {
+    try (HoodieLogFormat.Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(new StoragePath(basePath, partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(location.getFileId())
+        .withInstantTime(location.getInstantTime())
+        .withStorage(storage)
+        .build()) {
       Map<HeaderMetadataType, String> header = new java.util.HashMap<>();
       header.put(HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
       header.put(HeaderMetadataType.SCHEMA, schema.toString());
@@ -150,7 +154,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {
-          log.warn("Failed to convert record " + r.toString(), e);
+          log.warn("Failed to convert record {}", r, e);
           return null;
         }
       }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));

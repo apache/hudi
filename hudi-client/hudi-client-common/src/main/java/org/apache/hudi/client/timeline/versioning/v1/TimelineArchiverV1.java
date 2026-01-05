@@ -29,8 +29,8 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -111,9 +111,12 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   private Writer openWriter(StoragePath archivePath) {
     try {
       if (this.writer == null) {
-        return HoodieLogFormat.newWriterBuilder().onParentPath(archivePath).withInstantTime("")
-            .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-            .withStorage(metaClient.getStorage()).build();
+        return HoodieLogFormatWriter.builder()
+            .withParentPath(archivePath).withInstantTime("")
+            .withLogFileId(archiveFilePath.getName())
+            .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+            .withStorage(metaClient.getStorage())
+            .build();
       } else {
         return this.writer;
       }
