@@ -28,6 +28,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.regions.RegionMetadata;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
@@ -41,6 +43,7 @@ import software.amazon.awssdk.services.dynamodb.model.BillingMode;
     description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
         + " between writers to a Hudi table. Concurrency between Hudi's own table services "
         + " are auto managed internally.")
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   // configs for DynamoDb based locks
