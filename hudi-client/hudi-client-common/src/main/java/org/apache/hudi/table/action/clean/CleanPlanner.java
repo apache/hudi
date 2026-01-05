@@ -267,12 +267,26 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       throw new HoodieIOException("Fetching all partitions failed ", ioe);
     }
 
-    if (!config.getCleanerPartitionRegex().isEmpty()) {
+    String partitionSelected = config.getCleanerPartitionFilterSelected();
+    String partitionRegex = config.getCleanerPartitionFilterRegex();
+
+    // Static list of partitions takes precedence over regex pattern
+    if (!StringUtils.isNullOrEmpty(partitionSelected)) {
       if (config.incrementalCleanerModeEnabled()) {
-        throw new IllegalArgumentException("Incremental Cleaning mode is enabled. Partition regex for clean cannot be used.");
+        throw new IllegalArgumentException("Incremental Cleaning mode is enabled. Partition filter for clean cannot be used.");
       }
-      LOG.info("Restricting partition to clean using regex " + config.getCleanerPartitionRegex());
-      allPartitionPaths = allPartitionPaths.stream().filter(p -> p.matches(config.getCleanerPartitionRegex()))
+      List<String> selectedPartitions = Arrays.asList(partitionSelected.split(","));
+      LOG.info("Restricting partitions to clean using selected list: {}", selectedPartitions);
+      allPartitionPaths = allPartitionPaths.stream()
+          .filter(selectedPartitions::contains)
+          .collect(Collectors.toList());
+    } else if (!StringUtils.isNullOrEmpty(partitionRegex)) {
+      if (config.incrementalCleanerModeEnabled()) {
+        throw new IllegalArgumentException("Incremental Cleaning mode is enabled. Partition filter for clean cannot be used.");
+      }
+      LOG.info("Restricting partitions to clean using regex: {}", partitionRegex);
+      allPartitionPaths = allPartitionPaths.stream()
+          .filter(p -> p.matches(partitionRegex))
           .collect(Collectors.toList());
     }
 
