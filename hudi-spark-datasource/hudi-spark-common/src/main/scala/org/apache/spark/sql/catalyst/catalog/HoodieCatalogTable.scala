@@ -23,9 +23,10 @@ import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
+import org.apache.hudi.common.table.HoodieTableConfig.{HIVE_STYLE_PARTITIONING_ENABLE, URL_ENCODE_PARTITIONING}
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -293,6 +294,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   private def extraTableConfig(tableExists: Boolean,
                                originTableConfig: Map[String, String] = Map.empty,
                                sqlOptions: Map[String, String] = Map.empty): Map[String, String] = {
+    ValidationUtils.checkArgument(
+      !(sqlOptions.contains(HIVE_STYLE_PARTITIONING_ENABLE.key)
+        && sqlOptions.contains(KeyGeneratorOptions.HIERARCHICAL_DATE_PARTITIONING.key)),
+      s"Table configs cannot contain both ${HIVE_STYLE_PARTITIONING_ENABLE.key} "
+        + s"and ${KeyGeneratorOptions.HIERARCHICAL_DATE_PARTITIONING.key}")
     val extraConfig = mutable.Map.empty[String, String]
     if (tableExists) {
       val allPartitionPaths = getPartitionPaths
@@ -310,6 +316,17 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         extraConfig(URL_ENCODE_PARTITIONING.key) =
           String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
       }
+      if (originTableConfig.contains(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key)) {
+        extraConfig(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key) =
+          originTableConfig(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key)
+      } else {
+        extraConfig(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key) =
+          String.valueOf(isHierarchicalDatePartitioning(allPartitionPaths, table))
+      }
+    } else if (sqlOptions.contains(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key)) {
+      extraConfig(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key) =
+        String.valueOf(sqlOptions(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key))
+      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "false"
     } else {
       extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
       extraConfig(URL_ENCODE_PARTITIONING.key) = URL_ENCODE_PARTITIONING.defaultValue()

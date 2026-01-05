@@ -51,6 +51,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
@@ -136,6 +137,9 @@ public class HoodieSyncConfig extends HoodieConfig {
             if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
                 && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
               return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+            } else if (cfg.contains(HIERARCHICAL_DATE_PARTITIONING)
+                && cfg.getString(HIERARCHICAL_DATE_PARTITIONING).equals("true")) {
+              return Option.of("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor");
             } else {
               return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
             }

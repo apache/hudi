@@ -29,9 +29,10 @@ import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 public class StringPartitionPathFormatter extends PartitionPathFormatterBase<String> {
 
   public StringPartitionPathFormatter(Supplier<StringBuilder<String>> stringBuilderFactory,
-                               boolean useHiveStylePartitioning,
-                               boolean useEncoding) {
-    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding);
+                                      boolean useHiveStylePartitioning,
+                                      boolean useEncoding,
+                                      boolean hierarchicalDatePartitioning) {
+    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding, hierarchicalDatePartitioning);
   }
 
   @Override
