@@ -37,8 +37,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,8 +50,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
+@Slf4j
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
-  private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
 
   public CleanPlanActionExecutor(HoodieEngineContext context,
@@ -107,18 +106,18 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
-        LOG.info("Nothing to clean here. It is already clean");
+        log.info("Nothing to clean here. It is already clean");
         return HoodieCleanerPlan.newBuilder().setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name()).build();
       }
-      LOG.info(
+      log.info(
           "Earliest commit to retain for clean : {}",
           earliestInstant.isPresent() ? earliestInstant.get().requestedTime() : "null");
-      LOG.info(
+      log.info(
           "Total partitions to clean : {}, with policy {}",
           partitionsToClean.size(),
           config.getCleanerPolicy());
       int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
-      LOG.info(
+      log.info(
           "Using cleanerParallelism: {}", cleanerParallelism);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned: " + config.getTableName());
@@ -131,7 +130,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         // (remote or local embedded), thus to reduce the risk of an OOM exception.
         List<String> subPartitionsToClean = partitionsToClean.subList(i, Math.min(i + cleanerParallelism, partitionsToClean.size()));
         if (shouldUseBatchLookup) {
-          LOG.info("Load partitions and files into file system view in advance. Paths: {}", subPartitionsToClean);
+          log.info("Load partitions and files into file system view in advance. Paths: {}", subPartitionsToClean);
           table.getHoodieView().loadPartitions(subPartitionsToClean);
         }
         Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context

@@ -38,11 +38,10 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,8 +54,8 @@ import java.util.stream.Collectors;
 /**
  * Flink hoodie writable table.
  */
+@Slf4j
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkWriteableTestTable.class);
 
   private HoodieFlinkWriteableTestTable(String basePath, HoodieStorage storage,
                                         HoodieTableMetaClient metaClient, Schema schema,
@@ -151,7 +150,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {
-          LOG.warn("Failed to convert record " + r.toString(), e);
+          log.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
       }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));

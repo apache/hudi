@@ -54,14 +54,13 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -87,9 +86,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestColStatsRecordWithMetadataRecord.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -236,7 +234,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     allRecords.forEach(record -> {
       HoodieMetadataColumnStats actualColStatsMetadata = record.getData().getColumnStatMetadata().get();
       HoodieMetadataColumnStats expectedColStatsMetadata = expectedColumnStatsRecords.get(finalCounter.getAndIncrement()).getData().getColumnStatMetadata().get();
-      LOG.info("Validating {}, {}",expectedColStatsMetadata.getColumnName(), expectedColStatsMetadata.getMinValue().getClass().getSimpleName());
+      log.info("Validating {}, {}",expectedColStatsMetadata.getColumnName(), expectedColStatsMetadata.getMinValue().getClass().getSimpleName());
       if (expectedColStatsMetadata.getMinValue().getClass().getSimpleName().equals(DecimalWrapper.class.getSimpleName())) {
         // Big decimal gets wrapped w/ Decimal wrapper and converts to bytes.
         assertEquals(expectedColStatsMetadata.getMinValue().toString(), actualColStatsMetadata.getMinValue().toString());

@@ -80,7 +80,7 @@ class TestFileGroupRecordBuffer {
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\"}"
       + "]"
       + "}";
-  private HoodieSchema schema = HoodieSchema.parse(schemaString);
+  private final HoodieSchema schema = HoodieSchema.parse(schemaString);
   private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
   private final RecordContext recordContext = mock(RecordContext.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
@@ -94,7 +94,7 @@ class TestFileGroupRecordBuffer {
     props = new TypedProperties();
     when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
-    when(schemaHandler.getRequiredSchema()).thenReturn(schema.toAvroSchema());
+    when(schemaHandler.getRequiredSchema()).thenReturn(schema);
     when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, schema));
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());

@@ -23,8 +23,7 @@ import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -33,9 +32,8 @@ import java.util.function.Supplier;
  * Generic factory for creating audit services.
  * This factory determines whether auditing is enabled by checking configuration files.
  */
+@Slf4j
 public class AuditServiceFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AuditServiceFactory.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
@@ -87,32 +85,32 @@ public class AuditServiceFactory {
       // Construct the audit config path using the utility method
       String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(basePath);
 
-      LOG.debug("Checking for audit configuration at: {}", auditConfigPath);
+      log.debug("Checking for audit configuration at: {}", auditConfigPath);
 
       // Use the readObject method to read the config file
       // Pass true for checkExistsFirst since audit config is rarely present (99% miss rate)
       Option<String> jsonContent = storageLockClient.readObject(auditConfigPath, true);
 
       if (jsonContent.isPresent()) {
-        LOG.debug("Audit configuration file found, parsing content");
+        log.debug("Audit configuration file found, parsing content");
         JsonNode rootNode = OBJECT_MAPPER.readTree(jsonContent.get());
         JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
 
         boolean isEnabled = enabledNode != null && enabledNode.asBoolean(false);
 
         if (isEnabled) {
-          LOG.info("Audit logging is ENABLED for lock operations at base path: {}", basePath);
+          log.info("Audit logging is ENABLED for lock operations at base path: {}", basePath);
         } else {
-          LOG.info("Audit configuration present but audit logging is DISABLED");
+          log.info("Audit configuration present but audit logging is DISABLED");
         }
 
         return isEnabled;
       }
 
-      LOG.debug("No audit configuration file found at: {}", auditConfigPath);
+      log.debug("No audit configuration file found at: {}", auditConfigPath);
       return false;
     } catch (Exception e) {
-      LOG.error("Error reading audit configuration from base path: {}. Audit will be disabled.", basePath, e);
+      log.error("Error reading audit configuration from base path: {}. Audit will be disabled.", basePath, e);
       return false;
     }
   }

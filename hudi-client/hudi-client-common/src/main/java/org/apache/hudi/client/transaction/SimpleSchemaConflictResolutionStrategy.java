@@ -18,7 +18,8 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.avro.AvroSchemaComparatorForSchemaEvolution;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaComparatorForSchemaEvolution;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -27,13 +28,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.isSchemaNull;
 import static org.apache.hudi.client.transaction.SchemaConflictResolutionStrategy.throwConcurrentSchemaEvolutionException;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
@@ -43,11 +41,11 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * The implementation of SchemaConflictResolutionStrategy that detects incompatible
  * schema evolution from multiple writers
  */
+@Slf4j
 public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictResolutionStrategy {
-  private static final Logger LOG = LoggerFactory.getLogger(SimpleSchemaConflictResolutionStrategy.class);
 
   @Override
-  public Option<Schema> resolveConcurrentSchemaEvolution(
+  public Option<HoodieSchema> resolveConcurrentSchemaEvolution(
       HoodieTable table,
       HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
@@ -62,15 +60,15 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
 
     // Guard against unrecognized cases where writers do not come with a writer schema.
     if (StringUtils.isNullOrEmpty(config.getWriteSchema())) {
-      LOG.warn("Writer config does not come with a valid writer schema. Writer config: {}. Owner instant: {}",
+      log.warn("Writer config does not come with a valid writer schema. Writer config: {}. Owner instant: {}",
           config, currTxnOwnerInstant.get().toString());
       return Option.empty();
     }
 
-    Schema writerSchemaOfTxn = new Schema.Parser().parse(config.getWriteSchema());
+    HoodieSchema writerSchemaOfTxn = HoodieSchema.parse(config.getWriteSchema());
     // If a writer does not come with a meaningful schema, skip the schema resolution.
     ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver = new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient());
-    if (isSchemaNull(writerSchemaOfTxn)) {
+    if (writerSchemaOfTxn.isSchemaNull()) {
       return getTableSchemaAtInstant(schemaResolver, currTxnOwnerInstant.get());
     }
 
@@ -99,14 +97,14 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
       return Option.of(writerSchemaOfTxn);
     }
 
-    Option<Schema> tableSchemaAtTxnValidation = getTableSchemaAtInstant(schemaResolver, lastCompletedInstantAtTxnValidation);
+    Option<HoodieSchema> tableSchemaAtTxnValidation = getTableSchemaAtInstant(schemaResolver, lastCompletedInstantAtTxnValidation);
     // If table schema is not defined, it's still case 1. There can be cases where there are commits but they didn't
     // write any data.
     if (!tableSchemaAtTxnValidation.isPresent()) {
       return Option.of(writerSchemaOfTxn);
     }
     // Case 2, 4, 7: Both writers try to evolve to the same schema or neither evolves schema.
-    boolean writerSchemaIsCurrentTableSchema = AvroSchemaComparatorForSchemaEvolution.schemaEquals(writerSchemaOfTxn, tableSchemaAtTxnValidation.get());
+    boolean writerSchemaIsCurrentTableSchema = HoodieSchemaComparatorForSchemaEvolution.schemaEquals(writerSchemaOfTxn, tableSchemaAtTxnValidation.get());
     if (writerSchemaIsCurrentTableSchema) {
       return Option.of(writerSchemaOfTxn);
     }
@@ -123,7 +121,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
       throwConcurrentSchemaEvolutionException(
           Option.empty(), tableSchemaAtTxnValidation, writerSchemaOfTxn, lastCompletedTxnOwnerInstant, currTxnOwnerInstant);
     }
-    Option<Schema> tableSchemaAtTxnStart = getTableSchemaAtInstant(schemaResolver, lastCompletedInstantAtTxnStart);
+    Option<HoodieSchema> tableSchemaAtTxnStart = getTableSchemaAtInstant(schemaResolver, lastCompletedInstantAtTxnStart);
     // If no table schema is defined, fall back to case 3.
     if (!tableSchemaAtTxnStart.isPresent()) {
       throwConcurrentSchemaEvolutionException(
@@ -133,13 +131,13 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     // Case 5:
     // Table schema has not changed from the start of the transaction till the pre-commit validation
     // If table schema parsing failed we will blindly go with writer schema. use option.empty
-    if (AvroSchemaComparatorForSchemaEvolution.schemaEquals(tableSchemaAtTxnStart.get(), tableSchemaAtTxnValidation.get())) {
+    if (HoodieSchemaComparatorForSchemaEvolution.schemaEquals(tableSchemaAtTxnStart.get(), tableSchemaAtTxnValidation.get())) {
       return Option.of(writerSchemaOfTxn);
     }
 
     // Case 6: Current txn does not evolve schema, the tableSchema we saw at validation phase
     // might be an evolved one, use it.
-    if (AvroSchemaComparatorForSchemaEvolution.schemaEquals(writerSchemaOfTxn, tableSchemaAtTxnStart.get())) {
+    if (HoodieSchemaComparatorForSchemaEvolution.schemaEquals(writerSchemaOfTxn, tableSchemaAtTxnStart.get())) {
       return tableSchemaAtTxnValidation;
     }
 
@@ -165,11 +163,11 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
         .findFirst());
   }
 
-  private static Option<Schema> getTableSchemaAtInstant(ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver, HoodieInstant instant) {
+  private static Option<HoodieSchema> getTableSchemaAtInstant(ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver, HoodieInstant instant) {
     try {
-      return schemaResolver.getTableAvroSchemaIfPresent(false, Option.of(instant));
+      return schemaResolver.getTableSchemaIfPresent(false, Option.of(instant));
     } catch (Exception ex) {
-      LOG.error("Cannot get table schema for instant {}", instant);
+      log.error("Cannot get table schema for instant {}", instant);
       throw new HoodieException("Unable to get table schema", ex);
     }
   }

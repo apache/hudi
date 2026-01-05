@@ -117,7 +117,8 @@ public class BaseTestFileGroupRecordBuffer {
       props.setProperty(DELETE_MARKER, markerKeyValue.getRight());
     });
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
-    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA.toAvroSchema());
+    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);

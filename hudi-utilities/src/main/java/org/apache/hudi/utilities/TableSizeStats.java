@@ -34,7 +34,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -282,7 +282,7 @@ public class TableSizeStats implements Serializable {
         .setBasePath(basePath)
         .setConf(storageConf.newInstance()).build();
     HoodieTableMetadata tableMetadata = metaClientLocal.getTableFormat().getMetadataFactory().create(
-        engineContext, new HoodieHadoopStorage(basePath, storageConf), metadataConfig, basePath);
+        engineContext, HoodieStorageUtils.getStorage(basePath, storageConf), metadataConfig, basePath);
 
     List<String> allPartitions = tableMetadata.getAllPartitionPaths();
 

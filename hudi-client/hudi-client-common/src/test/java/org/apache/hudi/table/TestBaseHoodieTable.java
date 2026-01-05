@@ -42,6 +42,8 @@ import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 
+import lombok.Getter;
+
 import java.util.List;
 
 public class TestBaseHoodieTable extends HoodieTable {
@@ -54,11 +56,8 @@ public class TestBaseHoodieTable extends HoodieTable {
     super(config, engineContext, metaClient, viewManager, TestSimpleSchemaConflictResolutionStrategy.taskContextSupplier);
   }
 
+  @Getter
   private int countOfScheduleRollbackFunctionCalls = 0;
-
-  public int getCountOfScheduleRollbackFunctionCalls() {
-    return countOfScheduleRollbackFunctionCalls;
-  }
 
   @Override
   protected HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {

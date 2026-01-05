@@ -43,8 +43,7 @@ public class InputStreamConsumer extends Thread {
       BufferedReader br = new BufferedReader(isr);
       br.lines().forEach(log::info);
     } catch (Exception e) {
-      log.warn(e.toString());
-      e.printStackTrace();
+      log.warn("Error consuming input stream", e);
     }
   }
 

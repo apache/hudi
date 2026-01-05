@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -31,7 +32,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +49,7 @@ import java.util.stream.Collectors;
 public class CommitUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(CommitUtils.class);
-  private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
+  private static final String NULL_SCHEMA_STR = HoodieSchema.NULL_SCHEMA.toString();
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**

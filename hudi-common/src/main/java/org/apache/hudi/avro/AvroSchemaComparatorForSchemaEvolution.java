@@ -18,6 +18,8 @@
 
 package org.apache.hudi.avro;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
@@ -136,10 +138,8 @@ import java.util.stream.Collectors;
  *   <li>Custom properties</li>
  * </ul>
  */
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AvroSchemaComparatorForSchemaEvolution {
-
-  protected AvroSchemaComparatorForSchemaEvolution() {
-  }
 
   private static final AvroSchemaComparatorForSchemaEvolution VALIDATOR = new AvroSchemaComparatorForSchemaEvolution();
 

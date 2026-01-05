@@ -18,8 +18,8 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.spark.sql.catalyst.InternalRow;

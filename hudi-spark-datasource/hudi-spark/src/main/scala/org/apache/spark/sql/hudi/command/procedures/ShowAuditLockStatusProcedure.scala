@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
-import org.apache.hudi.common.util.FileIOUtils
+import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}

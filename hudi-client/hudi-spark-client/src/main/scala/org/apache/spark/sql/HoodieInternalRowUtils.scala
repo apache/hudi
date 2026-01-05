@@ -18,11 +18,10 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
-
-import org.apache.avro.Schema
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.HoodieSchemaConversionUtils.convertHoodieSchemaToStructType
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
@@ -35,7 +34,6 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.util.concurrent.ConcurrentHashMap
 import java.util.function.{Supplier, Function => JFunction}
 import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -60,13 +58,13 @@ object HoodieInternalRowUtils {
         new mutable.HashMap[(StructType, StructType), UnsafeProjection]
     })
 
-  private val identicalUnsafeProjectionThreadLocal: ThreadLocal[mutable.HashMap[Schema, UnsafeProjection]] =
-    ThreadLocal.withInitial(new Supplier[mutable.HashMap[Schema, UnsafeProjection]] {
-      override def get(): mutable.HashMap[Schema, UnsafeProjection] =
-        new mutable.HashMap[Schema, UnsafeProjection]
+  private val identicalUnsafeProjectionThreadLocal: ThreadLocal[mutable.HashMap[HoodieSchema, UnsafeProjection]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[HoodieSchema, UnsafeProjection]] {
+      override def get(): mutable.HashMap[HoodieSchema, UnsafeProjection] =
+        new mutable.HashMap[HoodieSchema, UnsafeProjection]
     })
 
-  private val schemaMap = new ConcurrentHashMap[Schema, StructType]
+  private val schemaMap = new ConcurrentHashMap[HoodieSchema, StructType]
   private val orderPosListMap = new ConcurrentHashMap[(StructType, String), Option[NestedFieldPath]]
 
   /**
@@ -84,7 +82,7 @@ object HoodieInternalRowUtils {
   /**
    * Provides cached instance of [[UnsafeProjection]] to project Java object based [[InternalRow]] to [[UnsafeRow]].
    */
-  def getCachedUnsafeProjection(schema: Schema): UnsafeProjection = {
+  def getCachedUnsafeProjection(schema: HoodieSchema): UnsafeProjection = {
     identicalUnsafeProjectionThreadLocal.get()
       .getOrElseUpdate(schema, UnsafeProjection.create(getCachedSchema(schema)))
   }
@@ -128,16 +126,16 @@ object HoodieInternalRowUtils {
    * @param schema [[Schema]] to convert to [[StructType]], NOTE: It is best that the schema passed in is cached through [[org.apache.hudi.avro.AvroSchemaCache]], so that we can reduce the overhead of schema lookup in the map
    * @return [[StructType]] for provided [[Schema]]
    */
-  def getCachedSchema(schema: Schema): StructType = {
+  def getCachedSchema(schema: HoodieSchema): StructType = {
     val structType = schemaMap.get(schema)
     // NOTE: This specifically designed to do 2 lookups (in case of cache-miss) to avoid
     //       allocating the closure when using [[computeIfAbsent]] on more frequent cache-hit path
     if (structType != null) {
       structType
     } else {
-      schemaMap.computeIfAbsent(schema, new JFunction[Schema, StructType] {
-        override def apply(t: Schema): StructType =
-          convertAvroSchemaToStructType(schema)
+      schemaMap.computeIfAbsent(schema, new JFunction[HoodieSchema, StructType] {
+        override def apply(t: HoodieSchema): StructType =
+          convertHoodieSchemaToStructType(schema)
       })
     }
   }

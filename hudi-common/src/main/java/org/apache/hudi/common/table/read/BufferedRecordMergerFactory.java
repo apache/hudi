@@ -33,8 +33,6 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
 
 /**
@@ -50,7 +48,7 @@ public class BufferedRecordMergerFactory {
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
                                                    Option<String> payloadClass,
-                                                   Schema readerSchema,
+                                                   HoodieSchema readerSchema,
                                                    TypedProperties props,
                                                    Option<PartialUpdateMode> partialUpdateModeOpt) {
     return create(readerContext, recordMergeMode, enablePartialMerging, recordMerger,
@@ -61,7 +59,7 @@ public class BufferedRecordMergerFactory {
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
-                                                   Schema readerSchema,
+                                                   HoodieSchema readerSchema,
                                                    Option<Pair<String, String>> payloadClasses,
                                                    TypedProperties props,
                                                    Option<PartialUpdateMode> partialUpdateModeOpt) {
@@ -280,14 +278,14 @@ public class BufferedRecordMergerFactory {
     private final RecordContext<T> recordContext;
     private final Option<HoodieRecordMerger> recordMerger;
     private final BufferedRecordMerger<T> deleteRecordMerger;
-    private final Schema readerSchema;
+    private final HoodieSchema readerSchema;
     private final TypedProperties props;
 
     public PartialUpdateBufferedRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       this.recordContext = recordContext;
       this.recordMerger = recordMerger;
@@ -340,7 +338,7 @@ public class BufferedRecordMergerFactory {
     public CustomRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
     }
@@ -366,7 +364,7 @@ public class BufferedRecordMergerFactory {
     private final HoodieRecordMerger deltaMerger;
 
     public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, String incomingPayloadClass,
-                                         Schema readerSchema, TypedProperties props) {
+                                         HoodieSchema readerSchema, TypedProperties props) {
       super(recordContext, recordMerger, incomingPayloadClass, readerSchema, props);
       this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
     }
@@ -393,7 +391,7 @@ public class BufferedRecordMergerFactory {
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         String payloadClass,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
       this.payloadClass = payloadClass;
@@ -418,13 +416,13 @@ public class BufferedRecordMergerFactory {
   private abstract static class BaseCustomMerger<T> implements BufferedRecordMerger<T> {
     protected final RecordContext<T> recordContext;
     protected final HoodieRecordMerger recordMerger;
-    protected final Schema readerSchema;
+    protected final HoodieSchema readerSchema;
     protected final TypedProperties props;
 
     public BaseCustomMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
-        Schema readerSchema,
+        HoodieSchema readerSchema,
         TypedProperties props) {
       this.recordContext = recordContext;
       this.recordMerger = recordMerger.orElseThrow(() -> new IllegalArgumentException("RecordMerger must be present for custom merging"));

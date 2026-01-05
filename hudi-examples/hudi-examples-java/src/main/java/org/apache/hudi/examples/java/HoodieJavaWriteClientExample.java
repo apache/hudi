@@ -34,11 +34,10 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,9 +51,8 @@ import java.util.stream.Collectors;
  * <tableType> describe table's type, now support mor and cow, default value is cow
  * for example, `HoodieJavaWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt mor`
  */
+@Slf4j
 public class HoodieJavaWriteClientExample {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaWriteClientExample.class);
 
   private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
@@ -72,7 +70,7 @@ public class HoodieJavaWriteClientExample {
       tableType = HoodieTableType.MERGE_ON_READ.name();
     }
 
-    LOG.info("Start JavaWriteClient example with tablePath: {}, tableName: {}, tableType: {}", tablePath, tableName, tableType);
+    log.info("Start JavaWriteClient example with tablePath: {}, tableName: {}, tableType: {}", tablePath, tableName, tableType);
 
     // Generator of some records to be loaded in.
     HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
@@ -101,7 +99,7 @@ public class HoodieJavaWriteClientExample {
 
       // inserts
       String newCommitTime = client.startCommit();
-      LOG.info("Starting commit {}", newCommitTime);
+      log.info("Starting commit {}", newCommitTime);
 
       List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
@@ -111,7 +109,7 @@ public class HoodieJavaWriteClientExample {
 
       // updates
       newCommitTime = client.startCommit();
-      LOG.info("Starting commit {}", newCommitTime);
+      log.info("Starting commit {}", newCommitTime);
       List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
       records.addAll(toBeUpdated);
       recordsSoFar.addAll(toBeUpdated);
@@ -121,7 +119,7 @@ public class HoodieJavaWriteClientExample {
 
       // Delete
       newCommitTime = client.startCommit();
-      LOG.info("Starting commit {}", newCommitTime);
+      log.info("Starting commit {}", newCommitTime);
       // just delete half of the records
       int numToDelete = recordsSoFar.size() / 2;
       List<HoodieKey> toBeDeleted =

@@ -195,7 +195,7 @@ public class TestCleanPlanner {
     HoodieStorage storage = mock(HoodieStorage.class);
     when(mockHoodieTable.getStorage()).thenReturn(storage);
     HoodieTableMetadata hoodieTableMetadata = mock(HoodieTableMetadata.class);
-    when(mockHoodieTable.getMetadataTable()).thenReturn(hoodieTableMetadata);
+    when(mockHoodieTable.getTableMetadata()).thenReturn(hoodieTableMetadata);
     when(mockHoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant())
         .thenReturn(Option.of(INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, lastCleanInstant)));
     when(hoodieTableMetadata.getAllPartitionPaths()).thenReturn(isPartitioned ? Arrays.asList(PARTITION1, PARTITION2, PARTITION3) : Collections.singletonList(StringUtils.EMPTY_STRING));

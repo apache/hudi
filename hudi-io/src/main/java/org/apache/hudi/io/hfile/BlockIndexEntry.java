@@ -21,6 +21,9 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.ToString;
+import lombok.Value;
+
 /**
  * Represents the index entry of a data block in the Data Index stored in the
  * {@link HFileBlockType#ROOT_INDEX} block.
@@ -30,55 +33,22 @@ import org.apache.hudi.common.util.Option;
  * When comparing two {@link BlockIndexEntry} instances, the underlying bytes of the keys
  * are compared in lexicographical order.
  */
+@Value
 public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
+
   // The first key stored in the block index can be shortened to save memory,
   // i.e., a fake first key is stored in the block index entry, and such a fake
   // first key does not exist in the data block. The fake first key is
   // lexicographically greater than the last key of the previous block and
   // lexicographically equal or smaller than the actual first key of the current block.
-  private final Key firstKey;
-  private final Option<Key> nextBlockFirstKey;
-  private final long offset;
-  private final int size;
-
-  public BlockIndexEntry(Key firstKey, Option<Key> nextBlockFirstKey,
-                         long offset,
-                         int size) {
-    this.firstKey = firstKey;
-    this.nextBlockFirstKey = nextBlockFirstKey;
-    this.offset = offset;
-    this.size = size;
-  }
-
-  public Key getFirstKey() {
-    return firstKey;
-  }
-
-  public Option<Key> getNextBlockFirstKey() {
-    return nextBlockFirstKey;
-  }
-
-  public long getOffset() {
-    return offset;
-  }
-
-  public int getSize() {
-    return size;
-  }
+  Key firstKey;
+  @ToString.Exclude
+  Option<Key> nextBlockFirstKey;
+  long offset;
+  int size;
 
   @Override
   public int compareTo(BlockIndexEntry o) {
     return firstKey.compareTo(o.getFirstKey());
-  }
-
-  @Override
-  public String toString() {
-    return "BlockIndexEntry{firstKey="
-        + firstKey.toString()
-        + ", offset="
-        + offset
-        + ", size="
-        + size
-        + "}";
   }
 }

@@ -18,9 +18,10 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.HoodieFileMetadataMerger;
 
+import lombok.Value;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
@@ -839,22 +840,11 @@ public class TestHoodieParquetFileBinaryCopier {
     }
   }
 
+  @Value
   public static class TestFile {
-    private final String fileName;
-    private final SimpleGroup[] fileContent;
 
-    public TestFile(String fileName, SimpleGroup[] fileContent) {
-      this.fileName = fileName;
-      this.fileContent = fileContent;
-    }
-
-    public String getFileName() {
-      return this.fileName;
-    }
-
-    public SimpleGroup[] getFileContent() {
-      return this.fileContent;
-    }
+    String fileName;
+    SimpleGroup[] fileContent;
   }
 
   private void verifyColumnConvert(

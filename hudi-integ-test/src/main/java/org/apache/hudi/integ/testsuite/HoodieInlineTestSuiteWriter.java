@@ -33,13 +33,12 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -50,9 +49,8 @@ import java.util.Properties;
  * A writer abstraction for the Hudi test suite. This class wraps different implementations of writers used to perform write operations into the target hudi dataset. Current supported writers are
  * {@link HoodieDeltaStreamerWrapper} and {@link SparkRDDWriteClient}.
  */
+@Slf4j
 public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
-
-  private static Logger log = LoggerFactory.getLogger(HoodieInlineTestSuiteWriter.class);
 
   private static final String GENERATED_DATA_PATH = "generated.data.path";
 
@@ -181,7 +179,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       Option<String> clusteringInstantOpt = writeClient.scheduleClustering(Option.empty());
       clusteringInstantOpt.ifPresent(clusteringInstant -> {
         // inline cluster should auto commit as the user is never given control
-        log.warn("Clustering instant :: " + clusteringInstant);
+        log.warn("Clustering instant :: {}", clusteringInstant);
         writeClient.cluster(clusteringInstant, true);
       });
     } else {

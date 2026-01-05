@@ -40,8 +40,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,9 +54,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
+@Slf4j
 public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends BaseActionExecutor<T, I, K, O, R> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseTableServicePlanActionExecutor.class);
   private static final Set<String> MOR_COMMITS = CollectionUtils.createSet(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
   private static final Set<String> COW_COMMITS = CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION);
 
@@ -76,32 +74,32 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     if (config.isIncrementalTableServiceEnabled() && strategy instanceof IncrementalPartitionAwareStrategy) {
       try {
         // get incremental partitions.
-        LOG.info("Start to fetch incremental partitions for {}", type);
+        log.info("Start to fetch incremental partitions for {}", type);
         Pair<Option<HoodieInstant>, Set<String>> lastInstantAndIncrPartitions = getIncrementalPartitions(type);
         Option<HoodieInstant> lastCompleteTableServiceInstant = lastInstantAndIncrPartitions.getLeft();
         Set<String> incrementalPartitions = lastInstantAndIncrPartitions.getRight();
 
         if (lastCompleteTableServiceInstant.isPresent()) {
           if (!incrementalPartitions.isEmpty()) {
-            LOG.info("Fetched incremental partitions for {}. {}. Instant {}", type, incrementalPartitions, instantTime);
+            log.info("Fetched incremental partitions for {}. {}. Instant {}", type, incrementalPartitions, instantTime);
             return new ArrayList<>(incrementalPartitions);
           } else {
             // handle the case the writer just commits the empty commits continuously
             // the incremental partition list is empty we just skip the scheduling
-            LOG.info("Incremental partitions are empty. Skip current schedule {}", instantTime);
+            log.info("Incremental partitions are empty. Skip current schedule {}", instantTime);
             return Collections.emptyList();
           }
         }
         // Last complete table service commit maybe archived.
         // fall back to get all partitions.
-        LOG.info("No previous completed table service instant, fall back to get all partitions");
+        log.info("No previous completed table service instant, fall back to get all partitions");
       } catch (Exception ex) {
-        LOG.warn("Failed to get incremental partitions", ex);
+        log.warn("Failed to get incremental partitions", ex);
       }
     }
 
     // get all partitions
-    LOG.info("Start to fetch all partitions for {}. Instant {}", type, instantTime);
+    log.info("Start to fetch all partitions for {}. Instant {}", type, instantTime);
     return FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
   }
 

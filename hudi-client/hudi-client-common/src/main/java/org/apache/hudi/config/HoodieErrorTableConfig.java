@@ -23,6 +23,8 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import lombok.Getter;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.util.Arrays;
@@ -100,14 +102,11 @@ public class HoodieErrorTableConfig extends HoodieConfig {
     ROLLBACK_COMMIT("Rollback the corresponding base table write commit for which the error events were triggered"),
     LOG_ERROR("Error is logged but the base table write succeeds");
 
+    @Getter
     private final String description;
 
     ErrorWriteFailureStrategy(String description) {
       this.description = description;
-    }
-
-    public String getDescription() {
-      return description;
     }
 
     @Override

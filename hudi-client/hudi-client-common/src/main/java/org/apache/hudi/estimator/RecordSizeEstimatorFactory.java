@@ -21,24 +21,22 @@ package org.apache.hudi.estimator;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Factory class to instantiate the configured implementation of {@link RecordSizeEstimator}.
  * Since record estimation is best effort, we use the {@link AverageRecordSizeEstimator} (default implementation)
  * as a backup in case of fatal exceptions.
  */
+@Slf4j
 public class RecordSizeEstimatorFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RecordSizeEstimatorFactory.class);
 
   public static RecordSizeEstimator createRecordSizeEstimator(HoodieWriteConfig writeConfig) {
     String recordSizeEstimatorClass = writeConfig.getRecordSizeEstimator();
     try {
       return (RecordSizeEstimator) ReflectionUtils.loadClass(recordSizeEstimatorClass, writeConfig);
     } catch (Throwable e) {
-      LOG.warn("Unable to instantiate the record estimator implementation {}. Falling back to use default AverageRecordSizeEstimator.\" ", recordSizeEstimatorClass, e);
+      log.warn("Unable to instantiate the record estimator implementation {}. Falling back to use default AverageRecordSizeEstimator.\" ", recordSizeEstimatorClass, e);
     }
     return new AverageRecordSizeEstimator(writeConfig);
   }

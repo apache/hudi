@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -49,13 +50,14 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import lombok.AccessLevel;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -79,12 +81,14 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESS
 /**
  * The common hoodie test harness to provide the basic infrastructure.
  */
+@Slf4j
 public class HoodieCommonTestHarness {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCommonTestHarness.class);
+
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
   protected static ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = null;
   protected static final HoodieLogBlock.HoodieLogBlockType DEFAULT_DATA_BLOCK_TYPE = HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
 
+  @Setter(AccessLevel.PROTECTED)
   protected String tableName;
   protected String basePath;
   protected URI baseUri;
@@ -96,10 +100,6 @@ public class HoodieCommonTestHarness {
 
   protected StorageConfiguration<Configuration> storageConf;
   protected HoodieStorage storage;
-
-  protected void setTableName(String tableName) {
-    this.tableName = tableName;
-  }
 
   /**
    * Initializes basePath.
@@ -274,7 +274,7 @@ public class HoodieCommonTestHarness {
           semaphore.release();
         }
       } catch (Exception e) {
-        LOG.warn("Error in polling for timeline", e);
+        log.warn("Error in polling for timeline", e);
       }
     }, 0, 1, TimeUnit.SECONDS);
     int maxWaitInMinutes = 10;
@@ -327,7 +327,7 @@ public class HoodieCommonTestHarness {
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
                                                      Schema recordSchema,
-                                                     Schema writerSchema,
+                                                     HoodieSchema writerSchema,
                                                      List<HoodieRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,
@@ -336,13 +336,13 @@ public class HoodieCommonTestHarness {
                                                      String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
-        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema).getData())
+        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema.toAvroSchema()).getData())
         .collect(Collectors.toList());
     return writeLogFiles(partitionPath, writerSchema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     HoodieSchema schema,
                                                      List<IndexedRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage)
@@ -351,7 +351,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     HoodieSchema schema,
                                                      List<IndexedRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,

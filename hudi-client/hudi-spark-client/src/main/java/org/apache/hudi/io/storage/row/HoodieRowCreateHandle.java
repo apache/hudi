@@ -40,11 +40,10 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -54,11 +53,10 @@ import java.util.function.Function;
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
  */
+@Slf4j
 public class HoodieRowCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowCreateHandle.class);
   private static final AtomicLong GLOBAL_SEQ_NO = new AtomicLong(1);
 
   private final HoodieTable table;
@@ -149,7 +147,7 @@ public class HoodieRowCreateHandle implements Serializable {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
 
-    LOG.info("New handle created for partition: {} with fileId {}", partitionPath, fileId);
+    log.info("New handle created for partition: {} with fileId {}", partitionPath, fileId);
   }
 
   /**
@@ -245,7 +243,7 @@ public class HoodieRowCreateHandle implements Serializable {
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     for (Pair<HoodieRecordDelegate, Throwable> pair : writeStatus.getFailedRecords()) {
-      LOG.error("Failed to write {}", pair.getLeft(), pair.getRight());
+      log.error("Failed to write {}", pair.getLeft(), pair.getRight());
     }
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
     runtimeStats.setTotalCreateTime(currTimer.endTimer());

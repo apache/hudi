@@ -27,7 +27,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
@@ -42,14 +44,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -84,6 +84,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -236,10 +237,10 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
 
     BloomFilter simpleBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, SIMPLE.name());
     BloomFilter dynmicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
-    String file1 = makeTestFile("file-1.parquet", AVRO_SCHEMA, legacySchema, simpleBloomFilter);
-    String file2 = makeTestFile("file-2.parquet", AVRO_SCHEMA, legacySchema, dynmicBloomFilter);
-    String file3 = makeTestFile("file-3.parquet", AVRO_SCHEMA, standardSchema, dynmicBloomFilter);
-    String file4 = makeTestFile("file-4.parquet", AVRO_SCHEMA, standardSchema, dynmicBloomFilter);
+    String file1 = makeTestFile("file-1.parquet", HOODIE_SCHEMA, legacySchema, simpleBloomFilter);
+    String file2 = makeTestFile("file-2.parquet", HOODIE_SCHEMA, legacySchema, dynmicBloomFilter);
+    String file3 = makeTestFile("file-3.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
+    String file4 = makeTestFile("file-4.parquet", HOODIE_SCHEMA, standardSchema, dynmicBloomFilter);
 
     // input file contains multiple bloom filter code type, should return false
     List<ClusteringGroupInfo> groups = makeClusteringGroup(file1, file2);
@@ -259,8 +260,8 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     Assertions.assertFalse(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
   }
 
-  private String makeTestFile(String fileName, Schema schema, MessageType messageType, BloomFilter filter) throws IOException {
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(messageType, schema, Option.of(filter), new Properties());
+  private String makeTestFile(String fileName, HoodieSchema hoodieSchema, MessageType messageType, BloomFilter filter) throws IOException {
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(messageType, hoodieSchema.getAvroSchema(), Option.of(filter), new Properties());
     StoragePath filePath = new StoragePath(tempDir.resolve(fileName).toAbsolutePath().toString());
     HoodieConfig hoodieConfig = new HoodieConfig();
     hoodieConfig.setValue("hoodie.base.path", basePath);

@@ -18,14 +18,20 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
+import org.apache.hudi.common.util.collection.Pair;
+
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * This class holds the write statistics for {@link DeltaInputWriter}.
  */
+@Getter
+@Setter
 public class DeltaWriteStats implements Serializable {
 
   // The file path (if any) for the data written
@@ -36,37 +42,4 @@ public class DeltaWriteStats implements Serializable {
   private long recordsWritten;
 
   private List<Pair<String, String>> partitionPathRecordKey = new ArrayList<>();
-
-  public String getFilePath() {
-    return filePath;
-  }
-
-  public void setFilePath(String filePath) {
-    this.filePath = filePath;
-  }
-
-  public long getBytesWritten() {
-    return bytesWritten;
-  }
-
-  public void setBytesWritten(long bytesWritten) {
-    this.bytesWritten = bytesWritten;
-  }
-
-  public List<Pair<String, String>> getPartitionPathRecordKey() {
-    return partitionPathRecordKey;
-  }
-
-  public void setPartitionPathRecordKey(List<Pair<String, String>> partitionPathRecordKey) {
-    this.partitionPathRecordKey = partitionPathRecordKey;
-  }
-
-  public long getRecordsWritten() {
-    return recordsWritten;
-  }
-
-  public void setRecordsWritten(long recordsWritten) {
-    this.recordsWritten = recordsWritten;
-  }
-
 }

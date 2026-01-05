@@ -64,6 +64,15 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- Required to support older Hive versions that still use Java 8 -->
+          <target>8</target>
+          <release>8</release>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -115,6 +124,12 @@
       <artifactId>kryo-shaded</artifactId>
     </dependency>
 
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-tests-common</artifactId>
@@ -142,6 +157,11 @@
       <artifactId>system-rules</artifactId>
       <version>1.17.2</version>
       <scope>test</scope>
+    </dependency>
+    <!-- Lance Core SDK -->
+    <dependency>
+      <groupId>com.lancedb</groupId>
+      <artifactId>lance-core</artifactId>
     </dependency>
   </dependencies>
 </project>

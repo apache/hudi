@@ -40,8 +40,7 @@ import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,8 +59,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
  */
+@Slf4j
 public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBloomIndex.class);
 
   private final BaseHoodieBloomIndexHelper bloomIndexHelper;
 
@@ -91,9 +90,9 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     if (config.getBloomIndexUseCaching()) {
       keyFilenamePairs.persist(config.getBloomIndexInputStorageLevel());
     }
-    if (LOG.isDebugEnabled()) {
+    if (log.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairs.count();
-      LOG.debug("Number of update records (ones tagged with a fileID): {}", totalTaggedRecords);
+      log.debug("Number of update records (ones tagged with a fileID): {}", totalTaggedRecords);
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
@@ -145,7 +144,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       }
       // fallback to loading column ranges from files
       if (isNullOrEmpty(fileInfoList)) {
-        LOG.info("fallback to loading column ranges from files");
+        log.info("fallback to loading column ranges from files");
         fileInfoList = loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable);
       }
     } else {
@@ -172,7 +171,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(pf.getValue().getValue());
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey(), minMaxKeys[0], minMaxKeys[1]));
       } catch (MetadataNotFoundException me) {
-        LOG.warn("Unable to find range metadata in file :{}", pf);
+        log.warn("Unable to find range metadata in file :{}", pf);
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
       }
     }, Math.max(partitionPathFileIDList.size(), 1));
@@ -226,7 +225,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     }
 
     Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap =
-        hoodieTable.getMetadataTable().getColumnStats(partitionFileNameList, keyField);
+        hoodieTable.getTableMetadata().getColumnStats(partitionFileNameList, keyField);
 
     List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>(fileToColumnStatsMap.size());
 
@@ -285,7 +284,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   HoodiePairData<HoodieFileGroupId, String> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
-    LOG.info("Instantiating index file filter ");
+    log.info("Instantiating index file filter ");
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);

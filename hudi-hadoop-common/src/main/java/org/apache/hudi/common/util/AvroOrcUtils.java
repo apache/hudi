@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Conversions;
@@ -55,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.avro.JsonProperties.NULL_VALUE;
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -810,74 +812,65 @@ public class AvroOrcUtils {
     }
   }
 
-  public static Schema createAvroSchemaWithDefaultValue(TypeDescription orcSchema, String recordName, String namespace, boolean nullable) {
-    Schema avroSchema = createAvroSchemaWithNamespace(orcSchema,recordName,namespace);
-    List<Schema.Field> fields = new ArrayList<Schema.Field>();
-    List<Field> fieldList = avroSchema.getFields();
-    for (Field field : fieldList) {
-      Schema fieldSchema = field.schema();
-      Schema nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL),fieldSchema);
+  public static HoodieSchema createSchemaWithDefaultValue(TypeDescription orcSchema, String recordName, String namespace, boolean nullable) {
+    HoodieSchema hoodieSchema = createSchemaWithNamespace(orcSchema, recordName, namespace);
+    List<HoodieSchemaField> fields = new ArrayList<>(hoodieSchema.getFields().size());
+    for (HoodieSchemaField field : hoodieSchema.getFields()) {
+      HoodieSchema fieldSchema = field.schema();
+      HoodieSchema nullableSchema = HoodieSchema.createNullable(fieldSchema);
       if (nullable) {
-        fields.add(new Schema.Field(field.name(), nullableSchema, null, NULL_VALUE));
+        fields.add(HoodieSchemaField.of(field.name(), nullableSchema, null, HoodieSchema.NULL_VALUE));
       } else {
-        fields.add(new Schema.Field(field.name(), fieldSchema, null, null));
+        fields.add(HoodieSchemaField.of(field.name(), fieldSchema, null, null));
       }
     }
-    Schema schema = Schema.createRecord(recordName, null, null, false);
-    schema.setFields(fields);
-    return schema;
+    return HoodieSchema.createRecord(recordName, null, null, false, fields);
   }
 
-  private static Schema createAvroSchemaWithNamespace(TypeDescription orcSchema, String recordName, String namespace) {
+  private static HoodieSchema createSchemaWithNamespace(TypeDescription orcSchema, String recordName, String namespace) {
     switch (orcSchema.getCategory()) {
       case BOOLEAN:
-        return Schema.create(Schema.Type.BOOLEAN);
+        return HoodieSchema.create(HoodieSchemaType.BOOLEAN);
       case BYTE:
         // tinyint (8 bit), use int to hold it
-        return Schema.create(Schema.Type.INT);
+        return HoodieSchema.create(HoodieSchemaType.INT);
       case SHORT:
         // smallint (16 bit), use int to hold it
-        return Schema.create(Schema.Type.INT);
+        return HoodieSchema.create(HoodieSchemaType.INT);
       case INT:
         // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MILLIS, but there is no way to distinguish
-        return Schema.create(Schema.Type.INT);
+        return HoodieSchema.create(HoodieSchemaType.INT);
       case LONG:
         // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MICROS, but there is no way to distinguish
-        return Schema.create(Schema.Type.LONG);
+        return HoodieSchema.create(HoodieSchemaType.LONG);
       case FLOAT:
-        return Schema.create(Schema.Type.FLOAT);
+        return HoodieSchema.create(HoodieSchemaType.FLOAT);
       case DOUBLE:
-        return Schema.create(Schema.Type.DOUBLE);
+        return HoodieSchema.create(HoodieSchemaType.DOUBLE);
       case VARCHAR:
       case CHAR:
       case STRING:
-        return Schema.create(Schema.Type.STRING);
+        return HoodieSchema.create(HoodieSchemaType.STRING);
       case DATE:
-        Schema date = Schema.create(Schema.Type.INT);
-        LogicalTypes.date().addToSchema(date);
-        return date;
+        return HoodieSchema.createDate();
       case TIMESTAMP:
-        Schema timestamp = Schema.create(Schema.Type.LONG);
-        LogicalTypes.timestampMillis().addToSchema(timestamp);
-        return timestamp;
+        return HoodieSchema.createTimestampMillis();
       case BINARY:
-        return Schema.create(Schema.Type.BYTES);
+        return HoodieSchema.create(HoodieSchemaType.BYTES);
       case DECIMAL:
-        Schema decimal = Schema.create(Schema.Type.BYTES);
-        LogicalTypes.decimal(orcSchema.getPrecision(), orcSchema.getScale()).addToSchema(decimal);
-        return decimal;
+        return HoodieSchema.createDecimal(orcSchema.getPrecision(), orcSchema.getScale());
       case LIST:
-        return Schema.createArray(createAvroSchemaWithNamespace(orcSchema.getChildren().get(0), recordName, ""));
+        return HoodieSchema.createArray(createSchemaWithNamespace(orcSchema.getChildren().get(0), recordName, ""));
       case MAP:
-        return Schema.createMap(createAvroSchemaWithNamespace(orcSchema.getChildren().get(1), recordName, ""));
+        return HoodieSchema.createMap(createSchemaWithNamespace(orcSchema.getChildren().get(1), recordName, ""));
       case STRUCT:
-        List<Field> childFields = new ArrayList<>();
+        List<HoodieSchemaField> childFields = new ArrayList<>();
         for (int i = 0; i < orcSchema.getChildren().size(); i++) {
           TypeDescription childType = orcSchema.getChildren().get(i);
           String childName = orcSchema.getFieldNames().get(i);
-          childFields.add(new Field(childName, createAvroSchemaWithNamespace(childType, childName, ""), null, null));
+          childFields.add(HoodieSchemaField.of(childName, createSchemaWithNamespace(childType, childName, ""), null, null));
         }
-        return Schema.createRecord(recordName, null, namespace, false, childFields);
+        return HoodieSchema.createRecord(recordName, null, namespace, false, childFields);
       default:
         throw new IllegalStateException(String.format("Unrecognized ORC type: %s", orcSchema.getCategory().getName()));
 

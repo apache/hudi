@@ -41,10 +41,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -64,8 +63,8 @@ import java.util.stream.Collectors;
  * <p>It also inherits the {@link CleanFunction} cleaning ability. This is needed because
  * the SQL API does not allow multiple sinks in one table sink provider.
  */
+@Slf4j
 public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringCommitSink.class);
 
   /**
    * Config options.
@@ -114,7 +113,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     if (event.isFailed()
         || (event.getWriteStatuses() != null
         && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
-      LOG.warn("Receive abnormal ClusteringCommitEvent of instant {}, task ID is {},"
+      log.warn("Receive abnormal ClusteringCommitEvent of instant {}, task ID is {},"
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
@@ -176,7 +175,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
       doCommit(instant, clusteringPlan, events);
     } catch (Throwable throwable) {
       // make it fail-safe
-      LOG.error("Error while committing clustering instant: " + instant, throwable);
+      log.error("Error while committing clustering instant: " + instant, throwable);
     } finally {
       // reset the status
       reset(instant);
@@ -193,7 +192,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
 
     if (numErrorRecords > 0 && !this.conf.get(FlinkOptions.IGNORE_FAILED)) {
       // handle failure case
-      LOG.error("Got {} error records during clustering of instant {},\n"
+      log.error("Got {} error records during clustering of instant {},\n"
           + "option '{}' is configured as false,"
           + "rolls back the clustering", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
       ClusteringUtil.rollbackClustering(table, writeClient, instant);
@@ -222,7 +221,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
     if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
-      LOG.info("Running inline clean");
+      log.info("Running inline clean");
       this.writeClient.clean();
     }
   }

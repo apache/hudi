@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
+import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
@@ -71,6 +72,9 @@ public class HoodieFileWriterFactory {
     if (ORC.getFileExtension().equals(extension)) {
       return newOrcFileWriter(instantTime, path, config, schema, taskContextSupplier);
     }
+    if (LANCE.getFileExtension().equals(extension)) {
+      return newLanceFileWriter(instantTime, path, config, schema, taskContextSupplier);
+    }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
@@ -102,6 +106,12 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newOrcFileWriter(
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileWriter newLanceFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();

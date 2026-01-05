@@ -22,15 +22,17 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -83,9 +85,10 @@ public class HoodieSchema implements Serializable {
    * This provides compatibility with Avro's JsonProperties while maintaining Hudi's API.
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
+  public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
   private static final long serialVersionUID = 1L;
-  private final Schema avroSchema;
-  private final HoodieSchemaType type;
+  private Schema avroSchema;
+  private HoodieSchemaType type;
 
   /**
    * Creates a new HoodieSchema wrapping the given Avro schema.
@@ -777,6 +780,10 @@ public class HoodieSchema implements Serializable {
         .anyMatch(schema -> schema.getType() == Schema.Type.NULL);
   }
 
+  public boolean isSchemaNull() {
+    return type == null || type == HoodieSchemaType.NULL;
+  }
+
   /**
    * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
    *
@@ -893,7 +900,7 @@ public class HoodieSchema implements Serializable {
 
       try {
         Schema avroSchema = avroParser.parse(jsonSchema);
-        return new HoodieSchema(avroSchema);
+        return fromAvroSchema(avroSchema);
       } catch (Exception e) {
         throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
       }
@@ -911,7 +918,7 @@ public class HoodieSchema implements Serializable {
 
       try {
         Schema avroSchema = avroParser.parse(inputStream);
-        return new HoodieSchema(avroSchema);
+        return fromAvroSchema(avroSchema);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse schema from InputStream", e);
       } catch (Exception e) {
@@ -1334,5 +1341,18 @@ public class HoodieSchema implements Serializable {
   public enum TimePrecision {
     MILLIS,
     MICROS
+  }
+
+  private void writeObject(ObjectOutputStream oos) throws IOException {
+    oos.defaultWriteObject();
+    oos.writeObject(avroSchema.toString());
+  }
+
+  private void readObject(ObjectInputStream ois)
+      throws ClassNotFoundException, IOException {
+    ois.defaultReadObject();
+    String schemaString = (String) ois.readObject();
+    avroSchema = new Schema.Parser().parse(schemaString);
+    type = HoodieSchemaType.fromAvro(avroSchema);
   }
 }

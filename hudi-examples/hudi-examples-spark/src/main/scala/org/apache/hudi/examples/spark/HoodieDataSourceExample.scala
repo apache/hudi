@@ -34,9 +34,10 @@ import scala.collection.JavaConverters._
  * Simple examples of [[org.apache.hudi.DefaultSource]]
  *
  * To run this example, you should
+ *  <pre>
  *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
- *      2. For running in shell, using `spark-submit`
- *
+ *   2. For running in shell, using `spark-submit`
+ *  </pre>
  * Usage: HoodieWriteClientExample <tablePath> <tableName>.
  * <tablePath> and <tableName> describe root path of hudi and table name
  * for example, `HoodieDataSourceExample file:///tmp/hoodie/hudi_cow_table hudi_cow_table`

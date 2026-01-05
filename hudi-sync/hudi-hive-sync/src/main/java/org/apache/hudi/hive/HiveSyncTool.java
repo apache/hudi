@@ -67,7 +67,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getSchemaDifference;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
@@ -387,7 +386,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private void createOrReplaceTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized, HoodieSchema schema) {
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeInputFormat, config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT));
+    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeInputFormat);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
     Map<String, String> serdeProperties = getSerdeProperties(readAsOptimized);
@@ -418,7 +417,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private void syncFirstTime(String tableName, boolean useRealTimeInputFormat, boolean readAsOptimized, HoodieSchema schema) {
     LOG.info("Sync table {} for the first time.", tableName);
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat, config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT));
+    String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
     Map<String, String> serdeProperties = getSerdeProperties(readAsOptimized);

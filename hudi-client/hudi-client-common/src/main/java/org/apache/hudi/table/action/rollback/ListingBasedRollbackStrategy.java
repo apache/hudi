@@ -42,10 +42,10 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,9 +68,8 @@ import static org.apache.hudi.table.action.rollback.RollbackHelper.EMPTY_STRING;
 /**
  * Listing based rollback strategy to fetch list of {@link HoodieRollbackRequest}s.
  */
+@Slf4j
 public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecutor.RollbackStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ListingBasedRollbackStrategy.class);
 
   protected final HoodieTable<?, ?, ?, ?> table;
 
@@ -216,7 +215,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         return hoodieRollbackRequests.stream();
       }, numPartitions);
     } catch (Exception e) {
-      LOG.error("Generating rollback requests failed for " + instantToRollback.requestedTime(), e);
+      log.error("Generating rollback requests failed for " + instantToRollback.requestedTime(), e);
       throw new HoodieRollbackException("Generating rollback requests failed for " + instantToRollback.requestedTime(), e);
     }
   }
@@ -277,7 +276,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return hoodieRollbackRequests;
   }
 
-  @NotNull
+  @Nonnull
   private List<HoodieRollbackRequest> getHoodieRollbackRequests(String partitionPath, List<StoragePath> filesToDeletedStatus) {
     return filesToDeletedStatus.stream()
         .map(pathInfo -> {
@@ -297,7 +296,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                      String basefileExtension,
                                                      String partitionPath,
                                                      HoodieStorage storage) throws IOException {
-    LOG.info("Collecting files to be cleaned/rolledback up for path {} and commit {}", partitionPath, commit);
+    log.info("Collecting files to be cleaned/rolledback up for path {} and commit {}", partitionPath, commit);
     StoragePathFilter filter = (path) -> {
       if (path.toString().contains(basefileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
@@ -372,7 +371,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return fullPaths.stream().map(StoragePath::new);
   }
 
-  @NotNull
+  @Nonnull
   private static StoragePathFilter getPathFilter(String basefileExtension, String commit) {
     return (path) -> {
       if (path.toString().endsWith(basefileExtension)) {

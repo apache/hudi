@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -85,8 +84,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    // TODO boundary for now to revisit HoodieAvroUtils in later pr to use HoodieSchema
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieAvroUtils.getRecordKeySchema());
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(schema, schema);
     return new ClosableIterator<String>() {
       @Override

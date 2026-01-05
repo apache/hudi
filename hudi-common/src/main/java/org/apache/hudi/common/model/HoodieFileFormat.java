@@ -49,7 +49,11 @@ public enum HoodieFileFormat {
       + "way to store Hive data. It was designed to overcome limitations of the other Hive file "
       + "formats. Using ORC files improves performance when Hive is reading, writing, and "
       + "processing data.")
-  ORC(".orc");
+  ORC(".orc"),
+
+  @EnumFieldDescription("Lance is a modern columnar data format optimized for random access patterns "
+          + "and designed for ML and AI workloads")
+  LANCE(".lance");
 
   public static final Set<String> BASE_FILE_EXTENSIONS = Arrays.stream(HoodieFileFormat.values())
       .map(HoodieFileFormat::getFileExtension)

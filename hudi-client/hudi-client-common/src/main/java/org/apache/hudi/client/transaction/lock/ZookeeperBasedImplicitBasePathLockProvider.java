@@ -21,13 +21,12 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.common.util.StringUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -41,8 +40,8 @@ import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
  * table name (hoodie.table.name), with lock key set to a hard-coded value.
  */
 @NotThreadSafe
+@Slf4j
 public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBasedLockProvider {
-  private static final Logger LOG = LoggerFactory.getLogger(ZookeeperBasedImplicitBasePathLockProvider.class);
 
   public static final String LOCK_KEY = "lock_key";
   private final String hudiTableBasePath;
@@ -50,7 +49,7 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
   public static String getLockBasePath(String hudiTableBasePath) {
     // Ensure consistent format for S3 URI.
     String lockBasePath = "/tmp/" + HashID.generateXXHashAsString(s3aToS3(hudiTableBasePath), HashID.Size.BITS_64);
-    LOG.info("The Zookeeper lock key for the base path {} is {}", hudiTableBasePath, lockBasePath);
+    log.info("The Zookeeper lock key for the base path {} is {}", hudiTableBasePath, lockBasePath);
     return lockBasePath;
   }
 

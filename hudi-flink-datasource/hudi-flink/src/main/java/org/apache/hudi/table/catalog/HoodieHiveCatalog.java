@@ -46,6 +46,8 @@ import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -95,8 +97,6 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -125,9 +125,10 @@ import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_P
 /**
  * A catalog implementation for Hoodie based on MetaStore.
  */
+@Slf4j
 public class HoodieHiveCatalog extends AbstractCatalog {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveCatalog.class);
 
+  @Getter
   private final HiveConf hiveConf;
   private IMetaStoreClient client;
 
@@ -155,7 +156,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           "Embedded metastore is not allowed. Make sure you have set a valid value for "
               + HiveConf.ConfVars.METASTOREURIS);
     }
-    LOG.info("Created Hoodie Catalog '{}' in hms mode", catalogName);
+    log.info("Created Hoodie Catalog '{}' in hms mode", catalogName);
   }
 
   @Override
@@ -166,10 +167,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       } catch (Exception e) {
         throw new HoodieCatalogException("Failed to create hive metastore client", e);
       }
-      LOG.info("Connected to Hive metastore");
+      log.info("Connected to Hive metastore");
     }
     if (!databaseExists(getDefaultDatabase())) {
-      LOG.info("{} does not exist, will be created.", getDefaultDatabase());
+      log.info("{} does not exist, will be created.", getDefaultDatabase());
       CatalogDatabase database = new CatalogDatabaseImpl(Collections.emptyMap(), "default database");
       try {
         createDatabase(getDefaultDatabase(), database, true);
@@ -184,12 +185,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (client != null) {
       client.close();
       client = null;
-      LOG.info("Disconnect to hive metastore");
+      log.info("Disconnect to hive metastore");
     }
-  }
-
-  public HiveConf getHiveConf() {
-    return hiveConf;
   }
 
   // ------ databases ------
@@ -446,7 +443,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       }
       schema = builder.build();
     } else {
-      LOG.warn(" Table: {}, does not have a hoodie schema. Using hive table schema instead.", tablePath);
+      log.warn(" Table: {}, does not have a hoodie schema. Using hive table schema instead.", tablePath);
       schema = HiveSchemaUtils.convertTableSchema(hiveTable);
     }
     Map<String, String> options = supplementOptions(tablePath, parameters);
@@ -977,7 +974,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       //alter hive table
       client.alter_table(tablePath.getDatabaseName(), tablePath.getObjectName(), hiveTable);
     } catch (Exception e) {
-      LOG.error("Failed to alter table {}", tablePath.getObjectName(), e);
+      log.error("Failed to alter table {}", tablePath.getObjectName(), e);
       throw new HoodieCatalogException(String.format("Failed to alter table %s", tablePath.getObjectName()), e);
     }
   }

@@ -21,16 +21,23 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
 import java.util.HashMap;
 
 /**
  * Wraps stats about a single partition path.
  */
+@Getter
+@ToString(onlyExplicitlyIncluded = true)
 public class WorkloadStat implements Serializable {
 
+  @ToString.Include
   private long numInserts = 0L;
 
+  @ToString.Include
   private long numUpdates = 0L;
 
   private final HashMap<String, Pair<String, Long>> insertLocationToCount;
@@ -66,28 +73,5 @@ public class WorkloadStat implements Serializable {
         location.getFileId(),
         Pair.of(location.getInstantTime(), numUpdates + accNumUpdates));
     return this.numUpdates += numUpdates;
-  }
-
-  public long getNumUpdates() {
-    return numUpdates;
-  }
-
-  public long getNumInserts() {
-    return numInserts;
-  }
-
-  public HashMap<String, Pair<String, Long>> getUpdateLocationToCount() {
-    return updateLocationToCount;
-  }
-
-  public HashMap<String, Pair<String, Long>> getInsertLocationToCount() {
-    return insertLocationToCount;
-  }
-
-  @Override
-  public String toString() {
-    return "WorkloadStat {" + "numInserts=" + numInserts + ", "
-        + "numUpdates=" + numUpdates
-        + '}';
   }
 }

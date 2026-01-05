@@ -19,9 +19,9 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -76,8 +76,8 @@ public class TestHoodieFileGroupReaderBasedRecordReader {
         + "    {\"name\": \"field3\", \"type\": \"int\"}\n"
         + "  ]\n"
         + "}";
-    Schema tableSchema = new Schema.Parser().parse(schemaStr);
-    Schema requestedSchema = HoodieFileGroupReaderBasedRecordReader.createRequestedSchema(tableSchema, jobConf);
+    HoodieSchema tableSchema = HoodieSchema.parse(schemaStr);
+    HoodieSchema requestedSchema = HoodieFileGroupReaderBasedRecordReader.createRequestedSchema(tableSchema, jobConf);
     assertEquals(2, requestedSchema.getFields().size());
     assertEquals("field1", requestedSchema.getFields().get(0).name());
     assertEquals("field2", requestedSchema.getFields().get(1).name());

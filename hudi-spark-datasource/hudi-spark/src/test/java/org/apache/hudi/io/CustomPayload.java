@@ -22,20 +22,20 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
+@AllArgsConstructor
 public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
-  private final GenericRecord record;
-  private final Comparable orderingValue;
 
-  public CustomPayload(GenericRecord record, Comparable orderingValue) {
-    this.record = record;
-    this.orderingValue = orderingValue;
-  }
+  private final GenericRecord record;
+  @Getter
+  private final Comparable orderingValue;
 
   @Override
   public CustomPayload preCombine(CustomPayload other) {
@@ -70,10 +70,5 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     return Option.ofNullable(record);
-  }
-
-  @Override
-  public Comparable getOrderingValue() {
-    return orderingValue;
   }
 }

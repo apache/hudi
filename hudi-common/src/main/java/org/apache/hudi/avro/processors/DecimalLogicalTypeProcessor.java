@@ -18,11 +18,11 @@
 
 package org.apache.hudi.avro.processors;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -34,15 +34,15 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
   /**
    * Check if the given schema is a valid decimal type configuration.
    */
-  protected static boolean isValidDecimalTypeConfig(Schema schema) {
-    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
+  protected static boolean isValidDecimalTypeConfig(HoodieSchema schema) {
+    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.toAvroSchema().getLogicalType();
     // At the time when the schema is found not valid when it is parsed, the Avro Schema.parse will just silently
     // set the schema to be null instead of throwing exceptions. Correspondingly, we just check if it is null here.
     if (decimalType == null) {
       return false;
     }
     // Even though schema is validated at schema parsing phase, still validate here to be defensive.
-    decimalType.validate(schema);
+    decimalType.validate(schema.toAvroSchema());
     return true;
   }
 
@@ -53,27 +53,25 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
    * @return Pair object, with left as boolean indicating if the parsing was successful and right as the
    * BigDecimal value.
    */
-  protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
+  protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, HoodieSchema.Decimal schema) {
     BigDecimal bigDecimal = null;
-    LogicalTypes.Decimal logicalType = (LogicalTypes.Decimal) schema.getLogicalType();
     try {
       if (obj instanceof BigDecimal) {
-        bigDecimal = ((BigDecimal) obj).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+        bigDecimal = ((BigDecimal) obj).setScale(schema.getScale(), RoundingMode.UNNECESSARY);
       } else if (obj instanceof String) {
         // Case 2: Object is a number in String format.
         try {
           //encoded big decimal
-          bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj),
-              (LogicalTypes.Decimal) schema.getLogicalType());
+          bigDecimal = HoodieSchemaUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj), schema);
         } catch (IllegalArgumentException e) {
           //no-op
         }
       }
       // None fixed byte or fixed byte conversion failure would end up here.
       if (bigDecimal == null) {
-        bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+        bigDecimal = new BigDecimal(obj.toString(), new MathContext(schema.getPrecision(), RoundingMode.UNNECESSARY)).setScale(schema.getScale(), RoundingMode.UNNECESSARY);
       }
-    } catch (java.lang.NumberFormatException | ArithmeticException ignored) {
+    } catch (NumberFormatException | ArithmeticException ignored) {
       /* ignore */
     }
 
@@ -85,9 +83,8 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
     // Allowed: 123.45, 123, 0.12
     // Disallowed: 1234 (4 digit integer while the scale has already reserved 2 digit out of the 5 digit precision)
     //             123456, 0.12345
-    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
-    if (bigDecimal.scale() > decimalType.getScale()
-        || (bigDecimal.precision() - bigDecimal.scale()) > (decimalType.getPrecision() - decimalType.getScale())) {
+    if (bigDecimal.scale() > schema.getScale()
+        || (bigDecimal.precision() - bigDecimal.scale()) > (schema.getPrecision() - schema.getScale())) {
       // Correspond to case
       // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 5 as scale 2 without rounding.
       // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 3 as scale 2 without rounding

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.io;
 
+import org.apache.hudi.io.ByteBufferBackedInputStream;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -39,7 +41,6 @@ public class TestByteBufferBackedInputStream {
 
     // ByteBuffer ctor
     ByteBufferBackedInputStream first = new ByteBufferBackedInputStream(byteBuf);
-
     assertEquals(first.read(), 0xD);
     assertThrows(IllegalArgumentException.class, first::read);
     // Make sure that the original buffer stays intact

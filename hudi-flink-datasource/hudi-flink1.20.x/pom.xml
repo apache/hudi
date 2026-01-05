@@ -47,6 +47,12 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
         <!-- Hudi -->
         <dependency>
             <groupId>org.apache.hudi</groupId>

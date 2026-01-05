@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -25,6 +26,9 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -44,9 +48,8 @@ import java.util.stream.Collectors;
 /**
  * Configurations for the test.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TestConfigurations {
-  private TestConfigurations() {
-  }
 
   public static final DataType ROW_DATA_TYPE = DataTypes.ROW(
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
@@ -68,6 +71,17 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE_DECIMAL_ORDERING =
       (RowType) ROW_DATA_TYPE_DECIMAL_ORDERING.getLogicalType();
+
+  public static final ResolvedSchema TABLE_SCHEMA_WITH_META_COLUMNS =
+      SchemaBuilder.instance()
+          .metaField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.STRING(), true)
+          .metaField(HoodieRecord.OPERATION_METADATA_FIELD, DataTypes.STRING(), true)
+          .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
+          .build();
 
   public static final ResolvedSchema TABLE_SCHEMA = SchemaBuilder.instance()
       .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
@@ -171,6 +185,28 @@ public class TestConfigurations {
       .notNull();
 
   public static final RowType ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
+
+  public static final ResolvedSchema TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE  = SchemaBuilder.instance()
+      .fields(ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getFieldNames(), ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getChildren())
+      .build();
+
+  public static final DataType ROW_DATA_TYPE_WITH_ATOMIC_TYPES = DataTypes.ROW(
+          DataTypes.FIELD("f_bool", DataTypes.BOOLEAN()),
+          DataTypes.FIELD("f_tinyint", DataTypes.TINYINT()),
+          DataTypes.FIELD("f_smallint", DataTypes.SMALLINT()),
+          DataTypes.FIELD("f_int", DataTypes.INT()),
+          DataTypes.FIELD("f_bigint", DataTypes.BIGINT()),
+          DataTypes.FIELD("f_float", DataTypes.FLOAT()),
+          DataTypes.FIELD("f_double", DataTypes.DOUBLE()),
+          DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("f_time", DataTypes.TIME()),
+          DataTypes.FIELD("f_date", DataTypes.DATE()),
+          DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(38, 18)),
+          DataTypes.FIELD("f_str", DataTypes.STRING()),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_WITH_ATOMIC_TYPES = (RowType) ROW_DATA_TYPE_WITH_ATOMIC_TYPES.getLogicalType();
 
   public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
 
@@ -375,6 +411,7 @@ public class TestConfigurations {
    * Tool to build hoodie table DDL with schema {@link #TABLE_SCHEMA}.
    */
   public static class Sql {
+    @Getter
     private final Map<String, String> options;
     private final String tableName;
     private List<String> fields = new ArrayList<>();
@@ -428,10 +465,6 @@ public class TestConfigurations {
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
-    }
-
-    public Map<String, String> getOptions() {
-      return this.options;
     }
   }
 

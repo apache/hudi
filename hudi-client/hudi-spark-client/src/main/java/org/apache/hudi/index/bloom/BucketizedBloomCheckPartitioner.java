@@ -21,9 +21,10 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.NumericUtils;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.Partitioner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,15 +57,15 @@ import scala.Tuple2;
  *   2) Spread buckets across partitions evenly to achieve skew reduction
  * </pre>
  */
+@Slf4j
 public class BucketizedBloomCheckPartitioner extends Partitioner {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BucketizedBloomCheckPartitioner.class);
 
   private int partitions;
 
   /**
    * Stores the final mapping of a file group to a list of partitions for its keys.
    */
+  @Getter(AccessLevel.PACKAGE)
   private Map<HoodieFileGroupId, List<Integer>> fileGroupToPartitions;
 
   /**
@@ -110,7 +111,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // of buckets and assigns buckets in the same order as file groups. If we were to simply round robin, then buckets
     // for a file group is more or less guaranteed to be placed on different partitions all the time.
     int minBucketsPerPartition = Math.max((int) Math.floor((1.0 * totalBuckets) / partitions), 1);
-    LOG.info("TotalBuckets {}, min_buckets/partition {}, partitions {}", totalBuckets, minBucketsPerPartition, partitions);
+    log.info("TotalBuckets {}, min_buckets/partition {}, partitions {}", totalBuckets, minBucketsPerPartition, partitions);
     int[] bucketsFilled = new int[partitions];
     Map<HoodieFileGroupId, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
     int partitionIndex = 0;
@@ -147,13 +148,13 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
       }
     }
 
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Partitions assigned per file groups :" + fileGroupToPartitions);
+    if (log.isDebugEnabled()) {
+      log.debug("Partitions assigned per file groups :" + fileGroupToPartitions);
       StringBuilder str = new StringBuilder();
       for (int i = 0; i < bucketsFilled.length; i++) {
         str.append("p" + i + " : " + bucketsFilled[i] + ",");
       }
-      LOG.debug("Num buckets assigned per file group :" + str);
+      log.debug("Num buckets assigned per file group :" + str);
     }
   }
 
@@ -171,9 +172,5 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     final int idx = Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
-  }
-
-  Map<HoodieFileGroupId, List<Integer>> getFileGroupToPartitions() {
-    return fileGroupToPartitions;
   }
 }

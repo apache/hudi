@@ -41,12 +41,11 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -68,9 +67,8 @@ import static org.apache.hudi.testutils.HoodieClientTestBase.Function3;
 import static org.apache.hudi.testutils.HoodieClientTestBase.wrapRecordsGenFunctionForPreppedCalls;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Slf4j
 public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestCleanerInsertAndCleanByCommits.class);
   private static final int BATCH_SIZE = 100;
   private static final int PARALLELISM = 2;
 
@@ -241,7 +239,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       for (HoodieFileGroup fileGroup : fileGroups) {
         Set<String> commitTimes = new HashSet<>();
         fileGroup.getAllBaseFiles().forEach(value -> {
-          LOG.debug("Data File - {}", value);
+          log.debug("Data File - {}", value);
           commitTimes.add(value.getCommitTime());
         });
         if (isAsyncClean) {

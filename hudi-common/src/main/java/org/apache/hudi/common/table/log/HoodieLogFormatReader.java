@@ -19,12 +19,12 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +39,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final List<HoodieLogFile> logFiles;
   private HoodieLogFileReader currentReader;
   private final HoodieStorage storage;
-  private final Schema readerSchema;
+  private final HoodieSchema readerSchema;
   private final InternalSchema internalSchema;
   private final String recordKeyField;
   private final boolean enableInlineReading;
@@ -47,7 +47,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
-  HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,
+  HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, HoodieSchema readerSchema,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
                         String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;

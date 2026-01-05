@@ -19,8 +19,9 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
@@ -43,8 +44,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class HiveSchemaProvider extends SchemaProvider {
 
-  private final Schema sourceSchema;
-  private Schema targetSchema;
+  private final HoodieSchema sourceSchema;
+  private HoodieSchema targetSchema;
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -57,7 +58,7 @@ public class HiveSchemaProvider extends SchemaProvider {
     try {
       TableIdentifier sourceSchemaTable = new TableIdentifier(sourceSchemaTableName, scala.Option.apply(sourceSchemaDatabaseName));
       StructType sourceSchema = spark.sessionState().catalog().getTableMetadata(sourceSchemaTable).schema();
-      this.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+      this.sourceSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
           sourceSchema,
           sourceSchemaTableName,
           "hoodie." + sourceSchemaDatabaseName);
@@ -72,7 +73,7 @@ public class HiveSchemaProvider extends SchemaProvider {
       try {
         TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));
         StructType targetSchema = spark.sessionState().catalog().getTableMetadata(targetSchemaTable).schema();
-        this.targetSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+        this.targetSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
             targetSchema,
             targetSchemaTableName,
             "hoodie." + targetSchemaDatabaseName);
@@ -84,13 +85,13 @@ public class HiveSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return sourceSchema;
+    return sourceSchema.toAvroSchema();
   }
 
   @Override
   public Schema getTargetSchema() {
     if (targetSchema != null) {
-      return targetSchema;
+      return targetSchema.toAvroSchema();
     } else {
       return super.getTargetSchema();
     }

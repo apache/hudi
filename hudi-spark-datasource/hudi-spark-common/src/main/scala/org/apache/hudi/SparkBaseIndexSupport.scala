@@ -85,7 +85,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
                                       Seq[FileSlice])]): (Set[String], Set[String]) = {
     val (prunedPartitions, prunedFiles) = prunedPartitionsAndFileSlices.foldLeft((Set.empty[String], Set.empty[String])) {
       case ((partitionSet, fileSet), (partitionPathOpt, fileSlices)) =>
-        val updatedPartitionSet = partitionPathOpt.map(_.path).map(partitionSet + _).getOrElse(partitionSet)
+        val updatedPartitionSet = partitionPathOpt.map(_.getPath).map(partitionSet + _).getOrElse(partitionSet)
         val updatedFileSet = fileSlices.foldLeft(fileSet) { (fileAcc, fileSlice) =>
           val baseFile = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName)
           val logFiles = if (fileIndex.includeLogFiles) {

@@ -64,10 +64,10 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |  col_tinyint TINYINT,
            |  col_timestamp TIMESTAMP,
            |  col_date DATE,
+           |  col_float FLOAT,  -- Float is supported for secondary indexes
            |  col_double DOUBLE,  -- Double is supported for secondary indexes
            |  -- Unsupported types
            |  col_boolean BOOLEAN,
-           |  col_float FLOAT,
            |  col_decimal DECIMAL(10,2),
            |  col_binary BINARY,
            |  col_array ARRAY<STRING>,
@@ -126,7 +126,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |  cast('2023-01-02 10:00:00' as timestamp) as col_timestamp,
            |  cast('2023-01-02' as date) as col_date,
            |  false as col_boolean,
-           |  cast(2.2220 as float) as col_float,
+           |  cast(2.5 as float) as col_float,
            |  cast(2.222220 as double) as col_double,
            |  cast(22.20 as decimal(10,2)) as col_decimal,
            |  cast('binary2' as binary) as col_binary,
@@ -150,7 +150,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |  cast('2023-01-03 10:00:00' as timestamp) as col_timestamp,
            |  cast('2023-01-03' as date) as col_date,
            |  true as col_boolean,
-           |  cast(3.3 as float) as col_float,
+           |  cast(3.75 as float) as col_float,
            |  cast(3.33 as double) as col_double,
            |  cast(33.33 as decimal(10,2)) as col_decimal,
            |  cast('binary3' as binary) as col_binary,
@@ -171,10 +171,13 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
         ("col_tinyint", Seq(("'3'", 3), ("2L", 2), (1, 1), (1.0, 1), (if (gteqSpark4_0) "1.00" else "'1.00'", 1))),
         ("col_timestamp", Seq(("cast('2023-01-03 10:00:00' as timestamp)", 3))),
         ("col_date", Seq(("cast('2023-01-03' as date)", 3))),
+        // Note: Using exactly representable float values to avoid binary floating-point precision issues.
+        // Exactly representable in binary: 1.0 = 2^0, 2.5 = 2^1 + 2^-1, 3.75 = 2^1 + 2^0 + 2^-1 + 2^-2
+        // Avoid infinite/non-representable values like 2.222
+        ("col_float", Seq(("'1'", 1), ("1L", 1), (2.5, 2), (3.75, 3))),
         ("col_double", Seq(("'1'", 1), ("1L", 1), (2.222220, 2), ("'3.3300'", 3)))
       )
       val unsupportedColumns = Seq(
-        "col_float",
         "col_decimal",
         "col_boolean",
         "col_binary",
@@ -235,6 +238,9 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
         Seq("2000$2"),
         Seq("1000$1"),
         Seq("3000$3"),
+        Seq("1.0$1"),
+        Seq("2.5$2"),
+        Seq("3.75$3"),
         Seq("1.0$1"),
         Seq("2.22222$2"),
         Seq("3.33$3")

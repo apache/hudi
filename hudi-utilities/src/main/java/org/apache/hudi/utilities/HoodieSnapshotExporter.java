@@ -40,7 +40,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
@@ -162,7 +161,9 @@ public class HoodieSnapshotExporter {
         latestCommitTimestamp));
 
     final HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    final List<String> partitions = getPartitions(engineContext, cfg, new HoodieHadoopStorage(sourceFs));
+    final List<String> partitions = getPartitions(engineContext, cfg, HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(cfg.sourceBasePath)),
+        HadoopFSUtils.getStorageConf(sourceFs.getConf())));
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }

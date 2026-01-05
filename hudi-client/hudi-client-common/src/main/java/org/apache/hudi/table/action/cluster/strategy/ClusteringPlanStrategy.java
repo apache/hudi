@@ -36,8 +36,9 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -51,12 +52,13 @@ import java.util.stream.Stream;
 /**
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
  */
+@Getter(AccessLevel.PROTECTED)
+@Slf4j
 public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanStrategy.class);
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
 
-  protected final HoodieTable<T,I,K,O> hoodieTable;
+  protected final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
 
@@ -77,15 +79,15 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
     String logStr = "The clustering plan '{}' is deprecated. Please set the plan as '{}' and set '{}' as '{}' to achieve the same behaviour";
     if (sparkRecentDaysClassName.equals(className)) {
       config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
-      LOG.info(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
+      log.info(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
       return sparkSizeBasedClassName;
     } else if (sparkSelectedPartitionsClassName.equals(className)) {
       config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
-      LOG.info(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
+      log.info(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
       return sparkSizeBasedClassName;
     } else if (javaSelectedPartitionClassName.equals(className)) {
       config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
-      LOG.info(logStr, className, javaSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
+      log.info(logStr, className, javaSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
       return javaSizeBasedClassName;
     }
     return className;
@@ -171,17 +173,5 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
     Map<String, Double> metrics = new HashMap<>();
     FileSliceMetricUtils.addFileSliceCommonMetrics(fileSlices, metrics, getWriteConfig().getParquetMaxFileSize());
     return metrics;
-  }
-
-  protected HoodieTable<T, I, K, O> getHoodieTable() {
-    return this.hoodieTable;
-  }
-
-  protected HoodieEngineContext getEngineContext() {
-    return this.engineContext;
-  }
-
-  protected HoodieWriteConfig getWriteConfig() {
-    return this.writeConfig;
   }
 }

@@ -91,7 +91,7 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
   @Override
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
     Map<String, Integer> partitionSizes = new HashMap<>();
-    Map<String, List<FileSlice>> fileGroups = hoodieTable.getMetadataTable().getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX);
+    Map<String, List<FileSlice>> fileGroups = hoodieTable.getTableMetadata().getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX);
     fileGroups.keySet().forEach(k -> partitionSizes.put(k, fileGroups.get(k).size()));
     return Either.right(partitionSizes);
   }
@@ -131,7 +131,7 @@ public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobal
       // recordIndexInfo object only contains records that are present in record_index.
       assert partitionName[0] != null || keysToLookup.isEmpty();
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo =
-          hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.ofNullable(partitionName[0]))
+          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.ofNullable(partitionName[0]))
               .collectAsList().stream().collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();

@@ -18,22 +18,25 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.io.util.FileIOUtils;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.reflect.ReflectData;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -45,8 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -57,8 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
  */
+@Slf4j
 public class TestHoodieCommitMetadata {
-  private static final Logger LOGGER = LoggerFactory.getLogger(TestHoodieCommitMetadata.class);
 
   private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(
       "partitionToWriteStats", "compacted", "extraMetadata", "operationType");
@@ -206,50 +207,50 @@ public class TestHoodieCommitMetadata {
   @Test
   public void testSchemaEqualityForHoodieCommitMetaData() {
     // Step 1: Get the schema from the Avro auto-generated class
-    Schema avroSchema = org.apache.hudi.avro.model.HoodieCommitMetadata.SCHEMA$;
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(org.apache.hudi.avro.model.HoodieCommitMetadata.SCHEMA$);
 
     // Step 2: Convert the POJO class to an Avro schema
-    Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieCommitMetadata.class);
+    HoodieSchema pojoSchema = HoodieSchema.fromAvroSchema(ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieCommitMetadata.class));
 
     // Step 3: Validate schemas
     // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when coverted to avro object.
-    assertTrue(isSchemaCompatible(replaceEnumWithString(pojoSchema), avroSchema, false, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(replaceEnumWithString(pojoSchema), schema, false, false));
   }
 
   @Test
   public void testSchemaEqualityForHoodieReplaceCommitMetaData() {
     // Step 1: Get the schema from the Avro auto-generated class
-    Schema avroSchema = org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.SCHEMA$;
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.SCHEMA$);
 
     // Step 2: Convert the POJO class to an Avro schema
-    Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class);
+    HoodieSchema pojoSchema = HoodieSchema.fromAvroSchema(ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class));
 
     // Step 3: Validate schemas
-    // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when coverted to avro object.
-    assertTrue(isSchemaCompatible(replaceEnumWithString(pojoSchema), avroSchema, false, false));
+    // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when converted to avro object.
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(replaceEnumWithString(pojoSchema), schema, false, false));
   }
 
   // Utility method that search for all ENUM fields and replace it with STRING.
-  private Schema replaceEnumWithString(Schema schema) {
-    if (schema.getType() == Schema.Type.ENUM) {
-      return Schema.create(Schema.Type.STRING);
-    } else if (schema.getType() == Schema.Type.RECORD) {
-      List<Schema.Field> newFields = new ArrayList<>();
-      for (Schema.Field field : schema.getFields()) {
-        Schema newFieldSchema = replaceEnumWithString(field.schema());
-        newFields.add(createNewSchemaField(field.name(), newFieldSchema, field.doc(), field.defaultVal()));
+  private HoodieSchema replaceEnumWithString(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.ENUM) {
+      return HoodieSchema.create(HoodieSchemaType.STRING);
+    } else if (schema.getType() == HoodieSchemaType.RECORD) {
+      List<HoodieSchemaField> newFields = new ArrayList<>();
+      for (HoodieSchemaField field : schema.getFields()) {
+        HoodieSchema newFieldSchema = replaceEnumWithString(field.schema());
+        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.name(), newFieldSchema, field.doc().orElse(null), field.defaultVal().orElse(null)));
       }
-      return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, newFields);
-    } else if (schema.getType() == Schema.Type.UNION) {
-      List<Schema> types = new ArrayList<>();
-      for (Schema type : schema.getTypes()) {
+      return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, newFields);
+    } else if (schema.getType() == HoodieSchemaType.UNION) {
+      List<HoodieSchema> types = new ArrayList<>();
+      for (HoodieSchema type : schema.getTypes()) {
         types.add(replaceEnumWithString(type));
       }
-      return Schema.createUnion(types);
-    } else if (schema.getType() == Schema.Type.ARRAY) {
-      return Schema.createArray(replaceEnumWithString(schema.getElementType()));
-    } else if (schema.getType() == Schema.Type.MAP) {
-      return Schema.createMap(replaceEnumWithString(schema.getValueType()));
+      return HoodieSchema.createUnion(types);
+    } else if (schema.getType() == HoodieSchemaType.ARRAY) {
+      return HoodieSchema.createArray(replaceEnumWithString(schema.getElementType()));
+    } else if (schema.getType() == HoodieSchemaType.MAP) {
+      return HoodieSchema.createMap(replaceEnumWithString(schema.getValueType()));
     }
     return schema;
   }

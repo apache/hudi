@@ -41,10 +41,9 @@ import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.schema.SchemaProvider;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -52,9 +51,8 @@ import java.util.Collections;
  * Provides the Hudi Writer for the {@link org.apache.hudi.connect.transaction.TransactionParticipant}
  * to write the incoming records to Hudi.
  */
+@Slf4j
 public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectWriterProvider.class);
 
   private final KafkaConnectConfigs connectConfigs;
   private final HoodieEngineContext context;

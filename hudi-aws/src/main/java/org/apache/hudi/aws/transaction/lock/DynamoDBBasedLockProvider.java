@@ -46,8 +46,7 @@ public class DynamoDBBasedLockProvider extends DynamoDBBasedLockProviderBase {
 
   @Override
   public String getDynamoDBPartitionKey(LockConfiguration lockConfiguration) {
-    DynamoDbBasedLockConfig config = new DynamoDbBasedLockConfig.Builder()
-        .fromProperties(lockConfiguration.getConfig()).build();
+    DynamoDbBasedLockConfig config = DynamoDbBasedLockConfig.from(lockConfiguration.getConfig());
     ValidationUtils.checkArgument(
         config.contains(DYNAMODB_LOCK_PARTITION_KEY),
         "Config key is not found: " + DYNAMODB_LOCK_PARTITION_KEY.key());

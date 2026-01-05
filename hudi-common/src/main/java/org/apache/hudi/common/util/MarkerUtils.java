@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -52,7 +53,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.isHeartbeatExpired;
-import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
 /**
  * A utility class for marker related operations.
@@ -293,7 +294,7 @@ public class MarkerUtils {
    * Because we don't want to let pending compaction block common writer.
    *
    * @param instants
-   * @return
+   * @return {@link List} of candidate instant paths.
    */
   public static List<String> getCandidateInstants(HoodieActiveTimeline activeTimeline,
                                                   List<StoragePath> instants, String currentInstantTime,

@@ -39,6 +39,7 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
@@ -46,8 +47,6 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -78,13 +77,13 @@ import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_VAL_CNT;
  * including utilities for abstracting away heavy-lifting of interactions with the index,
  * providing convenient interfaces to read it, transpose, etc.
  */
+@Slf4j
 public class FileStatsIndex implements ColumnStatsIndex {
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(FileStatsIndex.class);
   private final RowType rowType;
   private final String basePath;
   private final Configuration conf;
-  private HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
 
   public FileStatsIndex(
@@ -103,28 +102,34 @@ public class FileStatsIndex implements ColumnStatsIndex {
     return HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
   }
 
+  @Override
+  public boolean isIndexAvailable() {
+    return getMetaClient().getTableConfig().isMetadataTableAvailable()
+        && getMetaClient().getTableConfig().getMetadataPartitions().contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+  }
+
   public HoodieTableMetadata getMetadataTable() {
     // initialize the metadata table lazily
     if (this.metadataTable == null) {
-      initMetaClient();
-      this.metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+      this.metadataTable = getMetaClient().getTableFormat().getMetadataFactory().create(
           HoodieFlinkEngineContext.DEFAULT,
-          metaClient.getStorage(),
+          getMetaClient().getStorage(),
           StreamerUtil.metadataConfig(conf),
           basePath);
     }
     return this.metadataTable;
   }
 
-  private void initMetaClient() {
+  protected HoodieTableMetaClient getMetaClient() {
     if (this.metaClient == null) {
       this.metaClient = StreamerUtil.createMetaClient(conf);
     }
+    return this.metaClient;
   }
 
   @Override
   public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
-    if (probe == null) {
+    if (probe == null || !isIndexAvailable()) {
       return null;
     }
     try {
@@ -132,7 +137,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
       final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
       return candidatesInMetadataTable(probe, statsRows, allFiles);
     } catch (Throwable t) {
-      LOG.error("Failed to read metadata index: {} for data skipping", getIndexPartitionName(), t);
+      log.error("Failed to read metadata index: {} for data skipping", getIndexPartitionName(), t);
       return null;
     }
   }
@@ -413,5 +418,17 @@ public class FileStatsIndex implements ColumnStatsIndex {
         }
     ).collect(Collectors.toList());
     return projectNestedColStatsColumns(rows);
+  }
+
+  @Override
+  public void close() {
+    if (this.metadataTable == null) {
+      return;
+    }
+    try {
+      this.metadataTable.close();
+    } catch (Exception e) {
+      throw new HoodieException("Exception happened during close metadata table.", e);
+    }
   }
 }

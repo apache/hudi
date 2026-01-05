@@ -19,21 +19,19 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 
 public class PartitionPathParser {
   public static final String DEPRECATED_DEFAULT_PARTITION_PATH = "default";
@@ -44,7 +42,7 @@ public class PartitionPathParser {
 
   public Object[] getPartitionFieldVals(Option<String[]> partitionFields,
                                         String partitionPath,
-                                        Schema writerSchema) {
+                                        HoodieSchema writerSchema) {
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
@@ -53,18 +51,17 @@ public class PartitionPathParser {
 
   private static Object[] getPartitionValues(String[] partitionFields,
                                              String partitionPath,
-                                             Schema schema) {
+                                             HoodieSchema schema) {
     String[] parts = partitionPath.split("/");
     int pathSegment = 0;
     boolean hasDateField = false;
     Object[] partitionValues = new Object[partitionFields.length];
     for (int i = 0; i < partitionFields.length; i++) {
       String partitionField = partitionFields[i];
-      Schema.Field field = schema.getField(partitionField);
+      Option<HoodieSchemaField> field = schema.getField(partitionField);
       // if the field is not present in the schema, we assume it is a string
-      Schema fieldSchema = field == null ? Schema.create(Schema.Type.STRING) : getNonNullTypeFromUnion(field.schema());
-      LogicalType logicalType = fieldSchema.getLogicalType();
-      if (isTimeBasedLogicalType(logicalType)) {
+      HoodieSchema fieldSchema = field.map(f -> f.schema().getNonNullType()).orElseGet(() -> HoodieSchema.create(HoodieSchemaType.STRING));
+      if (isTimeBasedType(fieldSchema.getType())) {
         if (hasDateField) {
           throw new IllegalArgumentException("Only one date field based partition is supported");
         }
@@ -83,13 +80,15 @@ public class PartitionPathParser {
   }
 
   @VisibleForTesting
-  static Object parseValue(String partitionValue, Schema fieldSchema) {
+  static Object parseValue(String partitionValue, HoodieSchema fieldSchema) {
     if (partitionValue.equals(DEFAULT_PARTITION_PATH) || partitionValue.equals(DEPRECATED_DEFAULT_PARTITION_PATH)) {
       return null;
     }
 
     switch (fieldSchema.getType()) {
       case STRING:
+      case ENUM:
+      case UUID:
         return PartitionPathEncodeUtils.unescapePathName(partitionValue);
       case INT:
         return Integer.parseInt(partitionValue);
@@ -103,11 +102,9 @@ public class PartitionPathParser {
         return Boolean.parseBoolean(partitionValue);
       case BYTES:
       case FIXED:
-        if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          return new java.math.BigDecimal(partitionValue);
-        } else {
-          return partitionValue.getBytes(StandardCharsets.UTF_8);
-        }
+        return partitionValue.getBytes(StandardCharsets.UTF_8);
+      case DECIMAL:
+        return new BigDecimal(partitionValue);
       default:
         throw new IllegalArgumentException("Unexpected type " + fieldSchema.getType());
     }
@@ -118,7 +115,7 @@ public class PartitionPathParser {
       String[] parts,
       int pathSegment,
       int numDateDirs,
-      Schema fieldSchema) {
+      HoodieSchema fieldSchema) {
     StringBuilder condensedPartitionValue = new StringBuilder();
     for (int i = 0; i < numDateDirs; i++) {
       String partitionValue = parts[pathSegment + i];
@@ -158,19 +155,13 @@ public class PartitionPathParser {
         throw new IllegalArgumentException(
             "Unknown date format for partition path: " + partitionPath);
     }
-    if (fieldSchema.getLogicalType() instanceof LogicalTypes.Date) {
+    if (fieldSchema.getType() == HoodieSchemaType.DATE) {
       return Date.valueOf(time.toLocalDate());
     }
     return Timestamp.from(time.toInstant(ZoneOffset.UTC));
   }
 
-  private static boolean isTimeBasedLogicalType(LogicalType logicalType) {
-    return logicalType instanceof LogicalTypes.Date
-        || logicalType instanceof LogicalTypes.TimestampMillis
-        || logicalType instanceof LogicalTypes.TimestampMicros
-        || logicalType instanceof LogicalTypes.TimeMillis
-        || logicalType instanceof LogicalTypes.TimeMicros
-        || logicalType instanceof LogicalTypes.LocalTimestampMicros
-        || logicalType instanceof LogicalTypes.LocalTimestampMillis;
+  private static boolean isTimeBasedType(HoodieSchemaType type) {
+    return type == HoodieSchemaType.DATE || type == HoodieSchemaType.TIMESTAMP || type == HoodieSchemaType.TIME;
   }
 }

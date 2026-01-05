@@ -68,7 +68,7 @@ class PartitionBucketIndexSupport(spark: SparkSession,
       Option.apply(prunedPartitionsAndFileSlices.flatMap(v => {
         val partitionPathOption = v._1
         val fileSlices = v._2
-        val numBuckets = calc.get.computeNumBuckets(partitionPathOption.getOrElse(new PartitionPath("", Array())).path)
+        val numBuckets = calc.get.computeNumBuckets(partitionPathOption.getOrElse(new PartitionPath("", Array())).getPath)
         val bucketIdsBitMapByFilter = filterQueriesWithBucketHashField(queryFilters, numBuckets)
         if (bucketIdsBitMapByFilter.isDefined && bucketIdsBitMapByFilter.get.cardinality() > 0) {
           val allFilesName = getPrunedPartitionsAndFileNames(fileIndex, Seq((partitionPathOption, fileSlices)))._2

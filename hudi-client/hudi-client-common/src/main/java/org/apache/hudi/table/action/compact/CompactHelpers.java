@@ -35,6 +35,9 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -47,12 +50,10 @@ import java.util.Set;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CompactHelpers<T, I, K, O> {
 
   private static final CompactHelpers SINGLETON_INSTANCE = new CompactHelpers();
-
-  private CompactHelpers() {
-  }
 
   public static CompactHelpers getInstance() {
     return SINGLETON_INSTANCE;

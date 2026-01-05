@@ -29,8 +29,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -49,8 +48,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
  * files are selective files that have a threshold size to avoid measurement errors. Optionally, we can
  * configure the expected metadata size of the file so that can be accounted for.
  */
+@Slf4j
 public class AverageRecordSizeEstimator extends RecordSizeEstimator {
-  private static final Logger LOG = LoggerFactory.getLogger(AverageRecordSizeEstimator.class);
   /*
    * NOTE: we only use commit instants to calculate average record size because replacecommit can be
    * created by clustering, which has smaller average record size, which affects assigning inserts and
@@ -95,12 +94,12 @@ public class AverageRecordSizeEstimator extends RecordSizeEstimator {
               return (long) Math.ceil((1.0 * totalBytesWritten.value()) / totalRecordsWritten.value());
             }
           } catch (IOException ignore) {
-            LOG.info("Failed to parse commit metadata", ignore);
+            log.info("Failed to parse commit metadata", ignore);
           }
         }
       }
     } catch (Throwable t) {
-      LOG.info("Got error while trying to compute average bytes/record but will proceed to use the computed value "
+      log.info("Got error while trying to compute average bytes/record but will proceed to use the computed value "
           + "or fallback to default config value ", t);
     }
     return hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();

@@ -27,10 +27,9 @@ import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -49,8 +48,8 @@ import java.util.stream.Collectors;
  * <p>Use {partition}_{fileId} as the bucket identifier, so that the bucket is unique
  * within and among partitions.
  */
+@Slf4j
 public class BucketAssigner implements AutoCloseable {
-  private static final Logger LOG = LoggerFactory.getLogger(BucketAssigner.class);
 
   /**
    * Task ID.
@@ -178,7 +177,7 @@ public class BucketAssigner implements AutoCloseable {
     }
     List<SmallFile> smallFiles = smallFilesOfThisTask(writeProfile.getSmallFiles(partitionPath));
     if (smallFiles.size() > 0) {
-      LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+      log.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
       SmallFileAssignState[] states = smallFiles.stream()
           .map(smallFile -> new SmallFileAssignState(config.getParquetMaxFileSize(), smallFile, writeProfile.getAvgSize()))
           .toArray(SmallFileAssignState[]::new);

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
@@ -100,6 +100,9 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.ORC) {
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       baseFileReaderBroadcast = jsc.broadcast(orcFileReader);
+    } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.LANCE) {
+      baseFileReaderBroadcast = jsc.broadcast(
+          sparkAdapter.createLanceFileReader(false, sqlConf, options, configs));
     } else {
       baseFileReaderBroadcast = jsc.broadcast(
           sparkAdapter.createParquetFileReader(false, sqlConf, options, configs));
@@ -143,7 +146,7 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
                                                           Configuration configs,
                                                           SparkAdapter sparkAdapter) {
     try {
-      StructType dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema());
+      StructType dataSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(resolver.getTableSchema());
       return sparkAdapter.createOrcFileReader(false, sqlConf, options, configs, dataSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to broadcast ORC file reader", e);

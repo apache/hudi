@@ -20,11 +20,11 @@ package org.apache.hudi.integ.testsuite.dag.nodes
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.client.WriteStatus
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 
-import org.apache.avro.Schema
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SaveMode
 import org.slf4j.LoggerFactory
@@ -58,7 +58,7 @@ class SparkDeleteNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
     val pathToRead = context.getWriterContext.getCfg.inputBasePath + "/" + batchIdRecords.getKey()
     val avroDf = context.getWriterContext.getSparkSession.read.format("avro").load(pathToRead)
     val genRecsRDD = HoodieSparkUtils.createRdd(avroDf, "testStructName", "testNamespace", false,
-      org.apache.hudi.common.util.Option.of(new Schema.Parser().parse(context.getWriterContext.getHoodieTestSuiteWriter.getSchema)))
+      org.apache.hudi.common.util.Option.of(HoodieSchema.parse(context.getWriterContext.getHoodieTestSuiteWriter.getSchema)))
 
     val inputDF = AvroConversionUtils.createDataFrame(genRecsRDD,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema,

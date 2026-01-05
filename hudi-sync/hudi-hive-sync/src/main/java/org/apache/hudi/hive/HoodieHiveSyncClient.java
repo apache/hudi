@@ -62,7 +62,6 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputForma
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getSerDeClassName;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -187,7 +186,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
       // check if any change to input/output format
       HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-      String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeFormat, config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT));
+      String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeFormat);
       if (!inputFormatClassName.equals(storageDescriptor.getInputFormat())) {
         shouldUpdate = true;
       }

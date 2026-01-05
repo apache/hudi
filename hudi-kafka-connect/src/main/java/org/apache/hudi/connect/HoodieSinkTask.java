@@ -27,6 +27,7 @@ import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -34,8 +35,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -47,10 +46,10 @@ import java.util.Map;
  * from the assigned partitions and commit the Kafka offsets.
  * Also, handles re-assignments of partitions.
  */
+@Slf4j
 public class HoodieSinkTask extends SinkTask {
 
   public static final String TASK_ID_CONFIG_NAME = "task.id";
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSinkTask.class);
 
   private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
   private final Map<TopicPartition, TransactionParticipant> transactionParticipants;
@@ -74,8 +73,7 @@ public class HoodieSinkTask extends SinkTask {
   public void start(Map<String, String> props) {
     connectorName = props.get("name");
     taskId = props.get(TASK_ID_CONFIG_NAME);
-    LOG.info(String.format("Starting Hudi Sink Task for %s connector %s with id %s with assignments %s",
-        props, connectorName, taskId, context.assignment()));
+    log.info("Starting Hudi Sink Task for {} connector {} with id {} with assignments {}", props, connectorName, taskId, context.assignment());
     try {
       connectConfigs = KafkaConnectConfigs.newBuilder().withProperties(props).build();
       controlKafkaClient = KafkaConnectControlAgent.createKafkaControlManager(
@@ -84,8 +82,8 @@ public class HoodieSinkTask extends SinkTask {
     } catch (ConfigException e) {
       throw new ConnectException("Couldn't start HdfsSinkConnector due to configuration error.", e);
     } catch (ConnectException e) {
-      LOG.error("Couldn't start HudiSinkConnector:", e);
-      LOG.info("Shutting down HudiSinkConnector.");
+      log.error("Couldn't start HudiSinkConnector:", e);
+      log.info("Shutting down HudiSinkConnector.");
       cleanup();
       // Always throw the original exception that prevent us from starting
       throw e;
@@ -147,13 +145,13 @@ public class HoodieSinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    LOG.info("New partitions added " + partitions.toString());
+    log.info("New partitions added {}", partitions.toString());
     bootstrap(partitions);
   }
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    LOG.info("Existing partitions deleted " + partitions.toString());
+    log.info("Existing partitions deleted {}", partitions.toString());
     // Close any writers we have. We may get assigned the same partitions and end up duplicating
     // some effort since we'll have to reprocess those messages. It may be possible to hold on to
     // the TopicPartitionWriter and continue to use the temp file, but this can get significantly
@@ -172,18 +170,17 @@ public class HoodieSinkTask extends SinkTask {
       TransactionParticipant worker = transactionParticipants.remove(partition);
       if (worker != null) {
         try {
-          LOG.debug("Closing data writer due to task start failure.");
+          log.debug("Closing data writer due to task start failure.");
           worker.stop();
         } catch (Throwable t) {
-          LOG.warn("Error closing and stopping data writer", t);
+          log.warn("Error closing and stopping data writer", t);
         }
       }
     }
   }
 
   private void bootstrap(Collection<TopicPartition> partitions) {
-    LOG.info(String.format("Bootstrap task for connector %s with id %s with assignments %s part %s",
-        connectorName, taskId, context.assignment(), partitions));
+    log.info("Bootstrap task for connector {} with id {} with assignments {} part {}", connectorName, taskId, context.assignment(), partitions);
     for (TopicPartition partition : partitions) {
       try {
         // If the partition is 0, instantiate the Leader
@@ -199,7 +196,7 @@ public class HoodieSinkTask extends SinkTask {
         transactionParticipants.put(partition, worker);
         worker.start();
       } catch (HoodieException exception) {
-        LOG.error(String.format("Fatal error initializing task %s for partition %s", taskId, partition.partition()), exception);
+        log.error("Fatal error initializing task {} for partition {}", taskId, partition.partition(), exception);
       }
     }
   }
@@ -209,10 +206,10 @@ public class HoodieSinkTask extends SinkTask {
       TransactionParticipant worker = transactionParticipants.get(partition);
       if (worker != null) {
         try {
-          LOG.debug("Closing data writer due to task start failure.");
+          log.debug("Closing data writer due to task start failure.");
           worker.stop();
         } catch (Throwable t) {
-          LOG.debug("Error closing and stopping data writer", t);
+          log.debug("Error closing and stopping data writer", t);
         }
       }
     }

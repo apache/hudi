@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.test.TestingServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -37,8 +38,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -46,9 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestLockManager extends HoodieCommonTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestLockManager.class);
 
   private static TestingServer server;
   private static final String ZK_BASE_PATH = "/hudi/test/lock";
@@ -60,7 +58,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
       try {
         server = new TestingServer();
       } catch (Exception e) {
-        LOG.error("Getting bind exception - retrying to allocate server");
+        log.error("Getting bind exception - retrying to allocate server");
         server = null;
       }
     }

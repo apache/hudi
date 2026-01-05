@@ -22,12 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,8 +36,6 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaFie
  * Appends source ordering field to both source and target schemas. This is required to assist in validation to differentiate records written in different batches.
  */
 public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
-
-  protected static Logger log = LoggerFactory.getLogger(WriterContext.class);
 
   public TestSuiteFileBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);

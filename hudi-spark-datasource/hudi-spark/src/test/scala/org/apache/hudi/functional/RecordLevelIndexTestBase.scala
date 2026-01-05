@@ -119,7 +119,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   }
 
   protected def getFileGroupCountForRecordIndex(writeConfig: HoodieWriteConfig): Long = {
-    Using(getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata]) { metadataTable =>
+    Using(getHoodieTable(metaClient, writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata]) { metadataTable =>
       metadataTable.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count
     }.get
   }

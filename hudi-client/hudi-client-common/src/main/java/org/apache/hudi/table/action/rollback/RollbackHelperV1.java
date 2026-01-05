@@ -52,8 +52,7 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CommonClientUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -74,9 +73,8 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
  * Contains common methods to be used across engines for rollback operation.
  * This class is meant to be used only for table version 6. Any table version 8 and above will be using {@link RollbackHelper}.
  */
+@Slf4j
 public class RollbackHelperV1 extends RollbackHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RollbackHelperV1.class);
 
   public RollbackHelperV1(HoodieTable table, HoodieWriteConfig config) {
     super(table, config);
@@ -160,7 +158,7 @@ public class RollbackHelperV1 extends RollbackHelper {
     try {
       logPaths = markerHandler.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
     } catch (FileNotFoundException fnf) {
-      LOG.info("Rollback never failed and hence no marker dir was found. Safely moving on");
+      log.info("Rollback never failed and hence no marker dir was found. Safely moving on");
     } catch (IOException e) {
       throw new HoodieRollbackException("Failed to list log file markers for previous attempt of rollback ", e);
     }

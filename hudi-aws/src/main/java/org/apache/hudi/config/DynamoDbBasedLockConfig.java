@@ -28,6 +28,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.regions.RegionMetadata;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
@@ -41,11 +43,8 @@ import software.amazon.awssdk.services.dynamodb.model.BillingMode;
     description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
         + " between writers to a Hudi table. Concurrency between Hudi's own table services "
         + " are auto managed internally.")
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class DynamoDbBasedLockConfig extends HoodieConfig {
-
-  public static DynamoDbBasedLockConfig.Builder newBuilder() {
-    return new DynamoDbBasedLockConfig.Builder();
-  }
 
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX + "dynamodb.";
@@ -132,31 +131,12 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Lock Acquire Wait Timeout in milliseconds");
 
-  /**
-   * Builder for {@link DynamoDbBasedLockConfig}.
-   */
-  public static class Builder {
-    private final DynamoDbBasedLockConfig lockConfig = new DynamoDbBasedLockConfig();
-
-    public DynamoDbBasedLockConfig build() {
-      lockConfig.setDefaults(DynamoDbBasedLockConfig.class.getName());
-      checkRequiredProps();
-      return lockConfig;
-    }
-
-    public Builder fromProperties(TypedProperties props) {
-      lockConfig.getProps().putAll(props);
-      return this;
-    }
-
-    private void checkRequiredProps() {
-      String errorMsg = "Config key is not found: ";
-      ValidationUtils.checkArgument(
-          lockConfig.contains(DYNAMODB_LOCK_TABLE_NAME.key()),
-          errorMsg + DYNAMODB_LOCK_TABLE_NAME.key());
-      ValidationUtils.checkArgument(
-          lockConfig.contains(DYNAMODB_LOCK_REGION.key()),
-          errorMsg + DYNAMODB_LOCK_REGION.key());
-    }
+  public static DynamoDbBasedLockConfig from(TypedProperties properties) {
+    DynamoDbBasedLockConfig config = new DynamoDbBasedLockConfig();
+    config.getProps().putAll(properties);
+    config.setDefaults(DynamoDbBasedLockConfig.class.getName());
+    ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_TABLE_NAME.key()), "Config key is not found: " + DYNAMODB_LOCK_TABLE_NAME.key());
+    ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_REGION.key()), "Config key is not found: " + DYNAMODB_LOCK_REGION.key());
+    return config;
   }
 }

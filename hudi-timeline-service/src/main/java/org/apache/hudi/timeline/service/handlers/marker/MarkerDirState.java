@@ -53,7 +53,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 

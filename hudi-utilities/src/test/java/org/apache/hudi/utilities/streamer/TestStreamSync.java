@@ -233,7 +233,7 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
   private SchemaProvider getSchemaProvider(String name, boolean isNullTargetSchema) {
     SchemaProvider schemaProvider = mock(SchemaProvider.class);
     HoodieSchema sourceSchema = mock(HoodieSchema.class);
-    HoodieSchema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(HoodieSchema.class);
+    HoodieSchema targetSchema = isNullTargetSchema ? HoodieSchema.NULL_SCHEMA : mock(HoodieSchema.class);
     when(schemaProvider.getSourceHoodieSchema()).thenReturn(sourceSchema);
     when(schemaProvider.getTargetHoodieSchema()).thenReturn(targetSchema);
     when(sourceSchema.toString()).thenReturn(name + "SourceSchema");

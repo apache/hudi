@@ -22,7 +22,7 @@ package org.apache.hudi.common.bootstrap.index;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 /**
- * No Op Bootstrap Index , which is a empty implement and not do anything.
+ * No Op Bootstrap Index is an empty implementation.
  */
 public class NoOpBootstrapIndex extends BootstrapIndex {
 

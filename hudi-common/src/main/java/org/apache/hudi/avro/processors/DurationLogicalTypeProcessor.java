@@ -19,9 +19,10 @@
 package org.apache.hudi.avro.processors;
 
 import org.apache.hudi.avro.AvroLogicalTypeEnum;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
 import org.apache.avro.LogicalType;
-import org.apache.avro.Schema;
 
 import java.util.List;
 
@@ -50,15 +51,15 @@ public abstract class DurationLogicalTypeProcessor extends JsonFieldProcessor {
   /**
    * Check if the given schema is a valid decimal type configuration.
    */
-  protected static boolean isValidDurationTypeConfig(Schema schema) {
+  protected static boolean isValidDurationTypeConfig(HoodieSchema schema) {
     String durationTypeName = AvroLogicalTypeEnum.DURATION.getValue();
-    LogicalType durationType = schema.getLogicalType();
-    String durationTypeProp = schema.getProp("logicalType");
+    LogicalType durationType = schema.toAvroSchema().getLogicalType();
+    String durationTypeProp = (String) schema.getProp("logicalType");
     // 1. The Avro type should be "Fixed".
     // 2. Fixed size must be of 12 bytes as it hold 3 integers.
     // 3. Logical type name should be "duration". The name might be stored in different places based on Avro version
     //    being used here.
-    return schema.getType().equals(Schema.Type.FIXED)
+    return schema.getType().equals(HoodieSchemaType.FIXED)
         && schema.getFixedSize() == Integer.BYTES * NUM_ELEMENTS_FOR_DURATION_TYPE
         && (durationType != null && durationType.getName().equals(durationTypeName)
         || durationTypeProp != null && durationTypeProp.equals(durationTypeName));

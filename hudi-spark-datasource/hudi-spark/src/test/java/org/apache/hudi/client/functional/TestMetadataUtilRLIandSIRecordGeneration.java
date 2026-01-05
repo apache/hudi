@@ -714,8 +714,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
       HoodieFileGroupReader reader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
-          .withDataSchema(writerSchemaOpt.get().toAvroSchema())
-          .withRequestedSchema(writerSchemaOpt.get().toAvroSchema())
+          .withDataSchema(writerSchemaOpt.get())
+          .withRequestedSchema(writerSchemaOpt.get())
           .withEmitDelete(true)
           .withPartitionPath(partition)
           .withLogFiles(logFilePaths.stream().map(HoodieLogFile::new))

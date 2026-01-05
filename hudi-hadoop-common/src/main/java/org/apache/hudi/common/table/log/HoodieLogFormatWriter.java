@@ -26,13 +26,13 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.ipc.RemoteException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,14 +42,15 @@ import java.util.List;
 /**
  * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct.
  */
+@Slf4j
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatWriter.class);
-
+  @Getter
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
 
   private final HoodieStorage storage;
+  @Getter
   private final long sizeThreshold;
   private final Integer bufferSize;
   private final Short replication;
@@ -76,15 +77,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     addShutDownHook();
   }
 
-  @Override
-  public HoodieLogFile getLogFile() {
-    return logFile;
-  }
-
-  public long getSizeThreshold() {
-    return sizeThreshold;
-  }
-
   /**
    * Overrides the output stream, only for test purpose.
    */
@@ -108,14 +100,14 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
           }
           // Block size does not matter as we will always manually auto-flush
           createNewFile();
-          LOG.info("Created a new log file: {}", logFile);
+          log.info("Created a new log file: {}", logFile);
           created = true;
         } catch (FileAlreadyExistsException ignored) {
-          LOG.info("File {} already exists, rolling over", logFile.getPath());
+          log.info("File {} already exists, rolling over", logFile.getPath());
           rollOver();
         } catch (RemoteException re) {
           if (re.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
-            LOG.warn("Another task executor writing to the same log file({}), rolling over", logFile);
+            log.warn("Another task executor writing to the same log file({}), rolling over", logFile);
             // Rollover the current log file (since cannot get a stream handle) and create new one
             rollOver();
           } else {
@@ -214,7 +206,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private void rolloverIfNeeded() throws IOException {
     // Roll over if the size is past the threshold
     if (getCurrentSize() > sizeThreshold) {
-      LOG.info("CurrentSize {} has reached threshold {}. Rolling over to the next version", getCurrentSize(), sizeThreshold);
+      log.info("CurrentSize {} has reached threshold {}. Rolling over to the next version", getCurrentSize(), sizeThreshold);
       rollOver();
     }
   }
@@ -280,10 +272,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     shutdownThread = new Thread() {
       public void run() {
         try {
-          LOG.info("running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
+          log.info("running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
           closeStream();
         } catch (Exception e) {
-          LOG.warn("unable to close output stream for log file: {}", logFile, e);
+          log.warn("unable to close output stream for log file: {}", logFile, e);
           // fail silently for any sort of exception
         }
       }

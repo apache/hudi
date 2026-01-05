@@ -37,9 +37,11 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -236,7 +238,14 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
                                                                                             SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
                                                                                             List<K> keySpace,
                                                                                             boolean preservesPartitioning) {
-    throw new UnsupportedOperationException("processKeyGroups() is not supported in FlinkEngineContext");
+    // Group values by key and apply the function to each group in parallel
+    List<Iterable<V>> groupedValues = data.groupByKey().values().collectAsList();
+    // Process each group in parallel using parallel stream
+    List<R> results = executeParallelStream(
+        groupedValues.parallelStream(),
+        stream -> stream.map(values -> throwingMapWrapper(processFunc).apply(new ClosableSortingIterator<>(values.iterator()))),
+        groupedValues.size()).flatMap(CollectionUtils::toStream).collect(Collectors.toList());
+    return HoodieListData.eager(results);
   }
 
   @Override

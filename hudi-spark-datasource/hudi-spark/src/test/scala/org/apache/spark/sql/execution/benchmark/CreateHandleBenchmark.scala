@@ -18,8 +18,7 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.AvroConversionUtils
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{AvroConversionUtils, HoodieSchemaConversionUtils, HoodieSparkUtils}
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
@@ -117,22 +116,22 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
   private def createHandleBenchmark: Unit = {
     val benchmark = new HoodieBenchmark(s"perf create handle for hoodie", 10000)
     val df = getDataFrame(100000)
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, "record", "my")
-    spark.sparkContext.getConf.registerAvroSchemas(avroSchema)
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema, "record", "my")
+    spark.sparkContext.getConf.registerAvroSchemas(schema.toAvroSchema)
 
     df.write.format("hudi").option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "key")
       .option(HoodieMetadataConfig.ENABLE.key(), "false")
       .option(HoodieTableConfig.NAME.key(), "tbl_name").mode(SaveMode.Overwrite).save("/tmp/sample_test_table")
     val dummpProps = new Properties()
     val avroRecords: java.util.List[HoodieRecord[_]] = HoodieSparkUtils.createRdd(df, "struct_name", "name_space",
-      Some(avroSchema)).mapPartitions(
+      Some(schema)).mapPartitions(
       it => {
         it.map { genRec =>
           val hoodieKey = new HoodieKey(genRec.get("key").toString, "")
           HoodieRecordUtils.createHoodieRecord(genRec, 0L, hoodieKey, classOf[DefaultHoodieRecordPayload].getName, false, null)
         }
       }).toJavaRDD().collect().stream().map[HoodieRecord[_]](hoodieRec => {
-      hoodieRec.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(avroSchema, dummpProps)
+      hoodieRec.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema.toAvroSchema, dummpProps)
       hoodieRec
     }).collect(Collectors.toList[HoodieRecord[_]])
 
@@ -140,7 +139,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
       val props = new Properties()
       props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "key")
       val writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/sample_test_table").withPreCombineField("col1")
-        .withSchema(avroSchema.toString)
+        .withSchema(schema.toString)
         .withMarkersType(MarkerType.DIRECT.name())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withProps(props).build()
@@ -151,7 +150,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
       val createHandle = new HoodieCreateHandle(writeConfig, "000000001", hoodieTable, "", UUID.randomUUID().toString, new LocalTaskContextSupplier())
       avroRecords.forEach(record => {
         val newAvroRec = new HoodieAvroIndexedRecord(record.getKey, record.getData.asInstanceOf[IndexedRecord], 0L, record.getOperation)
-        createHandle.write(newAvroRec, HoodieSchema.fromAvroSchema(avroSchema), writeConfig.getProps)
+        createHandle.write(newAvroRec, schema, writeConfig.getProps)
       })
       createHandle.close()
     }

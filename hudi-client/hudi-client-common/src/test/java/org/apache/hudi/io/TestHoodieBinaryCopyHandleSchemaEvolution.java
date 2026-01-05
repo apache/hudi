@@ -20,13 +20,14 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -184,17 +185,11 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
   /**
    * Testable subclass that exposes the getWriteSchema method for testing.
    */
+  @Setter
   private static class TestableHoodieBinaryCopyHandle {
+
     private Schema writeSchemaWithMetaFields;
     private boolean simulateFileReadError = false;
-    
-    public void setWriteSchemaWithMetaFields(Schema schema) {
-      this.writeSchemaWithMetaFields = schema;
-    }
-    
-    public void setSimulateFileReadError(boolean simulateError) {
-      this.simulateFileReadError = simulateError;
-    }
     
     public MessageType testGetWriteSchema(HoodieWriteConfig config, List<StoragePath> inputFiles, 
                                          Configuration conf, HoodieTable<?, ?, ?, ?> table) {

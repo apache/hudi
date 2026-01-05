@@ -29,8 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,9 +42,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+@Slf4j
 public class RollbackUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RollbackUtils.class);
 
   /**
    * Get Latest version of Rollback plan corresponding to a clean instant.
@@ -155,7 +153,7 @@ public class RollbackUtils {
           if (!getFilesToBeDeletedFunc.apply(rollbackRequest).isEmpty()) {
             // This should never happen based on the rollback request generation
             // As a defensive guard, adding the files to be deleted to a new rollback request
-            LOG.warn("Only one of the following should be non-empty. "
+            log.warn("Only one of the following should be non-empty. "
                     + "Adding the files to be deleted to a new rollback request. "
                     + "FilesToBeDeleted: {}, LogBlocksToBeDeleted: {}",
                 getFilesToBeDeletedFunc.apply(rollbackRequest),

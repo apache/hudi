@@ -25,7 +25,8 @@ import org.apache.flink.api.common.io.RichInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.table.data.RowData;
-import org.jetbrains.annotations.Nullable;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;

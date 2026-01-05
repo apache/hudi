@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
@@ -46,13 +45,13 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
   }
 
   @Override
-  public <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, Schema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+  public <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, HoodieSchema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
     if (newer.isDelete()) {
       return newer;
     }
     HoodieSchema oldSchema = recordContext.getSchemaFromBufferRecord(older);
     HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema.toAvroSchema(),
-        (BufferedRecord<InternalRow>) newer, newSchema.toAvroSchema(), readerSchema, (RecordContext<InternalRow>) recordContext);
+    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema,
+        (BufferedRecord<InternalRow>) newer, newSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
   }
 }

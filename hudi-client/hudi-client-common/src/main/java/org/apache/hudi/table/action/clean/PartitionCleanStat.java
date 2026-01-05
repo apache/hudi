@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.clean;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,8 +30,11 @@ class PartitionCleanStat implements Serializable {
   private final List<String> deletePathPatterns = new ArrayList<>();
   private final List<String> successDeleteFiles = new ArrayList<>();
   private final List<String> failedDeleteFiles = new ArrayList<>();
+  @Getter
   private final List<String> deleteBootstrapBasePathPatterns = new ArrayList<>();
+  @Getter
   private final List<String> successfulDeleteBootstrapBaseFiles = new ArrayList<>();
+  @Getter
   private final List<String> failedDeleteBootstrapBaseFiles = new ArrayList<>();
 
   PartitionCleanStat(String partitionPath) {
@@ -84,17 +89,5 @@ class PartitionCleanStat implements Serializable {
 
   public List<String> failedDeleteFiles() {
     return failedDeleteFiles;
-  }
-
-  public List<String> getDeleteBootstrapBasePathPatterns() {
-    return deleteBootstrapBasePathPatterns;
-  }
-
-  public List<String> getSuccessfulDeleteBootstrapBaseFiles() {
-    return successfulDeleteBootstrapBaseFiles;
-  }
-
-  public List<String> getFailedDeleteBootstrapBaseFiles() {
-    return failedDeleteBootstrapBaseFiles;
   }
 }

@@ -19,8 +19,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
-
 import java.io.IOException;
 
 /**

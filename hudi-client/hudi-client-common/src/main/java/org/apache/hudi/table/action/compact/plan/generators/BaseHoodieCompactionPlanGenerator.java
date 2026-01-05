@@ -43,8 +43,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -58,8 +57,8 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 
+@Slf4j
 public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieCompactionPlanGenerator.class);
 
   protected final HoodieTable<T, I, K, O> hoodieTable;
   protected final HoodieWriteConfig writeConfig;
@@ -93,7 +92,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     Pair<List<String>, List<String>> partitionPair = filterPartitionPathsByStrategy(partitionPaths);
     partitionPaths = partitionPair.getLeft();
 
-    LOG.info("Strategy: {} matched {} partition paths from all {} partitions for table {}",
+    log.info("Strategy: {} matched {} partition paths from all {} partitions for table {}",
         writeConfig.getCompactionStrategy().getClass().getSimpleName(), partitionPaths.size(), allPartitionSize,
         hoodieTable.getConfig().getBasePath());
     if (partitionPaths.isEmpty()) {
@@ -101,8 +100,8 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
       return null;
     }
     // avoid logging all partitions in table by default
-    LOG.info("Looking for files to compact in {} partitions for table {}", partitionPaths.size(), hoodieTable.getConfig().getBasePath());
-    LOG.debug("Partitions scanned for compaction: {} for table {}", partitionPaths, hoodieTable.getConfig().getBasePath());
+    log.info("Looking for files to compact in {} partitions for table {}", partitionPaths.size(), hoodieTable.getConfig().getBasePath());
+    log.debug("Partitions scanned for compaction: {} for table {}", partitionPaths, hoodieTable.getConfig().getBasePath());
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact: " + writeConfig.getTableName());
 
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) this.hoodieTable.getSliceView();
@@ -125,7 +124,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant().get().requestedTime();
-    LOG.info("Last completed instant time {} for table {}", lastCompletedInstantTime, hoodieTable.getConfig().getBasePath());
+    log.info("Last completed instant time {} for table {}", lastCompletedInstantTime, hoodieTable.getConfig().getBasePath());
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
@@ -160,17 +159,17 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
-    LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
-    LOG.info("Total number of log files {} for table {}", totalLogFiles.value(), hoodieTable.getConfig().getBasePath());
-    LOG.info("Total number of file slices {} for table {}", totalFileSlices.value(), hoodieTable.getConfig().getBasePath());
+    log.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
+    log.info("Total number of log files {} for table {}", totalLogFiles.value(), hoodieTable.getConfig().getBasePath());
+    log.info("Total number of file slices {} for table {}", totalFileSlices.value(), hoodieTable.getConfig().getBasePath());
 
     if (operations.isEmpty()) {
-      LOG.info("No operations are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
+      log.info("No operations are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
       return null;
     }
 
     if (totalLogFiles.value() <= 0) {
-      LOG.info("No log files are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
+      log.info("No log files are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
       return null;
     }
 
@@ -183,7 +182,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
             + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
-      LOG.info("After filtering, Nothing to compact for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
+      log.info("After filtering, Nothing to compact for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
     }
     compactionPlan.setExtraMetadata(getExtraMetadata(operations, compactionPlan));
     return compactionPlan;

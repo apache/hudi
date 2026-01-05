@@ -20,11 +20,11 @@ package org.apache.hudi.common.testutils.minicluster;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.BindException;
@@ -34,13 +34,13 @@ import java.util.Objects;
 /**
  * An HDFS minicluster service implementation.
  */
+@Slf4j
 public class HdfsTestService {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HdfsTestService.class);
 
   /**
    * Configuration settings.
    */
+  @Getter
   private final Configuration hadoopConf;
   private final java.nio.file.Path dfsBaseDirPath;
 
@@ -58,16 +58,12 @@ public class HdfsTestService {
     this.dfsBaseDirPath = Files.createTempDirectory("hdfs-test-service" + System.currentTimeMillis());
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf;
-  }
-
   public MiniDFSCluster start(boolean format) throws IOException {
     Objects.requireNonNull(dfsBaseDirPath, "dfs base dir must be set before starting cluster.");
 
     // If clean, then remove the work dir so we can start fresh.
     if (format) {
-      LOG.info("Cleaning HDFS cluster data at: " + dfsBaseDirPath + " and starting fresh.");
+      log.info("Cleaning HDFS cluster data at: " + dfsBaseDirPath + " and starting fresh.");
       Files.deleteIfExists(dfsBaseDirPath);
     }
 
@@ -86,7 +82,7 @@ public class HdfsTestService {
             datanodePort, datanodeIpcPort, datanodeHttpPort);
         miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
             .checkDataNodeHostConfig(true).build();
-        LOG.info("HDFS Minicluster service started.");
+        log.info("HDFS Minicluster service started.");
         return miniDfsCluster;
       } catch (BindException ex) {
         ++loop;
@@ -100,7 +96,7 @@ public class HdfsTestService {
   }
 
   public void stop() {
-    LOG.info("HDFS Minicluster service being shut down.");
+    log.info("HDFS Minicluster service being shut down.");
     if (miniDfsCluster != null) {
       miniDfsCluster.shutdown(true, true);
     }
@@ -118,7 +114,7 @@ public class HdfsTestService {
   private static Configuration configureDFSCluster(Configuration config, String dfsBaseDir, String bindIP,
       int namenodeRpcPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
-    LOG.info("HDFS force binding to ip: " + bindIP);
+    log.info("HDFS force binding to ip: " + bindIP);
     config.set(DFSConfigKeys.FS_DEFAULT_NAME_KEY, "hdfs://" + bindIP + ":" + namenodeRpcPort);
     config.set(DFSConfigKeys.DFS_DATANODE_ADDRESS_KEY, bindIP + ":" + datanodePort);
     config.set(DFSConfigKeys.DFS_DATANODE_IPC_ADDRESS_KEY, bindIP + ":" + datanodeIpcPort);

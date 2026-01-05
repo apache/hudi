@@ -79,6 +79,7 @@ import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -105,8 +106,6 @@ import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -132,6 +131,7 @@ import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
  */
+@Slf4j
 public class HoodieTableSource implements
     ScanTableSource,
     SupportsProjectionPushDown,
@@ -141,7 +141,6 @@ public class HoodieTableSource implements
     SupportsReadingMetadata,
     Serializable {
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
   private static final long NO_LIMIT_CONSTANT = -1;
 
@@ -355,7 +354,7 @@ public class HoodieTableSource implements
     }
     StringJoiner joiner = new StringJoiner(" and ");
     partitionFilters.forEach(f -> joiner.add(f.asSummaryString()));
-    LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner);
+    log.info("Partition pruner for hoodie source, condition is:\n" + joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
             this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
@@ -391,42 +390,45 @@ public class HoodieTableSource implements
   }
 
   private List<MergeOnReadInputSplit> buildInputSplits() {
-    FileIndex fileIndex = getOrBuildFileIndex();
-    List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
-    if (relPartitionPaths.isEmpty()) {
-      return Collections.emptyList();
-    }
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    if (pathInfoList.isEmpty()) {
-      throw new HoodieException("No files found for reading in user provided path.");
-    }
-
-    String latestCommit;
-    List<FileSlice> allFileSlices;
-    // file-slice after pending compaction-requested instant-time is also considered valid
-    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
-        metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
-      if (!fsView.getLastInstant().isPresent()) {
+    try (FileIndex fileIndex = getOrBuildFileIndex()) {
+      List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
+      if (relPartitionPaths.isEmpty()) {
         return Collections.emptyList();
       }
-      latestCommit = fsView.getLastInstant().get().requestedTime();
-      allFileSlices = relPartitionPaths.stream()
-          .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit)).collect(Collectors.toList());
-    }
-    List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
+      List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+      if (pathInfoList.isEmpty()) {
+        throw new HoodieException("No files found for reading in user provided path.");
+      }
 
-    final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
-    final AtomicInteger cnt = new AtomicInteger(0);
-    // generates one input split for each file group
-    return fileSlices.stream().map(fileSlice -> {
-      String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-      Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-          .sorted(HoodieLogFile.getLogFileComparator())
-          .map(logFile -> logFile.getPath().toString())
-          .collect(Collectors.toList()));
-      return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
-    }).collect(Collectors.toList());
+      String latestCommit;
+      List<FileSlice> allFileSlices;
+      // file-slice after pending compaction-requested instant-time is also considered valid
+      try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+          metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
+        if (!fsView.getLastInstant().isPresent()) {
+          return Collections.emptyList();
+        }
+        latestCommit = fsView.getLastInstant().get().requestedTime();
+        allFileSlices = relPartitionPaths.stream()
+            .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit)).collect(Collectors.toList());
+      }
+      List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
+
+      final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
+      final AtomicInteger cnt = new AtomicInteger(0);
+      // generates one input split for each file group
+      return fileSlices.stream().map(fileSlice -> {
+        String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+        Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+            .sorted(HoodieLogFile.getLogFileComparator())
+            .map(logFile -> logFile.getPath().toString())
+            .collect(Collectors.toList()));
+        return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
+            metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
+      }).collect(Collectors.toList());
+    } finally {
+      this.fileIndex = null;
+    }
   }
 
   public InputFormat<RowData, ?> getInputFormat() {
@@ -453,7 +455,7 @@ public class HoodieTableSource implements
             final List<MergeOnReadInputSplit> inputSplits = buildInputSplits();
             if (inputSplits.isEmpty()) {
               // When there is no input splits, just return an empty source.
-              LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
+              log.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableSchema,
@@ -477,7 +479,7 @@ public class HoodieTableSource implements
         final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, cdcEnabled);
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
-          LOG.info("No input splits generated for incremental read. Returning empty collection");
+          log.info("No input splits generated for incremental read. Returning empty collection");
           return InputFormats.EMPTY_INPUT_FORMAT;
         } else if (cdcEnabled) {
           return cdcInputFormat(rowType, requiredRowType, tableSchema, rowDataType, result.getInputSplits());
@@ -538,8 +540,7 @@ public class HoodieTableSource implements
         requiredRowType,
         tableSchema.toString(),
         HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
-        inputSplits,
-        conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
+        inputSplits);
     return CdcInputFormat.builder()
         .config(this.conf)
         .tableState(hoodieTableState)
@@ -564,8 +565,7 @@ public class HoodieTableSource implements
         requiredRowType,
         tableAvroSchema.toString(),
         HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
-        inputSplits,
-        conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
+        inputSplits);
     return MergeOnReadInputFormat.builder()
         .config(this.conf)
         .tableState(hoodieTableState)
@@ -654,7 +654,7 @@ public class HoodieTableSource implements
       return schemaResolver.getTableSchema();
     } catch (Throwable e) {
       // table exists but has no written data
-      LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);
+      log.warn("Unable to resolve schema from table, using schema from the DDL", e);
       return inferSchemaFromDdl();
     }
   }
@@ -683,19 +683,23 @@ public class HoodieTableSource implements
    */
   @VisibleForTesting
   public List<FileSlice> getBaseFileOnlyFileSlices() {
-    List<String> relPartitionPaths = getReadPartitions();
-    if (relPartitionPaths.isEmpty()) {
-      return Collections.emptyList();
-    }
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
+    try (FileIndex fileIndex = getOrBuildFileIndex())  {
+      List<String> relPartitionPaths = getReadPartitions();
+      if (relPartitionPaths.isEmpty()) {
+        return Collections.emptyList();
+      }
+      List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+      try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+          metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
 
-      List<FileSlice> allFileSlices = relPartitionPaths.stream()
-          .flatMap(par -> fsView.getLatestBaseFiles(par)
-              .map(baseFile -> new FileSlice(new HoodieFileGroupId(par, baseFile.getFileId()), baseFile.getCommitTime(), baseFile, Collections.emptyList())))
-          .collect(Collectors.toList());
-      return fileIndex.filterFileSlices(allFileSlices);
+        List<FileSlice> allFileSlices = relPartitionPaths.stream()
+            .flatMap(par -> fsView.getLatestBaseFiles(par)
+                .map(baseFile -> new FileSlice(new HoodieFileGroupId(par, baseFile.getFileId()), baseFile.getCommitTime(), baseFile, Collections.emptyList())))
+            .collect(Collectors.toList());
+        return fileIndex.filterFileSlices(allFileSlices);
+      }
+    } finally {
+      this.fileIndex = null;
     }
   }
 

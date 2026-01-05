@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{HoodieCLIUtils, HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -37,7 +37,6 @@ import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, P
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SaveMode}
@@ -208,25 +207,23 @@ class PartitionBucketIndexManager extends BaseProcedure
       }).toList
 
       // read all fileSlice para and get DF
-      var tableSchemaWithMetaFields: Schema = null
-      try tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new TableSchemaResolver(metaClient).getTableAvroSchema(false), false)
+      var tableSchemaWithMetaFields: HoodieSchema = null
+      try tableSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(new TableSchemaResolver(metaClient).getTableSchema(false), false)
       catch {
         case e: Exception =>
           throw new HoodieException("Failed to get table schema during clustering", e)
       }
 
       val readerContextFactory: ReaderContextFactory[InternalRow] = context.getReaderContextFactory(metaClient)
-      val sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields)
+      val sparkSchemaWithMetaFields = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchemaWithMetaFields)
 
       val res: RDD[InternalRow] = if (allFileSlice.isEmpty) {
         spark.sparkContext.emptyRDD
       } else {
-        val serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields)
         val latestInstantTime = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
 
         spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
           // instantiate other supporting cast
-          val readerSchema = serializableTableSchemaWithMetaFields.get
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
           // get this value from config, which has obtained this from write client
           val enableOptimizedLogBlockScan = config.getOrElse(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
@@ -237,8 +234,8 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(latestInstantTime.requestedTime())
             .withFileSlice(fileSlice)
-            .withDataSchema(readerSchema)
-            .withRequestedSchema(readerSchema)
+            .withDataSchema(tableSchemaWithMetaFields)
+            .withRequestedSchema(tableSchemaWithMetaFields)
             .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)

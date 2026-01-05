@@ -33,17 +33,16 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkWriteableTestTable.class);
 
   private HoodieSparkWriteableTestTable(String basePath, HoodieStorage storage,
                                         HoodieTableMetaClient metaClient, Schema schema,

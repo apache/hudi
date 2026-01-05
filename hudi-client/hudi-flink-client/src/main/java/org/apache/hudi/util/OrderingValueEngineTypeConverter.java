@@ -18,12 +18,14 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ArrayComparable;
+import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.types.DataType;
 
 import java.util.Collections;
@@ -36,7 +38,7 @@ import java.util.stream.Collectors;
  */
 public class OrderingValueEngineTypeConverter {
   private final List<Function<Comparable, Comparable>> converters;
-  private OrderingValueEngineTypeConverter(Schema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
+  private OrderingValueEngineTypeConverter(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
     this.converters = createConverters(dataSchema, orderingFieldNames, utcTimezone);
   }
 
@@ -46,16 +48,16 @@ public class OrderingValueEngineTypeConverter {
         : this.converters.get(0).apply(value);
   }
 
-  public static List<Function<Comparable, Comparable>> createConverters(Schema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
+  public static List<Function<Comparable, Comparable>> createConverters(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
     if (orderingFieldNames.isEmpty()) {
       return Collections.singletonList(Function.identity());
     }
     return orderingFieldNames.stream().map(f -> {
-      Option<Schema> fieldSchemaOpt = AvroSchemaUtils.findNestedFieldSchema(dataSchema, f, true);
+      Option<HoodieSchema> fieldSchemaOpt = HoodieSchemaUtils.getNestedField(dataSchema, f).map(Pair::getValue).map(HoodieSchemaField::getNonNullSchema);
       if (fieldSchemaOpt.isEmpty()) {
         return Function.<Comparable>identity();
       } else {
-        DataType fieldType =  AvroSchemaConverter.convertToDataType(fieldSchemaOpt.get());
+        DataType fieldType = HoodieSchemaConverter.convertToDataType(fieldSchemaOpt.get());
         return RowDataUtils.flinkValFunc(fieldType.getLogicalType(), utcTimezone);
       }
     }).collect(Collectors.toList());
@@ -66,7 +68,7 @@ public class OrderingValueEngineTypeConverter {
     return converters;
   }
 
-  public static OrderingValueEngineTypeConverter create(Schema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
+  public static OrderingValueEngineTypeConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
     return new OrderingValueEngineTypeConverter(dataSchema, orderingFieldNames, utcTimezone);
   }
 }

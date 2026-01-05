@@ -34,31 +34,4 @@ public class ParquetTableSchemaResolver extends TableSchemaResolver {
   public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
     return getAvroSchemaConverter(hadoopConf).convert(schema);
   }
-
-  private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    return getAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class)).convert(parquetSchema);
-  }
-
-  private MessageType convertAvroSchemaToParquet(Schema schema) {
-    return getAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class)).convert(schema);
-  }
-
-  /**
-   * Gets full schema (user + metadata) for a hoodie table in Parquet format.
-   *
-   * @return Parquet schema for the table
-   */
-  public MessageType getTableParquetSchema() throws Exception {
-    return convertAvroSchemaToParquet(getTableAvroSchema(true));
-  }
-
-  /**
-   * Gets users data schema for a hoodie table in Parquet format.
-   *
-   * @return Parquet schema for the table
-   */
-  public MessageType getTableParquetSchema(boolean includeMetadataField) throws Exception {
-    return convertAvroSchemaToParquet(getTableAvroSchema(includeMetadataField));
-  }
-
 }

@@ -25,9 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.stream.Stream;
@@ -35,10 +34,9 @@ import java.util.stream.Stream;
 /**
  * Async clustering client for Spark datasource.
  */
+@Slf4j
 public class HoodieSparkClusteringClient<T> extends
     BaseClusterer<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkClusteringClient.class);
 
   public HoodieSparkClusteringClient(
       BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> clusteringClient) {
@@ -47,7 +45,7 @@ public class HoodieSparkClusteringClient<T> extends
 
   @Override
   public void cluster(String instantTime) throws IOException {
-    LOG.info("Executing clustering instance {}", instantTime);
+    log.info("Executing clustering instance {}", instantTime);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) clusteringClient;
     Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instantTime).getCommitMetadata();
     Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
@@ -55,7 +53,7 @@ public class HoodieSparkClusteringClient<T> extends
     long errorsCount = hoodieWriteStatStream.mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount > 0) {
       // TODO: Should we treat this fatal and throw exception?
-      LOG.error("Clustering for instant ({}) failed with write errors", instantTime);
+      log.error("Clustering for instant ({}) failed with write errors", instantTime);
     }
   }
 }

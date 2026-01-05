@@ -46,6 +46,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -94,10 +95,10 @@ import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -236,7 +237,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, cleaningPolicy);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE, cleaningPolicy);
   }
 
   /**
@@ -249,7 +250,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
-    return getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
+    return getConfigBuilder(schemaStr, HoodieIndex.IndexType.SIMPLE, HoodieFailedWritesCleaningPolicy.EAGER);
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType) {
@@ -439,7 +440,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
             .withProperties(properties).build();
   }
 
-  @NotNull
+  @Nonnull
   protected Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
       StoragePath filePath = new StoragePath(basePath, status.getStat().getPath());
@@ -534,7 +535,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected HoodieWriteConfig getSmallInsertWriteConfigForMDT(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.SIMPLE, HoodieFailedWritesCleaningPolicy.EAGER);
     return builder.withCompactionConfig(
                     HoodieCompactionConfig.newBuilder()
                             .compactionSmallFileSize(smallFileSize)
@@ -573,7 +574,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         false,
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
         Option.ofNullable(writeClient.getConfig().getPayloadClass()),
-        new Schema.Parser().parse(writeClient.getConfig().getSchema()),
+        HoodieSchema.parse(writeClient.getConfig().getSchema()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
     HoodieData<HoodieRecord<IndexedRecord>> dedupedRecsRdd =

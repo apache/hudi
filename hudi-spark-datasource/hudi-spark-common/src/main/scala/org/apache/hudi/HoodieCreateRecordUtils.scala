@@ -115,8 +115,7 @@ object HoodieCreateRecordUtils {
     recordType match {
       case HoodieRecord.HoodieRecordType.AVRO =>
         // avroRecords will contain meta fields when isPrepped is true.
-        val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace,
-          Some(writerSchema.getAvroSchema))
+        val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace, Some(writerSchema))
 
         avroRecords.mapPartitions(it => {
           val sparkPartitionId = TaskContext.getPartitionId()
@@ -168,8 +167,8 @@ object HoodieCreateRecordUtils {
 
       case HoodieRecord.HoodieRecordType.SPARK =>
         val dataFileSchema = HoodieSchemaCache.intern(HoodieSchema.parse(dataFileSchemaStr))
-        val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema.getAvroSchema)
-        val writerStructType = HoodieInternalRowUtils.getCachedSchema(AvroSchemaCache.intern(writerSchema.getAvroSchema))
+        val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)
+        val writerStructType = HoodieInternalRowUtils.getCachedSchema(HoodieSchemaCache.intern(writerSchema))
         val sourceStructType = df.schema
 
         df.queryExecution.toRdd.mapPartitions { it =>

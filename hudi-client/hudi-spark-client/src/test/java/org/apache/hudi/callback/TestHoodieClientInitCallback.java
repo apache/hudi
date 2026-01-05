@@ -23,13 +23,13 @@ import org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback;
 import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -98,20 +98,20 @@ public class TestHoodieClientInitCallback {
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
     assertFalse(config.contains(CUSTOM_CONFIG_KEY1));
-    assertFalse(new Schema.Parser().parse(config.getWriteSchema())
+    assertFalse(HoodieSchema.parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
     try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
 
       HoodieWriteConfig updatedConfig = writeClient.getConfig();
       assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-      Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      HoodieSchema actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
 
       updatedConfig = writeClient.getTableServiceClient().getConfig();
       assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-      actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
     }
@@ -129,7 +129,7 @@ public class TestHoodieClientInitCallback {
             WRITE_SCHEMA_OVERRIDE.key(), TRIP_NESTED_EXAMPLE_SCHEMA))
         .build(false);
     assertFalse(config.contains(CUSTOM_CONFIG_KEY1));
-    assertFalse(new Schema.Parser().parse(config.getWriteSchema())
+    assertFalse(HoodieSchema.parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
     try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
@@ -137,14 +137,14 @@ public class TestHoodieClientInitCallback {
       HoodieWriteConfig updatedConfig = writeClient.getConfig();
       assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
       assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
-      Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      HoodieSchema actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
 
       updatedConfig = writeClient.getTableServiceClient().getConfig();
       assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
       assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
-      actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      actualSchema = HoodieSchema.parse(updatedConfig.getWriteSchema());
       assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
       assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
     }
@@ -217,7 +217,7 @@ public class TestHoodieClientInitCallback {
     @Override
     public void call(BaseHoodieClient hoodieClient) {
       HoodieWriteConfig config = hoodieClient.getConfig();
-      Schema schema = new Schema.Parser().parse(config.getWriteSchema());
+      HoodieSchema schema = HoodieSchema.parse(config.getWriteSchema());
       if (!schema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2)) {
         schema.addProp(CUSTOM_CONFIG_KEY2, CUSTOM_CONFIG_VALUE2);
       }

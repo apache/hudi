@@ -224,7 +224,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
-    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getSchemaForUpdates());
+    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getSchemaForUpdates().toAvroSchema());
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
@@ -358,7 +358,7 @@ public abstract class HoodieReaderContext<T> {
       return fileRecordIterator;
     }
     InstantRange instantRange = getInstantRange().get();
-    final Option<HoodieSchemaField> commitTimeFieldOpt = HoodieSchema.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final Option<HoodieSchemaField> commitTimeFieldOpt = getSchemaHandler().getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     final int commitTimePos = commitTimeFieldOpt.orElseThrow(() ->
         new HoodieSchemaException("Commit time metadata field '" + HoodieRecord.COMMIT_TIME_METADATA_FIELD + "' not found in required schema")).pos();
     java.util.function.Predicate<T> instantFilter =

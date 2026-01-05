@@ -45,10 +45,9 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -59,9 +58,8 @@ import static java.util.stream.Collectors.toList;
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
  */
+@Slf4j
 public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
@@ -122,7 +120,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // Compacting is very similar to applying updates to existing file
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    LOG.info("Compactor compacting {} fileGroups", operations.size());
+    log.info("Compactor compacting {} fileGroups", operations.size());
 
     String maxInstantTime = getMaxInstantTime(metaClient);
 

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -44,10 +45,11 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -56,14 +58,9 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.isStrictProjectionOf;
-
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class HoodieMergeHelper<T> extends BaseMergeHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHelper.class);
-
-  private HoodieMergeHelper() {
-  }
 
   private static class MergeHelperHolder {
     private static final HoodieMergeHelper HOODIE_MERGE_HELPER = new HoodieMergeHelper<>();
@@ -98,7 +95,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
     boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
-        && isStrictProjectionOf(readerSchema.toAvroSchema(), writerSchema.toAvroSchema());
+        && HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
     boolean shouldRewriteInWriterSchema = !isPureProjection

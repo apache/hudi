@@ -35,20 +35,19 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -70,9 +69,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@Slf4j
 class TestRollbackHelper extends HoodieRollbackTestBase {
   private static final int ROLLBACK_LOG_VERSION = 20;
-  private static final Logger LOG = LoggerFactory.getLogger(TestRollbackHelper.class);
 
   @Override
   @BeforeEach
@@ -343,7 +342,7 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
       fail("Should not have reached here");
     } catch (HoodieException e) {
       if (!(e.getCause() instanceof HoodieIOException)) {
-        LOG.error("Expected HoodieIOException to be thrown, but found " + e.getCause() + ", w/ error msg " + e.getCause().getMessage());
+        log.error("Expected HoodieIOException to be thrown, but found " + e.getCause() + ", w/ error msg " + e.getCause().getMessage());
       }
       assertTrue(e.getCause() instanceof HoodieIOException);
       assertTrue(e.getCause().getMessage().contains("Failing to delete file during rollback execution failed : " + expectedFileToFailOnDeletion));

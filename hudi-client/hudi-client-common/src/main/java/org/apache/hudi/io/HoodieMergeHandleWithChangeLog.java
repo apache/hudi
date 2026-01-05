@@ -32,10 +32,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -45,9 +44,8 @@ import java.util.Map;
 /**
  * A merge handle that supports logging change logs.
  */
+@Slf4j
 public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleWithChangeLog.class);
 
   protected final HoodieCDCLogger cdcLogger;
 
