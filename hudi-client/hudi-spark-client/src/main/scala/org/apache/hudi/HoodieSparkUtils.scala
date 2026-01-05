@@ -240,7 +240,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
-        shouldValidatePartitionColumns, tableConfig.get(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key).toBoolean)
+        shouldValidatePartitionColumns, tableConfig.getOrDefault(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key,
+          HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.defaultValue).toBoolean)
     }
   }
 
