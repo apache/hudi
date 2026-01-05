@@ -102,6 +102,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
           + " If disabled, archival will stop at the earliest savepoint commit.");
 
+  public static final ConfigProperty<Long> TIMELINE_ARCHIVED_FILE_MAX_SIZE = ConfigProperty
+        .key("hoodie.timeline.archived.file.max.size")
+        .defaultValue(1000L * 1024 * 1024)
+        .markAdvanced()
+        .withDocumentation("Max size (in bytes) for each archived timeline file.");
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
    */

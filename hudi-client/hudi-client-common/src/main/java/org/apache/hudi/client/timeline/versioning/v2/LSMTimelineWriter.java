@@ -71,8 +71,6 @@ public class LSMTimelineWriter {
 
   public static final int FILE_LAYER_ZERO = 0;
 
-  public static final long MAX_FILE_SIZE_IN_BYTES = 1024 * 1024 * 1000;
-
   private final HoodieWriteConfig config;
   private final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetaClient metaClient;
@@ -312,7 +310,7 @@ public class LSMTimelineWriter {
           //TODO boundary to revisit in later pr to use HoodieSchema directly
           HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(schema,
-                  schema)) {
+              schema)) {
             while (iterator.hasNext()) {
               IndexedRecord record = iterator.next();
               writer.write(record.get(0).toString(), new HoodieAvroIndexedRecord(record), schema);
@@ -382,16 +380,32 @@ public class LSMTimelineWriter {
   private List<String> getCandidateFiles(List<HoodieLSMTimelineManifest.LSMFileEntry> files, int filesBatch) throws IOException {
     List<String> candidates = new ArrayList<>();
     long totalFileLen = 0L;
-    for (int i = 0; i < filesBatch; i++) {
+    // try to find at most one group of files to compact
+    // 1. files num in the group should be at least 2
+    // 2. files num in the group should not exceed the batch size
+    // 3. the group's total file size should not exceed the threshold
+    // 4. all files in the group should be consecutive in instant order
+    for (int i = 0; i < files.size(); i++) {
       HoodieLSMTimelineManifest.LSMFileEntry fileEntry = files.get(i);
-      if (totalFileLen > MAX_FILE_SIZE_IN_BYTES) {
-        return candidates;
-      }
       // we may also need to consider a single file that is very close to the threshold in size,
       // to avoid the write amplification,
       // for e.g, two 800MB files compact into a 1.6GB file.
       totalFileLen += fileEntry.getFileLen();
       candidates.add(fileEntry.getFileName());
+      if (candidates.size() >= filesBatch) {
+        // stop once we reach the batch size
+        break;
+      }
+      if (totalFileLen > writeConfig.getTimelineArchivedFileMaxSize()) {
+        if (candidates.size() < 2) {
+          // reset if we have not reached the minimum files num to compact
+          totalFileLen = 0L;
+          candidates.clear();
+        } else {
+          // stop once we reach the file size threshold
+          break;
+        }
+      }
     }
     return candidates;
   }
