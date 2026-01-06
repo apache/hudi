@@ -56,21 +56,21 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
   private static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
 
   @Override
-  public String loadInstants(HoodieTableMetaClient metaClient,
-                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                             HoodieArchivedTimeline.LoadMode loadMode,
-                             Function<GenericRecord, Boolean> commitsFilter,
-                             BiConsumer<String, GenericRecord> recordConsumer) {
+  public Option<String> loadInstants(HoodieTableMetaClient metaClient,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     HoodieArchivedTimeline.LoadMode loadMode,
+                                     Function<GenericRecord, Boolean> commitsFilter,
+                                     BiConsumer<String, GenericRecord> recordConsumer) {
     return loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
-  public String loadInstants(HoodieTableMetaClient metaClient,
-                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                             HoodieArchivedTimeline.LoadMode loadMode,
-                             Function<GenericRecord, Boolean> commitsFilter,
-                             BiConsumer<String, GenericRecord> recordConsumer,
-                             Option<Integer> limit) {
+  public Option<String> loadInstants(HoodieTableMetaClient metaClient,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     HoodieArchivedTimeline.LoadMode loadMode,
+                                     Function<GenericRecord, Boolean> commitsFilter,
+                                     BiConsumer<String, GenericRecord> recordConsumer,
+                                     Option<Integer> limit) {
     try {
       // List all files
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
@@ -95,7 +95,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       Stream<String> fileStream = hasLimit
           ? filteredFiles.stream()
           : filteredFiles.parallelStream();
-      return fileStream.map(fileName -> {
+      return Option.fromJavaOptional(fileStream.map(fileName -> {
         if (hasLimit && loadedCount.get() >= limit.get()) {
           return null;
         }
@@ -123,7 +123,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
           throw new HoodieIOException("Error open file reader for path: "
               + new StoragePath(metaClient.getArchivePath(), fileName));
         }
-      }).filter(Objects::nonNull).reduce(InstantComparison::minTimestamp).orElse(null);
+      }).filter(Objects::nonNull).reduce(InstantComparison::minTimestamp));
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);

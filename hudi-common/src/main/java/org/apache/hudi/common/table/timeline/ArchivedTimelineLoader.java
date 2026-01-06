@@ -41,9 +41,9 @@ public interface ArchivedTimelineLoader extends Serializable {
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
    *
-   * @return The last instant time loaded, null if no instant is loaded.
+   * @return The last instant time loaded or empty if no instant is loaded.
    */
-  String loadInstants(
+  Option<String> loadInstants(
       HoodieTableMetaClient metaClient,
       @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,
@@ -61,9 +61,9 @@ public interface ArchivedTimelineLoader extends Serializable {
    * @param recordConsumer Consumer of the instant record payload.
    * @param limit          Optional maximum number of instants to load. Empty for no limit.
    *
-   * @return the last instant time loaded, null if no instant is loaded.
+   * @return the last instant time loaded or empty if no instant is loaded.
    */
-  default String loadInstants(
+  default Option<String> loadInstants(
       HoodieTableMetaClient metaClient,
       @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,

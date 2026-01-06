@@ -70,31 +70,31 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
   private static final Logger LOG = LoggerFactory.getLogger(ArchivedTimelineLoaderV1.class);
 
   @Override
-  public String loadInstants(HoodieTableMetaClient metaClient,
-                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                           HoodieArchivedTimeline.LoadMode loadMode,
-                           Function<GenericRecord, Boolean> commitsFilter,
-                           BiConsumer<String, GenericRecord> recordConsumer) {
+  public Option<String> loadInstants(HoodieTableMetaClient metaClient,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     HoodieArchivedTimeline.LoadMode loadMode,
+                                     Function<GenericRecord, Boolean> commitsFilter,
+                                     BiConsumer<String, GenericRecord> recordConsumer) {
     return loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
-  public String loadInstants(HoodieTableMetaClient metaClient,
-                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                             HoodieArchivedTimeline.LoadMode loadMode,
-                             Function<GenericRecord, Boolean> commitsFilter,
-                             BiConsumer<String, GenericRecord> recordConsumer,
-                             Option<Integer> limit) {
+  public Option<String> loadInstants(HoodieTableMetaClient metaClient,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     HoodieArchivedTimeline.LoadMode loadMode,
+                                     Function<GenericRecord, Boolean> commitsFilter,
+                                     BiConsumer<String, GenericRecord> recordConsumer,
+                                     Option<Integer> limit) {
     return loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
   }
 
-  public String loadInstants(HoodieTableMetaClient metaClient,
-                             @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                             Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,
-                             HoodieArchivedTimeline.LoadMode loadMode,
-                             Function<GenericRecord, Boolean> commitsFilter,
-                             BiConsumer<String, GenericRecord> recordConsumer,
-                             Option<Integer> limit) {
+  public Option<String> loadInstants(HoodieTableMetaClient metaClient,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,
+                                     HoodieArchivedTimeline.LoadMode loadMode,
+                                     Function<GenericRecord, Boolean> commitsFilter,
+                                     BiConsumer<String, GenericRecord> recordConsumer,
+                                     Option<Integer> limit) {
     Set<String> instantsInRange = new HashSet<>();
     AtomicInteger loadedCount = new AtomicInteger(0);
     boolean hasLimit = limit.isPresent() && limit.get() > 0;
@@ -186,7 +186,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
     }
-    return lastInstantTime.get();
+    return Option.ofNullable(lastInstantTime.get());
   }
 
   /**
