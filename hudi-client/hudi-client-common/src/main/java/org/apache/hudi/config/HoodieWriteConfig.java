@@ -1739,8 +1739,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.TIMELINE_COMPACTION_BATCH_SIZE);
   }
 
-  public long getTimelineArchivedFileMaxSize() {
-    return getLong(HoodieArchivalConfig.TIMELINE_ARCHIVED_FILE_MAX_SIZE);
+  public long getTimelineCompactionTargetFileMaxBytes() {
+    return getLong(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES);
   }
 
   public int getParquetSmallFileLimit() {

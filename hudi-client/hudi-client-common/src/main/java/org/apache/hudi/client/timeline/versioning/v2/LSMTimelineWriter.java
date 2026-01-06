@@ -396,7 +396,7 @@ public class LSMTimelineWriter {
         // stop once we reach the batch size
         break;
       }
-      if (totalFileLen > writeConfig.getTimelineArchivedFileMaxSize()) {
+      if (totalFileLen > writeConfig.getTimelineCompactionTargetFileMaxBytes()) {
         if (candidates.size() < 2) {
           // reset if we have not reached the minimum files num to compact
           totalFileLen = 0L;

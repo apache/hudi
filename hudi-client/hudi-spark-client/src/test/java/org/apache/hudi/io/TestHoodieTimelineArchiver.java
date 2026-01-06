@@ -728,7 +728,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   @Test
   public void testCompactionWithLargeL0File() throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, 3);
-    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_ARCHIVED_FILE_MAX_SIZE.key(), "3200");
+    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES.key(), "3200");
     // do ingestion and trigger archive actions here.
     for (int i = 1; i < 19; i++) {
       testTable.doWriteOperation(
