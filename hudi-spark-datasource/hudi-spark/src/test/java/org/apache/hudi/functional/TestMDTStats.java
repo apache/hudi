@@ -171,6 +171,9 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     // Add commit to timeline using HoodieTestTable
     testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
     LOG.info("Created commit metadata with {} files per partition", filesPerPartition);
+    // Create actual empty parquet files on disk so filesystem listing finds them
+    createEmptyParquetFiles(dataMetaClient, commitMetadata);
+    LOG.info("Created {} empty parquet files on disk", numFiles);
 
     HoodieWriteConfig mdtConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
         dataConfig,
@@ -564,6 +567,36 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     tableDF.show(10, false);
 
     return tableName;
+  }
+
+  /**
+   * Creates empty parquet files on disk for all files in the commit metadata.
+   * This ensures that filesystem listing will find these files even if metadata table
+   * lookup falls back to filesystem.
+   * 
+   * @param metaClient The meta client for the data table
+   * @param commitMetadata The commit metadata containing file information
+   */
+  private void createEmptyParquetFiles(HoodieTableMetaClient metaClient, 
+                                       HoodieCommitMetadata commitMetadata) throws Exception {
+    org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
+    StoragePath basePath = metaClient.getBasePath();
+    
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : 
+        commitMetadata.getPartitionToWriteStats().entrySet()) {
+      String partitionPath = entry.getKey();
+      StoragePath partitionDir = new StoragePath(basePath, partitionPath);
+      if (!storage.exists(partitionDir)) {
+        storage.createDirectory(partitionDir);
+      }
+      for (HoodieWriteStat stat : entry.getValue()) {
+        String relativePath = stat.getPath();
+        StoragePath filePath = new StoragePath(basePath, relativePath);        
+        if (!storage.exists(filePath)) {
+          storage.create(filePath).close();
+        }
+      }
+    }
   }
 
   /**
