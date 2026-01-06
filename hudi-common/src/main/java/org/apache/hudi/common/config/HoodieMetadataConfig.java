@@ -219,7 +219,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
+      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed. "
+          + "For nested fields within ARRAY types, use: field.list.element (Avro convention) or field.array (Spark convention) "
+          + "(e.g., items.list.element, items.array, items.list.element.price, or items.array.price). "
+          + "For nested fields within MAP types, use: field.key_value.key for keys or field.key_value.value for values "
+          + "(e.g., metadata.key_value.key, metadata.key_value.value, or metadata.key_value.value.nested_field).");
 
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_MAX_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.max.columns.to.index")

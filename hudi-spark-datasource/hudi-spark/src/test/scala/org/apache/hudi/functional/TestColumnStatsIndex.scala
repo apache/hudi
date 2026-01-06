@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -50,7 +50,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Great
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
@@ -257,6 +257,221 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue", "`c9.c9_1_car_brand_maxValue`", "`c9.c9_1_car_brand_minValue`",
         "`c10.c10_1.c10_2_1_nested_lvl2_field2_maxValue`","`c10.c10_1.c10_2_1_nested_lvl2_field2_minValue`")),
       addNestedFiled = true)
+  }
+
+  /**
+   * Tests data skipping with nested MAP and ARRAY fields in column stats index.
+   * This test verifies that queries can efficiently skip files based on nested field values
+   * within MAP and ARRAY types using the new Parquet-style accessor patterns.
+   */
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  def testMetadataColumnStatsIndexNestedMapArrayDataSkipping(testCase: ColumnStatsTestCase): Unit = {
+    // Define nested struct schema
+    val nestedSchema = new StructType()
+      .add("nested_int", IntegerType, false)
+      .add("level", StringType, true)
+
+    // Define full schema with MAP and ARRAY of nested structs
+    val testSchema = new StructType()
+      .add("record_key", StringType, false)
+      .add("partition_col", IntegerType, false)
+      .add("nullable_map_field", MapType(StringType, nestedSchema), true)
+      .add("array_field", ArrayType(nestedSchema), false)
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key ->
+        "record_key,partition_col,nullable_map_field.key_value.value.nested_int,nullable_map_field.key_value.value.level,array_field.array.nested_int,array_field.array.level"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_nested_skipping",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "record_key",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "record_key",
+      PARTITIONPATH_FIELD.key -> "partition_col",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key -> "10240",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
+    ) ++ metadataOpts
+
+    // Batch 1 - Low Range Values (should be skipped when querying for nested_int > 200)
+    val batch1Data = Seq(
+      Row("key_001", 1,
+        Map("item1" -> Row(50, "low"), "item2" -> Row(75, "low")),
+        Array(Row(60, "low"), Row(80, "low"))),
+      Row("key_002", 1,
+        Map("item1" -> Row(30, "low"), "item2" -> Row(90, "low")),
+        Array(Row(40, "low"), Row(70, "low")))
+    )
+
+    // Batch 2 - High Range MAP and ARRAY (should be read when querying for nested_int > 200)
+    val batch2Data = Seq(
+      Row("key_003", 1,
+        Map("item1" -> Row(250, "high"), "item2" -> Row(275, "high")),
+        Array(Row(260, "high"), Row(280, "high"))),
+      Row("key_004", 1,
+        Map("item1" -> Row(230, "high"), "item2" -> Row(290, "high")),
+        Array(Row(240, "high"), Row(270, "high")))
+    )
+
+    // Batch 3 - Mixed Range (low MAP, high ARRAY)
+    val batch3Data = Seq(
+      Row("key_005", 2,
+        Map("item1" -> Row(50, "mixed"), "item2" -> Row(75, "mixed")),
+        Array(Row(260, "high"), Row(280, "high"))),
+      Row("key_006", 2,
+        Map("item1" -> Row(30, "mixed"), "item2" -> Row(90, "mixed")),
+        Array(Row(240, "high"), Row(270, "high")))
+    )
+
+    // Write Batch 1
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(batch1Data), testSchema)
+    df1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Write Batch 2
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(batch2Data), testSchema)
+    df2.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Write Batch 3
+    val df3 = spark.createDataFrame(spark.sparkContext.parallelize(batch3Data), testSchema)
+    df3.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+
+    // Query options with data skipping enabled
+    val queryOpts = Map(
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    ) ++ metadataOpts
+
+    // Query 1: Filter on MAP nested_int (high range)
+    val resultDf1 = spark.read.format("hudi")
+      .options(queryOpts)
+      .load(basePath)
+      .filter("EXISTS(map_values(nullable_map_field), v -> v.nested_int > 200)")
+
+    // Expected: 2 records from batch2 (key_003, key_004)
+    assertArrayEquals(
+      Array[Object]("key_003", "key_004"),
+      resultDf1.select("record_key").collect().map(_.getString(0)).sorted.asInstanceOf[Array[Object]]
+    )
+
+    // Query 2: Filter on ARRAY nested_int (high range)
+    val resultDf2 = spark.read.format("hudi")
+      .options(queryOpts)
+      .load(basePath)
+      .filter("EXISTS(array_field, elem -> elem.nested_int > 200)")
+
+    // Expected: 4 records from batch2 and batch3 (key_003, key_004, key_005, key_006)
+    assertArrayEquals(
+      Array[Object]("key_003", "key_004", "key_005", "key_006"),
+      resultDf2.select("record_key").collect().map(_.getString(0)).sorted.asInstanceOf[Array[Object]]
+    )
+
+    // Query 3: Filter on MAP level field (string)
+    val resultDf3 = spark.read.format("hudi")
+      .options(queryOpts)
+      .load(basePath)
+      .filter("EXISTS(map_values(nullable_map_field), v -> v.level = 'high')")
+
+    // Expected: 2 records from batch2
+    assertArrayEquals(
+      Array[Object]("key_003", "key_004"),
+      resultDf3.select("record_key").collect().map(_.getString(0)).sorted.asInstanceOf[Array[Object]]
+    )
+
+    // Query 4: Combined filter (both MAP and ARRAY conditions)
+    val resultDf4 = spark.read.format("hudi")
+      .options(queryOpts)
+      .load(basePath)
+      .filter("EXISTS(map_values(nullable_map_field), v -> v.nested_int > 200) " +
+        "AND EXISTS(array_field, elem -> elem.nested_int > 200)")
+
+    // Expected: 2 records from batch2 only (both MAP and ARRAY have high values)
+    assertArrayEquals(
+      Array[Object]("key_003", "key_004"),
+      resultDf4.select("record_key").collect().map(_.getString(0)).sorted.asInstanceOf[Array[Object]]
+    )
+
+    // Validate column stats were created for nested fields
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(testSchema, "record", "")
+    val columnStatsIndex = new ColumnStatsIndexSupport(
+      spark,
+      testSchema,
+      hoodieSchema,
+      metadataConfig,
+      metaClient
+    )
+
+    val indexedColumns = Seq(
+      "nullable_map_field.key_value.value.nested_int",
+      "array_field.array.nested_int"
+    )
+
+    columnStatsIndex.loadTransposed(indexedColumns, testCase.shouldReadInMemory) { transposedDF =>
+      // Verify we have stats for all 3 file groups (may have more files for MOR due to updates)
+      val fileCount = transposedDF.select("fileName").distinct().count()
+      assertTrue(fileCount >= 3, s"Expected at least 3 files with column stats, got $fileCount")
+
+      // Verify min/max ranges for MAP field
+      val mapStats = transposedDF.select(
+        "`nullable_map_field.key_value.value.nested_int_minValue`",
+        "`nullable_map_field.key_value.value.nested_int_maxValue`"
+      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+
+      // Expected stats: Batch1[30,90], Batch2[230,290], Batch3[30,90]
+      // We should have exactly one file with [230,290] (high range) and at least two with [30,90] (low range)
+      val mapHighRangeCount = mapStats.count(stat => stat._1 == 230 && stat._2 == 290)
+      val mapLowRangeCount = mapStats.count(stat => stat._1 == 30 && stat._2 == 90)
+      assertEquals(1, mapHighRangeCount, "Expected exactly 1 file with MAP range [230,290]")
+      assertTrue(mapLowRangeCount >= 2, s"Expected at least 2 files with MAP range [30,90], got $mapLowRangeCount")
+
+      // Verify min/max ranges for ARRAY field
+      val arrayStats = transposedDF.select(
+        "`array_field.array.nested_int_minValue`",
+        "`array_field.array.nested_int_maxValue`"
+      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+
+      // Expected stats: Batch1[40,80], Batch2[260,280], Batch3[240,280]
+      // We should have exactly one file with [40,80] (low range) and at least two with high ranges
+      val arrayLowRangeCount = arrayStats.count(stat => stat._1 == 40 && stat._2 == 80)
+      val arrayHighRangeCount = arrayStats.count(stat => stat._1 >= 240 && stat._2 == 280)
+      assertEquals(1, arrayLowRangeCount, "Expected exactly 1 file with ARRAY range [40,80]")
+      assertTrue(arrayHighRangeCount >= 2, s"Expected at least 2 files with ARRAY high ranges, got $arrayHighRangeCount")
+    }
+    // Validate that indexed columns are registered correctly
+    validateColumnsToIndex(metaClient, Seq(
+      HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+      HoodieRecord.RECORD_KEY_METADATA_FIELD,
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+      "record_key",
+      "partition_col",
+      "nullable_map_field.key_value.value.nested_int",
+      "nullable_map_field.key_value.value.level",
+      "array_field.array.nested_int",
+      "array_field.array.level"
+    ))
   }
 
   @ParameterizedTest

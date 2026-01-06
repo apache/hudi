@@ -33,7 +33,7 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, MapType, StructField, StructType}
 import org.slf4j.LoggerFactory
 
 import java.util.Properties
@@ -56,11 +56,80 @@ object HoodieSchemaUtils {
     }
     else {
       val rootFieldIndex: Int = fieldName.indexOf(".")
-      val rootField: StructField = schema.fields(schema.fieldIndex(fieldName.substring(0, rootFieldIndex)))
+      val rootFieldName = fieldName.substring(0, rootFieldIndex)
+      val rootField: StructField = schema.fields(schema.fieldIndex(rootFieldName))
       if (rootField == null) {
         throw new HoodieException("Failed to find " + fieldName + " in the table schema ")
       }
-      getSchemaForField(rootField.dataType.asInstanceOf[StructType], fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1))
+
+      val remainingPath = fieldName.substring(rootFieldIndex + 1)
+
+      // Handle ARRAY type with .array pattern (Spark) or .list.element pattern (Avro)
+      if (rootField.dataType.isInstanceOf[ArrayType]) {
+        val arrayType = rootField.dataType.asInstanceOf[ArrayType]
+        val elementType = arrayType.elementType
+
+        // Determine which pattern is being used (Spark: .array, Avro: .list.element)
+        val arrayPattern = if (remainingPath == "array" || remainingPath.startsWith("array.")) {
+          Some(("array", "array".length))
+        } else if (remainingPath == "list.element" || remainingPath.startsWith("list.element.")) {
+          Some(("list.element", "list.element".length))
+        } else {
+          None
+        }
+
+        arrayPattern match {
+          case Some((pattern, patternLength)) =>
+            if (remainingPath == pattern) {
+              // Terminal case: just accessing the element type
+              val elementField = StructField("element", elementType, arrayType.containsNull)
+              org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + "." + pattern, elementField)
+            } else if (remainingPath.startsWith(pattern + ".") && elementType.isInstanceOf[StructType]) {
+              // Recursive case: accessing fields within array elements
+              val nestedPath = remainingPath.substring(patternLength + 1)
+              getSchemaForField(elementType.asInstanceOf[StructType], nestedPath, prefix + rootFieldName + "." + pattern + ".")
+            } else {
+              throw new HoodieException(s"Invalid array navigation pattern: $fieldName")
+            }
+          case None =>
+            throw new HoodieException(s"Array field requires .array or .list.element accessor pattern: $fieldName")
+        }
+      }
+      // Handle MAP type with .key_value.key or .key_value.value pattern
+      else if (rootField.dataType.isInstanceOf[MapType] && remainingPath.startsWith("key_value.")) {
+        val mapType = rootField.dataType.asInstanceOf[MapType]
+        if (remainingPath.startsWith("key_value.key")) {
+          // Accessing map keys (always the key type)
+          val keyField = StructField("key", mapType.keyType, false)
+          if (remainingPath == "key_value.key") {
+            org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + ".key_value.key", keyField)
+          } else {
+            throw new HoodieException(s"Cannot navigate beyond map key: $fieldName")
+          }
+        } else if (remainingPath.startsWith("key_value.value")) {
+          val valueType = mapType.valueType
+          if (remainingPath == "key_value.value") {
+            // Terminal case: just accessing the value type
+            val valueField = StructField("value", valueType, mapType.valueContainsNull)
+            org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + ".key_value.value", valueField)
+          } else if (remainingPath.startsWith("key_value.value.") && valueType.isInstanceOf[StructType]) {
+            // Recursive case: accessing fields within map values
+            val nestedPath = remainingPath.substring("key_value.value.".length)
+            getSchemaForField(valueType.asInstanceOf[StructType], nestedPath, prefix + rootFieldName + ".key_value.value.")
+          } else {
+            throw new HoodieException(s"Invalid map value navigation pattern: $fieldName")
+          }
+        } else {
+          throw new HoodieException(s"Invalid map navigation pattern: $fieldName. Expected .key_value.key or .key_value.value")
+        }
+      }
+      // Handle standard STRUCT type
+      else if (rootField.dataType.isInstanceOf[StructType]) {
+        getSchemaForField(rootField.dataType.asInstanceOf[StructType], remainingPath, prefix + rootFieldName + ".")
+      }
+      else {
+        throw new HoodieException(s"Unsupported field type for navigation: ${rootField.dataType} for field $fieldName")
+      }
     }
   }
 

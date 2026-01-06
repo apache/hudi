@@ -64,11 +64,35 @@ public final class HoodieSchemaUtils {
    * These patterns are specifically used for column stats generation and differ from
    * InternalSchema constants which are used in schema evolution contexts.
    */
-  private static final String ARRAY_LIST_ELEMENT = "list.element";
-  private static final String MAP_KEY_VALUE_KEY = "key_value.key";
-  private static final String MAP_KEY_VALUE_VALUE = "key_value.value";
   private static final String ARRAY_LIST = "list";
+  private static final String ARRAY_ELEMENT = "element";
+  private static final String ARRAY_SPARK = "array"; // Spark writer uses this
   private static final String MAP_KEY_VALUE = "key_value";
+  private static final String MAP_KEY = "key";
+  private static final String MAP_VALUE = "value";
+
+  private static final String ARRAY_LIST_ELEMENT = ARRAY_LIST + "." + ARRAY_ELEMENT;
+  private static final String MAP_KEY_VALUE_KEY = MAP_KEY_VALUE + "." + MAP_KEY;
+  private static final String MAP_KEY_VALUE_VALUE = MAP_KEY_VALUE + "." + MAP_VALUE;
+
+  /**
+   * Advances offset past a component name in the path, handling end-of-path and dot separator.
+   *
+   * @param path      the full path string
+   * @param offset    current position in path
+   * @param component the component name to match (e.g., "element", "key", "value")
+   * @return new offset after component and dot, or path.length() if at end, or -1 if no match
+   */
+  private static int getNextOffset(String path, int offset, String component) {
+    if (!path.regionMatches(offset, component, 0, component.length())) {
+      return -1;
+    }
+    int next = offset + component.length();
+    if (next == path.length()) {
+      return next;
+    }
+    return (path.charAt(next) == '.') ? next + 1 : -1;
+  }
 
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
@@ -406,11 +430,11 @@ public final class HoodieSchemaUtils {
   public static Option<Pair<String, HoodieSchemaField>> getNestedField(HoodieSchema schema, String fieldName) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
-    return getNestedFieldInternal(schema, fieldName, "");
+    return getNestedFieldInternal(schema, fieldName, 0, "");
   }
 
   /**
-   * Internal helper method for recursively retrieving nested fields.
+   * Internal helper method for recursively retrieving nested fields using offset-based navigation.
    *
    * <p>Supports nested field access using dot notation including MAP and ARRAY types
    * using Parquet-style accessor patterns:</p>
@@ -438,155 +462,129 @@ public final class HoodieSchemaUtils {
    * ({@code ARRAY_ELEMENT}, {@code MAP_KEY}, {@code MAP_VALUE}) which are used in other contexts
    * like schema evolution.</p>
    *
-   * @param schema    the current schema to search in
-   * @param fieldName the remaining field path
-   * @param prefix    the accumulated field path prefix
-   * @return Option containing Pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
+   * @param schema   the current schema to search in
+   * @param fullPath the full field path string
+   * @param offset   current position in fullPath
+   * @param prefix   the accumulated field path prefix
+   * @return Option containing a pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
    */
-  private static Option<Pair<String, HoodieSchemaField>> getNestedFieldInternal(HoodieSchema schema, String fieldName, String prefix) {
+  private static Option<Pair<String, HoodieSchemaField>> getNestedFieldInternal(
+      HoodieSchema schema, String fullPath, int offset, String prefix) {
     HoodieSchema nonNullableSchema = getNonNullTypeFromUnion(schema);
-
-    if (!fieldName.contains(".")) {
-      // Base case: simple field name
+    int nextDot = fullPath.indexOf('.', offset);
+    // Terminal case: no more dots in this segment
+    if (nextDot == -1) {
       if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
         return Option.empty();
       }
+      String fieldName = fullPath.substring(offset);
       return nonNullableSchema.getField(fieldName)
           .map(field -> Pair.of(prefix + fieldName, field));
-    } else {
-      // Recursive case: nested field
-      int dotIndex = fieldName.indexOf(".");
-      String rootFieldName = fieldName.substring(0, dotIndex);
-      String remainingPath = fieldName.substring(dotIndex + 1);
-
-      // Handle RECORD types - standard field navigation
-      if (nonNullableSchema.getType() == HoodieSchemaType.RECORD) {
-        return nonNullableSchema.getField(rootFieldName)
-            .flatMap(rootField -> getNestedFieldInternal(
-                rootField.schema(),
-                remainingPath,
-                prefix + rootFieldName + "."
-            ));
-      }
-
-      // Handle ARRAY types - expect ".list.element" pattern
-      if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY && ARRAY_LIST.equals(rootFieldName)) {
-        return handleArrayNavigation(nonNullableSchema, remainingPath, prefix);
-      }
-
-      // Handle MAP types - expect ".key_value.key" or ".key_value.value" pattern
-      if (nonNullableSchema.getType() == HoodieSchemaType.MAP && MAP_KEY_VALUE.equals(rootFieldName)) {
-        return handleMapNavigation(nonNullableSchema, remainingPath, prefix);
-      }
-      // For all other types (primitives, etc.), cannot navigate
-      return Option.empty();
     }
+    // Recursive case: more nesting to explore
+    String rootFieldName = fullPath.substring(offset, nextDot);
+    int nextOffset = nextDot + 1;
+    // Handle RECORD: standard field navigation
+    if (nonNullableSchema.getType() == HoodieSchemaType.RECORD) {
+      return nonNullableSchema.getField(rootFieldName)
+          .flatMap(f -> getNestedFieldInternal(f.schema(), fullPath, nextOffset, prefix + rootFieldName + "."));
+    }
+    // Handle ARRAY: expect ".list.element" (Avro) or ".array" (Spark)
+    if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY && ARRAY_LIST.equals(rootFieldName)) {
+      return handleArrayNavigationAvro(nonNullableSchema, fullPath, nextOffset, prefix);
+    }
+    if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY && ARRAY_SPARK.equals(rootFieldName)) {
+      return handleArrayNavigationSpark(nonNullableSchema, fullPath, nextOffset, prefix);
+    }
+    // Handle MAP: expect ".key_value.key" or ".key_value.value"
+    if (nonNullableSchema.getType() == HoodieSchemaType.MAP && MAP_KEY_VALUE.equals(rootFieldName)) {
+      return handleMapNavigation(nonNullableSchema, fullPath, nextOffset, prefix);
+    }
+    return Option.empty();
   }
 
   /**
-   * Extracts the remaining path after a component name, validating the format.
-   * Supports both "component" (end of path) and "component.rest" (continued navigation).
+   * Handles navigation into ARRAY types using the Avro ".list.element" pattern.
    *
-   * @param remainingPath the remaining path to parse
-   * @param component     the component name to extract after (e.g., "element", "key", "value")
-   * @return Option containing the path after the component (empty string if at end), or Option.empty() if invalid format
-   */
-  private static Option<String> extractPathAfterComponent(String remainingPath, String component) {
-    if (remainingPath.equals(component)) {
-      return Option.of("");
-    } else if (remainingPath.startsWith(component + ".")) {
-      return Option.of(remainingPath.substring((component + ".").length()));
-    }
-    return Option.empty();  // Invalid format (e.g., "elementXYZ")
-  }
-
-  /**
-   * Handles navigation into ARRAY types using the Parquet-style ".list.element" pattern.
-   *
-   * @param arraySchema   the ARRAY schema to navigate into
-   * @param remainingPath the remaining path after "list" (should start with "element")
-   * @param prefix        the accumulated field path prefix
+   * @param arraySchema the ARRAY schema to navigate into
+   * @param fullPath    the full field path string
+   * @param offset      current position in fullPath (should point to "element")
+   * @param prefix      the accumulated field path prefix
    * @return Option containing the nested field, or Option.empty() if invalid path
    */
-  private static Option<Pair<String, HoodieSchemaField>> handleArrayNavigation(
-      HoodieSchema arraySchema, String remainingPath, String prefix) {
-    return extractPathAfterComponent(remainingPath, "element")
-        .flatMap(pathAfterElement -> {
-          HoodieSchema elementSchema = arraySchema.getElementType();
-          if (pathAfterElement.isEmpty()) {
-            // We've reached the end - return nested component field for element
-            HoodieSchemaField nestedComponentField = HoodieSchemaField.of(
-                "element",
-                elementSchema,
-                null,  // doc
-                null   // defaultVal
-            );
-            return Option.of(Pair.of(prefix + ARRAY_LIST_ELEMENT, nestedComponentField));
-          } else {
-            // Continue navigating into element schema
-            return getNestedFieldInternal(
-                elementSchema,
-                pathAfterElement,
-                prefix + ARRAY_LIST_ELEMENT + "."
-            );
-          }
-        });
+  private static Option<Pair<String, HoodieSchemaField>> handleArrayNavigationAvro(
+      HoodieSchema arraySchema, String fullPath, int offset, String prefix) {
+    int nextPos = getNextOffset(fullPath, offset, ARRAY_ELEMENT);
+    if (nextPos == -1) {
+      return Option.empty();
+    }
+
+    HoodieSchema elSchema = arraySchema.getElementType();
+    if (nextPos == fullPath.length()) {
+      return Option.of(Pair.of(prefix + ARRAY_LIST_ELEMENT,
+          HoodieSchemaField.of(ARRAY_ELEMENT, elSchema, null, null)));
+    }
+    return getNestedFieldInternal(elSchema, fullPath, nextPos, prefix + ARRAY_LIST_ELEMENT + ".");
+  }
+
+  /**
+   * Handles navigation into ARRAY types using the Spark ".array" pattern.
+   *
+   * @param arraySchema the ARRAY schema to navigate into
+   * @param fullPath    the full field path string
+   * @param offset      current position in fullPath (points after "array")
+   * @param prefix      the accumulated field path prefix
+   * @return Option containing the nested field, or Option.empty() if invalid path
+   */
+  private static Option<Pair<String, HoodieSchemaField>> handleArrayNavigationSpark(
+      HoodieSchema arraySchema, String fullPath, int offset, String prefix) {
+    HoodieSchema elSchema = arraySchema.getElementType();
+
+    // Check if we're at the end (just accessing "array" itself)
+    if (offset == fullPath.length()) {
+      return Option.of(Pair.of(prefix + ARRAY_SPARK,
+          HoodieSchemaField.of(ARRAY_SPARK, elSchema, null, null)));
+    }
+
+    // The dot after "array" has already been consumed by the caller (nextDot + 1),
+    // so we can directly continue navigating into the element type
+    return getNestedFieldInternal(elSchema, fullPath, offset, prefix + ARRAY_SPARK + ".");
   }
 
   /**
    * Handles navigation into MAP types using the Parquet-style ".key_value.key" or ".key_value.value" patterns.
    *
-   * @param mapSchema     the MAP schema to navigate into
-   * @param remainingPath the remaining path after "key_value" (should start with "key" or "value")
-   * @param prefix        the accumulated field path prefix
+   * @param mapSchema the MAP schema to navigate into
+   * @param fullPath  the full field path string
+   * @param offset    current position in fullPath (should point to "key" or "value")
+   * @param prefix    the accumulated field path prefix
    * @return Option containing the nested field, or Option.empty() if invalid path
    */
   private static Option<Pair<String, HoodieSchemaField>> handleMapNavigation(
-      HoodieSchema mapSchema, String remainingPath, String prefix) {
-    Option<Pair<String, HoodieSchemaField>> keyResult = extractPathAfterComponent(remainingPath, "key")
-        .flatMap(pathAfterKey -> {
-          if (pathAfterKey.isEmpty()) {
-            // We've reached the end - return nested component field for key (always STRING)
-            HoodieSchema keySchema = mapSchema.getKeyType();
-            HoodieSchemaField nestedComponentField = HoodieSchemaField.of(
-                "key",
-                keySchema,
-                null,  // doc
-                null   // defaultVal
-            );
-            return Option.of(Pair.of(prefix + MAP_KEY_VALUE_KEY, nestedComponentField));
-          } else {
-            // Keys are primitives, cannot navigate further
-            return Option.empty();
-          }
-        });
-
-    if (keyResult.isPresent()) {
-      return keyResult;
+      HoodieSchema mapSchema, String fullPath, int offset, String prefix) {
+    // Check for "key" path
+    int keyPos = getNextOffset(fullPath, offset, MAP_KEY);
+    if (keyPos != -1) {
+      if (keyPos == fullPath.length()) {
+        return Option.of(Pair.of(prefix + MAP_KEY_VALUE_KEY,
+            HoodieSchemaField.of(MAP_KEY, mapSchema.getKeyType(), null, null)));
+      }
+      // Map keys are primitives, cannot navigate further
+      return Option.empty();
     }
 
-    // Try to match "value" path
-    return extractPathAfterComponent(remainingPath, "value")
-        .flatMap(pathAfterValue -> {
-          HoodieSchema valueSchema = mapSchema.getValueType();
-          if (pathAfterValue.isEmpty()) {
-            // We've reached the end - return nested component field for value
-            HoodieSchemaField nestedComponentField = HoodieSchemaField.of(
-                "value",
-                valueSchema,
-                null,  // doc
-                null   // defaultVal
-            );
-            return Option.of(Pair.of(prefix + MAP_KEY_VALUE_VALUE, nestedComponentField));
-          } else {
-            // Continue navigating into value schema
-            return getNestedFieldInternal(
-                valueSchema,
-                pathAfterValue,
-                prefix + MAP_KEY_VALUE_VALUE + "."
-            );
-          }
-        });
+    // Check for "value" path
+    int valPos = getNextOffset(fullPath, offset, MAP_VALUE);
+    if (valPos == -1) {
+      return Option.empty();
+    }
+
+    HoodieSchema vSchema = mapSchema.getValueType();
+    if (valPos == fullPath.length()) {
+      return Option.of(Pair.of(prefix + MAP_KEY_VALUE_VALUE,
+          HoodieSchemaField.of(MAP_VALUE, vSchema, null, null)));
+    }
+    return getNestedFieldInternal(vSchema, fullPath, valPos, prefix + MAP_KEY_VALUE_VALUE + ".");
   }
 
   /**
