@@ -46,7 +46,7 @@ public class WriteMarkersFactory {
       case DIRECT:
         return new DirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
-        if (!table.getConfig().isEmbeddedTimelineServerEnabled()) {
+        if (!table.getConfig().isEmbeddedTimelineServerEnabled() && !table.getConfig().isRemoteViewStorageType()) {
           LOG.warn("Timeline-server-based markers are configured as the marker type "
               + "but embedded timeline server is not enabled.  Falling back to direct markers.");
           return new DirectWriteMarkers(table, instantTime);

@@ -20,18 +20,28 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for delta stream write.
@@ -199,6 +209,27 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .checkpointComplete(3)
         .checkWrittenData(mergedExpected, 4)
         .end();
+  }
+
+  @ParameterizedTest
+  @EnumSource(MarkerType.class)
+  public void testMarkType(MarkerType markerType) throws Exception {
+    conf.setString(HoodieWriteConfig.MARKERS_TYPE.key(), markerType.toString());
+    TestHarness testHarness =
+        preparePipeline(conf)
+            .consume(TestData.DATA_SET_INSERT)
+            // no checkpoint, so the coordinator does not accept any events
+            .emptyEventBuffer()
+            .checkpoint(1)
+            .assertNextEvent(4, "par1,par2,par3,par4");
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    List<StoragePathInfo> files =  metaClient.getStorage().listFiles(new StoragePath(metaClient.getTempFolderPath()));
+    if (markerType == MarkerType.DIRECT) {
+      assertTrue(files.stream().allMatch(f -> f.getPath().getName().endsWith("marker.APPEND")));
+    } else {
+      assertTrue(files.stream().noneMatch(f -> f.getPath().getName().endsWith("marker.APPEND")));
+    }
+    testHarness.checkpointComplete(1).checkWrittenData(EXPECTED1).end();
   }
 
   @Override

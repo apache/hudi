@@ -91,6 +91,13 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testTimelineServerBasedMarkersWithRemoteViewStorageType() {
+    // Fallback to direct markers should happen
+    testWriteMarkersFactory(
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH, false, true, TimelineServerBasedWriteMarkers.class);
+  }
+
+  @Test
   public void testTimelineServerBasedMarkersWithHDFS() {
     // Fallback to direct markers should happen
     testWriteMarkersFactory(
@@ -99,12 +106,20 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
   }
 
   private void testWriteMarkersFactory(
+      MarkerType markerTypeConfig, String basePath, boolean isTimelineServerEnabled, Class<?> expectedWriteMarkersClass) {
+    testWriteMarkersFactory(
+        markerTypeConfig, basePath, isTimelineServerEnabled, false, expectedWriteMarkersClass);
+  }
+
+  private void testWriteMarkersFactory(
       MarkerType markerTypeConfig, String basePath, boolean isTimelineServerEnabled,
-      Class<?> expectedWriteMarkersClass) {
+      boolean isRemoteViewStorageType, Class<?> expectedWriteMarkersClass) {
     String instantTime = "001";
     Mockito.when(table.getConfig()).thenReturn(writeConfig);
     Mockito.when(writeConfig.isEmbeddedTimelineServerEnabled())
         .thenReturn(isTimelineServerEnabled);
+    Mockito.when(writeConfig.isRemoteViewStorageType())
+        .thenReturn(isRemoteViewStorageType);
     Mockito.when(table.getMetaClient()).thenReturn(metaClient);
     Mockito.when(metaClient.getStorage()).thenReturn(storage);
     Mockito.when(storage.getFileSystem()).thenReturn(fileSystem);

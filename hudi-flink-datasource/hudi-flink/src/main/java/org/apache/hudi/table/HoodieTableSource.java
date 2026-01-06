@@ -71,6 +71,7 @@ import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -242,7 +243,12 @@ public class HoodieTableSource implements
     } else if (OptionsResolver.isAppendMode(conf)) {
       return source.partitionCustom(new StreamReadAppendPartitioner(conf.getInteger(FlinkOptions.READ_TASKS)), new StreamReadAppendKeySelector());
     } else {
-      return source.keyBy(MergeOnReadInputSplit::getFileId);
+      return source.keyBy(new KeySelector<MergeOnReadInputSplit, String>() {
+        @Override
+        public String getKey(MergeOnReadInputSplit split) throws Exception {
+          return split.getFileId();
+        }
+      });
     }
   }
 
