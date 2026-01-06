@@ -3,7 +3,7 @@ title: "Apache Hudi's Latest Architecture Evolution at JD.com"
 excerpt: ""
 author: "Team at JD.com"
 category: blog
-image: https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgDjjeTYOZTnD1keXP7fDiaumtlueMxBWwwJQVBZrAbL0mVhG2gFz75nA/640?wx_fmt=png
+image: /assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/01.webp
 tags:
   - hudi
   - meetup
@@ -28,7 +28,7 @@ _This post, translated from the [original blog in Chinese](https://mp.weixin.qq.
 
 The JD.com data lake team has been working to enable near-real-time data processing across the entire organization, helping JD Retail, JD Technology, JD Logistics, and other subsidiaries improve data timeliness for core data assets. The data lake now exceeds 500PB in scale, supported by robust underlying technology and platform product capabilities.
 
-![JD.com data lake capability overview](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgDjjeTYOZTnD1keXP7fDiaumtlueMxBWwwJQVBZrAbL0mVhG2gFz75nA/640?wx_fmt=png)
+![JD.com data lake capability overview](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/01.webp)
 
 JD.com's data lake is built on top of HDFS and other distributed storage systems, leveraging Hudi's high-performance read/write capabilities and file organization to support near-real-time processing pipelines. It ingests data from message queues, Binlog, Hive, and Hudi sources, supporting high-performance streaming, batch, and OLAP queries. On top of this infrastructure, the JD Big Data Platform provides full lifecycle product capabilities—from table creation, data integration, data development, and task scheduling, to data queries and data quality, to lake table migration tools—enabling various business units to improve data timeliness.
 
@@ -80,7 +80,7 @@ Using Bucket Index as the foundation, files within each FileGroup are organized 
 
 **Major Compaction**: Periodically merges all files into a single L1 file, maintaining global data consistency while reducing compaction frequency.
 
-![LSM-Tree FileGroup structure](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgXSZTbSterP4CG99VQnYYlmob8RYE9N0QTWkkWZClNRajtF1tmhnrWA/640?wx_fmt=png)
+![LSM-Tree FileGroup structure](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/02.webp)
 
 During data flow, JD-Hudi uses compute engine native row formats (like Spark InternalRow, Flink RowData), avoiding the overhead of Avro serialization and deserialization. Additionally, incremental updates create new Parquet files instead of appending to log files, avoiding the heavy file listing operations before writes while supporting multi-task concurrent updates.
 
@@ -89,10 +89,10 @@ During data flow, JD-Hudi uses compute engine native row formats (like Spark Int
 FileSystemView (FSView) is Hudi's metadata abstraction layer that provides a unified query interface, hiding underlying file organization details so engines can efficiently build query splits based on logical views—providing critical support for snapshot isolation and data consistency. The transformed FSView construction logic can be expressed as:
 
 ```
-FSView at T = CommittedLogs - ReplacedLogs(baseInstant)
+FSView at T = CommittedLogs - (Log.baseInstant>T) - (ReplacedLogs.baseInstant<=T)
 ```
 
-![FileSystemView construction example](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgv6ZmhOrDoYoW32a271XtX7ADsPwxhcicsqneoCgmCJ16a6tumU9M50w/640?wx_fmt=png)
+![FileSystemView construction example](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/03.webp)
 
 Using the multi-task concurrent update scenario shown in the diagram as an example: all committed files include File 1-10 and File 15. At time T_i, files committed after that time include File 15, while files committed before or at that time that were replaced by Compaction operations are Files 1-5. Therefore, the logical snapshot view at T_i can be calculated using the formula, consisting of Files 6-10.
 
@@ -100,7 +100,7 @@ Using the multi-task concurrent update scenario shown in the diagram as an examp
 
 Taking Flink writes as an example, the write process mainly includes **repartitioning, sorting, deduplication, and I/O**—four core steps.
 
-![Write process flow](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgChuOJq2tA4x9ZgmhOb5Hibvy3GWfq9CumgBb9Z0UOgDqct0wW4P7XDg/640?wx_fmt=png)
+![Write process flow](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/04.webp)
 
 - **Unified Data Representation**: The entire data flow uses Flink's native RowData format, reducing serialization and format conversion overhead.
 - **Balanced Data Distribution**: To address uneven Bucket distribution, a Remote Partitioner mechanism based on a global view was proposed, achieving dynamic load balancing for writes.
@@ -119,7 +119,7 @@ To further improve merge efficiency, the JD.com data lake team adopted a **state
 
 This approach achieved approximately 15% read performance improvement in actual testing, effectively supporting high-throughput, low-latency query requirements under the LSM-Tree architecture.
 
-![Loser tree merge algorithm](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQg3jUQ0JLWL43A4aNGTQmIDTwEKAkEbnhSedYUrOZyEcAW565FPuqmHg/640?wx_fmt=png)
+![Loser tree merge algorithm](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/05.webp)
 
 ### Compaction Optimization
 
@@ -131,7 +131,7 @@ The scheduling phase's main work is determining which partitions' file slices wi
 
 In practice, only partitions with new data need processing. However, the original Compaction strategy scanned all partitions regardless of whether they contained new data, causing unnecessary resource consumption and potential task failures as partition counts increased. The LSM version introduced an Incremental Compaction strategy with the following core workflow:
 
-![Incremental Compaction strategy](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgnXn8IZUhHiaWqzdSV7ljontd4QicBdLKPPAYxLkHq03rD2xuib8wdngCg/640?wx_fmt=png)
+![Incremental Compaction strategy](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/06.webp)
 
 First, the time period from the last completed Compaction to the current moment is treated as an incremental window. Partitions committed via deltacommit during this period have received incremental data. As shown in the diagram, if scheduling occurs at T5, then (T1, T5) is the incremental window, with Partition4 and Partition5 written at T2 and T3 needing inclusion in this compaction plan.
 
@@ -147,13 +147,13 @@ The original scheduling mechanism was timed to execute after Commit operations c
 
 To address these pain points, the new streaming scheduling approach makes critical optimizations: the core scheduling logic is extracted and encapsulated as an independent operator deployed to TaskManager (TM) nodes for execution. This architectural-level fundamental optimization completely overcomes the two core pain points of the original pattern. The diagram below shows the Flink streaming scheduling topology structure, where obtaining scheduling partitions, listing files to merge, and generating compaction plans are all executed by independent operators.
 
-![Flink streaming scheduling topology](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQglVXEVhQDHoDGceKWdJ2aTN6h5E6dqT8MibyCS2icPHljN7Z7nY1J5Pkg/640?wx_fmt=png)
+![Flink streaming scheduling topology](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/07.webp)
 
 ### Benchmark
 
 Based on TPCDS and Nexmark standard datasets, benchmark evaluations were conducted under unified test environments for three table formats: MoR-LSM (JD-Hudi optimized version), MoR-Avro (JD-Hudi original version), and PK Table (Paimon 1.0.1), using task execution time or data consumption time as evaluation metrics. The results are as follows:
 
-![Benchmark comparison results](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgCJoyXcB8hW0KDz5ibgztY6NDFRjPnPCNOjBGw3lCQr4Vrf7QQYOKLsA/640?wx_fmt=png)
+![Benchmark comparison results](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/08.webp)
 
 ## 03 Business Practices
 
@@ -161,7 +161,7 @@ Based on TPCDS and Nexmark standard datasets, benchmark evaluations were conduct
 
 Based on earlier near-real-time data asset transformation, upstream product basic detail pipelines now have near-real-time capabilities. The current goal is to continue advancing near-real-time transformation of downstream product wide tables. Product wide tables use SKU information as the core foundation and need to extend related dimension information through streaming processing, involving non-primary-key association update scenarios.
 
-![Partial Update Foreign-Key Join problem](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgFYAsIqSOdejx1rK9SWjTvR5aWQvl7CWx1ENB5ichzib87icKZ6ZzJ0PRA/640?wx_fmt=png)
+![Partial Update Foreign-Key Join problem](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/09.webp)
 
 **Existing approaches:**
 
@@ -176,7 +176,7 @@ In Hudi, Partial Update in streaming primary key association scenarios can push 
 
 JD.com designed a foreign key index with: the ability to quickly locate primary key values by foreign key values, support for concurrent update operations, efficient point query performance, and extensible, pluggable index storage mechanisms. The overall pipeline flow is as follows:
 
-![External index solution](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgkYSyVKVU1IqXmmn1jg6DFKHyL880r3pW1VkK0Ib9SdH3ricbZeJFMJQ/640?wx_fmt=png)
+![External index solution](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/10.webp)
 
 - SKU data stream maintains the foreign key index in real-time and performs Partial Update to the Hudi product wide table
 - SPU data stream queries the foreign key index in real-time, retrieves all related primary keys, expands them, and performs Partial Update to the Hudi product wide table
@@ -188,7 +188,7 @@ Current training engine I/O layers lack native data lake adaptation capability (
 
 As business scenarios demand increasingly real-time and accurate models, there's an urgent need to establish direct connectivity between sample training engines and data lakes. By building a Hudi-compatible NativeIO SDK, training engines can bypass intermediate sync steps to read samples directly from Hudi lake tables, deeply leveraging data lake capabilities in incremental updates and efficient filtering. Meanwhile, NativeIO-level optimizations—such as columnar storage adaptation, batch data direct reads, and reduced data copying—effectively lower I/O overhead, fundamentally improving sample data timeliness and retrieval efficiency, thereby driving continuous model effectiveness optimization.
 
-![NativeIO SDK architecture](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgCASPib6U9kpR8NPApic0VHZXLAUzicAVuoq8OgxJzoic9eghU4urIfw3GQ/640?wx_fmt=png)
+![NativeIO SDK architecture](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/11.webp)
 
 JD.com's internal Hudi NativeIO SDK adopts a layered, decoupled architecture design, divided into four core modules: data invocation layer, cross-language Transformation layer, Hudi view management layer, and high-performance query layer. Each module has clear responsibilities and boundaries, working together top-to-bottom to ensure user operation convenience while achieving efficient lake table data reads and high-timeliness responses, ultimately supporting sample training engines to directly connect with Hudi lake tables for efficient training.
 
@@ -200,7 +200,7 @@ This performance optimization effectively addresses key bottlenecks in AI scenar
 
 Traffic business currently has separate real-time and offline development pipelines, with high maintenance and development costs and inconsistent metrics. Offline pipelines where each domain independently processes click data lead to inconsistent metrics and redundant data storage. Additionally, near-real-time data scenarios are not currently supported. Traffic business faces challenges including severe data skew, massive data scale, and concurrent data corrections. To address these issues, JD.com built a unified traffic common layer with near-real-time pipelines based on the Hudi data lake, using unified metrics processing for real-time data ingestion. This provides near-real-time data analysis capabilities, with extensive kernel optimizations during the pipeline upgrade.
 
-![Traffic data warehouse ADM upgrade](https://mmbiz.qpic.cn/mmbiz_png/zHbzQPKIBPh8otccd4YZFQ5AL1icdAfQgQARgzA5XzHLGICRKvhqqiafWCcRoiciaQic0iawymMVKeKficuyJIKhaAxpg/640?wx_fmt=png)
+![Traffic data warehouse ADM upgrade](/assets/images/blog/2026-01-06-jd-hudi-architecture-evolution/12.webp)
 
 **Challenge**: Bucket Index-based MoR tables in traffic data production pipelines have uneven bucket allocation to write tasks, causing some tasks to be heavily loaded while others idle, with low parallel resource utilization affecting traffic job write performance. Additionally, traffic business partition data skew (TB to MB) causes Fixed Bucket mode to generate excessive small files for small data partitions.
 
