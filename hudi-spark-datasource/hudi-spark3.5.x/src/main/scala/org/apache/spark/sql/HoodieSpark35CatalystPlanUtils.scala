@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, MergeIntoTable, Project}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -79,5 +79,16 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       messageParameters = Map(
         "sqlExpr" -> a.sql,
         "cols" -> cols))
+  }
+
+  override def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan = {
+    val insert = iis.asInstanceOf[InsertIntoStatement]
+    insert.copy(
+      table = targetTable,
+      partitionSpec = insert.partitionSpec,
+      userSpecifiedCols = insert.userSpecifiedCols,
+      query = query,
+      overwrite = insert.overwrite,
+      ifPartitionNotExists = insert.ifPartitionNotExists)
   }
 }
