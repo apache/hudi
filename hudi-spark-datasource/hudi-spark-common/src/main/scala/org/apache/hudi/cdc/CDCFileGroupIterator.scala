@@ -561,7 +561,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    */
   private def convertBufferedRecordToJsonString(record: BufferedRecord[InternalRow]): UTF8String = {
     internalRowToJsonStringConverterMap.getOrElseUpdate(record.getSchemaId,
-      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId).toAvroSchema)))
+      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId))))
       .convert(record.getRecord)
   }
 

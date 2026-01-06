@@ -766,4 +766,8 @@ public final class HoodieSchemaUtils {
 
     return nonNullType;
   }
+
+  public static String addMetadataColumnTypes(String hiveColumnTypes) {
+    return "string,string,string,string,string," + hiveColumnTypes;
+  }
 }

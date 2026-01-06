@@ -89,7 +89,7 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
     corruptFile(file1Status.getPath());
     assertTrue(batch.getBatch().isPresent());
     Throwable t = assertThrows(Exception.class,
-        () -> batch.getBatch().get().show(30));
+        () -> batch.getBatch().get().limit(30).collect());
     while (t != null) {
       if (t instanceof SchemaCompatibilityException) {
         return;

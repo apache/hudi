@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.util.FileIOUtils;
 
@@ -89,17 +90,13 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     if (isDeleted) {
       return Option.empty();
     } else {
-      return Option.of(JSON_CONVERTER.convert(getJsonData(), schema));
+      return Option.of(JSON_CONVERTER.convert(getJsonData(), HoodieSchema.fromAvroSchema(schema)));
     }
   }
 
   @Override
   public Comparable<?> getOrderingValue() {
     return orderingVal;
-  }
-
-  public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
-    return JSON_CONVERTER.convert(getJsonData(), schema);
   }
 
   @Override

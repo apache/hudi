@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.lance.HoodieBaseLanceWriter;
+import org.apache.hudi.io.storage.row.HoodieInternalRowFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -42,14 +43,15 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.PART
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD;
 
 /**
- * Spark Lance file writer implementing {@link HoodieSparkFileWriter}.
+ * Spark Lance file writer implementing {@link HoodieSparkFileWriter} and {@link HoodieInternalRowFileWriter}.
  *
  * This writer integrates with Hudi's storage I/O layer and supports:
  * - Hudi metadata field population
  * - Record key tracking (for bloom filters - TODO https://github.com/apache/hudi/issues/17664)
  * - Sequence ID generation
  */
-public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> implements HoodieSparkFileWriter {
+public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
+    implements HoodieSparkFileWriter, HoodieInternalRowFileWriter {
 
   private static final String DEFAULT_TIMEZONE = "UTC";
 
@@ -90,6 +92,22 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> i
     };
   }
 
+  /**
+   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata.
+   *
+   * @param file Path where Lance file will be written
+   * @param sparkSchema Spark schema for the data
+   * @param taskContextSupplier Task context supplier for partition ID
+   * @param storage HoodieStorage instance
+   * @throws IOException if writer initialization fails
+   */
+  public HoodieSparkLanceWriter(StoragePath file,
+                                StructType sparkSchema,
+                                TaskContextSupplier taskContextSupplier,
+                                HoodieStorage storage) throws IOException {
+    this(file, sparkSchema, null, taskContextSupplier, storage, false);
+  }
+
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
     if (populateMetaFields) {
@@ -103,6 +121,17 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow> i
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
+    super.write(row);
+  }
+  
+  @Override
+  public void writeRow(UTF8String key, InternalRow row) throws IOException {
+    // Key reserved for future bloom filter support (https://github.com/apache/hudi/issues/17664)
+    super.write(row);
+  }
+  
+  @Override
+  public void writeRow(InternalRow row) throws IOException {
     super.write(row);
   }
 

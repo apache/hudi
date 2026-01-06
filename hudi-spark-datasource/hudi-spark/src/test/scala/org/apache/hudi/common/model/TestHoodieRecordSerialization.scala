@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
-import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
+import org.apache.hudi.AvroConversionUtils.createInternalRowToAvroConverter
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{cloneUsingKryo, convertToAvroRecord, toUnsafeRow, OverwriteWithLatestAvroPayloadWithEquality}
 import org.apache.hudi.common.schema.HoodieSchema
@@ -183,9 +183,9 @@ object TestHoodieRecordSerialization {
   }
 
   private def convertToAvroRecord(row: Row): GenericRecord = {
-    val schema = convertStructTypeToAvroSchema(row.schema, "testRecord", "testNamespace")
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(row.schema, "testRecord", "testNamespace")
 
-    createInternalRowToAvroConverter(row.schema, schema, nullable = false)
+    createInternalRowToAvroConverter(row.schema, schema.toAvroSchema, nullable = false)
       .apply(toUnsafeRow(row, row.schema))
   }
 

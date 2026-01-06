@@ -398,10 +398,6 @@ public class HoodieAvroUtils {
     return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
-  public static String addMetadataColumnTypes(String hiveColumnTypes) {
-    return "string,string,string,string,string," + hiveColumnTypes;
-  }
-
   public static Schema makeFieldNonNull(Schema schema, String fieldName, Object fieldDefaultValue) {
     ValidationUtils.checkArgument(fieldDefaultValue != null);
     List<Schema.Field> filteredFields = schema.getFields()
@@ -1368,6 +1364,46 @@ public class HoodieAvroUtils {
   public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
     return new BigDecimal(new BigInteger(value),
         scale, new MathContext(precision, RoundingMode.HALF_UP));
+  }
+
+  /**
+   * Projects a record to a new schema by performing a shallow copy of fields.
+   * Best used for adding or removing top-level metadata fields.
+   * <p>
+   * This is a high-performance alternative to deep rewriting. It only iterates through
+   * the top-level fields of the target schema and pulls values from the source record
+   * by field name.
+   * <p>
+   * <p>
+   * This is significantly faster than {@link #rewriteRecordWithNewSchema} for:
+   * 1. Wide records (many top-level fields): Reduces CPU overhead/recursion.
+   * 2. Deeply nested records: Uses reference-copying for nested structures instead of rebuilding them.
+   * <p>
+   * <b>Warning:</b> This method does not recursively rewrite/transform nested records, arrays,
+   * or maps. It assumes that the underlying values for each field are already
+   * compatible with the target schema.
+   *
+   * @param record      The source GenericRecord to project.
+   * @param targetSchema The schema to project the record into.
+   * @return A new GenericRecord matching targetSchema, or the original record if
+   * the schemas are identical in field count.
+   */
+
+  public static GenericRecord projectRecordToNewSchemaShallow(IndexedRecord record, Schema targetSchema) {
+    if (record.getSchema().getFields().size() == targetSchema.getFields().size()) {
+      return (GenericRecord) record;
+    } else {
+      GenericData.Record rec = new GenericData.Record(targetSchema);
+      for (Schema.Field field : targetSchema.getFields()) {
+        Field sourceField = record.getSchema().getField(field.name());
+        if (sourceField == null) {
+          rec.put(field.pos(), null);
+        } else {
+          rec.put(field.pos(), record.get(sourceField.pos()));
+        }
+      }
+      return rec;
+    }
   }
 
   /**

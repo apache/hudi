@@ -80,10 +80,11 @@ public class TestAvroSchemaEvolutionUtils {
         HoodieSchema.fromAvroSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG))),
         HoodieSchema.fromAvroSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))),
         HoodieSchema.create(HoodieSchemaType.STRING),
-        HoodieSchema.fromAvroSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.fixed", null, null, 16))),
+        HoodieSchema.createUUID(),
         HoodieSchema.createFixed("t1.fixed", null, null, 12),
         HoodieSchema.create(HoodieSchemaType.BYTES),
-        HoodieSchema.fromAvroSchema(LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("t1.fixed", null, null, 4)))};
+        HoodieSchema.createDecimal("t1.fixed", null, null, 9, 4, 4)
+    };
 
     Type[] primitiveTypes = new Type[] {
         Types.BooleanType.get(),
@@ -140,8 +141,7 @@ public class TestAvroSchemaEvolutionUtils {
         HoodieSchemaField.of("timestamp", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))),
             null, HoodieJsonProperties.NULL_VALUE),
         HoodieSchemaField.of("string", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)), null, HoodieJsonProperties.NULL_VALUE),
-        HoodieSchemaField.of("uuid", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.uuid().addToSchema(
-            Schema.createFixed("t1.uuid.fixed", null, null, 16)))), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("uuid", HoodieSchema.createNullable(HoodieSchema.createUUID()), null, HoodieJsonProperties.NULL_VALUE),
         HoodieSchemaField.of("fixed", HoodieSchema.createNullable(HoodieSchema.createFixed("t1.fixed.fixed", null, null, 10)), null, HoodieJsonProperties.NULL_VALUE),
         HoodieSchemaField.of("binary", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BYTES)), null, HoodieJsonProperties.NULL_VALUE),
         HoodieSchemaField.of("decimal", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.decimal(10, 2)

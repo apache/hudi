@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.avro.model.HoodieCleanMetadata
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -28,7 +28,6 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
-import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadataLegacy
@@ -465,7 +464,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       latestDf.schema,
-      HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", "")),
+      HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(latestDf.schema, "record", ""),
       HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
@@ -476,7 +475,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .collectAsList()
     assertTrue(partitionStats.size() > 0)
     // Assert column stats after restore.
-    val hoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", ""))
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(latestDf.schema, "record", "")
     val columnStatsIndex = new ColumnStatsIndexSupport(
       spark, latestDf.schema,
       hoodieSchema,

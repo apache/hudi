@@ -18,15 +18,15 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -47,6 +47,7 @@ import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondar
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -79,20 +80,17 @@ public class TestHoodieIndexUtils {
   public void testIsEligibleForSecondaryIndexWithSupportedDataTypes() {
     // Given: A schema with supported data types for secondary index (String/CHAR, Int, Long, Float, Double)
     // Note: CHAR is represented as STRING in Avro schema
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .requiredString("charField") // CHAR is represented as STRING in Avro
-        .optionalInt("intField")
-        .requiredLong("longField")
-        .name("doubleField").type().doubleType().noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("charField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("intField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("longField", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("doubleField", HoodieSchema.create(HoodieSchemaType.DOUBLE))
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Test case 1: Secondary index with record index already present
       // Given: Record index partition already exists
@@ -143,21 +141,18 @@ public class TestHoodieIndexUtils {
     }
   }
 
+  @Test
   public void testValidateDataTypeForSecondaryOrExpressionIndex() {
     // Create a dummy schema with both complex and primitive types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .optionalInt("intField")
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .name("structField").type().record("NestedRecord")
-        .fields()
-        .requiredString("nestedString")
-        .endRecord()
-        .noDefault()
-        .endRecord();
-
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("intField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("arrayField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
+        HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT))),
+        HoodieSchemaField.of("structField", HoodieSchema.createRecord("NestedRecord", null, null, Arrays.asList(
+            HoodieSchemaField.of("nestedString", HoodieSchema.create(HoodieSchemaType.STRING))
+        )))
+    ));
     // Test for primitive fields
     assertTrue(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("stringField", "intField"), schema));
 
@@ -175,24 +170,21 @@ public class TestHoodieIndexUtils {
   @Test
   public void testValidateDataTypeForSecondaryIndex() {
     // Create a schema with various data types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .requiredString("charField") // CHAR is represented as STRING in Avro
-        .optionalInt("intField")
-        .requiredLong("longField")
-        .name("timestampField").type().longType().longDefault(0L) // timestamp as long
-        .name("booleanField").type().booleanType().noDefault()
-        .name("floatField").type().floatType().noDefault()
-        .name("doubleField").type().doubleType().noDefault()
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .name("structField").type().record("NestedRecord")
-        .fields()
-        .requiredString("nestedString")
-        .endRecord()
-        .noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("charField", HoodieSchema.create(HoodieSchemaType.STRING)), // CHAR is represented as STRING
+        HoodieSchemaField.of("intField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("longField", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("timestampField", HoodieSchema.create(HoodieSchemaType.LONG), null, 0L), // timestamp as long
+        HoodieSchemaField.of("booleanField", HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
+        HoodieSchemaField.of("floatField", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+        HoodieSchemaField.of("doubleField", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
+        HoodieSchemaField.of("arrayField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
+        HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT))),
+        HoodieSchemaField.of("structField", HoodieSchema.createRecord("NestedRecord", null, null, Arrays.asList(
+            HoodieSchemaField.of("nestedString", HoodieSchema.create(HoodieSchemaType.STRING))
+        )))
+    ));
 
     // Test supported types for secondary index
     assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("stringField"), schema));
@@ -210,7 +202,7 @@ public class TestHoodieIndexUtils {
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("arrayField"), schema));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("mapField"), schema));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("structField"), schema));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("floatField"), schema));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("floatField"), schema));
 
     // Test mix of supported and unsupported types (should fail)
     assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "booleanField"), schema));
@@ -227,32 +219,36 @@ public class TestHoodieIndexUtils {
   @Test
   public void testValidateDataTypeForSecondaryIndexWithLogicalTypes() {
     // Supported logical types
-    Schema timestampMillis = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema timestampMicros = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema date = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    Schema timeMillis = LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
-    Schema timeMicros = LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    
+    HoodieSchema timestampMillis = HoodieSchema.createTimestampMillis();
+    HoodieSchema timestampMicros = HoodieSchema.createTimestampMicros();
+    HoodieSchema date = HoodieSchema.createDate();
+    HoodieSchema timeMillis = HoodieSchema.createTimeMillis();
+    HoodieSchema timeMicros = HoodieSchema.createTimeMicros();
+
     // Unsupported logical types
-    Schema decimal = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));
-    Schema uuid = LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING));
-    Schema localTimestampMillis = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema localTimestampMicros = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    
-    Schema schemaWithLogicalTypes = SchemaBuilder.record("TestRecord")
-        .fields()
-        // Supported logical types
-        .name("timestampMillisField").type(timestampMillis).noDefault()
-        .name("timestampMicrosField").type(timestampMicros).noDefault()
-        .name("dateField").type(date).noDefault()
-        .name("timeMillisField").type(timeMillis).noDefault()
-        .name("timeMicrosField").type(timeMicros).noDefault()
-        // Unsupported logical types
-        .name("decimalField").type(decimal).noDefault()
-        .name("uuidField").type(uuid).noDefault()
-        .name("localTimestampMillisField").type(localTimestampMillis).noDefault()
-        .name("localTimestampMicrosField").type(localTimestampMicros).noDefault()
-        .endRecord();
+    HoodieSchema decimalBytesBackedField = HoodieSchema.createDecimal(10, 2);
+    HoodieSchema decimalFixedBackedField = HoodieSchema.createDecimal("decimal_fixed", null, null, 10, 2, 16);
+    assertInstanceOf(HoodieSchema.Decimal.class, decimalBytesBackedField);
+    assertInstanceOf(HoodieSchema.Decimal.class, decimalFixedBackedField);
+    assertFalse(((HoodieSchema.Decimal) decimalBytesBackedField).isFixed());
+    assertTrue(((HoodieSchema.Decimal) decimalFixedBackedField).isFixed());
+
+    HoodieSchema uuid = HoodieSchema.createUUID();
+    HoodieSchema localTimestampMillis = HoodieSchema.createLocalTimestampMillis();
+    HoodieSchema localTimestampMicros = HoodieSchema.createLocalTimestampMicros();
+
+    HoodieSchema schemaWithLogicalTypes = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestampMillisField", timestampMillis),
+        HoodieSchemaField.of("timestampMicrosField", timestampMicros),
+        HoodieSchemaField.of("dateField", date),
+        HoodieSchemaField.of("timeMillisField", timeMillis),
+        HoodieSchemaField.of("timeMicrosField", timeMicros),
+        HoodieSchemaField.of("decimalBytesBackedField", decimalBytesBackedField),
+        HoodieSchemaField.of("decimalFixedBackedField", decimalFixedBackedField),
+        HoodieSchemaField.of("uuidField", uuid),
+        HoodieSchemaField.of("localTimestampMillisField", localTimestampMillis),
+        HoodieSchemaField.of("localTimestampMicrosField", localTimestampMicros)
+    ));
 
     // Test supported timestamp and date/time logical types
     assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampMillisField"), schemaWithLogicalTypes));
@@ -260,15 +256,16 @@ public class TestHoodieIndexUtils {
     assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("dateField"), schemaWithLogicalTypes));
     assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timeMillisField"), schemaWithLogicalTypes));
     assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timeMicrosField"), schemaWithLogicalTypes));
-    
+
     // Test unsupported logical types
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("decimalField"), schemaWithLogicalTypes));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("decimalBytesBackedField"), schemaWithLogicalTypes));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("decimalFixedBackedField"), schemaWithLogicalTypes));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("uuidField"), schemaWithLogicalTypes));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("localTimestampMillisField"), schemaWithLogicalTypes));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("localTimestampMicrosField"), schemaWithLogicalTypes));
-    
+
     // Test mix of supported and unsupported logical types
-    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("timestampMillisField", "decimalField"), schemaWithLogicalTypes));
+    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("timestampMillisField", "decimalBytesBackedField"), schemaWithLogicalTypes));
   }
 
   /**
@@ -282,21 +279,18 @@ public class TestHoodieIndexUtils {
   public void testIsEligibleForSecondaryIndexWithUnsupportedDataTypes() {
     // Given: A schema with unsupported data types for secondary index (Boolean, Decimal)
     // Note: Float and Double are now supported
-    Schema decimalType = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .name("floatField").type().floatType().noDefault()
-        .name("doubleField").type().doubleType().noDefault()
-        .name("booleanField").type().booleanType().noDefault()
-        .name("decimalField").type(decimalType).noDefault()
-        .endRecord();
+    HoodieSchema decimalType = HoodieSchema.createDecimal(10, 2);
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("floatField", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+        HoodieSchemaField.of("doubleField", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
+        HoodieSchemaField.of("booleanField", HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
+        HoodieSchemaField.of("decimalField", decimalType)
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Given: Record index partition exists
       Set<String> partitions = new HashSet<>();
@@ -312,8 +306,7 @@ public class TestHoodieIndexUtils {
       
       // When: Checking eligibility for secondary index
       // Then: Should not throw exception because float is now supported for secondary index
-      assertThrows(HoodieMetadataIndexException.class,
-          () -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
+      assertDoesNotThrow(() -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
           mockMetaClient, PARTITION_NAME_SECONDARY_INDEX, options, columns, "test_index"));
       
       // Test case 2: Supported double field (now supported)
@@ -351,8 +344,7 @@ public class TestHoodieIndexUtils {
           () -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
               mockMetaClient, PARTITION_NAME_SECONDARY_INDEX, options, columns, "test_index"));
       assertTrue(ex4.getMessage().contains("unsupported data type"));
-      assertTrue(ex4.getMessage().contains("BYTES with logical type"));
-      assertTrue(ex4.getMessage().contains("Decimal"));
+      assertTrue(ex4.getMessage().contains("DECIMAL"));
       assertTrue(ex4.getMessage().contains("Secondary indexes only support"));
 
       // Test case 5: Mix of supported fields (now including double)
@@ -378,20 +370,16 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForSecondaryIndexWithLogicalTypes() {
     // Given: A schema with timestamp and date logical types
-    Schema timestampMillis = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema date = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .name("timestampField").type(timestampMillis).noDefault()
-        .name("dateField").type(date).noDefault()
-        .endRecord();
+    HoodieSchema timestampMillis = HoodieSchema.createTimestampMillis();
+    HoodieSchema date = HoodieSchema.createDate();
 
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+          HoodieSchemaField.of("timestampField", timestampMillis),
+          HoodieSchemaField.of("dateField", date)
+        ));
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Given: Record index partition exists
       Set<String> partitions = new HashSet<>();
@@ -420,16 +408,13 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForSecondaryIndexWithoutRecordIndex() {
     // Given: A schema with supported data types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING))
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Test case 1: No record index partition and not enabled in options
       // Given: No record index partition exists and not enabled in options
@@ -471,19 +456,16 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForExpressionIndex() {
     // Given: A schema with various data types including complex types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .name("floatField").type().floatType().noDefault()
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("floatField", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+        HoodieSchemaField.of("arrayField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
+        HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       Map<String, Map<String, String>> columns = new HashMap<>();
       Map<String, String> options = new HashMap<>();
@@ -544,18 +526,17 @@ public class TestHoodieIndexUtils {
    */
   @Test
   public void testIsEligibleForExpressionIndexWithNullableFields() {
+    // An int with default 0 must have the int type defined first.
+    // If null is defined first, which HoodieSchema#createNullable does, an error will be thrown
+    HoodieSchema nullableIntWithDefault = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.NULL));
     // Given: A schema with nullable fields (union types)
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .optionalString("nullableStringField")
-        .name("nullableIntField").type().nullable().intType().intDefault(0)
-        .endRecord();
-
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("nullableStringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nullableIntField", nullableIntWithDefault, null, 0)
+    ));
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       Map<String, Map<String, String>> columns = new HashMap<>();
       columns.put("nullableStringField", Collections.emptyMap());
@@ -578,19 +559,18 @@ public class TestHoodieIndexUtils {
    */
   @Test
   public void testIsEligibleForSecondaryIndexWithNullableFields() {
+    HoodieSchema nullableIntWithDefault = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.NULL));
+    HoodieSchema nullableLongWithDefault = HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.NULL));
     // Given: A schema with nullable fields that are supported for secondary index
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .optionalString("nullableStringField")
-        .name("nullableIntField").type().nullable().intType().intDefault(0)
-        .name("nullableLongField").type().nullable().longType().longDefault(0L)
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+          HoodieSchemaField.of("nullableStringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("nullableIntField", nullableIntWithDefault, null, 0),
+          HoodieSchemaField.of("nullableLongField", nullableLongWithDefault, null, 0L)
+        ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Given: Record index partition exists
       Set<String> partitions = new HashSet<>();
@@ -620,26 +600,23 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForSecondaryIndexWithAllLogicalTypes() {
     // Given: A schema with all supported timestamp logical types
-    Schema timestampMillis = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema timestampMicros = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    Schema date = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    Schema timeMillis = LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
-    Schema timeMicros = LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
-    
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .name("timestampMillisField").type(timestampMillis).noDefault()
-        .name("timestampMicrosField").type(timestampMicros).noDefault()
-        .name("dateField").type(date).noDefault()
-        .name("timeMillisField").type(timeMillis).noDefault()
-        .name("timeMicrosField").type(timeMicros).noDefault()
-        .endRecord();
+    HoodieSchema timestampMillis = HoodieSchema.createTimestampMillis();
+    HoodieSchema timestampMicros = HoodieSchema.createTimestampMicros();
+    HoodieSchema date = HoodieSchema.createDate();
+    HoodieSchema timeMillis = HoodieSchema.createTimeMillis();
+    HoodieSchema timeMicros = HoodieSchema.createTimeMicros();
+
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestampMillisField", timestampMillis),
+        HoodieSchemaField.of("timestampMicrosField", timestampMicros),
+        HoodieSchemaField.of("dateField", date),
+        HoodieSchemaField.of("timeMillisField", timeMillis),
+        HoodieSchemaField.of("timeMicrosField", timeMicros)
+        ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Given: Record index is enabled
       Set<String> partitions = new HashSet<>();
@@ -671,16 +648,13 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForSecondaryIndexWithColumnNotInSchema() {
     // Given: A schema without the requested column
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("existingField")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("existingField", HoodieSchema.create(HoodieSchemaType.STRING))
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Given: Record index is enabled
       Set<String> partitions = new HashSet<>();
@@ -711,19 +685,16 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForSecondaryIndexWithStringLogicalTypes() {
     // Given: A schema with UUID logical type on string field
-    Schema uuidSchema = LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING));
-    
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .name("uuidField").type(uuidSchema).noDefault()
-        .requiredString("regularStringField")
-        .endRecord();
+    HoodieSchema uuidSchema = HoodieSchema.createUUID();
+
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+          HoodieSchemaField.of("uuidField", uuidSchema),
+          HoodieSchemaField.of("regularStringField", HoodieSchema.create(HoodieSchemaType.STRING))
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       // Given: Record index is enabled
       Set<String> partitions = new HashSet<>();
@@ -767,16 +738,13 @@ public class TestHoodieIndexUtils {
   @Test
   public void testIsEligibleForExpressionIndexWithColumnNotInSchema() {
     // Given: A schema without the requested column
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("existingField")
-        .endRecord();
+    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("existingField", HoodieSchema.create(HoodieSchemaType.STRING))
+    ));
 
     // Mock the schema resolver
     try (MockedConstruction<TableSchemaResolver> mockedResolver = Mockito.mockConstruction(TableSchemaResolver.class,
-        (mock, context) -> {
-          when(mock.getTableAvroSchema()).thenReturn(schema);
-        })) {
+        (mock, context) -> when(mock.getTableSchema()).thenReturn(schema))) {
 
       Map<String, Map<String, String>> columns = new HashMap<>();
       columns.put("nonExistentField", Collections.emptyMap());

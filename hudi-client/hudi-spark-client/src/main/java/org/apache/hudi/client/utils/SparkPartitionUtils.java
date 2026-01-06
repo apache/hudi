@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +41,7 @@ public class SparkPartitionUtils {
         partitionFields.get(),
         partitionPath,
         new StoragePath(basePath),
-        AvroConversionUtils.convertAvroSchemaToStructType(writerSchema.toAvroSchema()),
+        HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(writerSchema),
         hadoopConf.get("timeZone", SQLConf.get().sessionLocalTimeZone()),
         hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true));
   }
