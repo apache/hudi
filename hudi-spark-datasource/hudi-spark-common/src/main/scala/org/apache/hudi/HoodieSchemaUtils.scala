@@ -46,91 +46,224 @@ import scala.collection.JavaConverters._
 object HoodieSchemaUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
+  /**
+   * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
+   * These patterns are specifically used for column stats generation and differ from
+   * InternalSchema constants which are used in schema evolution contexts.
+   */
+  private final val ARRAY_LIST = "list"
+  private final val ARRAY_ELEMENT = "element"
+  private final val ARRAY_SPARK = "array" // Spark writer uses this
+  private final val MAP_KEY_VALUE = "key_value"
+  private final val MAP_KEY = "key"
+  private final val MAP_VALUE = "value"
+
+  private final val ARRAY_LIST_ELEMENT = ARRAY_LIST + "." + ARRAY_ELEMENT
+  private final val MAP_KEY_VALUE_KEY = MAP_KEY_VALUE + "." + MAP_KEY
+  private final val MAP_KEY_VALUE_VALUE = MAP_KEY_VALUE + "." + MAP_VALUE
+
+  /**
+   * Advances offset past a component name in the path, handling end-of-path and dot separator.
+   *
+   * @param path      the full path string
+   * @param offset    current position in path
+   * @param component the component name to match (e.g., "element", "key", "value")
+   * @return new offset after component and dot, or path.length() if at end, or -1 if no match
+   */
+  private def getNextOffset(path: String, offset: Int, component: String): Int = {
+    if (!path.regionMatches(offset, component, 0, component.length)) {
+      -1
+    } else {
+      val next = offset + component.length
+      if (next == path.length) {
+        next
+      } else {
+        if (path.charAt(next) == '.') next + 1 else -1
+      }
+    }
+  }
+
+  /**
+   * Handles navigation into ARRAY types using the Avro ".list.element" pattern.
+   *
+   * @param arrayType  the ArrayType to navigate into
+   * @param fullPath   the full field path string
+   * @param offset     current position in fullPath (should point to start of "list")
+   * @param prefix     the accumulated field path prefix
+   * @param rootFieldName the name of the array field
+   * @return Pair of canonical field name and the StructField
+   */
+  private def handleArrayNavigationAvro(arrayType: ArrayType, fullPath: String, offset: Int,
+                                        prefix: String, rootFieldName: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
+    val elementType = arrayType.elementType
+    val listOffset = getNextOffset(fullPath, offset, ARRAY_LIST)
+
+    if (listOffset == -1) {
+      throw new HoodieException(s"Array field requires .$ARRAY_LIST.$ARRAY_ELEMENT accessor pattern: $fullPath")
+    }
+
+    val elementOffset = getNextOffset(fullPath, listOffset, ARRAY_ELEMENT)
+    if (elementOffset == -1) {
+      throw new HoodieException(s"Array field requires .$ARRAY_LIST.$ARRAY_ELEMENT accessor pattern: $fullPath")
+    }
+
+    if (elementOffset == fullPath.length) {
+      // Terminal case: just accessing the element type
+      val elementField = StructField(ARRAY_ELEMENT, elementType, arrayType.containsNull)
+      org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + "." + ARRAY_LIST_ELEMENT, elementField)
+    } else if (elementType.isInstanceOf[StructType]) {
+      // Recursive case: accessing fields within array elements
+      getSchemaForFieldInternal(elementType.asInstanceOf[StructType], fullPath, elementOffset,
+        prefix + rootFieldName + "." + ARRAY_LIST_ELEMENT + ".")
+    } else {
+      throw new HoodieException(s"Invalid array navigation pattern: $fullPath")
+    }
+  }
+
+  /**
+   * Handles navigation into ARRAY types using the Spark ".array" pattern.
+   *
+   * @param arrayType  the ArrayType to navigate into
+   * @param fullPath   the full field path string
+   * @param offset     current position in fullPath (should point to start of "array")
+   * @param prefix     the accumulated field path prefix
+   * @param rootFieldName the name of the array field
+   * @return Pair of canonical field name and the StructField
+   */
+  private def handleArrayNavigationSpark(arrayType: ArrayType, fullPath: String, offset: Int,
+                                         prefix: String, rootFieldName: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
+    val elementType = arrayType.elementType
+    val sparkArrayOffset = getNextOffset(fullPath, offset, ARRAY_SPARK)
+
+    if (sparkArrayOffset == -1) {
+      throw new HoodieException(s"Array field requires .$ARRAY_SPARK accessor pattern: $fullPath")
+    }
+
+    if (sparkArrayOffset == fullPath.length) {
+      // Terminal case: just accessing the element type
+      val elementField = StructField(ARRAY_SPARK, elementType, arrayType.containsNull)
+      org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + "." + ARRAY_SPARK, elementField)
+    } else if (elementType.isInstanceOf[StructType]) {
+      // Recursive case: accessing fields within array elements
+      getSchemaForFieldInternal(elementType.asInstanceOf[StructType], fullPath, sparkArrayOffset,
+        prefix + rootFieldName + "." + ARRAY_SPARK + ".")
+    } else {
+      throw new HoodieException(s"Invalid array navigation pattern: $fullPath")
+    }
+  }
+
+  /**
+   * Handles navigation into MAP types using the Parquet-style ".key_value.key" or ".key_value.value" patterns.
+   *
+   * @param mapType    the MapType to navigate into
+   * @param fullPath   the full field path string
+   * @param offset     current position in fullPath (should point to start of "key_value")
+   * @param prefix     the accumulated field path prefix
+   * @param rootFieldName the name of the map field
+   * @return Pair of canonical field name and the StructField
+   */
+  private def handleMapNavigation(mapType: MapType, fullPath: String, offset: Int,
+                                   prefix: String, rootFieldName: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
+    val keyValueOffset = getNextOffset(fullPath, offset, MAP_KEY_VALUE)
+    if (keyValueOffset == -1) {
+      throw new HoodieException(s"Invalid map navigation pattern: $fullPath. Expected .$MAP_KEY_VALUE_KEY or .$MAP_KEY_VALUE_VALUE")
+    }
+
+    // Check for .key pattern
+    val keyOffset = getNextOffset(fullPath, keyValueOffset, MAP_KEY)
+    if (keyOffset != -1) {
+      // Accessing map keys (always the key type)
+      val keyField = StructField(MAP_KEY, mapType.keyType, false)
+      if (keyOffset == fullPath.length) {
+        org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + "." + MAP_KEY_VALUE_KEY, keyField)
+      } else {
+        throw new HoodieException(s"Cannot navigate beyond map key: $fullPath")
+      }
+    } else {
+      // Check for .value pattern
+      val valueOffset = getNextOffset(fullPath, keyValueOffset, MAP_VALUE)
+      if (valueOffset == -1) {
+        throw new HoodieException(s"Invalid map navigation pattern: $fullPath. Expected .$MAP_KEY_VALUE_KEY or .$MAP_KEY_VALUE_VALUE")
+      }
+
+      val valueType = mapType.valueType
+      if (valueOffset == fullPath.length) {
+        // Terminal case: just accessing the value type
+        val valueField = StructField(MAP_VALUE, valueType, mapType.valueContainsNull)
+        org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + "." + MAP_KEY_VALUE_VALUE, valueField)
+      } else if (valueType.isInstanceOf[StructType]) {
+        // Recursive case: accessing fields within map values
+        getSchemaForFieldInternal(valueType.asInstanceOf[StructType], fullPath, valueOffset,
+          prefix + rootFieldName + "." + MAP_KEY_VALUE_VALUE + ".")
+      } else {
+        throw new HoodieException(s"Invalid map value navigation pattern: $fullPath")
+      }
+    }
+  }
+
+  /**
+   * Internal helper method for retrieving nested fields using offset-based navigation.
+   * This method uses offset arithmetic to navigate through the path string instead of
+   * creating intermediate substring objects, improving performance and memory efficiency.
+   *
+   * @param schema   the schema to search in
+   * @param fullPath the full field path string
+   * @param offset   current position in fullPath
+   * @param prefix   the accumulated field path prefix
+   * @return Pair of canonical field name and the StructField
+   * @throws HoodieException if field is not found or navigation pattern is invalid
+   */
+  private def getSchemaForFieldInternal(schema: StructType, fullPath: String, offset: Int, prefix: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
+    val nextDot = fullPath.indexOf('.', offset)
+
+    // Terminal case: no more dots in this segment
+    if (nextDot == -1) {
+      val fieldName = fullPath.substring(offset)
+      val fieldIndex = schema.fieldIndex(fieldName)
+      val field = schema.fields(fieldIndex)
+      org.apache.hudi.common.util.collection.Pair.of(prefix + field.name, field)
+    } else {
+      // Recursive case: more nesting to explore
+      val rootFieldName = fullPath.substring(offset, nextDot)
+      val rootFieldIndex = schema.fieldIndex(rootFieldName)
+      val rootField = schema.fields(rootFieldIndex)
+      if (rootField == null) {
+        throw new HoodieException("Failed to find " + fullPath + " in the table schema ")
+      }
+      val nextOffset = nextDot + 1
+      // Handle ARRAY type with .array pattern (Spark) or .list.element pattern (Avro)
+      if (rootField.dataType.isInstanceOf[ArrayType]) {
+        val arrayType = rootField.dataType.asInstanceOf[ArrayType]
+        // Try Spark pattern first: .array
+        val sparkArrayOffset = getNextOffset(fullPath, nextOffset, ARRAY_SPARK)
+        if (sparkArrayOffset != -1) {
+          handleArrayNavigationSpark(arrayType, fullPath, nextOffset, prefix, rootFieldName)
+        } else {
+          // Try Avro pattern: .list.element
+          handleArrayNavigationAvro(arrayType, fullPath, nextOffset, prefix, rootFieldName)
+        }
+      }
+      // Handle MAP type with .key_value.key or .key_value.value pattern
+      else if (rootField.dataType.isInstanceOf[MapType]) {
+        val mapType = rootField.dataType.asInstanceOf[MapType]
+        handleMapNavigation(mapType, fullPath, nextOffset, prefix, rootFieldName)
+      }
+      // Handle standard STRUCT type
+      else if (rootField.dataType.isInstanceOf[StructType]) {
+        getSchemaForFieldInternal(rootField.dataType.asInstanceOf[StructType], fullPath, nextOffset, prefix + rootFieldName + ".")
+      }
+      else {
+        throw new HoodieException(s"Unsupported field type for navigation: ${rootField.dataType} for field $fullPath")
+      }
+    }
+  }
+
   def getSchemaForField(schema: StructType, fieldName: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
     getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING)
   }
 
   def getSchemaForField(schema: StructType, fieldName: String, prefix: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
-    if (!(fieldName.contains("."))) {
-      org.apache.hudi.common.util.collection.Pair.of(prefix + schema.fields(schema.fieldIndex(fieldName)).name, schema.fields(schema.fieldIndex(fieldName)))
-    }
-    else {
-      val rootFieldIndex: Int = fieldName.indexOf(".")
-      val rootFieldName = fieldName.substring(0, rootFieldIndex)
-      val rootField: StructField = schema.fields(schema.fieldIndex(rootFieldName))
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ")
-      }
-
-      val remainingPath = fieldName.substring(rootFieldIndex + 1)
-
-      // Handle ARRAY type with .array pattern (Spark) or .list.element pattern (Avro)
-      if (rootField.dataType.isInstanceOf[ArrayType]) {
-        val arrayType = rootField.dataType.asInstanceOf[ArrayType]
-        val elementType = arrayType.elementType
-
-        // Determine which pattern is being used (Spark: .array, Avro: .list.element)
-        val arrayPattern = if (remainingPath == "array" || remainingPath.startsWith("array.")) {
-          Some(("array", "array".length))
-        } else if (remainingPath == "list.element" || remainingPath.startsWith("list.element.")) {
-          Some(("list.element", "list.element".length))
-        } else {
-          None
-        }
-
-        arrayPattern match {
-          case Some((pattern, patternLength)) =>
-            if (remainingPath == pattern) {
-              // Terminal case: just accessing the element type
-              val elementField = StructField("element", elementType, arrayType.containsNull)
-              org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + "." + pattern, elementField)
-            } else if (remainingPath.startsWith(pattern + ".") && elementType.isInstanceOf[StructType]) {
-              // Recursive case: accessing fields within array elements
-              val nestedPath = remainingPath.substring(patternLength + 1)
-              getSchemaForField(elementType.asInstanceOf[StructType], nestedPath, prefix + rootFieldName + "." + pattern + ".")
-            } else {
-              throw new HoodieException(s"Invalid array navigation pattern: $fieldName")
-            }
-          case None =>
-            throw new HoodieException(s"Array field requires .array or .list.element accessor pattern: $fieldName")
-        }
-      }
-      // Handle MAP type with .key_value.key or .key_value.value pattern
-      else if (rootField.dataType.isInstanceOf[MapType] && remainingPath.startsWith("key_value.")) {
-        val mapType = rootField.dataType.asInstanceOf[MapType]
-        if (remainingPath.startsWith("key_value.key")) {
-          // Accessing map keys (always the key type)
-          val keyField = StructField("key", mapType.keyType, false)
-          if (remainingPath == "key_value.key") {
-            org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + ".key_value.key", keyField)
-          } else {
-            throw new HoodieException(s"Cannot navigate beyond map key: $fieldName")
-          }
-        } else if (remainingPath.startsWith("key_value.value")) {
-          val valueType = mapType.valueType
-          if (remainingPath == "key_value.value") {
-            // Terminal case: just accessing the value type
-            val valueField = StructField("value", valueType, mapType.valueContainsNull)
-            org.apache.hudi.common.util.collection.Pair.of(prefix + rootFieldName + ".key_value.value", valueField)
-          } else if (remainingPath.startsWith("key_value.value.") && valueType.isInstanceOf[StructType]) {
-            // Recursive case: accessing fields within map values
-            val nestedPath = remainingPath.substring("key_value.value.".length)
-            getSchemaForField(valueType.asInstanceOf[StructType], nestedPath, prefix + rootFieldName + ".key_value.value.")
-          } else {
-            throw new HoodieException(s"Invalid map value navigation pattern: $fieldName")
-          }
-        } else {
-          throw new HoodieException(s"Invalid map navigation pattern: $fieldName. Expected .key_value.key or .key_value.value")
-        }
-      }
-      // Handle standard STRUCT type
-      else if (rootField.dataType.isInstanceOf[StructType]) {
-        getSchemaForField(rootField.dataType.asInstanceOf[StructType], remainingPath, prefix + rootFieldName + ".")
-      }
-      else {
-        throw new HoodieException(s"Unsupported field type for navigation: ${rootField.dataType} for field $fieldName")
-      }
-    }
+    getSchemaForFieldInternal(schema, fieldName, 0, prefix)
   }
 
   /**
