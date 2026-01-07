@@ -683,7 +683,7 @@ public class HoodieMDTStats  implements Closeable {
         .format("hudi")
         .option("hoodie.table.name", tableName)
         .option("hoodie.datasource.write.recordkey.field", "id")
-        .option("hoodie.datasource.write.partitionpath.field", "city")
+        .option("hoodie.datasource.write.partitionpath.field", "dt")
         .option("hoodie.datasource.write.table.name", tableName)
         .option("hoodie.datasource.write.operation", "insert")
         .option("hoodie.datasource.write.precombine.field", "id")
