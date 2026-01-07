@@ -74,7 +74,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -110,7 +109,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -797,64 +795,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                boolean consistencyCheckEnabled,
                                boolean shouldFailOnDuplicateDataFileDetection,
                                WriteMarkers markers) throws HoodieIOException {
-    try {
-      // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
-      // (but succeeded on retry) tasks are removed.
-      String basePath = getMetaClient().getBasePath().toString();
-
-      if (!markers.doesMarkerDirExist()) {
-        // can happen if it was an empty write say.
-        return;
-      }
-
-      // Ignores log file appended for update, since they are already fail-safe.
-      // but new created log files should be included.
-      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
-      Set<String> validDataPaths = stats.stream()
-          .map(HoodieWriteStat::getPath)
-          .collect(Collectors.toSet());
-      Set<String> validCdcDataPaths = stats.stream()
-          .map(HoodieWriteStat::getCdcStats)
-          .filter(Objects::nonNull)
-          .flatMap(cdcStat -> cdcStat.keySet().stream())
-          .collect(Collectors.toSet());
-
-      // Contains list of partially created files. These needs to be cleaned up.
-      invalidDataPaths.removeAll(validDataPaths);
-      invalidDataPaths.removeAll(validCdcDataPaths);
-
-      if (!invalidDataPaths.isEmpty()) {
-        if (shouldFailOnDuplicateDataFileDetection) {
-          throw new HoodieDuplicateDataFileDetectedException("Duplicate data files detected " + invalidDataPaths);
-        }
-
-        log.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
-        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
-            .map(dp ->
-                Pair.of(new StoragePath(basePath, dp).getParent().toString(),
-                    new StoragePath(basePath, dp).toString()))
-            .collect(Collectors.groupingBy(Pair::getKey));
-
-        // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
-        // Otherwise, we may miss deleting such files. If files are not found even after retries, fail the commit
-        if (consistencyCheckEnabled) {
-          // This will either ensure all files to be deleted are present.
-          waitForAllFiles(context, invalidPathsByPartition, FileVisibility.APPEAR);
-        }
-
-        // Now delete partially written files
-        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files: " + config.getTableName());
-        deleteInvalidFilesByPartitions(context, invalidPathsByPartition);
-
-        // Now ensure the deleted files disappear
-        if (consistencyCheckEnabled) {
-          // This will either ensure all files to be deleted are absent.
-          waitForAllFiles(context, invalidPathsByPartition, FileVisibility.DISAPPEAR);
-        }
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
+    log.warn("Skipping reconcile markers for instant: {}", instantTs);
+    return;
   }
 
   /**
