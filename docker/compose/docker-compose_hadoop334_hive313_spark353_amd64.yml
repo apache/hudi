@@ -147,15 +147,26 @@ services:
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
   kafka:
-    image: 'bitnami/kafka:3.4.1'
+    image: 'apache/kafka:3.7.2'
     platform: linux/amd64
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
       - "9092:9092" # Kafka Broker
     environment:
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      - 'KAFKA_NODE_ID=1'
+      - 'KAFKA_PROCESS_ROLES=broker,controller'
+      - 'KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092'
+      - 'KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafkabroker:29092,PLAINTEXT_HOST://localhost:9092'
+      - 'KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER'
+      - 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      - 'KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT'
+      - 'KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafkabroker:9093'
+      - 'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1'
+      - 'KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1'
+      - 'KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1'
+      - 'KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0'
+      - 'KAFKA_NUM_PARTITIONS=3'
   sparkmaster:
     image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkmaster_3.5.3:latest
     platform: linux/amd64
