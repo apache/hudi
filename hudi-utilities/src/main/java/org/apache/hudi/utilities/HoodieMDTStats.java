@@ -127,8 +127,8 @@ public class HoodieMDTStats  implements Closeable {
     @Parameter(names = {"--table-base-path", "-tbp"}, description = "Number of columns to index", required = true)
     public String tableBasePath = null;
 
-    @Parameter(names = {"--num-cols-to-index", "-num-cols"}, description = "Number of columns to index", required = true)
-    public Integer numColumnsToIndex = 2;
+    @Parameter(names = {"--cols-to-index", "-num-cols"}, description = "Number of columns to index", required = true)
+    public String colsToIndex = "age,salary";
 
     @Parameter(names = {"--col-stats-file-group-count", "-col-fg-count"}, description = "Target Base path for the table", required = true)
     public Integer colStatsFileGroupCount = 10;
@@ -154,7 +154,7 @@ public class HoodieMDTStats  implements Closeable {
     @Override
     public String toString() {
       return "TableSizeStats {\n"
-          + "   --numColumnsToIndex " + numColumnsToIndex + ", \n"
+          + "   --col-to-index " + colsToIndex + ", \n"
           + "   --col-stats-file-group-count " + colStatsFileGroupCount + ", \n"
           + "\n}";
     }
@@ -194,7 +194,7 @@ public class HoodieMDTStats  implements Closeable {
     int numPartitions = cfg.numPartitions;
 
     LOG.info("Starting MDT stats test with {} files, {} partitions, {} columns, {} file groups",
-        numFiles, numPartitions, cfg.numColumnsToIndex, cfg.colStatsFileGroupCount);
+        numFiles, numPartitions, cfg.colsToIndex, cfg.colStatsFileGroupCount);
     LOG.info("Data table base path: {}", cfg.tableBasePath);
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(cfg.tableBasePath);
     LOG.info("Metadata table base path: {}", metadataTableBasePath);
@@ -252,7 +252,7 @@ public class HoodieMDTStats  implements Closeable {
     // STEP 3: Write both /files and /column_stats partitions to metadata table in a single commit
     @SuppressWarnings("rawtypes")
     Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats =
-        writeFilesAndColumnStatsToMetadataTable(dataConfig, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig, cfg.numColumnsToIndex);
+        writeFilesAndColumnStatsToMetadataTable(dataConfig, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig);
 
     // STEP 4: Print column stats for verification (up to 10 files per partition)
     printColumnStatsForVerification(commitMetadata, expectedStats);
@@ -494,7 +494,6 @@ public class HoodieMDTStats  implements Closeable {
    * @param commitMetadata The commit metadata containing file information
    * @param dataCommitTime The commit time for the data table commit
    * @param mdtWriteConfig The write config for the metadata table
-   * @param numColumns The number of columns to generate stats for
    * @return Map of file names to their column stats metadata for verification
    * @throws Exception if there's an error writing to the metadata table
    */
@@ -504,8 +503,7 @@ public class HoodieMDTStats  implements Closeable {
       HoodieTableMetaClient dataMetaClient,
       HoodieCommitMetadata commitMetadata,
       String dataCommitTime,
-      HoodieWriteConfig mdtWriteConfig,
-      int numColumns) throws Exception {
+      HoodieWriteConfig mdtWriteConfig) throws Exception {
 
     try (HoodieTableMetadataWriter<?, ?> metadataWriter = SparkMetadataWriterFactory.create(
         engineContext.getStorageConf(),
@@ -565,7 +563,6 @@ public class HoodieMDTStats  implements Closeable {
       Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats = new HashMap<>();
       List<HoodieRecord<HoodieMetadataPayload>> columnStatsRecords = generateColumnStatsRecordsForCommitMetadata(
           commitMetadata,
-          numColumns,
           expectedStats,
           dataCommitTime);
 
@@ -746,7 +743,6 @@ public class HoodieMDTStats  implements Closeable {
   @SuppressWarnings("rawtypes")
   private List<HoodieRecord<HoodieMetadataPayload>> generateColumnStatsRecordsForCommitMetadata(
       HoodieCommitMetadata commitMetadata,
-      int numColumns,
       Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStatsMap,
       String commitTime) {
 
@@ -775,6 +771,7 @@ public class HoodieMDTStats  implements Closeable {
 
         // Generate stats for age (int) and salary (long) columns
         String[] columnNames = getColumnsToIndex();
+        int numColumns = columnNames.length;
         for (int colIdx = 0; colIdx < numColumns; colIdx++) {
           String colName = columnNames[colIdx];
 
@@ -857,8 +854,7 @@ public class HoodieMDTStats  implements Closeable {
   }
 
   private String[] getColumnsToIndex() {
-    String[] allColumns = new String[]{"age", "salary", "name", "city"};
-    return Arrays.copyOfRange(allColumns, 0, cfg.numColumnsToIndex);
+    return cfg.colsToIndex.split(",");
   }
 
   private HoodieWriteConfig getWriteConfig(String tableName, String schemaStr, String basePath, HoodieFailedWritesCleaningPolicy cleaningPolicy) {
