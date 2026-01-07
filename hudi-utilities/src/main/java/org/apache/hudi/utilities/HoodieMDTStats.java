@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -67,7 +85,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -78,7 +95,7 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
 
-public class HoodieMDTStats  implements Closeable {
+public class HoodieMDTStats implements Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMDTStats.class);
 
@@ -94,19 +111,20 @@ public class HoodieMDTStats  implements Closeable {
 
   private final HoodieEngineContext engineContext;
 
-  private static final String avroSchema = "{\n" +
-      "  \"type\": \"record\",\n" +
-      "  \"name\": \"Employee\",\n" +
-      "  \"namespace\": \"com.example.avro\",\n" +
-      "  \"fields\": [\n" +
-      "    { \"name\": \"id\", \"type\": \"string\" },\n" +
-      "    { \"name\": \"name\", \"type\": \"string\" },\n" +
-      "    { \"name\": \"city\", \"type\": \"string\" },\n" +
-      "    { \"name\": \"age\", \"type\": \"int\" },\n" +
-      "    { \"name\": \"salary\", \"type\": \"double\" },\n" +
-      "    { \"name\": \"dt\", \"type\": \"string\" }\n" +
-      "  ]\n" +
-      "}\n";
+  private static final String AVRO_SCHEMA =
+      "{\n"
+          + "  \"type\": \"record\",\n"
+          + "  \"name\": \"Employee\",\n"
+          + "  \"namespace\": \"com.example.avro\",\n"
+          + "  \"fields\": [\n"
+          + "    { \"name\": \"id\", \"type\": \"string\" },\n"
+          + "    { \"name\": \"name\", \"type\": \"string\" },\n"
+          + "    { \"name\": \"city\", \"type\": \"string\" },\n"
+          + "    { \"name\": \"age\", \"type\": \"int\" },\n"
+          + "    { \"name\": \"salary\", \"type\": \"double\" },\n"
+          + "    { \"name\": \"dt\", \"type\": \"string\" }\n"
+          + "  ]\n"
+          + "}\n";
 
   public HoodieMDTStats(SparkSession spark, Config cfg) {
     this.spark = spark;
@@ -181,8 +199,7 @@ public class HoodieMDTStats  implements Closeable {
 
     try (HoodieMDTStats hoodieMDTStats = new HoodieMDTStats(spark, cfg)) {
       hoodieMDTStats.run();
-    }
-    catch (Throwable throwable) {
+    } catch (Throwable throwable) {
       LOG.error("Failed to get table size stats for " + cfg, throwable);
     } finally {
       spark.stop();
@@ -202,7 +219,7 @@ public class HoodieMDTStats  implements Closeable {
     String tableName = "test_mdt_stats_tbl";
     initializeTableWithSampleData(tableName);
     // Create data table config with metadata enabled
-    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, avroSchema, cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, AVRO_SCHEMA, cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
     HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
     HoodieWriteConfig dataConfig = HoodieWriteConfig.newBuilder()
         .withProperties(dataWriteConfig.getProps())
@@ -264,11 +281,11 @@ public class HoodieMDTStats  implements Closeable {
   /**
    * Generates a list of date-based partition paths incrementing by day.
    * Starting from 2020-01-01, creates partitions for consecutive days based on numPartitions.
-   *
+   * <p>
    * Example:
-   *   numPartitions = 1  -> ["2020-01-01"]
-   *   numPartitions = 3  -> ["2020-01-01", "2020-01-02", "2020-01-03"]
-   *   numPartitions = 10 -> ["2020-01-01", "2020-01-02", ..., "2020-01-10"]
+   * numPartitions = 1  -> ["2020-01-01"]
+   * numPartitions = 3  -> ["2020-01-01", "2020-01-02", "2020-01-03"]
+   * numPartitions = 10 -> ["2020-01-01", "2020-01-02", ..., "2020-01-10"]
    *
    * @param numPartitions Number of partitions to generate
    * @return List of partition paths in yyyy-MM-dd format
@@ -301,7 +318,7 @@ public class HoodieMDTStats  implements Closeable {
    * This helps verify that column stats were constructed properly before querying.
    *
    * @param commitMetadata The commit metadata containing partition and file information
-   * @param expectedStats The expected column stats map (file name -> column name -> stats)
+   * @param expectedStats  The expected column stats map (file name -> column name -> stats)
    */
   @SuppressWarnings("rawtypes")
   private void printColumnStatsForVerification(
@@ -359,10 +376,10 @@ public class HoodieMDTStats  implements Closeable {
   /**
    * Query the column stats index using HoodieFileIndex.filterFileSlices and verify results.
    *
-   * @param dataConfig The write config for the data table
+   * @param dataConfig     The write config for the data table
    * @param dataMetaClient The meta client for the data table
-   * @param expectedStats The expected column stats for verification
-   * @param numFiles The total number of files in the commit
+   * @param expectedStats  The expected column stats for verification
+   * @param numFiles       The total number of files in the commit
    */
   @SuppressWarnings("rawtypes")
   private void queryAndVerifyColumnStats(
@@ -489,7 +506,7 @@ public class HoodieMDTStats  implements Closeable {
    * This method handles initialization of partitions if needed, tags records with location,
    * and writes them together to simulate how actual code writes metadata.
    *
-   * @param dataConfig The write config for the data table
+   * @param dataConfig     The write config for the data table
    * @param dataMetaClient The meta client for the data table
    * @param commitMetadata The commit metadata containing file information
    * @param dataCommitTime The commit time for the data table commit
@@ -578,12 +595,12 @@ public class HoodieMDTStats  implements Closeable {
         JavaRDD<HoodieRecord<HoodieMetadataPayload>> filesRDD = jsc.parallelize(filesRecords, 1);
         JavaRDD<HoodieRecord<HoodieMetadataPayload>> colStatsRDD = jsc.parallelize(columnStatsRecords, 1);
 
-        @SuppressWarnings({ "unchecked", "rawtypes" })
+        @SuppressWarnings({"unchecked", "rawtypes"})
         org.apache.hudi.metadata.HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>>
             sparkMetadataWriter
             = (org.apache.hudi.metadata.HoodieBackedTableMetadataWriter) metadataWriter;
 
-        @SuppressWarnings({ "rawtypes", "unchecked" })
+        @SuppressWarnings({"rawtypes", "unchecked"})
         Map<String, org.apache.hudi.common.data.HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
         partitionRecordsMap.put(
             HoodieTableMetadataUtil.PARTITION_NAME_FILES,
@@ -711,7 +728,7 @@ public class HoodieMDTStats  implements Closeable {
    * This ensures that filesystem listing will find these files even if metadata table
    * lookup falls back to filesystem.
    *
-   * @param metaClient The meta client for the data table
+   * @param metaClient     The meta client for the data table
    * @param commitMetadata The commit metadata containing file information
    */
   private void createEmptyParquetFiles(HoodieTableMetaClient metaClient,
@@ -792,7 +809,7 @@ public class HoodieMDTStats  implements Closeable {
             maxValue = maxSalary;
           }
 
-          @SuppressWarnings({ "rawtypes", "unchecked" })
+          @SuppressWarnings({"rawtypes", "unchecked"})
           int compareResult = minValue.compareTo(maxValue);
           if (compareResult > 0) {
             Comparable temp = minValue;
@@ -800,7 +817,7 @@ public class HoodieMDTStats  implements Closeable {
             maxValue = temp;
           }
 
-          @SuppressWarnings({ "rawtypes", "unchecked" })
+          @SuppressWarnings({"rawtypes", "unchecked"})
           HoodieColumnRangeMetadata<Comparable> colStats = HoodieColumnRangeMetadata.create(
               fileName,
               colName,
@@ -858,25 +875,25 @@ public class HoodieMDTStats  implements Closeable {
   }
 
   private HoodieWriteConfig getWriteConfig(String tableName, String schemaStr, String basePath, HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-      HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
-          .withProperties(props)
-          .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
-          .withWriteStatusClass(MetadataMergeWriteStatus.class)
-          .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
-          .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy).build())
-          .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-          .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
-          .forTable(tableName)
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-          .withMarkersTimelineServerBasedBatchIntervalMs(10)
-          .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-              .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-              .withRemoteServerPort(FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()).build());
-      if (StringUtils.nonEmpty(schemaStr)) {
-        builder.withSchema(schemaStr);
-      }
-      builder.withEngineType(EngineType.SPARK);
-      return builder.build();
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withProperties(props)
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
+        .withWriteStatusClass(MetadataMergeWriteStatus.class)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
+        .forTable(tableName)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
+        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
+            .withRemoteServerPort(FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()).build());
+    if (StringUtils.nonEmpty(schemaStr)) {
+      builder.withSchema(schemaStr);
+    }
+    builder.withEngineType(EngineType.SPARK);
+    return builder.build();
   }
 
   public void close() {
