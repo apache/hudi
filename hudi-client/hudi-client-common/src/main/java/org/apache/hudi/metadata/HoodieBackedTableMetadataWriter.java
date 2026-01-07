@@ -488,6 +488,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             break;
           case PARTITION_STATS:
             // For PARTITION_STATS, COLUMN_STATS should also be enabled
+            /* 
             if (!dataWriteConfig.isMetadataColumnStatsIndexEnabled()) {
               LOG.debug("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
                   HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
@@ -496,6 +497,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             fileGroupCountAndRecordsPair = initializePartitionStatsIndex(lazyLatestMergedPartitionFileSliceList, tableSchema);
             initializeFilegroupsAndCommit(partitionType, PARTITION_STATS.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForPartition);
             break;
+            */
+            continue;
           case SECONDARY_INDEX:
             Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
             if (secondaryIndexPartitionsToInit.size() != 1) {

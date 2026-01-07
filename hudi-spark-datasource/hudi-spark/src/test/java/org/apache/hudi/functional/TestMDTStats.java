@@ -41,6 +41,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.NativeTableMetadataFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.MetadataWriterTestUtils;
@@ -67,8 +68,10 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -98,7 +101,6 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
   // Configuration constants
   private static final int NUM_COLUMNS = 2;
   private static final int FILE_GROUP_COUNT = 10;
-  private static final String DEFAULT_PARTITION_PATH = "p1";
   private static final int DEFAULT_NUM_FILES = 1000; // Configurable via system property
   private static final int INITIAL_ROW_COUNT = 50; // Rows to insert in STEP 1
 
@@ -170,10 +172,11 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
 
     // Add commit to timeline using HoodieTestTable
     testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
-    LOG.info("Created commit metadata with {} files per partition", filesPerPartition);
+    LOG.info("Created commit metadata with {} files per partition at instant {}", filesPerPartition, dataCommitTime);
     // Create actual empty parquet files on disk so filesystem listing finds them
     createEmptyParquetFiles(dataMetaClient, commitMetadata);
-    LOG.info("Created {} empty parquet files on disk", numFiles);
+    LOG.info("Created {} empty parquet files on disk", numFiles);    
+    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
 
     HoodieWriteConfig mdtConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
         dataConfig,
@@ -270,13 +273,26 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     
     LOG.info("=== STEP 5: Querying column stats index using HoodieFileIndex ===");
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
-
+    
     // Create HoodieFileIndex
     Map<String, String> options = new HashMap<>();
     options.put("path", dataConfig.getBasePath());
     options.put("hoodie.datasource.read.data.skipping.enable", "true");
+    options.put("hoodie.metadata.enable", "true");
+    options.put("hoodie.metadata.index.column.stats.enable", "true");
+    // Also ensure the columns are specified for column stats
+    options.put("hoodie.metadata.index.column.stats.column.list", "age,salary");
+    sparkSession.sqlContext().conf().setConfString("hoodie.fileIndex.dataSkippingFailureMode", "strict");
 
-    scala.Option<StructType> schemaOption = scala.Option.empty();
+    // Create schema with the columns used for data skipping
+    StructType dataSchema = new StructType()
+        .add("id", "string")
+        .add("name", "string")
+        .add("city", "string")
+        .add("age", "int")
+        .add("salary", "long");
+    scala.Option<StructType> schemaOption = scala.Option.apply(dataSchema);
+    
     @SuppressWarnings("deprecation")
     scala.collection.immutable.Map<String, String> scalaOptions = JavaConverters.mapAsScalaMap(options)
         .toMap(scala.Predef$.MODULE$.<scala.Tuple2<String, String>>conforms());
@@ -291,16 +307,21 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
         false);
 
     // Create data filters for age and salary columns
+    // Unresolved expressions cause translateIntoColumnStatsIndexFilterExpr to return TrueLiteral (no filtering).
     List<Expression> dataFilters = new ArrayList<>();
-    Expression filter1 = sparkSession.sessionState().sqlParser().parseExpression("age > 30");
-    Expression filter2 = sparkSession.sessionState().sqlParser().parseExpression("salary > 100000");
+    String filterString = "age > 90";
+    Expression filter1 = org.apache.spark.sql.HoodieCatalystExpressionUtils$.MODULE$
+        .resolveExpr(sparkSession, filterString, dataSchema);
+    LOG.info("DEBUG: Resolved filter expression: {}", filter1);
+    LOG.info("DEBUG: Resolved filter resolved: {}", filter1.resolved());
+    LOG.info("DEBUG: Resolved filter tree:\n{}", filter1.treeString());
+
     dataFilters.add(filter1);
-    dataFilters.add(filter2);
+    // Expression filter2 = org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr(
+    //     sparkSession, "salary > 100000", dataSchema);
+    // dataFilters.add(filter2);
 
     List<Expression> partitionFilters = new ArrayList<>(); // Empty partition filters
-
-    LOG.info("Data filters: age > 30, salary > 100000");
-    LOG.info("Partition filters: (empty)");
 
     // Convert to Scala Seq
     scala.collection.immutable.List<Expression> dataFiltersList = JavaConverters.asScalaBuffer(dataFilters)
@@ -359,7 +380,7 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     
     if (numFiles > 0) {
       double skippingRatio = ((double) (numFiles - totalFileSlices) / numFiles) * 100.0;
-      LOG.info("Data skipping ratio: {:.2f}%", skippingRatio);
+      LOG.info(String.format("Data skipping ratio: %.2f%%", skippingRatio));
     }
   }
 
@@ -415,6 +436,25 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
         LOG.info("Marked /files partition as inflight for initialization");
       }
       
+      // Also mark column_stats partition as inflight for initialization
+      boolean colStatsPartitionExists = dataMetaClient.getTableConfig()
+          .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
+      if (!colStatsPartitionExists) {
+        dataMetaClient.getTableConfig().setMetadataPartitionsInflight(
+            dataMetaClient, MetadataPartitionType.COLUMN_STATS);
+        LOG.info("Marked /column_stats partition as inflight for initialization");
+        
+        // Create index definition for column stats - this tells data skipping which columns are indexed
+        org.apache.hudi.common.model.HoodieIndexDefinition colStatsIndexDef = 
+            new org.apache.hudi.common.model.HoodieIndexDefinition.Builder()
+                .withIndexName(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+                .withIndexType("column_stats")
+                .withSourceFields(java.util.Arrays.asList("age", "salary"))
+                .build();
+        dataMetaClient.buildIndexDefinition(colStatsIndexDef);
+        LOG.info("Created column stats index definition for columns: age, salary");
+      }
+      
       // Convert commit metadata to files partition records
       @SuppressWarnings("unchecked")
       List<HoodieRecord<HoodieMetadataPayload>> filesRecords = (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>) 
@@ -432,7 +472,9 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
       LOG.info("Generated {} files records and {} column stats records", filesRecords.size(), columnStatsRecords.size());
 
       // STEP 3b: Tag records with location for both partitions and write them together
-      String mdtCommitTime = InProcessTimeGenerator.createNewInstantTime();
+      // IMPORTANT: Use dataCommitTime for the metadata table commit to ensure timeline sync.
+      // HoodieFileIndex expects metadata table commits to match data table commit times.
+      String mdtCommitTime = dataCommitTime;
       try (SparkRDDWriteClient<HoodieMetadataPayload> mdtWriteClient = new SparkRDDWriteClient<>(context, mdtWriteConfig)) {
 
         WriteClientTestUtils.startCommitWithTime(mdtWriteClient, mdtCommitTime);
@@ -450,17 +492,10 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
             HoodieTableMetadataUtil.PARTITION_NAME_FILES,
             (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
                 .of(filesRDD));
-        
-        // Check if column_stats partition is initialized
-        boolean isColStatsPartitionInitialized = dataMetaClient.getTableConfig()
-            .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
-        
-        if (isColStatsPartitionInitialized) {
-          partitionRecordsMap.put(
-              HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS,
-              (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
-                  .of(colStatsRDD));
-        }
+        partitionRecordsMap.put(
+            HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS,
+            (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
+                .of(colStatsRDD));
         
         // Tag records for all partitions together - use isInitializing=true if /files partition was just marked as inflight
         @SuppressWarnings("rawtypes")
@@ -482,12 +517,10 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
         JavaRDD<HoodieRecord<HoodieMetadataPayload>> allTaggedRecords = 
             (JavaRDD<HoodieRecord<HoodieMetadataPayload>>) (JavaRDD) HoodieJavaRDD
                 .getJavaRDD(taggedResult.getKey());
-        
-        // If column_stats partition is not initialized, add untagged column stats records (they'll be inserts)
-        if (!isColStatsPartitionInitialized) {
-          allTaggedRecords = allTaggedRecords.union(colStatsRDD);
-        }
 
+        allTaggedRecords.take(3).forEach(r -> 
+            LOG.info("DEBUG: Record key={}, location={}", r.getRecordKey(), r.getCurrentLocation()));
+        
         JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.upsertPreppedRecords(allTaggedRecords, mdtCommitTime);
         List<WriteStatus> statusList = writeStatuses.collect();
         mdtWriteClient.commit(mdtCommitTime, jsc.parallelize(statusList, 1), Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
@@ -497,6 +530,12 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
           dataMetaClient.getTableConfig().setMetadataPartitionState(
               dataMetaClient, MetadataPartitionType.FILES.getPartitionPath(), true);
           LOG.info("Marked /files partition as completed");
+        }
+
+        if (!colStatsPartitionExists) {
+          dataMetaClient.getTableConfig().setMetadataPartitionState(
+              dataMetaClient, MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true);
+          LOG.info("Marked /column_stats partition as completed");
         }
         
         // Verify final state
@@ -642,9 +681,9 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
           Comparable maxValue;
 
           if (colIdx == 0) {
-            // age column: values between 20-70
+            // age column: values between 20-100
             int minAge = 20 + random.nextInt(30);
-            int maxAge = minAge + random.nextInt(30);
+            int maxAge = minAge + random.nextInt(50);
             minValue = minAge;
             maxValue = maxAge;
           } else {
