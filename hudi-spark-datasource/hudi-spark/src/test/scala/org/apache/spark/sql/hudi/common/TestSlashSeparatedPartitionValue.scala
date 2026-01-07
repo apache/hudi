@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.partitions
-
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+package org.apache.spark.sql.hudi.common
 
 class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
 
