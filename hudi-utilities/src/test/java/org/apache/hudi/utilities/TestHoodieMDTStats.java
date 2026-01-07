@@ -49,13 +49,13 @@ public class TestHoodieMDTStats {
     // Create config for HoodieMDTStats
     HoodieMDTStats.Config config = new HoodieMDTStats.Config();
     config.tableBasePath = tempDir.resolve("test_table").toString();
-    config.numColumnsToIndex = 2;
+    config.colsToIndex = "age,salary";
     config.colStatsFileGroupCount = 10;
     config.numFiles = 100;
     config.numPartitions = 3;
 
     LOG.info("Test config: tableBasePath={}, numFiles={}, numPartitions={}, numColumnsToIndex={}, colStatsFileGroupCount={}",
-        config.tableBasePath, config.numFiles, config.numPartitions, config.numColumnsToIndex, config.colStatsFileGroupCount);
+        config.tableBasePath, config.numFiles, config.numPartitions, config.colsToIndex, config.colStatsFileGroupCount);
 
     // Run HoodieMDTStats
     assertDoesNotThrow(() -> {
