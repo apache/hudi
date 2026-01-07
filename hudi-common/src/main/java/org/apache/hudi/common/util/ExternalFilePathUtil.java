@@ -18,8 +18,38 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
 /**
  * Utility methods for handling externally created files.
+ * <p>
+ * External files are files created outside Hudi (by external formats) that are later
+ * registered in a Hudi table. To distinguish these files from Hudi-generated files and
+ * to include commit time information, they are marked with a special suffix.
+ * <p>
+ * Hudi supports two formats for external files:
+ * <p>
+ * <b>Format 1: Without file group prefix</b>
+ * <pre>{@code <originalFileName>_<commitTime>_hudiext}</pre>
+ * Example: {@code data.parquet_20240101000000_hudiext}
+ * <ul>
+ *   <li>fileId: {@code data.parquet}</li>
+ *   <li>commitTime: {@code 20240101000000}</li>
+ * </ul>
+ * <p>
+ * <b>Format 2: With file group prefix</b>
+ * <pre>{@code <originalFileName>_<commitTime>_fg%3D<encodedPrefix>_hudiext}</pre>
+ * Example: {@code data.parquet_20240101000000_fg%3Dbucket-0_hudiext}
+ * <ul>
+ *   <li>fileId: {@code bucket-0/data.parquet} (includes prefix path)</li>
+ *   <li>commitTime: {@code 20240101000000}</li>
+ *   <li>prefix: {@code bucket-0} (URL-decoded from {@code _fg%3D} marker)</li>
+ * </ul>
+ * <p>
+ * The file group prefix format is used when external files are organized in subdirectories
+ * within a partition (e.g., bucketed files). The prefix is URL-encoded to avoid conflicts
+ * with special characters in directory names.
  */
 public class ExternalFilePathUtil {
   // Suffix acts as a marker when appended to a file path that the path was created by an external system and not a Hudi writer.
@@ -68,7 +98,7 @@ public class ExternalFilePathUtil {
    * @param fileName The file name
    * @return True if the file has a file group prefix encoded in its name
    */
-  public static boolean hasExternalFileGroupPrefix(String fileName) {
+  private static boolean hasExternalFileGroupPrefix(String fileName) {
     return isExternallyCreatedFile(fileName) && fileName.contains(FILE_GROUP_PREFIX_MARKER);
   }
 
@@ -77,29 +107,13 @@ public class ExternalFilePathUtil {
    * @param fileName The external file name
    * @return Option containing the decoded file group prefix, or empty if not present
    */
-  public static Option<String> getExternalFileGroupPrefix(String fileName) {
+  private static Option<String> getExternalFileGroupPrefix(String fileName) {
     if (!hasExternalFileGroupPrefix(fileName)) {
       return Option.empty();
     }
     int start = fileName.indexOf(FILE_GROUP_PREFIX_MARKER) + FILE_GROUP_PREFIX_MARKER.length();
     int end = fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     return Option.of(PartitionPathEncodeUtils.unescapePathName(fileName.substring(start, end)));
-  }
-
-  /**
-   * Gets the original file path including the file group prefix if present.
-   * For example, "data.parquet_123_fg%3Dbucket-0_hudiext" returns "bucket-0/data.parquet"
-   *
-   * @param fileName The external file name
-   * @return The original file path with prefix
-   */
-  public static String getOriginalFilePath(String fileName) {
-    if (!isExternallyCreatedFile(fileName)) {
-      return fileName;
-    }
-    String originalName = getOriginalFileName(fileName);
-    Option<String> prefix = getExternalFileGroupPrefix(fileName);
-    return prefix.map(p -> p + "/" + originalName).orElse(originalName);
   }
 
   /**
@@ -110,7 +124,7 @@ public class ExternalFilePathUtil {
    * @param fileName The external file name
    * @return The original file name
    */
-  public static String getOriginalFileName(String fileName) {
+  private static String getOriginalFileName(String fileName) {
     if (!isExternallyCreatedFile(fileName)) {
       return fileName;
     }
@@ -119,5 +133,71 @@ public class ExternalFilePathUtil {
         : fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     int commitTimeStart = fileName.lastIndexOf('_', markerEnd - 1);
     return fileName.substring(0, commitTimeStart);
+  }
+
+  /**
+   * Adjusts the parent path for external files with file group prefix.
+   * For files with file group prefix, the prefix represents a subdirectory within the partition,
+   * so we need to go up one more level to get the actual partition path.
+   *
+   * @param parent the parent path
+   * @param fileName the file name to check
+   * @return the adjusted parent path
+   */
+  public static StoragePath getActualParentPath(StoragePath parent, String fileName) {
+    if (hasExternalFileGroupPrefix(fileName)) {
+      return parent.getParent();
+    }
+    return parent;
+  }
+
+  /**
+   * Parses external file names to extract fileId and commit time.
+   * Handles both formats:
+   *   - With prefix: originalName_commitTime_fg%3D<prefix>_hudiext -> fileId = prefix/originalName
+   *   - Without prefix: originalName_commitTime_hudiext -> fileId = originalName
+   *
+   * @param fileName The external file name to parse
+   * @return String array of size 2: [fileId, commitTime]
+   */
+  public static String[] parseFileIdAndCommitTimeFromExternalFile(String fileName) {
+    String[] values = new String[2];
+    // Extract original file name
+    String originalName = getOriginalFileName(fileName);
+    // Extract file group prefix (if present)
+    Option<String> prefix = getExternalFileGroupPrefix(fileName);
+    // Build fileId
+    values[0] = prefix.map(p -> p + "/" + originalName).orElse(originalName);
+    // Extract commitTime
+    int markerEnd = hasExternalFileGroupPrefix(fileName)
+        ? fileName.indexOf(FILE_GROUP_PREFIX_MARKER)
+        : fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
+    int commitTimeStart = fileName.lastIndexOf('_', markerEnd - 1);
+    values[1] = fileName.substring(commitTimeStart + 1, markerEnd);
+    return values;
+  }
+
+  /**
+   * If the file was created externally, the original file path will have a '_[commitTime]_hudiext' suffix when stored in the metadata table. That suffix needs to be removed from the FileStatus so
+   * that the actual file can be found and read.
+   *
+   * @param pathInfo an input path info that may require updating
+   * @param fileId   the fileId for the file
+   * @return the original file status if it was not externally created, or a new FileStatus with the original file name if it was externally created
+   */
+  public static StoragePathInfo maybeHandleExternallyGeneratedFileName(StoragePathInfo pathInfo,
+                                                                        String fileId) {
+    if (pathInfo == null) {
+      return null;
+    }
+    if (isExternallyCreatedFile(pathInfo.getPath().getName())) {
+      String fileName = pathInfo.getPath().getName();
+      StoragePath parent = getActualParentPath(pathInfo.getPath().getParent(), fileName);
+      return new StoragePathInfo(
+          new StoragePath(parent, fileId), pathInfo.getLength(), pathInfo.isDirectory(),
+          pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime(), pathInfo.getLocations());
+    } else {
+      return pathInfo;
+    }
   }
 }
