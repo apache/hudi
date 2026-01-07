@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -26,6 +27,10 @@ import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{ArrayType, IntegerType, MapType, StringType, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+
+import java.util.stream.Stream
 
 /**
  * Test to verify schema evolution for complex data types (Array[Struct], Nested Structs, Array[Map[Struct]])
@@ -47,10 +52,11 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     cleanupFileSystem()
   }
 
-  @Test
-  def testArrayStructSchemaEvolutionWithRecordMerger(): Unit = {
-    val tablePath = basePath + "/array_struct_evolution"
-    val tableName = "array_struct_evolution"
+  @ParameterizedTest
+  @MethodSource(Array("testParameters"))
+  def testArrayStructSchemaEvolutionWithRecordMerger(tableType: String, logFormat: String): Unit = {
+    val tablePath = basePath + s"/array_struct_evolution_${tableType}_${logFormat}"
+    val tableName = s"array_struct_evolution_${tableType}_${logFormat}"
 
     // ==========================================================
     // STEP 1: Initial schema (no evolution yet)
@@ -82,14 +88,18 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     // ==========================================================
     // STEP 2: Write initial data using INSERT (not bulk-insert)
     // ==========================================================
-    val hudiOpts = Map(
+    var hudiOpts = Map(
       HoodieTableConfig.NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName
     )
+    // Add log format for MOR tables
+    if (tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) {
+      hudiOpts = hudiOpts + (HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logFormat)
+    }
     dfInit.write.format("hudi").options(hudiOpts).mode(SaveMode.Overwrite).save(tablePath)
     // Verify initial data
     val dfAfterInsert = spark.read.format("hudi").load(tablePath)
@@ -120,14 +130,18 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     // ==========================================================
     // STEP 4: Upsert with HoodieSparkRecordMerger
     // ==========================================================
-    val hudiOptsUpsert = Map(
+    var hudiOptsUpsert = Map(
       HoodieTableConfig.NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> "org.apache.hudi.HoodieSparkRecordMerger"
     )
+    // Add log format for MOR tables
+    if (tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) {
+      hudiOptsUpsert = hudiOptsUpsert + (HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logFormat)
+    }
     dfEvolved.write.format("hudi").options(hudiOptsUpsert).mode(SaveMode.Append).save(tablePath)
 
     // ==========================================================
@@ -192,10 +206,11 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     assertTrue(secondItem2.isNullAt(4), "Second item 'e' should be null for unchanged record")
   }
 
-  @Test
-  def testNestedStructSchemaEvolutionWithRecordMerger(): Unit = {
-    val tablePath = basePath + "/nested_struct_evolution"
-    val tableName = "nested_struct_evolution"
+  @ParameterizedTest
+  @MethodSource(Array("testParameters"))
+  def testNestedStructSchemaEvolutionWithRecordMerger(tableType: String, logFormat: String): Unit = {
+    val tablePath = basePath + s"/nested_struct_evolution_${tableType}_${logFormat}"
+    val tableName = s"nested_struct_evolution_${tableType}_${logFormat}"
 
     // ==========================================================
     // STEP 1: Initial schema with nested struct (no evolution yet)
@@ -217,14 +232,18 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     // ==========================================================
     // STEP 2: Write initial data using INSERT
     // ==========================================================
-    val hudiOpts = Map(
+    var hudiOpts = Map(
       HoodieTableConfig.NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName
     )
+    // Add log format for MOR tables
+    if (tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) {
+      hudiOpts = hudiOpts + (HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logFormat)
+    }
     dfInit.write.format("hudi").options(hudiOpts).mode(SaveMode.Overwrite).save(tablePath)
     val dfAfterInsert = spark.read.format("hudi").load(tablePath)
     assertEquals(2, dfAfterInsert.count(), "Should have 2 records after initial insert")
@@ -252,14 +271,18 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     // ==========================================================
     // STEP 4: Upsert with HoodieSparkRecordMerger
     // ==========================================================
-    val hudiOptsUpsert = Map(
+    var hudiOptsUpsert = Map(
       HoodieTableConfig.NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> "org.apache.hudi.HoodieSparkRecordMerger"
     )
+    // Add log format for MOR tables
+    if (tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) {
+      hudiOptsUpsert = hudiOptsUpsert + (HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logFormat)
+    }
     dfEvolved.write.format("hudi").options(hudiOptsUpsert).mode(SaveMode.Append).save(tablePath)
 
     // ==========================================================
@@ -299,10 +322,11 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     assertTrue(location2.isNullAt(3), "Location 'w' should be null for unchanged record")
   }
 
-  @Test
-  def testArrayMapStructSchemaEvolutionWithRecordMerger(): Unit = {
-    val tablePath = basePath + "/array_map_struct_evolution"
-    val tableName = "array_map_struct_evolution"
+  @ParameterizedTest
+  @MethodSource(Array("testParameters"))
+  def testArrayMapStructSchemaEvolutionWithRecordMerger(tableType: String, logFormat: String): Unit = {
+    val tablePath = basePath + s"/array_map_struct_evolution_${tableType}_${logFormat}"
+    val tableName = s"array_map_struct_evolution_${tableType}_${logFormat}"
 
     // ==========================================================
     // STEP 1: Initial schema with Array[Map[String, Struct]] (no evolution yet)
@@ -331,14 +355,18 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     // ==========================================================
     // STEP 2: Write initial data using INSERT
     // ==========================================================
-    val hudiOpts = Map(
+    var hudiOpts = Map(
       HoodieTableConfig.NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName
     )
+    // Add log format for MOR tables
+    if (tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) {
+      hudiOpts = hudiOpts + (HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logFormat)
+    }
     dfInit.write.format("hudi").options(hudiOpts).mode(SaveMode.Overwrite).save(tablePath)
     val dfAfterInsert = spark.read.format("hudi").load(tablePath)
     assertEquals(2, dfAfterInsert.count(), "Should have 2 records after initial insert")
@@ -370,14 +398,18 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     // ==========================================================
     // STEP 4: Upsert with HoodieSparkRecordMerger
     // ==========================================================
-    val hudiOptsUpsert = Map(
+    var hudiOptsUpsert = Map(
       HoodieTableConfig.NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> "org.apache.hudi.HoodieSparkRecordMerger"
     )
+    // Add log format for MOR tables
+    if (tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL) {
+      hudiOptsUpsert = hudiOptsUpsert + (HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logFormat)
+    }
     dfEvolved.write.format("hudi").options(hudiOptsUpsert).mode(SaveMode.Append).save(tablePath)
 
     // ==========================================================
@@ -425,5 +457,15 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     assertEquals("b3", firstEvent2.getString(1), "First event col2 should be 'b3'")
     assertEquals(300, firstEvent2.getInt(2), "First event col3 should be 300")
     assertTrue(firstEvent2.isNullAt(3), "First event col4 should be null for unchanged record")
+  }
+}
+
+object TestComplexTypeSchemaEvolution {
+  def testParameters(): java.util.stream.Stream[Arguments] = {
+    import org.junit.jupiter.params.provider.Arguments.arguments
+    java.util.stream.Stream.of(
+      arguments(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, "avro"),
+      arguments(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, "parquet")
+    )
   }
 }
