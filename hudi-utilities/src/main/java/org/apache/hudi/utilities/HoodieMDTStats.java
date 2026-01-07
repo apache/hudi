@@ -157,6 +157,9 @@ public class HoodieMDTStats implements Closeable {
     @Parameter(names = {"--num-partitions", "-np"}, description = "Target Base path for the table", required = true)
     public Integer numPartitions = 1;
 
+    @Parameter(names = {"--files-per-commit", "-fpc"}, description = "Number of files to create per commit. If not specified or >= num-files, all files will be in one commit", required = false)
+    public Integer filesPerCommit = 1000;
+
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
         splitter = IdentitySplitter.class)
@@ -240,42 +243,84 @@ public class HoodieMDTStats implements Closeable {
     // and metadata table
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
 
-    // STEP 2: Create commit metadata using HoodieTestTable without writing data
-    // files
-    String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
-    List<String> partitions = generatePartitions(cfg.numPartitions);
-    int filesPerPartition = numFiles / numPartitions; // Evenly distribute files
-    HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
-    HoodieCommitMetadata commitMetadata = testTable.createCommitMetadata(
-        dataCommitTime,
-        WriteOperationType.INSERT,
-        partitions,
-        filesPerPartition,
-        false); // bootstrap
+    Integer filesPerCommit = cfg.filesPerCommit;
 
-    // Add commit to timeline using HoodieTestTable
-    testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
-    LOG.info("Created commit metadata with {} files per partition at instant {}", filesPerPartition, dataCommitTime);
-    // Create actual empty parquet files on disk so filesystem listing finds them
-    createEmptyParquetFilesDistributed(dataMetaClient, commitMetadata);
-    LOG.info("Created {} empty parquet files on disk", numFiles);
-    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
+    int effectiveFilesPerCommit = filesPerCommit >= numFiles ? numFiles
+        : filesPerCommit;
+
+    // Calculate number of commits needed
+    int numCommits = (int) Math.ceil((double) numFiles / effectiveFilesPerCommit);
+
+    LOG.info("Creating {} commits with {} files per commit", numCommits, effectiveFilesPerCommit);
+
+    List<String> partitions = generatePartitions(cfg.numPartitions);
+    HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
 
     HoodieWriteConfig mdtConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
         dataConfig,
         HoodieFailedWritesCleaningPolicy.EAGER,
         HoodieTableVersion.NINE);
 
-    // STEP 3: Write both /files and /column_stats partitions to metadata table in a single commit
+    // Track all expected stats across all commits for final verification
     @SuppressWarnings("rawtypes")
-    Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats =
-        writeFilesAndColumnStatsToMetadataTable(dataConfig, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig);
+    Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> allExpectedStats = new HashMap<>();
 
-    // STEP 4: Print column stats for verification (up to 10 files per partition)
-    printColumnStatsForVerification(commitMetadata, expectedStats);
+    int remainingFiles = numFiles;
+    int totalFilesCreated = 0;
+
+    // STEP 2 & 3: Create multiple commits with files and metadata
+    for (int commitIdx = 0; commitIdx < numCommits; commitIdx++) {
+      LOG.info("=== Processing commit {}/{} ===", commitIdx + 1, numCommits);
+
+      // Calculate files for this commit
+      int filesInThisCommit = Math.min(effectiveFilesPerCommit, remainingFiles);
+      int filesPerPartitionThisCommit = filesInThisCommit / numPartitions;
+
+      LOG.info("Creating {} files in this commit ({} per partition)",
+          filesInThisCommit, filesPerPartitionThisCommit);
+
+      // Generate unique commit time
+      String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
+
+      // Create commit metadata
+      HoodieCommitMetadata commitMetadata = testTable.createCommitMetadata(
+          dataCommitTime,
+          WriteOperationType.INSERT,
+          partitions,
+          filesPerPartitionThisCommit,
+          false); // bootstrap
+
+      // Add commit to timeline
+      testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
+      LOG.info("Created commit metadata at instant {}", dataCommitTime);
+
+      // Create actual empty parquet files on disk
+      createEmptyParquetFilesDistributed(dataMetaClient, commitMetadata);
+      totalFilesCreated += filesInThisCommit;
+      LOG.info("Created {} empty parquet files on disk (total so far: {})",
+          filesInThisCommit, totalFilesCreated);
+
+      dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
+
+      // Write both /files and /column_stats partitions to metadata table
+      @SuppressWarnings("rawtypes")
+      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> commitExpectedStats =
+          writeFilesAndColumnStatsToMetadataTable(dataConfig, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig);
+
+      // Accumulate expected stats from this commit
+      allExpectedStats.putAll(commitExpectedStats);
+
+      remainingFiles -= filesInThisCommit;
+      LOG.info("Commit {}/{} completed. Remaining files: {}", commitIdx + 1, numCommits, remainingFiles);
+    }
+
+    LOG.info("=== All {} commits completed. Total files created: {} ===", numCommits, totalFilesCreated);
+
+    // STEP 4: Verification
+    LOG.info("Total unique files with stats: {}", allExpectedStats.size());
 
     // STEP 5: Use HoodieFileIndex.filterFileSlices to query and verify
-    queryAndVerifyColumnStats(dataConfig, dataMetaClient, expectedStats, numFiles);
+    queryAndVerifyColumnStats(dataConfig, dataMetaClient, allExpectedStats, totalFilesCreated);
   }
 
   /**
