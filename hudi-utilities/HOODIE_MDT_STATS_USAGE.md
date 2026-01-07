@@ -36,11 +36,12 @@
 
 ### Optional Parameters
 
-| Parameter | Description | Usage |
-|-----------|-------------|-------|
-| `--props` | Path to properties file containing Hudi configurations | `--props /path/to/config.properties` |
-| `--hoodie-conf` | Individual Hudi configuration (can be specified multiple times) | `--hoodie-conf hoodie.metadata.enable=true` |
-| `--help` / `-h` | Display help message | `--help` |
+| Parameter | Short Flag | Description | Usage |
+|-----------|------------|-------------|-------|
+| `--files-per-commit` | `-fpc` | Number of files to create per commit. If not specified or >= num-files, all files will be in one commit | `--files-per-commit 1000` |
+| `--props` | | Path to properties file containing Hudi configurations | `--props /path/to/config.properties` |
+| `--hoodie-conf` | | Individual Hudi configuration (can be specified multiple times) | `--hoodie-conf hoodie.metadata.enable=true` |
+| `--help` | `-h` | Display help message | `--help` |
 
 ## Configuration Details
 
@@ -75,17 +76,27 @@ Number of date-based partitions to create. Partitions are generated sequentially
 - `3` → `["2020-01-01", "2020-01-02", "2020-01-03"]`
 - `10` → `["2020-01-01" through "2020-01-10"]`
 
+### `--files-per-commit`
+**Optional parameter** that controls how many files are created in each commit. This allows testing scenarios with multiple commits instead of a single commit. Default value is 1000
+
+**Examples:**
+- `--num-files 1000 --files-per-commit 1000` → 1 commit with 1000 files
+- `--num-files 5000 --files-per-commit 1000` → 5 commits, each with 1000 files
+- `--num-files 2500 --files-per-commit 1000` → 3 commits (1000, 1000, 500 files)
+
 ## Example Usage
 
 ### Basic Example
 ```bash
 spark-submit \
-    --class org.apache.hudi.utilities.HoodieMDTStats \
-    --master "local[*]" \
-    packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.2.0-SNAPSHOT.jar \
-    --table-base-path /tmp/hudi_test \
-    --cols-to-index age,salary \
-    --col-stats-file-group-count 10 \
-    --num-files 1000 \
-    --num-partitions 5
+  --class org.apache.hudi.utilities.HoodieMDTStats \
+  --master "local[*]" \
+  packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.2.0-SNAPSHOT.jar \
+  --table-base-path /tmp/hudi_test \
+  --cols-to-index age,salary \
+  --col-stats-file-group-count 10 \
+  --num-files 1000 \
+  --num-partitions 5 \
+  --files-per-commit 1000
 ```
+Omit `--files-per-commit` to create all files in a single commit, or set it to a value less than `--num-files` to create multiple commits.

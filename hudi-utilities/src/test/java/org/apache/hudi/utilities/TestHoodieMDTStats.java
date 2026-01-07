@@ -69,7 +69,8 @@ public class TestHoodieMDTStats {
     config.tableBasePath = tempDir.resolve("test_table").toString();
     config.colsToIndex = "age,salary";
     config.colStatsFileGroupCount = 10;
-    config.numFiles = 100;
+    config.numFiles = 1000;
+    config.filesPerCommit = 1000;
     config.numPartitions = 3;
 
     LOG.info("Test config: tableBasePath={}, numFiles={}, numPartitions={}, numColumnsToIndex={}, colStatsFileGroupCount={}",
