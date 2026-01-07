@@ -755,52 +755,64 @@ public class HoodieMDTStats implements Closeable {
 
   /**
    * Creates empty parquet files on disk in parallel using engineContext.
-   * This method distributes file creation across executors for better performance
-   * when dealing with large numbers of files.
+   * This method distributes file creation by partition, where each executor task
+   * handles all files within a single partition for better locality and efficiency.
    *
    * @param metaClient     The meta client for the data table
    * @param commitMetadata The commit metadata containing file information
    */
   private void createEmptyParquetFilesDistributed(HoodieTableMetaClient metaClient,
                                                   HoodieCommitMetadata commitMetadata) throws Exception {
-    org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
     StoragePath basePath = metaClient.getBasePath();
-
-    // First, create all partition directories sequentially to avoid race conditions
     Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
-    for (String partitionPath : partitionToWriteStats.keySet()) {
-      StoragePath partitionDir = new StoragePath(basePath, partitionPath);
-      if (!storage.exists(partitionDir)) {
-        storage.createDirectory(partitionDir);
-      }
-    }
 
-    // Collect all file paths that need to be created
-    List<String> filePaths = new ArrayList<>();
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
-      for (HoodieWriteStat stat : entry.getValue()) {
-        filePaths.add(stat.getPath());
-      }
-    }
+    // Calculate total files for logging
+    int totalFiles = partitionToWriteStats.values().stream()
+        .mapToInt(List::size)
+        .sum();
 
-    LOG.info("Creating {} empty parquet files in parallel using engineContext", filePaths.size());
+    LOG.info("Creating {} empty parquet files across {} partitions in parallel using engineContext",
+        totalFiles, partitionToWriteStats.size());
 
-    // Parallelize file creation across executors
-    engineContext.map(filePaths, relativePath -> {
+    // Create a list of partition entries to parallelize over
+    List<Map.Entry<String, List<HoodieWriteStat>>> partitionEntries =
+        new ArrayList<>(partitionToWriteStats.entrySet());
+
+    // Parallelize by partition - each executor task handles all files in one partition
+    engineContext.map(partitionEntries, partitionEntry -> {
+      String partitionPath = partitionEntry.getKey();
+      List<HoodieWriteStat> writeStats = partitionEntry.getValue();
+      int filesCreated = 0;
+
       try {
-        StoragePath filePath = new StoragePath(basePath, relativePath);
         org.apache.hudi.storage.HoodieStorage storageInstance = metaClient.getStorage();
-        if (!storageInstance.exists(filePath)) {
-          storageInstance.create(filePath).close();
-        }
-        return relativePath;
-      } catch (Exception e) {
-        LOG.error("Failed to create file: {}", relativePath, e);
-        throw new RuntimeException("Failed to create file: " + relativePath, e);
-      }
-    }, Math.min(filePaths.size(), 100)); // Limit parallelism to avoid overwhelming the system
 
-    LOG.info("Successfully created {} empty parquet files", filePaths.size());
+        // Create partition directory if it doesn't exist
+        StoragePath partitionDir = new StoragePath(basePath, partitionPath);
+        if (!storageInstance.exists(partitionDir)) {
+          storageInstance.createDirectory(partitionDir);
+        }
+
+        // Create all files in this partition
+        for (HoodieWriteStat stat : writeStats) {
+          String relativePath = stat.getPath();
+          StoragePath filePath = new StoragePath(basePath, relativePath);
+          if (!storageInstance.exists(filePath)) {
+            storageInstance.create(filePath).close();
+            filesCreated++;
+          }
+        }
+
+        LOG.debug("Created {} files in partition: {}", filesCreated, partitionPath);
+        return Pair.of(partitionPath, filesCreated);
+      } catch (Exception e) {
+        LOG.error("Failed to create files in partition: {}", partitionPath, e);
+        throw new RuntimeException("Failed to create files in partition: " + partitionPath, e);
+      }
+    }, partitionEntries.size()); // Parallelism equals number of partitions
+
+    LOG.info("Successfully created {} empty parquet files across {} partitions",
+        totalFiles, partitionToWriteStats.size());
   }
 
   /**
