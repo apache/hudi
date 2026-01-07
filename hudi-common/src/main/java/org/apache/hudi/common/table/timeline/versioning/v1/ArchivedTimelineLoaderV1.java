@@ -71,25 +71,25 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
 
   @Override
   public Option<String> loadInstants(HoodieTableMetaClient metaClient,
-                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
                                      HoodieArchivedTimeline.LoadMode loadMode,
                                      Function<GenericRecord, Boolean> commitsFilter,
                                      BiConsumer<String, GenericRecord> recordConsumer) {
-    return loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
+    return loadInstants(metaClient, fileTimeRangeFilter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
   public Option<String> loadInstants(HoodieTableMetaClient metaClient,
-                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
                                      HoodieArchivedTimeline.LoadMode loadMode,
                                      Function<GenericRecord, Boolean> commitsFilter,
                                      BiConsumer<String, GenericRecord> recordConsumer,
                                      Option<Integer> limit) {
-    return loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
+    return loadInstants(metaClient, fileTimeRangeFilter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
   }
 
   public Option<String> loadInstants(HoodieTableMetaClient metaClient,
-                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
                                      Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,
                                      HoodieArchivedTimeline.LoadMode loadMode,
                                      Function<GenericRecord, Boolean> commitsFilter,
@@ -107,7 +107,8 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       // Sort files by version suffix in reverse (implies reverse chronological order)
       entryList.sort(new ArchiveFileVersionComparator());
 
-      for (StoragePathInfo fs : entryList) {
+      for (int i = 0; i < entryList.size(); i++) {
+        StoragePathInfo fs = entryList.get(i);
         if (hasLimit && loadedCount.get() >= limit.get()) {
           break;
         }
@@ -126,6 +127,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
               // TODO If we can store additional metadata in datablock, we can skip parsing records
               // (such as startTime, endTime of records in the block)
+              boolean isLastFile = (i == entryList.size() - 1);
               try (ClosableIterator<HoodieRecord<IndexedRecord>> itr = avroBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
                 int commitTimeFieldPosition = avroBlock.getSchema().getField(HoodieTableMetaClient.COMMIT_TIME_KEY).map(HoodieSchemaField::pos)
                     .orElseThrow(() -> new HoodieIOException("Unable to find commit time field in archived timeline"));
@@ -138,21 +140,21 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                         return;
                       }
                       String instantTime = r.get(commitTimeFieldPosition).toString();
-                      if (filter == null || filter.isInRange(instantTime)) {
-                        boolean isNewInstant = instantsInRange.add(instantTime);
-                        recordConsumer.accept(instantTime, r);
-                        // Oldest instant will be the first one processed
+                      boolean isNewInstant = instantsInRange.add(instantTime);
+                      recordConsumer.accept(instantTime, r);
+                      // Oldest instant will be the first one processed in the last file
+                      if (isLastFile) {
                         lastInstantTime.compareAndSet(null, instantTime);
-                        if (hasLimit && isNewInstant) {
-                          loadedCount.incrementAndGet();
-                        }
+                      }
+                      if (hasLimit && isNewInstant) {
+                        loadedCount.incrementAndGet();
                       }
                     });
               }
             }
           }
 
-          if (filter != null) {
+          if (fileTimeRangeFilter != null) {
             int instantsInCurrentFile = instantsInRange.size() - instantsInPreviousFile;
             if (instantsInPreviousFile > 0 && instantsInCurrentFile == 0) {
               // Note that this is an optimization to skip reading unnecessary archived files

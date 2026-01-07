@@ -34,18 +34,18 @@ public interface ArchivedTimelineLoader extends Serializable {
   /**
    * Loads the instants from the timeline.
    *
-   * @param metaClient     The meta client.
-   * @param filter         The time range filter where the target instant belongs to. This will only be applied at the file level.
-   *                       If strict filtering is required for the records, the commitsFilter should be used as well.
-   * @param loadMode       The load mode.
-   * @param commitsFilter  Filter of the instant type.
-   * @param recordConsumer Consumer of the instant record payload.
+   * @param metaClient          The meta client.
+   * @param fileTimeRangeFilter The time range filter where the target instant belongs to. This will only be applied at the file level.
+   *                            If strict filtering is required for the records, the commitsFilter should be used as well.
+   * @param loadMode            The load mode.
+   * @param commitsFilter       Filter of the instant type.
+   * @param recordConsumer      Consumer of the instant record payload.
    *
    * @return The last instant time loaded or empty if no instant is loaded.
    */
   Option<String> loadInstants(
       HoodieTableMetaClient metaClient,
-      @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+      @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter,
       BiConsumer<String, GenericRecord> recordConsumer);
@@ -53,24 +53,24 @@ public interface ArchivedTimelineLoader extends Serializable {
   /**
    * Loads the instants from the timeline with optional limit for early termination.
    *
-   * @param metaClient     The meta client.
-   * @param filter         The time range filter where the target instant belongs to. This will only be applied at the file level.
-   *                       If strict filtering is required for the records, the commitsFilter should be used as well.
-   * @param loadMode       The load mode.
-   * @param commitsFilter  Filter of the instant type.
-   * @param recordConsumer Consumer of the instant record payload.
-   * @param limit          Optional maximum number of instants to load. Empty for no limit.
+   * @param metaClient          The meta client.
+   * @param fileTimeRangeFilter The time range filter where the target instant belongs to. This will only be applied at the file level.
+   *                            If strict filtering is required for the records, the commitsFilter should be used as well.
+   * @param loadMode            The load mode.
+   * @param commitsFilter       Filter of the instant type.
+   * @param recordConsumer      Consumer of the instant record payload.
+   * @param limit               Optional maximum number of instants to load. Empty for no limit.
    *
    * @return the last instant time loaded or empty if no instant is loaded.
    */
   default Option<String> loadInstants(
       HoodieTableMetaClient metaClient,
-      @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+      @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter,
       BiConsumer<String, GenericRecord> recordConsumer,
       Option<Integer> limit) {
     // Default implementation calls the method without limit for backward compatibility
-    return loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer);
+    return loadInstants(metaClient, fileTimeRangeFilter, loadMode, commitsFilter, recordConsumer);
   }
 }

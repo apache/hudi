@@ -57,16 +57,16 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
 
   @Override
   public Option<String> loadInstants(HoodieTableMetaClient metaClient,
-                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
                                      HoodieArchivedTimeline.LoadMode loadMode,
                                      Function<GenericRecord, Boolean> commitsFilter,
                                      BiConsumer<String, GenericRecord> recordConsumer) {
-    return loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, Option.empty());
+    return loadInstants(metaClient, fileTimeRangeFilter, loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
   public Option<String> loadInstants(HoodieTableMetaClient metaClient,
-                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                     @Nullable HoodieArchivedTimeline.TimeRangeFilter fileTimeRangeFilter,
                                      HoodieArchivedTimeline.LoadMode loadMode,
                                      Function<GenericRecord, Boolean> commitsFilter,
                                      BiConsumer<String, GenericRecord> recordConsumer,
@@ -80,7 +80,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       
       List<String> filteredFiles = new ArrayList<>();
       for (String fileName : fileNames) {
-        if (filter == null || LSMTimeline.isFileInRange(filter, fileName)) {
+        if (fileTimeRangeFilter == null || LSMTimeline.isFileInRange(fileTimeRangeFilter, fileName)) {
           filteredFiles.add(fileName);
         }
       }
