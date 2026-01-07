@@ -257,7 +257,7 @@ public class HoodieMDTStats implements Closeable {
     testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
     LOG.info("Created commit metadata with {} files per partition at instant {}", filesPerPartition, dataCommitTime);
     // Create actual empty parquet files on disk so filesystem listing finds them
-    createEmptyParquetFiles(dataMetaClient, commitMetadata);
+    createEmptyParquetFilesDistributed(dataMetaClient, commitMetadata);
     LOG.info("Created {} empty parquet files on disk", numFiles);
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
 
@@ -751,6 +751,56 @@ public class HoodieMDTStats implements Closeable {
         }
       }
     }
+  }
+
+  /**
+   * Creates empty parquet files on disk in parallel using engineContext.
+   * This method distributes file creation across executors for better performance
+   * when dealing with large numbers of files.
+   *
+   * @param metaClient     The meta client for the data table
+   * @param commitMetadata The commit metadata containing file information
+   */
+  private void createEmptyParquetFilesDistributed(HoodieTableMetaClient metaClient,
+                                                  HoodieCommitMetadata commitMetadata) throws Exception {
+    org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
+    StoragePath basePath = metaClient.getBasePath();
+
+    // First, create all partition directories sequentially to avoid race conditions
+    Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
+    for (String partitionPath : partitionToWriteStats.keySet()) {
+      StoragePath partitionDir = new StoragePath(basePath, partitionPath);
+      if (!storage.exists(partitionDir)) {
+        storage.createDirectory(partitionDir);
+      }
+    }
+
+    // Collect all file paths that need to be created
+    List<String> filePaths = new ArrayList<>();
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
+        filePaths.add(stat.getPath());
+      }
+    }
+
+    LOG.info("Creating {} empty parquet files in parallel using engineContext", filePaths.size());
+
+    // Parallelize file creation across executors
+    engineContext.map(filePaths, relativePath -> {
+      try {
+        StoragePath filePath = new StoragePath(basePath, relativePath);
+        org.apache.hudi.storage.HoodieStorage storageInstance = metaClient.getStorage();
+        if (!storageInstance.exists(filePath)) {
+          storageInstance.create(filePath).close();
+        }
+        return relativePath;
+      } catch (Exception e) {
+        LOG.error("Failed to create file: {}", relativePath, e);
+        throw new RuntimeException("Failed to create file: " + relativePath, e);
+      }
+    }, Math.min(filePaths.size(), 100)); // Limit parallelism to avoid overwhelming the system
+
+    LOG.info("Successfully created {} empty parquet files", filePaths.size());
   }
 
   /**
