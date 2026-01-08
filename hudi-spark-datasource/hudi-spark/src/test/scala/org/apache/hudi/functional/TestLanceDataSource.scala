@@ -581,7 +581,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Verify commit action types based on table type
     val expectedAction = if (tableType == "COPY_ON_WRITE") "commit" else "deltacommit"
-    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
     commits.foreach { instant =>
       assertEquals(expectedAction, instant.getAction,
         s"Instant ${instant.requestedTime()} should be a $expectedAction action for $tableType table")
@@ -663,7 +663,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Verify commit action types based on table type
     val expectedAction = if (tableType == "COPY_ON_WRITE") "commit" else "deltacommit"
-    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
     commits.foreach { instant =>
       assertEquals(expectedAction, instant.getAction,
         s"Instant ${instant.requestedTime()} should be a $expectedAction action for $tableType table")
