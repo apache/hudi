@@ -23,7 +23,6 @@ import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.DeleteSupportSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.DropColumnSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.add.AddPrimitiveColumnSchemaPostProcessor;
@@ -88,7 +87,6 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
   @Test
   public void testSparkAvro() throws IOException {
-    properties.put(SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key(), SparkAvroPostProcessor.class.getName());
     List<String> transformerClassNames = new ArrayList<>();
     transformerClassNames.add(FlatteningTransformer.class.getName());
 
@@ -184,12 +182,5 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     newColumn = targetSchema.getField("primitive_column");
     assertEquals(type, newColumn.schema().getType().getName());
 
-  }
-
-  @Test
-  public void testSparkAvroSchema() throws IOException {
-    SparkAvroPostProcessor processor = new SparkAvroPostProcessor(properties, null);
-    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    assertEquals(RESULT_SCHEMA, processor.processSchema(schema).toString());
   }
 }
