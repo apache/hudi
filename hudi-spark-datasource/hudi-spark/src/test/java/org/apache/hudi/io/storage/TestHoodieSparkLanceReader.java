@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.SafeProjection;
@@ -36,9 +37,6 @@ import org.apache.spark.sql.catalyst.util.GenericArrayData;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
-
-import java.math.BigDecimal;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -50,6 +48,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -207,13 +206,14 @@ public class TestHoodieSparkLanceReader {
     StructType schema = new StructType()
         .add("id", DataTypes.IntegerType, false)
         .add("int_array", DataTypes.createArrayType(DataTypes.IntegerType, false), false)
-        .add("string_array", DataTypes.createArrayType(DataTypes.StringType, false), false);
+        .add("string_array", DataTypes.createArrayType(DataTypes.StringType, false), false)
+        .add("nullable_elements", DataTypes.createArrayType(DataTypes.StringType, true), true);
 
     // Create test data with 3 records
     List<InternalRow> expectedRows = new ArrayList<>();
-    expectedRows.add(createRow(1, new Object[]{}, new Object[]{}));  // Empty arrays
-    expectedRows.add(createRow(2, new Object[]{42}, new Object[]{"Alice"}));  // Single element
-    expectedRows.add(createRow(3, new Object[]{1, 2, 3, 4, 5}, new Object[]{"Bob", "Charlie", "David"}));  // Multi-element
+    expectedRows.add(createRow(1, new Object[]{}, new Object[]{}, null));  // Empty arrays
+    expectedRows.add(createRow(2, new Object[]{42}, new Object[]{"Alice"}, new Object[]{null}));  // Single element
+    expectedRows.add(createRow(3, new Object[]{1, 2, 3, 4, 5}, new Object[]{"Bob", "Charlie", "David"}, new Object[]{"A", null, "B", null}));  // Multi-element
 
     // Write and read back
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_array.lance");
