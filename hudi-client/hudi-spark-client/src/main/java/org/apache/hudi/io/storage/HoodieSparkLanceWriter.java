@@ -18,8 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import com.lancedb.lance.spark.arrow.LanceArrowWriter;
-import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,6 +25,9 @@ import org.apache.hudi.io.lance.HoodieBaseLanceWriter;
 import org.apache.hudi.io.storage.row.HoodieInternalRowFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
+import com.lancedb.lance.spark.arrow.LanceArrowWriter;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
@@ -113,26 +114,26 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     if (populateMetaFields) {
       UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
-      super.write(row);
+      super.write(row.copy());
     } else {
-      super.write(row);
+      super.write(row.copy());
     }
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
-    super.write(row);
+    super.write(row.copy());
   }
   
   @Override
   public void writeRow(UTF8String key, InternalRow row) throws IOException {
     // Key reserved for future bloom filter support (https://github.com/apache/hudi/issues/17664)
-    super.write(row);
+    super.write(row.copy());
   }
   
   @Override
   public void writeRow(InternalRow row) throws IOException {
-    super.write(row);
+    super.write(row.copy());
   }
 
   @Override
