@@ -39,8 +39,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -493,7 +491,7 @@ public class TestHoodieSchemaConverter {
         + "`isDeleted` BOOLEAN NOT NULL, "
         + "`isTightBound` BOOLEAN NOT NULL, "
         + "`valueType` ROW<`typeOrdinal` INT NOT NULL, `additionalInfo` STRING>>";
-    assertThat(dataType.getChildren().get(pos).toString(), is(expected));
+    assertEquals(expected, dataType.getChildren().get(pos).toString());
   }
 
   @Test
@@ -524,12 +522,12 @@ public class TestHoodieSchemaConverter {
         + "    \"default\" : null\n"
         + "  } ]\n"
         + "} ]";
-    assertThat(schema.toString(true), is(expectedSchema));
+    assertEquals(expectedSchema, schema.toString(true));
     // convert it back
     DataType convertedDataType = HoodieSchemaConverter.convertToDataType(schema);
     final String expectedDataType = "ROW<"
         + "`f_localtimestamp_millis` TIMESTAMP_LTZ(3), "
         + "`f_localtimestamp_micros` TIMESTAMP_LTZ(6)>";
-    assertThat(convertedDataType.toString(), is(expectedDataType));
+    assertEquals(expectedDataType, convertedDataType.toString());
   }
 }
