@@ -897,6 +897,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     final int totalDataFilesCount = partitionIdToAllFilesMap.values().stream().mapToInt(Map::size).sum();
     LOG.info("Committing total {} partitions and {} files to metadata", partitions.size(), totalDataFilesCount);
 
+    if (partitions.isEmpty()) {
+      return Pair.of(fileGroupCount, engineContext.emptyHoodieData());
+    }
     // Record which saves the list of all partitions
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
@@ -1041,7 +1044,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * File groups will be named as :
    * record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
-  private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
+  public void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount, String relativePartitionPath, Option<String> dataPartitionName) throws IOException {
 
     // Archival of data table has a dependency on compaction(base files) in metadata table.

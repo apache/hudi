@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -52,13 +53,15 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.CustomMetadataTableFileGroupIndexParser;
+import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.MetadataWriterTestUtils;
+import org.apache.hudi.metadata.SparkCustomHoodieMetadataBulkInsertPartitioner;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.stats.ValueMetadata;
@@ -70,8 +73,6 @@ import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.execution.datasources.NoopCache$;
@@ -90,7 +91,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
@@ -157,9 +157,6 @@ public class HoodieMDTStats implements Closeable {
     @Parameter(names = {"--num-partitions", "-np"}, description = "Target Base path for the table", required = true)
     public Integer numPartitions = 1;
 
-    @Parameter(names = {"--files-per-commit", "-fpc"}, description = "Number of files to create per commit. If not specified or >= num-files, all files will be in one commit", required = false)
-    public Integer filesPerCommit = 1000;
-
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
         splitter = IdentitySplitter.class)
@@ -220,7 +217,7 @@ public class HoodieMDTStats implements Closeable {
     LOG.info("Metadata table base path: {}", metadataTableBasePath);
 
     String tableName = "test_mdt_stats_tbl";
-    initializeTableWithSampleData(tableName);
+    // initializeTableWithSampleData(tableName);
     // Create data table config with metadata enabled
     HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, AVRO_SCHEMA, cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
     HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
@@ -234,26 +231,15 @@ public class HoodieMDTStats implements Closeable {
             .build())
         .build();
 
-    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
-        .setBasePath(dataConfig.getBasePath())
-        .setConf(engineContext.getStorageConf().newInstance())
-        .build();
+    HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableVersion(HoodieTableVersion.NINE)
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(tableName)
+        .setPartitionFields("dt")
+        .setRecordKeyFields("id")
+        .initTable(engineContext.getStorageConf(), dataConfig.getBasePath());
 
-    // STEP 1: Insert 50 rows with age and salary columns to initialize table schema
-    // and metadata table
-    dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
-
-    Integer filesPerCommit = cfg.filesPerCommit;
-
-    int effectiveFilesPerCommit = filesPerCommit >= numFiles ? numFiles
-        : filesPerCommit;
-
-    // Calculate number of commits needed
-    int numCommits = (int) Math.ceil((double) numFiles / effectiveFilesPerCommit);
-
-    LOG.info("Creating {} commits with {} files per commit", numCommits, effectiveFilesPerCommit);
-
-    List<String> partitions = generatePartitions(cfg.numPartitions);
+    List<String> partitions = generatePartitions(numPartitions);
     HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
 
     HoodieWriteConfig mdtConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
@@ -264,20 +250,19 @@ public class HoodieMDTStats implements Closeable {
     // Track all expected stats across all commits for final verification
     @SuppressWarnings("rawtypes")
     Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> allExpectedStats = new HashMap<>();
-
-    int remainingFiles = numFiles;
     int totalFilesCreated = 0;
 
-    // STEP 2 & 3: Create multiple commits with files and metadata
-    for (int commitIdx = 0; commitIdx < numCommits; commitIdx++) {
-      LOG.info("=== Processing commit {}/{} ===", commitIdx + 1, numCommits);
+    try (HoodieBackedTableMetadataWriter<?, ?> metadataWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.create(
+        engineContext.getStorageConf(),
+        dataConfig,
+        engineContext,
+        Option.empty(),
+        dataMetaClient.getTableConfig())) {
 
-      // Calculate files for this commit
-      int filesInThisCommit = Math.min(effectiveFilesPerCommit, remainingFiles);
-      int filesPerPartitionThisCommit = filesInThisCommit / numPartitions;
 
+      int filesPerPartition = numFiles / numPartitions;
       LOG.info("Creating {} files in this commit ({} per partition)",
-          filesInThisCommit, filesPerPartitionThisCommit);
+          numFiles, filesPerPartition);
 
       // Generate unique commit time
       String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
@@ -287,7 +272,7 @@ public class HoodieMDTStats implements Closeable {
           dataCommitTime,
           WriteOperationType.INSERT,
           partitions,
-          filesPerPartitionThisCommit,
+          filesPerPartition,
           false); // bootstrap
 
       // Add commit to timeline
@@ -296,28 +281,22 @@ public class HoodieMDTStats implements Closeable {
 
       // Create actual empty parquet files on disk
       createEmptyParquetFilesDistributed(dataMetaClient, commitMetadata);
-      totalFilesCreated += filesInThisCommit;
       LOG.info("Created {} empty parquet files on disk (total so far: {})",
-          filesInThisCommit, totalFilesCreated);
+          numFiles, totalFilesCreated);
 
       dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
 
       // Write both /files and /column_stats partitions to metadata table
       @SuppressWarnings("rawtypes")
       Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> commitExpectedStats =
-          writeFilesAndColumnStatsToMetadataTable(dataConfig, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig);
+          writeFilesAndColumnStatsToMetadataTable(metadataWriter, dataMetaClient, commitMetadata, dataCommitTime, mdtConfig);
 
       // Accumulate expected stats from this commit
       allExpectedStats.putAll(commitExpectedStats);
 
-      remainingFiles -= filesInThisCommit;
-      LOG.info("Commit {}/{} completed. Remaining files: {}", commitIdx + 1, numCommits, remainingFiles);
+      // STEP 4: Verification
+      LOG.info("Total unique files with stats: {}", allExpectedStats.size());
     }
-
-    LOG.info("=== All {} commits completed. Total files created: {} ===", numCommits, totalFilesCreated);
-
-    // STEP 4: Verification
-    LOG.info("Total unique files with stats: {}", allExpectedStats.size());
 
     // STEP 5: Use HoodieFileIndex.filterFileSlices to query and verify
     queryAndVerifyColumnStats(dataConfig, dataMetaClient, allExpectedStats, totalFilesCreated);
@@ -501,8 +480,6 @@ public class HoodieMDTStats implements Closeable {
             partitionFiltersSeq,
             false);
 
-    // Print results
-    LOG.info("");
     LOG.info("Filtered File Slices Min/Max Values:");
     LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
         "FileName", "age_min", "age_max", "salary_min", "salary_max"));
@@ -551,7 +528,7 @@ public class HoodieMDTStats implements Closeable {
    * This method handles initialization of partitions if needed, tags records with location,
    * and writes them together to simulate how actual code writes metadata.
    *
-   * @param dataConfig     The write config for the data table
+   * @param metadataWriter metadata table writer
    * @param dataMetaClient The meta client for the data table
    * @param commitMetadata The commit metadata containing file information
    * @param dataCommitTime The commit time for the data table commit
@@ -561,241 +538,118 @@ public class HoodieMDTStats implements Closeable {
    */
   @SuppressWarnings("rawtypes")
   private Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> writeFilesAndColumnStatsToMetadataTable(
-      HoodieWriteConfig dataConfig,
+      HoodieBackedTableMetadataWriter metadataWriter,
       HoodieTableMetaClient dataMetaClient,
       HoodieCommitMetadata commitMetadata,
       String dataCommitTime,
-      HoodieWriteConfig mdtWriteConfig) throws Exception {
+      HoodieWriteConfig mdtWriteConfig) {
 
-    try (HoodieTableMetadataWriter<?, ?> metadataWriter = SparkMetadataWriterFactory.create(
-        engineContext.getStorageConf(),
-        dataConfig,
-        engineContext,
-        Option.empty(),
-        dataMetaClient.getTableConfig())) {
+    // STEP 3a: Check if /files partition exists and initialize if needed
+    String metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(cfg.tableBasePath);
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setBasePath(metadataBasePath)
+        .setConf(engineContext.getStorageConf().newInstance())
+        .build();
 
-      // STEP 3a: Check if /files partition exists and initialize if needed
-      String metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(cfg.tableBasePath);
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-          .setBasePath(metadataBasePath)
-          .setConf(engineContext.getStorageConf().newInstance())
-          .build();
+    // Also mark column_stats partition as inflight for initialization
+    boolean colStatsPartitionExists = dataMetaClient.getTableConfig()
+        .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
+    if (!colStatsPartitionExists) {
+      dataMetaClient.getTableConfig().setMetadataPartitionsInflight(
+          dataMetaClient, MetadataPartitionType.COLUMN_STATS);
+      LOG.info("Marked /column_stats partition as inflight for initialization");
 
-      boolean filesPartitionExists = dataMetaClient.getTableConfig()
-          .isMetadataPartitionAvailable(MetadataPartitionType.FILES);
+      // Create index definition for column stats - this tells data skipping which columns are indexed
+      org.apache.hudi.common.model.HoodieIndexDefinition colStatsIndexDef =
+          new org.apache.hudi.common.model.HoodieIndexDefinition.Builder()
+              .withIndexName(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+              .withIndexType("column_stats")
+              .withSourceFields(java.util.Arrays.asList("age", "salary"))
+              .build();
+      dataMetaClient.buildIndexDefinition(colStatsIndexDef);
+      LOG.info("Created column stats index definition for columns: age, salary");
+    }
 
-      LOG.info("BEFORE initialization - Metadata table exists: {}, partitions: {}",
-          filesPartitionExists,
+    // Convert commit metadata to files partition records
+    @SuppressWarnings("unchecked")
+    List<HoodieRecord<HoodieMetadataPayload>> filesRecords = (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>)
+        HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
+
+    // Generate column stats records
+    @SuppressWarnings("rawtypes")
+    Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats = new HashMap<>();
+    HoodieData<HoodieRecord> columnStatsRecords = generateColumnStatsRecordsForCommitMetadataDistributed(
+        commitMetadata);
+
+    // STEP 3b: Tag records with location for both partitions and write them together
+    // IMPORTANT: Use dataCommitTime for the metadata table commit to ensure timeline sync.
+    // HoodieFileIndex expects metadata table commits to match data table commit times.
+    String mdtCommitTime = dataCommitTime;
+    try (SparkRDDWriteClient<HoodieMetadataPayload> mdtWriteClient = new SparkRDDWriteClient<>(engineContext, mdtWriteConfig)) {
+
+      WriteClientTestUtils.startCommitWithTime(mdtWriteClient, mdtCommitTime);
+      JavaRDD<HoodieRecord<HoodieMetadataPayload>> filesRDD = jsc.parallelize(filesRecords, 1);
+
+      @SuppressWarnings({"unchecked", "rawtypes"})
+      org.apache.hudi.metadata.HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>>
+          sparkMetadataWriter
+          = (org.apache.hudi.metadata.HoodieBackedTableMetadataWriter) metadataWriter;
+
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      Map<String, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
+      partitionRecordsMap.put(
+          HoodieTableMetadataUtil.PARTITION_NAME_FILES,
+          (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
+              .of(filesRDD));
+      partitionRecordsMap.put(
+          HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, columnStatsRecords);
+
+      // Tag records for all partitions together - use isInitializing=true if /files partition was just marked as inflight
+      @SuppressWarnings("rawtypes")
+      Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedResult =
+          MetadataWriterTestUtils.tagRecordsWithLocation(
+              sparkMetadataWriter,
+              partitionRecordsMap,
+              false
+          );
+
+      // Check metadata table state after tagging
+      metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+      LOG.info("AFTER tagging - Metadata table exists: {}, partitions: {}",
+          metadataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
           metadataMetaClient.getTableConfig().getMetadataPartitions());
 
-      if (!filesPartitionExists) {
-        // Mark partition as inflight in table config - this is required for tagRecordsWithLocation
-        // to work with isInitializing=true
-        dataMetaClient.getTableConfig().setMetadataPartitionsInflight(
-            dataMetaClient, MetadataPartitionType.FILES);
-        LOG.info("Marked /files partition as inflight for initialization");
-      }
-
-      // Also mark column_stats partition as inflight for initialization
-      boolean colStatsPartitionExists = dataMetaClient.getTableConfig()
-          .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
-      if (!colStatsPartitionExists) {
-        dataMetaClient.getTableConfig().setMetadataPartitionsInflight(
-            dataMetaClient, MetadataPartitionType.COLUMN_STATS);
-        LOG.info("Marked /column_stats partition as inflight for initialization");
-
-        // Create index definition for column stats - this tells data skipping which columns are indexed
-        org.apache.hudi.common.model.HoodieIndexDefinition colStatsIndexDef =
-            new org.apache.hudi.common.model.HoodieIndexDefinition.Builder()
-                .withIndexName(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
-                .withIndexType("column_stats")
-                .withSourceFields(java.util.Arrays.asList("age", "salary"))
-                .build();
-        dataMetaClient.buildIndexDefinition(colStatsIndexDef);
-        LOG.info("Created column stats index definition for columns: age, salary");
-      }
-
-      // Convert commit metadata to files partition records
+      // Convert back to JavaRDD - taggedResult contains all records from all partitions
       @SuppressWarnings("unchecked")
-      List<HoodieRecord<HoodieMetadataPayload>> filesRecords = (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>)
-          HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
+      JavaRDD<HoodieRecord<HoodieMetadataPayload>> allTaggedRecords =
+          (JavaRDD<HoodieRecord<HoodieMetadataPayload>>) (JavaRDD) HoodieJavaRDD
+              .getJavaRDD(taggedResult.getKey());
 
-      // Generate column stats records
-      @SuppressWarnings("rawtypes")
-      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats = new HashMap<>();
-      List<HoodieRecord<HoodieMetadataPayload>> columnStatsRecords = generateColumnStatsRecordsForCommitMetadata(
-          commitMetadata,
-          expectedStats,
-          dataCommitTime);
+      allTaggedRecords.take(3).forEach(r ->
+          LOG.info("DEBUG: Record key={}, location={}", r.getRecordKey(), r.getCurrentLocation()));
 
-      LOG.info("Generated {} files records and {} column stats records", filesRecords.size(), columnStatsRecords.size());
+      Map<String, Integer> mdtPartitionFileGroupCountMap = new HashMap<>();
+      mdtPartitionFileGroupCountMap.put(MetadataPartitionType.FILES.getPartitionPath(), 1);
+      mdtPartitionFileGroupCountMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), cfg.colStatsFileGroupCount);
 
-      // STEP 3b: Tag records with location for both partitions and write them together
-      // IMPORTANT: Use dataCommitTime for the metadata table commit to ensure timeline sync.
-      // HoodieFileIndex expects metadata table commits to match data table commit times.
-      String mdtCommitTime = dataCommitTime;
-      try (SparkRDDWriteClient<HoodieMetadataPayload> mdtWriteClient = new SparkRDDWriteClient<>(engineContext, mdtWriteConfig)) {
+      JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.bulkInsertPreppedRecords(allTaggedRecords, mdtCommitTime,
+          Option.of(new SparkCustomHoodieMetadataBulkInsertPartitioner(new CustomMetadataTableFileGroupIndexParser(mdtPartitionFileGroupCountMap))));
+      List<WriteStatus> statusList = writeStatuses.collect();
+      mdtWriteClient.commit(mdtCommitTime, jsc.parallelize(statusList, 1), Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
 
-        WriteClientTestUtils.startCommitWithTime(mdtWriteClient, mdtCommitTime);
-        JavaRDD<HoodieRecord<HoodieMetadataPayload>> filesRDD = jsc.parallelize(filesRecords, 1);
-        JavaRDD<HoodieRecord<HoodieMetadataPayload>> colStatsRDD = jsc.parallelize(columnStatsRecords, 1);
-
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        org.apache.hudi.metadata.HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>>
-            sparkMetadataWriter
-            = (org.apache.hudi.metadata.HoodieBackedTableMetadataWriter) metadataWriter;
-
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Map<String, org.apache.hudi.common.data.HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
-        partitionRecordsMap.put(
-            HoodieTableMetadataUtil.PARTITION_NAME_FILES,
-            (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
-                .of(filesRDD));
-        partitionRecordsMap.put(
-            HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS,
-            (org.apache.hudi.common.data.HoodieData<HoodieRecord>) (org.apache.hudi.common.data.HoodieData) HoodieJavaRDD
-                .of(colStatsRDD));
-
-        // Tag records for all partitions together - use isInitializing=true if /files partition was just marked as inflight
-        @SuppressWarnings("rawtypes")
-        Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedResult =
-            MetadataWriterTestUtils.tagRecordsWithLocation(
-                sparkMetadataWriter,
-                partitionRecordsMap,
-                !filesPartitionExists // isInitializing = true if we just marked /files as inflight
-            );
-
-        // Check metadata table state after tagging
-        metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
-        LOG.info("AFTER tagging - Metadata table exists: {}, partitions: {}",
-            metadataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
-            metadataMetaClient.getTableConfig().getMetadataPartitions());
-
-        // Convert back to JavaRDD - taggedResult contains all records from all partitions
-        @SuppressWarnings("unchecked")
-        JavaRDD<HoodieRecord<HoodieMetadataPayload>> allTaggedRecords =
-            (JavaRDD<HoodieRecord<HoodieMetadataPayload>>) (JavaRDD) HoodieJavaRDD
-                .getJavaRDD(taggedResult.getKey());
-
-        allTaggedRecords.take(3).forEach(r ->
-            LOG.info("DEBUG: Record key={}, location={}", r.getRecordKey(), r.getCurrentLocation()));
-
-        JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.upsertPreppedRecords(allTaggedRecords, mdtCommitTime);
-        List<WriteStatus> statusList = writeStatuses.collect();
-        mdtWriteClient.commit(mdtCommitTime, jsc.parallelize(statusList, 1), Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
-
-        // Mark partition as completed if we initialized it
-        if (!filesPartitionExists) {
-          dataMetaClient.getTableConfig().setMetadataPartitionState(
-              dataMetaClient, MetadataPartitionType.FILES.getPartitionPath(), true);
-          LOG.info("Marked /files partition as completed");
-        }
-
-        if (!colStatsPartitionExists) {
-          dataMetaClient.getTableConfig().setMetadataPartitionState(
-              dataMetaClient, MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true);
-          LOG.info("Marked /column_stats partition as completed");
-        }
-
-        // Verify final state
-        dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
-        LOG.info("AFTER commit - Metadata table exists: {}, partitions: {}",
-            dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
-            dataMetaClient.getTableConfig().getMetadataPartitions());
-
-        LOG.info("Wrote {} files partition records and {} column stats records to metadata table in a single commit",
-            filesRecords.size(), columnStatsRecords.size());
+      if (!colStatsPartitionExists) {
+        dataMetaClient.getTableConfig().setMetadataPartitionState(
+            dataMetaClient, MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true);
+        LOG.info("Marked /column_stats partition as completed");
       }
-      return expectedStats;
+
+      // Verify final state
+      dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
+      LOG.info("AFTER commit - Metadata table exists: {}, partitions: {}",
+          dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
+          dataMetaClient.getTableConfig().getMetadataPartitions());
     }
-  }
-
-  /**
-   * Initialize Hudi table with sample data to set up the table schema and
-   * metadata table.
-   *
-   * @return the name of the created table
-   */
-  private String initializeTableWithSampleData(String tableName) {
-    // Define a schema with 'id', 'age', 'salary' columns
-    StructType schema = new StructType()
-        .add("id", "string")
-        .add("name", "string")
-        .add("city", "string")
-        .add("age", "int")
-        .add("salary", "double")
-        .add("dt", "string");
-
-    // Generate 50 rows of sample data
-    List<Row> rows = new ArrayList<>();
-    for (int i = 0; i < INITIAL_ROW_COUNT; i++) {
-      rows.add(org.apache.spark.sql.RowFactory.create(
-          UUID.randomUUID().toString(),
-          "user_" + i,
-          "frisco",
-          20 + (i % 30), // age: 20..49
-          50000.0 + (i * 1000), //
-          "2020-01-01"// salary varies
-      ));
-    }
-    Dataset<Row> df = spark.createDataFrame(rows, schema);
-
-    // Write the data to the Hudi table using spark sql
-    df.write()
-        .format("hudi")
-        .option("hoodie.table.name", tableName)
-        .option("hoodie.datasource.write.recordkey.field", "id")
-        .option("hoodie.datasource.write.partitionpath.field", "dt")
-        .option("hoodie.datasource.write.table.name", tableName)
-        .option("hoodie.datasource.write.operation", "insert")
-        .option("hoodie.datasource.write.precombine.field", "id")
-        .option("hoodie.metadata.enabled", "true")
-        .option("path", cfg.tableBasePath)
-        .mode("overwrite")
-        .save();
-
-    // Refresh table metadata in Spark
-    spark.catalog().clearCache();
-    spark.read().format("hudi").load(cfg.tableBasePath).createOrReplaceTempView(tableName);
-
-    // print total rows in table
-    long totalRows = spark.read().format("hudi").load(cfg.tableBasePath).count();
-    LOG.info("Total rows in table: {}", totalRows);
-    // print the table first few rows
-    Dataset<Row> tableDF = spark.read().format("hudi").load(cfg.tableBasePath);
-    tableDF.show(10, false);
-
-    return tableName;
-  }
-
-  /**
-   * Creates empty parquet files on disk for all files in the commit metadata.
-   * This ensures that filesystem listing will find these files even if metadata table
-   * lookup falls back to filesystem.
-   *
-   * @param metaClient     The meta client for the data table
-   * @param commitMetadata The commit metadata containing file information
-   */
-  private void createEmptyParquetFiles(HoodieTableMetaClient metaClient,
-                                       HoodieCommitMetadata commitMetadata) throws Exception {
-    org.apache.hudi.storage.HoodieStorage storage = metaClient.getStorage();
-    StoragePath basePath = metaClient.getBasePath();
-
-    for (Map.Entry<String, List<HoodieWriteStat>> entry :
-        commitMetadata.getPartitionToWriteStats().entrySet()) {
-      String partitionPath = entry.getKey();
-      StoragePath partitionDir = new StoragePath(basePath, partitionPath);
-      if (!storage.exists(partitionDir)) {
-        storage.createDirectory(partitionDir);
-      }
-      for (HoodieWriteStat stat : entry.getValue()) {
-        String relativePath = stat.getPath();
-        StoragePath filePath = new StoragePath(basePath, relativePath);
-        if (!storage.exists(filePath)) {
-          storage.create(filePath).close();
-        }
-      }
-    }
+    return expectedStats;
   }
 
   /**
@@ -861,120 +715,120 @@ public class HoodieMDTStats implements Closeable {
   }
 
   /**
-   * Generates column stats records based on commit metadata file structure.
-   * Ensures file names match those in the commit metadata.
+   * Generates column stats records based on commit metadata file structure in a distributed manner.
+   * This method distributes work by table partition - each Spark partition processes
+   * all files within a single table partition to avoid memory issues.
+   *
+   * @param commitMetadata The commit metadata containing partition and file information
+   * @return HoodieData of column stats records, distributed across Spark partitions
    */
   @SuppressWarnings("rawtypes")
-  private List<HoodieRecord<HoodieMetadataPayload>> generateColumnStatsRecordsForCommitMetadata(
-      HoodieCommitMetadata commitMetadata,
-      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStatsMap,
-      String commitTime) {
+  private HoodieData<HoodieRecord> generateColumnStatsRecordsForCommitMetadataDistributed(
+      HoodieCommitMetadata commitMetadata) {
 
-    Random random = new Random(42);
-    List<HoodieRecord<HoodieMetadataPayload>> allRecords = new ArrayList<>();
-
-    // Extract file information from commit metadata
+    // Extract partition to writeStats mapping
     Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
 
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
-      String partitionPath = entry.getKey();
-      List<HoodieWriteStat> writeStats = entry.getValue();
+    // Create a list of partition entries to distribute
+    // This only holds metadata (partition paths and file references), not actual records
+    List<Map.Entry<String, List<HoodieWriteStat>>> partitionEntries =
+        new ArrayList<>(partitionToWriteStats.entrySet());
 
-      LOG.info("Processing partition {} with {} write stats", partitionPath, writeStats.size());
+    LOG.info("Processing {} table partitions for column stats generation with total {} files",
+        partitionEntries.size(),
+        partitionToWriteStats.values().stream().mapToInt(List::size).sum());
 
-      for (HoodieWriteStat writeStat : writeStats) {
-        String fileId = writeStat.getFileId();
-        String filePath = writeStat.getPath();
-        String fileName = new StoragePath(filePath).getName();
+    // Capture config for serialization into the closure
+    final String columnsToIndex = cfg.colsToIndex;
 
-        if (allRecords.size() < 5) {
-          LOG.debug("Processing file: {} (fileId: {}, path: {})", fileName, fileId, filePath);
-        }
+    // Parallelize by table partition - each Spark partition processes one table partition
+    // Use number of table partitions as the parallelism level
+    JavaRDD<Map.Entry<String, List<HoodieWriteStat>>> partitionsRDD =
+        jsc.parallelize(partitionEntries, partitionEntries.size());
 
-        List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
+    // Process each table partition separately on executors
+    // Each Spark task generates column stats records for ALL files in its assigned table partition
+    JavaRDD<HoodieRecord> recordsRDD = partitionsRDD.flatMap(
+        partitionEntry -> {
+          String partitionPath = partitionEntry.getKey();
+          List<HoodieWriteStat> writeStats = partitionEntry.getValue();
 
-        // Generate stats for age (int) and salary (long) columns
-        String[] columnNames = getColumnsToIndex();
-        int numColumns = columnNames.length;
-        for (int colIdx = 0; colIdx < numColumns; colIdx++) {
-          String colName = columnNames[colIdx];
+          // Process all files in this table partition
+          // Records are accumulated locally on the executor, not in driver memory
+          List<HoodieRecord> partitionRecords = new ArrayList<>();
 
-          Comparable minValue;
-          Comparable maxValue;
+          for (HoodieWriteStat writeStat : writeStats) {
+            String filePath = writeStat.getPath();
+            String fileName = new StoragePath(filePath).getName();
 
-          if (colIdx == 0) {
-            // age column: values between 20-100
-            int minAge = 20 + random.nextInt(30);
-            int maxAge = minAge + random.nextInt(50);
-            minValue = minAge;
-            maxValue = maxAge;
-          } else {
-            // salary column: values between 50000-250000
-            long minSalary = 50000L + random.nextInt(100000);
-            long maxSalary = minSalary + random.nextInt(100000);
-            minValue = minSalary;
-            maxValue = maxSalary;
+            // Use fileName hash as seed for deterministic but unique random values per file
+            Random fileRandom = new Random(fileName.hashCode());
+
+            List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
+
+            // Generate stats for configured columns
+            String[] columnNames = columnsToIndex.split(",");
+            int numColumns = columnNames.length;
+            for (int colIdx = 0; colIdx < numColumns; colIdx++) {
+              String colName = columnNames[colIdx];
+
+              Comparable minValue;
+              Comparable maxValue;
+
+              if (colIdx == 0) {
+                // age column: values between 20-100
+                int minAge = 20 + fileRandom.nextInt(30);
+                int maxAge = minAge + fileRandom.nextInt(50);
+                minValue = minAge;
+                maxValue = maxAge;
+              } else {
+                // salary column: values between 50000-250000
+                long minSalary = 50000L + fileRandom.nextInt(100000);
+                long maxSalary = minSalary + fileRandom.nextInt(100000);
+                minValue = minSalary;
+                maxValue = maxSalary;
+              }
+
+              @SuppressWarnings({"rawtypes", "unchecked"})
+              int compareResult = minValue.compareTo(maxValue);
+              if (compareResult > 0) {
+                Comparable temp = minValue;
+                minValue = maxValue;
+                maxValue = temp;
+              }
+
+              @SuppressWarnings({"rawtypes", "unchecked"})
+              HoodieColumnRangeMetadata<Comparable> colStats = HoodieColumnRangeMetadata.create(
+                  fileName,
+                  colName,
+                  minValue,
+                  maxValue,
+                  0,
+                  1000,
+                  123456,
+                  123456,
+                  ValueMetadata.V1EmptyMetadata.get());
+
+              columnRangeMetadata.add(colStats);
+            }
+
+            // Generate column stats records for this file
+            // These records are added to the partition's local list on the executor
+            List<HoodieRecord<HoodieMetadataPayload>> fileRecords = HoodieMetadataPayload
+                .createColumnStatsRecords(partitionPath, columnRangeMetadata, false)
+                .map(record -> (HoodieRecord) record)
+                .collect(Collectors.toList());
+
+            partitionRecords.addAll(fileRecords);
           }
 
-          @SuppressWarnings({"rawtypes", "unchecked"})
-          int compareResult = minValue.compareTo(maxValue);
-          if (compareResult > 0) {
-            Comparable temp = minValue;
-            minValue = maxValue;
-            maxValue = temp;
-          }
-
-          @SuppressWarnings({"rawtypes", "unchecked"})
-          HoodieColumnRangeMetadata<Comparable> colStats = HoodieColumnRangeMetadata.create(
-              fileName,
-              colName,
-              minValue,
-              maxValue,
-              0,
-              1000,
-              123456,
-              123456,
-              ValueMetadata.V1EmptyMetadata.get());
-
-          columnRangeMetadata.add(colStats);
-          expectedStatsMap.computeIfAbsent(fileName, k -> new HashMap<>()).put(colName, colStats);
+          // Return all records for this table partition as an iterator
+          return partitionRecords.iterator();
         }
+    );
 
-        @SuppressWarnings("unchecked")
-        List<HoodieRecord<HoodieMetadataPayload>> fileRecords = HoodieMetadataPayload
-            .createColumnStatsRecords(partitionPath, columnRangeMetadata, false)
-            .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
-            .collect(Collectors.toList());
-
-        allRecords.addAll(fileRecords);
-      }
-    }
-
-    LOG.info("Generated {} column stats records total for {} unique files",
-        allRecords.size(), expectedStatsMap.size());
-    if (expectedStatsMap.size() <= 10) {
-      LOG.info("File names in expectedStatsMap: {}", expectedStatsMap.keySet());
-    } else {
-      LOG.info("First 10 file names: {}",
-          expectedStatsMap.keySet().stream().limit(10).collect(Collectors.toList()));
-    }
-
-    // Log sample record keys and file names to verify they're unique
-    if (allRecords.size() > 0) {
-      LOG.info("Sample record keys (first 5):");
-      for (int i = 0; i < Math.min(5, allRecords.size()); i++) {
-        HoodieRecord<HoodieMetadataPayload> record = allRecords.get(i);
-        HoodieMetadataPayload payload = record.getData();
-        if (payload.getColumnStatMetadata().isPresent()) {
-          String fileName = payload.getColumnStatMetadata().get().getFileName();
-          String columnName = payload.getColumnStatMetadata().get().getColumnName();
-          LOG.info("  Record {}: key={}, fileName={}, columnName={}",
-              i, record.getRecordKey(), fileName, columnName);
-        }
-      }
-    }
-
-    return allRecords;
+    // Return as HoodieData - records stay distributed across Spark partitions
+    return HoodieJavaRDD.of(recordsRDD);
   }
 
   private String[] getColumnsToIndex() {
