@@ -384,7 +384,7 @@ public class TableSchemaResolver {
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
     StoragePath path = new StoragePath(filePath);
     return HoodieIOFactory.getIOFactory(metaClient.getStorage())
-        .getFileFormatUtils(path).readAvroSchema(metaClient.getStorage(), path);
+        .getFileFormatUtils(path).readSchema(metaClient.getStorage(), path).toAvroSchema();
   }
 
   private Schema readSchemaFromLogFile(StoragePath path) throws IOException {
@@ -567,8 +567,9 @@ public class TableSchemaResolver {
           // this is a log file
           return readSchemaFromLogFile(filePath);
         } else {
-          return HoodieIOFactory.getIOFactory(metaClient.getStorage())
-              .getFileFormatUtils(filePath).readAvroSchema(metaClient.getStorage(), filePath);
+          HoodieSchema hoodieSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+              .getFileFormatUtils(filePath).readSchema(metaClient.getStorage(), filePath);
+          return hoodieSchema != null ? hoodieSchema.toAvroSchema() : null;
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to read schema from file: " + filePath, e);

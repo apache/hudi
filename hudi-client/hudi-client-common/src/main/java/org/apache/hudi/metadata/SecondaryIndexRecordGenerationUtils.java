@@ -54,8 +54,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -248,9 +246,9 @@ public class SecondaryIndexRecordGenerationUtils {
     }
     final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
     final StoragePath basePath = metaClient.getBasePath();
-    Schema tableSchema;
+    HoodieSchema tableSchema;
     try {
-      tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+      tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
     }
@@ -261,16 +259,16 @@ public class SecondaryIndexRecordGenerationUtils {
       final String partition = partitionAndBaseFile.getKey();
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
       Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
-      Schema readerSchema;
+      HoodieSchema readerSchema;
       if (dataFilePath.isPresent()) {
         readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getFileFormatUtils(baseFileFormat)
-            .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
+            .readSchema(metaClient.getStorage(), dataFilePath.get());
       } else {
         readerSchema = tableSchema;
       }
       ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
-          readerContextFactory.getContext(), metaClient, fileSlice, HoodieSchema.fromAvroSchema(readerSchema), indexDefinition,
+          readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });

@@ -66,7 +66,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.isMetadataField;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.isMetadataField;
 
 /**
  * Helper class to serialize hive writable type to avro record.

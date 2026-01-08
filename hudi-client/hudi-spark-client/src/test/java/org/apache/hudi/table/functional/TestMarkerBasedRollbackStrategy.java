@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -75,7 +76,6 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE;
@@ -317,7 +317,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     initMetaClient(tableType, props);
     String partition = "partA";
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(
-        metaClient, addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA.toAvroSchema()));
+        metaClient, HoodieSchemaUtils.addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA));
     String fileId = UUID.randomUUID().toString();
     HoodieRecord tripRecord = createSimpleRecord("key1", "2016-01-31T03:16:41.415Z", 123);
     String instantTime1 = "001";

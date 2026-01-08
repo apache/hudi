@@ -202,7 +202,7 @@ class TestTableSchemaResolver {
       FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
       StoragePath parquetPath = new StoragePath("/tmp/hudi_table/partition1/baseFile1.parquet");
       when(ioFactory.getFileFormatUtils(parquetPath)).thenReturn(fileFormatUtils);
-      when(fileFormatUtils.readAvroSchema(any(), eq(parquetPath))).thenReturn(null);
+      when(fileFormatUtils.readSchema(any(), eq(parquetPath))).thenReturn(null);
       ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(any())).thenReturn(ioFactory);
       // mock log file schema reading to return the expected schema
       tableSchemaResolverMockedStatic.when(() -> TableSchemaResolver.readSchemaFromLogFile(any(), eq(new StoragePath("/tmp/hudi_table/" + logFileWriteStat.getPath()))))

@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -37,7 +38,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -94,11 +94,11 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
       // Limit the ORC schema to requested fields only
-      Schema fileSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
+      HoodieSchema fileSchema = AvroOrcUtils.createSchema(reader.getSchema());
       Set<String> existingFields = fileSchema.getFields().stream()
-          .map(Schema.Field::name)
+          .map(HoodieSchemaField::name)
           .collect(Collectors.toSet());
-      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(HoodieSchemaField::name)
+      HoodieSchema prunedFileSchema = HoodieSchemaUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(HoodieSchemaField::name)
               .filter(existingFields::contains).collect(Collectors.toList()));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(prunedFileSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
@@ -136,8 +136,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    //TODO boundary for now to revisit in later pr to directly use HoodieSchema
-    return HoodieSchema.fromAvroSchema(orcUtils.readAvroSchema(storage, path));
+    return orcUtils.readSchema(storage, path);
   }
 
   @Override
