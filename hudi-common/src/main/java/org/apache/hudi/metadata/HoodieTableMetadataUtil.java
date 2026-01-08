@@ -2277,7 +2277,7 @@ public class HoodieTableMetadataUtil {
         }
       } catch (Exception e) {
         // If rename fails, we will try to delete the table instead
-        log.error(String.format("Failed to backup MDT partition %s using rename", partitionPath), e);
+        log.error("Failed to backup MDT partition {} using rename", partitionPath, e);
       }
     } else {
       log.info("Deleting metadata table partition from {}", metadataTablePartitionPath);
@@ -3141,10 +3141,6 @@ public class HoodieTableMetadataUtil {
           }
         }
       }
-    }
-
-    int getTotalFiles() {
-      return filenameToSizeMap.size();
     }
   }
 

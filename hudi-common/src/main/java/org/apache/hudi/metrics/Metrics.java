@@ -63,7 +63,7 @@ public class Metrics {
     if (StringUtils.nonEmpty(metricConfig.getMetricReporterFileBasedConfigs())) {
       reporters.addAll(addAdditionalMetricsExporters(metricConfig));
     }
-    if (reporters.size() == 0) {
+    if (reporters.isEmpty()) {
       throw new RuntimeException("Cannot initialize Reporters.");
     }
     reporters.forEach(MetricsReporter::start);
@@ -106,14 +106,13 @@ public class Metrics {
         if (reporter.isPresent()) {
           reporterList.add(reporter.get());
         } else {
-          log.error(String.format("Could not create reporter using properties path %s base path %s",
-              propPath, metricConfig.getBasePath()));
+          log.error("Could not create reporter using properties path {} base path {}", propPath, metricConfig.getBasePath());
         }
       }
     } catch (IOException e) {
       log.error("Failed to add MetricsExporters", e);
     }
-    log.info("total additional metrics reporters added =" + reporterList.size());
+    log.info("total additional metrics reporters added = {}", reporterList.size());
     return reporterList;
   }
 

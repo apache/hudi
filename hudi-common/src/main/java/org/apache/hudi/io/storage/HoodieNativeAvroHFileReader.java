@@ -140,7 +140,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             try {
               return reader.seekTo(new UTF8StringKey(k)) == HFileReader.SEEK_TO_FOUND;
             } catch (IOException e) {
-              log.error("Failed to check key availability: " + k);
+              log.error("Failed to check key availability: {}", k);
               return false;
             }
           })

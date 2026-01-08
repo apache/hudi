@@ -54,7 +54,7 @@ public class M3MetricsReporter extends MetricsReporter {
     tagBuilder.put("service", metricsConfig.getM3Service());
     tagBuilder.put("env", metricsConfig.getM3Env());
     this.tags = tagBuilder.build();
-    log.info(String.format("Building M3 Reporter with M3 tags mapping: %s", tags));
+    log.info("Building M3 Reporter with M3 tags mapping: {}", tags);
   }
 
   private static Map parseOptionalTags(String tagValueString) {
@@ -106,7 +106,7 @@ public class M3MetricsReporter extends MetricsReporter {
         scopeReporter.report();
         scopeReporter.stop();
       } catch (Exception e) {
-        log.error(String.format("Error reporting metrics to M3: %s", e));
+        log.error("Error reporting metrics to M3:", e);
       }
     }
   }

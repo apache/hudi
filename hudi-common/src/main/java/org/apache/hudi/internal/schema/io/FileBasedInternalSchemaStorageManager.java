@@ -95,7 +95,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     timeline.saveAsComplete(false, metaClient.createNewInstant(
         HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.requestedTime()),
         Option.of(HoodieInstantWriter.convertByteArrayToWriter(writeContent)));
-    log.info(String.format("persist history schema success on commit time: %s", instantTime));
+    log.info("persist history schema success on commit time: {}", instantTime);
   }
 
   private void cleanResidualFiles() {
@@ -166,7 +166,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
           byte[] content;
           try (InputStream is = storage.open(latestFilePath)) {
             content = FileIOUtils.readAsByteArray(is);
-            log.info(String.format("read history schema success from file : %s", latestFilePath));
+            log.info("read history schema success from file: {}", latestFilePath);
             return fromUTF8Bytes(content);
           } catch (IOException e) {
             throw new HoodieIOException("Could not read history schema from " + latestFilePath, e);
