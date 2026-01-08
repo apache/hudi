@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -48,7 +49,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -67,24 +67,24 @@ import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileNam
 @Slf4j
 public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
-  protected final Schema schema;
+  protected final HoodieSchema schema;
   protected final Option<BloomFilter> filter;
   protected final boolean populateMetaFields;
 
   protected HoodieWriteableTestTable(String basePath, HoodieStorage storage,
                                      HoodieTableMetaClient metaClient,
-                                     Schema schema, BloomFilter filter) {
+                                     HoodieSchema schema, BloomFilter filter) {
     this(basePath, storage, metaClient, schema, filter, null);
   }
 
   protected HoodieWriteableTestTable(String basePath, HoodieStorage storage,
-                                     HoodieTableMetaClient metaClient, Schema schema,
+                                     HoodieTableMetaClient metaClient, HoodieSchema schema,
                                      BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {
     this(basePath, storage, metaClient, schema, filter, metadataWriter, Option.empty());
   }
 
   public HoodieWriteableTestTable(String basePath, HoodieStorage storage,
-                                     HoodieTableMetaClient metaClient, Schema schema,
+                                     HoodieTableMetaClient metaClient, HoodieSchema schema,
                                      BloomFilter filter, HoodieTableMetadataWriter metadataWriter,
                                      Option<HoodieEngineContext> context) {
     super(basePath, storage, metaClient, metadataWriter, context);
@@ -116,7 +116,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
       HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-          new AvroSchemaConverter().convert(schema), schema, filter, new Properties());
+          new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, filter, new Properties());
       HoodieParquetConfig<HoodieAvroWriteSupport> config = new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
           storage.getConf(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
@@ -125,7 +125,8 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           contextSupplier, populateMetaFields)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
-          GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(schema, CollectionUtils.emptyProps(), schema).getData();
+          GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(
+              schema.toAvroSchema(), CollectionUtils.emptyProps(), schema.toAvroSchema()).getData();
           if (populateMetaFields) {
             HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
             HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
@@ -148,7 +149,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           config, schema, contextSupplier)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
-          GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();
+          GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(schema.toAvroSchema(), CollectionUtils.emptyProps()).get().getData();
           HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
           HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
           writer.writeAvro(record.getRecordKey(), avroRecord);

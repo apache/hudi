@@ -141,7 +141,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
     HoodieSchema nonNullSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
-    Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema.toAvroSchema()));
+    Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
     StructType dataStructType = convertToStruct(enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema());
     SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
@@ -189,7 +189,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   private MessageType getFileSchema() {
     if (fileSchemaOption.isEmpty()) {
-      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      MessageType messageType = ((ParquetUtils) parquetUtils).readMessageType(storage, path);
       fileSchemaOption = Option.of(messageType);
     }
     return fileSchemaOption.get();

@@ -726,6 +726,28 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   @Test
+  public void testCompactionWithLargeL0File() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, 3);
+    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES.key(), "3200");
+    // do ingestion and trigger archive actions here.
+    for (int i = 1; i < 19; i++) {
+      testTable.doWriteOperation(
+          WriteClientTestUtils.createNewInstantTime(), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2", "p3") : Collections.emptyList(),
+          i == 1 ? Arrays.asList("p1", "p2", "p3") : Arrays.asList("p1"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+    // first L0 file will be larger than max archived file size
+
+    // loading archived timeline and active timeline success
+    HoodieActiveTimeline rawActiveTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
+    assertEquals(4 * 3 + 14, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+    // L0 file should be only one
+    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath());
+    assertEquals(1, latestManifest.getFiles().stream().filter(f -> LSMTimeline.isFileFromLayer(f.getFileName(), 0)).count());
+  }
+
+  @Test
   public void testReadArchivedCompactionPlan() throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 5, HoodieTableType.MERGE_ON_READ);
 
