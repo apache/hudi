@@ -79,6 +79,10 @@ class Spark2Adapter extends SparkAdapter {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
   }
 
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
+
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark2CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
