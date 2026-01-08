@@ -261,7 +261,7 @@ public class HiveTestUtil {
       failedReleases.add("ZKService");
     }
 
-    // 在所有服务关闭后，在关闭文件系统之前删除临时目录
+    // Delete the temporary directory before closing the fileSystem.
     if (basePath != null && fileSystem != null) {
       try {
         fileSystem.delete(new Path(basePath), true);
