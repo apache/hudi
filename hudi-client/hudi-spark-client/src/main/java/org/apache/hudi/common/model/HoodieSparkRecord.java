@@ -366,7 +366,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       return OrderingValues.getDefault();
     } else {
       return OrderingValues.create(orderingFields, field -> {
-        if (recordSchema.getField(field) == null) {
+        if (recordSchema.getField(field).isEmpty()) {
           return OrderingValues.getDefault();
         }
         return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);

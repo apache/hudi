@@ -60,7 +60,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithNullValue() {
-    HoodieSchema dateSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    HoodieSchema dateSchema = HoodieSchema.createDate();
     
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(dateSchema, null, true);
     assertNull(result);

@@ -100,7 +100,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       return OrderingValues.getDefault();
     } else {
       return OrderingValues.create(orderingFields, field -> {
-        if (recordSchema.getField(field) == null) {
+        if (recordSchema.getField(field).isEmpty()) {
           return OrderingValues.getDefault();
         }
         return (Comparable<?>) getColumnValue(recordSchema.toAvroSchema(), field, props);
@@ -114,7 +114,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       return OrderingValues.getDefault();
     } else {
       return OrderingValues.create(orderingFields, field -> {
-        if (recordSchema.getField(field) == null) {
+        if (recordSchema.getField(field).isEmpty()) {
           return OrderingValues.getDefault();
         }
         return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
@@ -130,7 +130,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   public String getRecordKey(HoodieSchema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
     if (key == null) {
-      ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null,
+      ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD).isPresent(),
           "There should be `_hoodie_record_key` in record schema.");
       String recordKey = Objects.toString(data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal()));
       key = new HoodieKey(recordKey, null);
@@ -229,7 +229,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
     String[] metaVals = new String[HoodieRecord.HOODIE_META_COLUMNS.size()];
     metaVals[ordinal] = value;
-    boolean withOperation = recordSchema.getField(OPERATION_METADATA_FIELD) != null;
+    boolean withOperation = recordSchema.getField(OPERATION_METADATA_FIELD).isPresent();
     RowData rowData = new HoodieRowDataWithUpdatedMetaField(metaVals, ordinal, getData(), withOperation);
     return new HoodieFlinkRecord(getKey(), getOperation(), orderingValue, rowData);
   }
