@@ -141,6 +141,7 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
             .enable(true)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexColumnStatsFileGroupCount(FILE_GROUP_COUNT)
+            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 
@@ -277,6 +278,7 @@ public class TestMDTStats extends HoodieSparkClientTestHarness {
     options.put("hoodie.datasource.read.data.skipping.enable", "true");
     options.put("hoodie.metadata.enable", "true");
     options.put("hoodie.metadata.index.column.stats.enable", "true");
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     // Also ensure the columns are specified for column stats
     options.put("hoodie.metadata.index.column.stats.column.list", "age,salary");
     sparkSession.sqlContext().conf().setConfString("hoodie.fileIndex.dataSkippingFailureMode", "strict");
