@@ -662,6 +662,7 @@
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/test/resources/*.commit</exclude>
+              <exclude>**/test/resources/**/*.data</exclude>
               <exclude>**/test/resources/**/*.txt</exclude>
               <exclude>**/test/resources/**/*.avsc</exclude>
               <exclude>**/test/resources/**/.zip</exclude>
