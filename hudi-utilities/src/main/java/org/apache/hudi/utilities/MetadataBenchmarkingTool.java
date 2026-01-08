@@ -598,6 +598,15 @@ public class MetadataBenchmarkingTool implements Closeable {
         LOG.info("Marked /files partition as inflight for initialization");
       }
 
+      // Explicitly disable partition_stats if it exists in table config
+      boolean partitionStatsExists = dataMetaClient.getTableConfig()
+          .isMetadataPartitionAvailable(MetadataPartitionType.PARTITION_STATS);
+      if (partitionStatsExists) {
+        dataMetaClient.getTableConfig().setMetadataPartitionState(
+            dataMetaClient, MetadataPartitionType.PARTITION_STATS.getPartitionPath(), false);
+        LOG.info("Disabled /partition_stats partition in table config");
+      }
+
       // Also mark column_stats partition as inflight for initialization
       boolean colStatsPartitionExists = dataMetaClient.getTableConfig()
           .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
