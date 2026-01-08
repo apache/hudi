@@ -170,6 +170,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs,
         HoodieMetadataConfig.newBuilder().enable(true)
             .withMetadataIndexColumnStats(true)
+            .withMetadataIndexPartitionStats(true)
             .withColumnStatsIndexForColumns("rider,driver")
             .withPartitionStatsIndexParallelism(1)
             .build(),
@@ -287,6 +288,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs,
         HoodieMetadataConfig.newBuilder().enable(true)
             .withMetadataIndexColumnStats(true)
+            .withMetadataIndexPartitionStats(true)
             .withColumnStatsIndexForColumns("rider,driver")
             .withPartitionStatsIndexParallelism(1)
             .build(),

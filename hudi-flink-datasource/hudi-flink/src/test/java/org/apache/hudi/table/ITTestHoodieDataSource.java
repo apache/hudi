@@ -563,6 +563,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true)
         .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), false)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
@@ -570,6 +571,7 @@ public class ITTestHoodieDataSource {
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());

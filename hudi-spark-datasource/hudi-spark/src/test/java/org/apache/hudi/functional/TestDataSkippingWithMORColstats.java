@@ -119,6 +119,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     // we have specified which columns to index
     options.put(HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.key(), "1");
 
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     Dataset<Row> inserts = makeInsertDf("000", 100);
     Dataset<Row> batch1 = inserts.where(matchCond);
     Dataset<Row> batch2 = inserts.where(nonMatchCond);
@@ -189,6 +190,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesDeleteBlockCompact() {
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     testBaseFileAndLogFileUpdateMatchesHelper(false, true,true, false);
   }
 
@@ -202,6 +204,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileAndLogFileUpdateMatchesAndRollBack() {
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     testBaseFileAndLogFileUpdateMatchesHelper(false, false,false, true);
   }
 
