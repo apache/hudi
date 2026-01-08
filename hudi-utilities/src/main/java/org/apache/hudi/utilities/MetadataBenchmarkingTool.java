@@ -95,9 +95,9 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
 
-public class HoodieMDTStats implements Closeable {
+public class MetadataBenchmarkingTool implements Closeable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMDTStats.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataBenchmarkingTool.class);
 
   private static final int INITIAL_ROW_COUNT = 50; // Rows to insert in STEP 1
 
@@ -126,7 +126,7 @@ public class HoodieMDTStats implements Closeable {
           + "  ]\n"
           + "}\n";
 
-  public HoodieMDTStats(SparkSession spark, Config cfg) {
+  public MetadataBenchmarkingTool(SparkSession spark, Config cfg) {
     this.spark = spark;
     this.jsc = new JavaSparkContext(spark.sparkContext());
     this.engineContext = new HoodieSparkEngineContext(jsc);
@@ -200,8 +200,8 @@ public class HoodieMDTStats implements Closeable {
         .getOrCreate();
 
 
-    try (HoodieMDTStats hoodieMDTStats = new HoodieMDTStats(spark, cfg)) {
-      hoodieMDTStats.run();
+    try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(spark, cfg)) {
+      metadataBenchmarkingTool.run();
     } catch (Throwable throwable) {
       LOG.error("Failed to get table size stats for " + cfg, throwable);
     } finally {
@@ -231,6 +231,7 @@ public class HoodieMDTStats implements Closeable {
             .enable(true)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexColumnStatsFileGroupCount(cfg.colStatsFileGroupCount)
+            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 
@@ -444,6 +445,7 @@ public class HoodieMDTStats implements Closeable {
     options.put("hoodie.metadata.index.column.stats.enable", "true");
     // Also ensure the columns are specified for column stats
     options.put("hoodie.metadata.index.column.stats.column.list", "age,salary");
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     spark.sqlContext().conf().setConfString("hoodie.fileIndex.dataSkippingFailureMode", "strict");
 
     // Create schema with the columns used for data skipping

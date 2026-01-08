@@ -16,11 +16,11 @@
   limitations under the License.
 -->
 
-# HoodieMDTStats Configuration Guide
+# MetadataBenchmarkingTool Configuration Guide
 
 ## Overview
 
-`HoodieMDTStats` is a utility for testing Hudi Metadata Table column statistics functionality. It creates a Hudi table, generates column statistics, and demonstrates data skipping capabilities.
+`MetadataBenchmarkingTool` is a utility for testing Hudi Metadata Table column statistics functionality. It creates a Hudi table, generates column statistics, and demonstrates data skipping capabilities.
 
 ## Configuration Parameters
 
@@ -89,7 +89,7 @@ Number of date-based partitions to create. Partitions are generated sequentially
 ### Basic Example
 ```bash
 spark-submit \
-  --class org.apache.hudi.utilities.HoodieMDTStats \
+  --class org.apache.hudi.utilities.MetadataBenchmarkingTool \
   --master "local[*]" \
   packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.2.0-SNAPSHOT.jar \
   --table-base-path /tmp/hudi_test \

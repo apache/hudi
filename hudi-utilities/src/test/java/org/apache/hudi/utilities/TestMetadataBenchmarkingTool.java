@@ -31,18 +31,18 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
- * Test cases for {@link HoodieMDTStats}.
+ * Test cases for {@link MetadataBenchmarkingTool}.
  */
-public class TestHoodieMDTStats {
+public class TestMetadataBenchmarkingTool {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMDTStats.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestMetadataBenchmarkingTool.class);
   private static SparkSession sparkSession;
 
   @BeforeAll
   public static void setUpClass() {
     // Initialize SparkSession for tests
     sparkSession = SparkSession.builder()
-        .appName("TestHoodieMDTStats")
+        .appName("TestMetadataBenchmarkingTool")
         .master("local[2]")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
@@ -61,11 +61,11 @@ public class TestHoodieMDTStats {
   }
 
   @Test
-  public void testHoodieMDTStatsRun(@TempDir Path tempDir) {
-    LOG.info("Running HoodieMDTStats test with temp directory: {}", tempDir);
+  public void testMetadataBenchmarkingToolRun(@TempDir Path tempDir) {
+    LOG.info("Running MetadataBenchmarkingTool test with temp directory: {}", tempDir);
 
-    // Create config for HoodieMDTStats
-    HoodieMDTStats.Config config = new HoodieMDTStats.Config();
+    // Create config for MetadataBenchmarkingTool
+    MetadataBenchmarkingTool.Config config = new MetadataBenchmarkingTool.Config();
     config.tableBasePath = tempDir.resolve("test_table").toString();
     config.colsToIndex = "age,salary";
     config.colStatsFileGroupCount = 10;
@@ -76,14 +76,14 @@ public class TestHoodieMDTStats {
     LOG.info("Test config: tableBasePath={}, numFiles={}, numPartitions={}, numColumnsToIndex={}, colStatsFileGroupCount={}",
         config.tableBasePath, config.numFiles, config.numPartitions, config.colsToIndex, config.colStatsFileGroupCount);
 
-    // Run HoodieMDTStats
+    // Run MetadataBenchmarkingTool
     assertDoesNotThrow(() -> {
-      try (HoodieMDTStats hoodieMDTStats = new HoodieMDTStats(sparkSession, config)) {
-        hoodieMDTStats.run();
+      try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(sparkSession, config)) {
+        metadataBenchmarkingTool.run();
       }
-    }, "HoodieMDTStats.run() should complete without throwing exceptions");
+    }, "MetadataBenchmarkingTool.run() should complete without throwing exceptions");
 
-    LOG.info("HoodieMDTStats test completed successfully");
+    LOG.info("MetadataBenchmarkingTool test completed successfully");
   }
 }
 
