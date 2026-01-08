@@ -36,8 +36,7 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.javalin.http.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -75,8 +74,8 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
  * Worker Thread 2        |-------------------------->| writing to MARKERS1
  * Worker Thread 3               |-------------------------->| writing to MARKERS2
  */
+@Slf4j
 public class MarkerHandler extends Handler {
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerHandler.class);
 
   private final Registry metricsRegistry;
   // a scheduled executor service to schedule dispatching of marker creation requests
@@ -100,7 +99,7 @@ public class MarkerHandler extends Handler {
   public MarkerHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
                        FileSystemViewManager viewManager, Registry metricsRegistry) {
     super(conf, timelineServiceConfig, viewManager);
-    LOG.debug("MarkerHandler batching params: batchNumThreads={} batchIntervalMs={}ms",
+    log.debug("MarkerHandler batching params: batchNumThreads={} batchIntervalMs={}ms",
         timelineServiceConfig.markerBatchNumThreads, timelineServiceConfig.markerBatchIntervalMs);
     this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;
@@ -195,9 +194,9 @@ public class MarkerHandler extends Handler {
           if (earlyConflictDetectionStrategy == null) {
             String strategyClassName = timelineServiceConfig.earlyConflictDetectionStrategy;
             if (!ReflectionUtils.isSubClass(strategyClassName, TimelineServerBasedDetectionStrategy.class)) {
-              LOG.warn("Cannot use {} for timeline-server-based markers.", strategyClassName);
+              log.warn("Cannot use {} for timeline-server-based markers.", strategyClassName);
               strategyClassName = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
-              LOG.warn("Falling back to {}", strategyClassName);
+              log.warn("Falling back to {}", strategyClassName);
             }
 
             earlyConflictDetectionStrategy =
@@ -230,11 +229,11 @@ public class MarkerHandler extends Handler {
         earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
 
       } catch (HoodieEarlyConflictDetectionException he) {
-        LOG.error("Detected the write conflict due to a concurrent writer, "
+        log.error("Detected the write conflict due to a concurrent writer, "
             + "failing the marker creation as the early conflict detection is enabled", he);
         return finishCreateMarkerFuture(context, markerDir, markerName);
       } catch (Exception e) {
-        LOG.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
+        log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
         // When early conflict detection fails to execute, we still allow the marker creation
         // to continue
         return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
@@ -247,7 +246,7 @@ public class MarkerHandler extends Handler {
 
   private MarkerCreationFuture addMarkerCreationRequestForAsyncProcessing(
       Context context, String markerDir, String markerName) {
-    LOG.debug("Request: create marker: {}", markerName);
+    log.debug("Request: Create marker: {}", markerName);
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
