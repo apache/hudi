@@ -185,11 +185,6 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(basePath), true);
-    HoodieTableMetaClient.newTableBuilder()
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(TABLE_NAME)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     for (String tableName : createdTablesSet) {
       ddlExecutor.runSQL("drop table if exists " + tableName);
@@ -259,15 +254,6 @@ public class HiveTestUtil {
     } catch (RuntimeException re) {
       re.printStackTrace();
       failedReleases.add("ZKService");
-    }
-
-    // Delete the temporary directory before closing the fileSystem.
-    if (basePath != null && fileSystem != null) {
-      try {
-        fileSystem.delete(new Path(basePath), true);
-      } catch (Exception e) {
-        LOG.warn("Failed to delete temporary directory using FileSystem: " + basePath, e);
-      }
     }
 
     try {
