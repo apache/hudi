@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.DefaultSparkRecordMerger
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import scala.collection.JavaConverters._
 
@@ -505,9 +506,9 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testBasicUpsertModifyExistingRow(tableType: String): Unit = {
-    val tableName = s"test_lance_upsert_${tableType.toLowerCase}"
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBasicUpsertModifyExistingRow(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_upsert_${tableType.name().toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // Initial insert - 3 records
@@ -521,7 +522,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
-      .option(TABLE_TYPE.key(), tableType)
+      .option(TABLE_TYPE.key(), tableType.name())
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -540,7 +541,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df2.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
-      .option(TABLE_TYPE.key(), tableType)
+      .option(TABLE_TYPE.key(), tableType.name())
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -550,7 +551,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .mode(SaveMode.Append)
       .save(tablePath)
 
-    // Second upsert - modify Alice (id=1) and insert David (id=4) made it pass first upsert
+    // Second upsert - modify Alice (id=1) and insert David (id=4)
     val records3 = Seq(
       (1, "Alice", 45, 98.5),  // Update Alice: age 30->45, score 95.5->98.5
       (4, "David", 28, 88.0)   // Insert new record
@@ -560,7 +561,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df3.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
-      .option(TABLE_TYPE.key(), tableType)
+      .option(TABLE_TYPE.key(), tableType.name())
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -580,7 +581,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(3, commitCount, "Should have 3 completed commits (insert + 2 upserts)")
 
     // Verify commit action types based on table type
-    val expectedAction = if (tableType == "COPY_ON_WRITE") "commit" else "deltacommit"
+    val expectedAction = if (tableType == HoodieTableType.COPY_ON_WRITE) "commit" else "deltacommit"
     val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
     commits.foreach { instant =>
       assertEquals(expectedAction, instant.getAction,
@@ -598,8 +599,46 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       (4, "David", 28, 88.0)
     )).toDF("id", "name", "age", "score")
 
-    assertTrue(expectedDf.except(actual).isEmpty) //fails here
+    assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
+
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // Write one more commit to trigger compaction
+      val records4 = Seq(
+        (1, "Alice", 50, 98.5),  // Update Alice: age 45->50
+        (4, "David", 28, 90.0)   // Update David: score 88.0->90.0
+      )
+      val df4 = spark.createDataFrame(records4).toDF("id", "name", "age", "score")
+      df4.write
+        .format("hudi")
+        .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+        .option(TABLE_TYPE.key(), tableType.name())
+        .option(RECORDKEY_FIELD.key(), "id")
+        .option(PRECOMBINE_FIELD.key(), "age")
+        .option(TABLE_NAME.key(), tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+        .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+        .option(OPERATION.key(), "upsert")
+        .option("hoodie.compact.inline", "true")
+        .option("hoodie.compact.inline.max.delta.commits", "1")
+        .mode(SaveMode.Append)
+        .save(tablePath)
+      val expectedDfAfterCompaction = spark.createDataFrame(Seq(
+        (1, "Alice", 50, 98.5),
+        (2, "Bob", 40, 95.0),
+        (3, "Charlie", 35, 92.1),
+        (4, "David", 28, 90.0)
+      )).toDF("id", "name", "age", "score")
+      // validate compaction commit is present
+      val compactionCommits = metaClient.reloadActiveTimeline().filterCompletedInstants().getInstants.asScala
+        .filter(instant => instant.getAction == "commit")
+      assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
+      // Read and verify data after compaction
+      val readDfAfterCompaction = spark.read.format("hudi").load(tablePath)
+      val actualAfterCompaction = readDfAfterCompaction.select("id", "name", "age", "score")
+      assertTrue(expectedDfAfterCompaction.except(actualAfterCompaction).isEmpty)
+      assertTrue(actualAfterCompaction.except(expectedDfAfterCompaction).isEmpty)
+    }
   }
 
   @ParameterizedTest
