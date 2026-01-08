@@ -261,6 +261,15 @@ public class HiveTestUtil {
       failedReleases.add("ZKService");
     }
 
+    // 在所有服务关闭后，在关闭文件系统之前删除临时目录
+    if (basePath != null && fileSystem != null) {
+      try {
+        fileSystem.delete(new Path(basePath), true);
+      } catch (Exception e) {
+        LOG.warn("Failed to delete temporary directory using FileSystem: " + basePath, e);
+      }
+    }
+
     try {
       if (fileSystem != null) {
         fileSystem.close();
