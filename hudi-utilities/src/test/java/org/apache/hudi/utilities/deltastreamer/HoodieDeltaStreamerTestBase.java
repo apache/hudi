@@ -156,7 +156,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         dfsBasePath + "/sql-transformer.properties");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/source_evolved.avsc", dfs, dfsBasePath + "/source_evolved.avsc");
-    UtilitiesTestBase.Helpers.copyToDFS("streamer-config/source_evolved_post_processed.avsc", dfs, dfsBasePath + "/source_evolved_post_processed.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/source-flattened.avsc", dfs, dfsBasePath + "/source-flattened.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/target-flattened.avsc", dfs, dfsBasePath + "/target-flattened.avsc");
