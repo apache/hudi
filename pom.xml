@@ -999,6 +999,12 @@
         <artifactId>orc-core</artifactId>
         <version>${orc.spark.version}</version>
         <scope>compile</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-exec</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <!-- RoaringBitmap -->
@@ -1030,6 +1036,12 @@
         <artifactId>spark-sql_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.apache.orc</groupId>
+            <artifactId>orc-core</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
@@ -1561,6 +1573,10 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-storage-api</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1616,6 +1632,10 @@
           <exclusion>
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-storage-api</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1807,6 +1827,87 @@
         <groupId>io.confluent</groupId>
         <artifactId>kafka-protobuf-serializer</artifactId>
         <version>${confluent.version}</version>
+      </dependency>
+
+      <!-- Netty: Force version compatible with Spark 3.5.1 (4.1.96.Final) -->
+      <!-- This prevents NoClassDefFoundError: io/netty/util/Recycler$EnhancedHandle -->
+      <!-- when Spark actions like take()/collect() transfer data from executors to driver -->
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-all</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-common</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-handler</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-buffer</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-resolver</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+
+      <!-- Jetty: Force version alignment to ensure setHttpOnly method is available -->
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-server</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-servlet</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-http</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-io</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-util</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-webapp</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-xml</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-security</artifactId>
+        <version>${jetty.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -2379,6 +2480,7 @@
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <hive.version>3.1.3</hive.version>
         <hive.storage.version>2.8.1</hive.storage.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
@@ -2665,6 +2767,7 @@
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark35.version}</kafka.version>
+        <hive.version>3.1.3</hive.version>
         <hive.storage.version>2.8.1</hive.storage.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
