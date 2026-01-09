@@ -53,7 +53,6 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -326,7 +325,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema recordSchema,
+                                                     HoodieSchema recordSchema,
                                                      HoodieSchema writerSchema,
                                                      List<HoodieRecord> records,
                                                      int numFiles,
@@ -336,7 +335,7 @@ public class HoodieCommonTestHarness {
                                                      String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
-        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema.toAvroSchema()).getData())
+        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema).getData())
         .collect(Collectors.toList());
     return writeLogFiles(partitionPath, writerSchema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }

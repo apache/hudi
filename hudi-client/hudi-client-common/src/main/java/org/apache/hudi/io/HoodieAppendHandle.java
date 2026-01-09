@@ -632,14 +632,14 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private void bufferInsertAndUpdate(HoodieSchema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
     // Check if the record should be ignored (special case for [[ExpressionPayload]])
-    if (hoodieRecord.shouldIgnore(schema.toAvroSchema(), recordProperties)) {
+    if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
       return;
     }
 
     // Prepend meta-fields into the record
     MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
     HoodieRecord populatedRecord =
-        hoodieRecord.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), metadataValues, recordProperties);
+        hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
 
     // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
     //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
@@ -661,7 +661,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     recordsDeleted++;
 
     // store ordering value with Java type.
-    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema.toAvroSchema(), recordProperties, orderingFields);
+    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema, recordProperties, orderingFields);
     long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
     recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }

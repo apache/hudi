@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -39,8 +41,6 @@ import org.apache.hudi.util.RowProjection;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.DecimalData;
@@ -95,26 +95,26 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+  protected Comparable<?> doGetOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     if (orderingFields == null) {
       return OrderingValues.getDefault();
     } else {
       return OrderingValues.create(orderingFields, field -> {
-        if (recordSchema.getField(field) == null) {
+        if (recordSchema.getField(field).isEmpty()) {
           return OrderingValues.getDefault();
         }
-        return (Comparable<?>) getColumnValue(recordSchema, field, props);
+        return (Comparable<?>) getColumnValue(recordSchema.toAvroSchema(), field, props);
       });
     }
   }
 
   @Override
-  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+  public Comparable<?> getOrderingValueAsJava(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     if (orderingFields == null) {
       return OrderingValues.getDefault();
     } else {
       return OrderingValues.create(orderingFields, field -> {
-        if (recordSchema.getField(field) == null) {
+        if (recordSchema.getField(field).isEmpty()) {
           return OrderingValues.getDefault();
         }
         return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
@@ -128,9 +128,9 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(HoodieSchema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
     if (key == null) {
-      ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null,
+      ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD).isPresent(),
           "There should be `_hoodie_record_key` in record schema.");
       String recordKey = Objects.toString(data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal()));
       key = new HoodieKey(recordKey, null);
@@ -139,9 +139,9 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, String keyFieldName) {
+  public String getRecordKey(HoodieSchema recordSchema, String keyFieldName) {
     if (key == null) {
-      String recordKey = Objects.toString(RowDataAvroQueryContexts.fromAvroSchema(recordSchema).getFieldQueryContext(keyFieldName).getFieldGetter().getFieldOrNull(data));
+      String recordKey = Objects.toString(RowDataAvroQueryContexts.fromAvroSchema(recordSchema.toAvroSchema()).getFieldQueryContext(keyFieldName).getFieldGetter().getFieldOrNull(data));
       key = new HoodieKey(recordKey, null);
     }
     return getRecordKey();
@@ -158,36 +158,39 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+  public Object convertColumnValueForLogicalType(HoodieSchema fieldSchema,
                                                  Object fieldValue,
                                                  boolean keepConsistentLogicalTimestamp) {
     if (fieldValue == null) {
       return null;
     }
-    LogicalType logicalType = fieldSchema.getLogicalType();
-
-    if (logicalType == LogicalTypes.date()) {
+    
+    HoodieSchemaType schemaType = fieldSchema.getType();
+    
+    if (schemaType == HoodieSchemaType.DATE) {
       return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
-    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+    } else if (schemaType == HoodieSchemaType.TIMESTAMP && keepConsistentLogicalTimestamp) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
       TimestampData ts = (TimestampData) fieldValue;
-      return ts.getMillisecond();
-    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
-      TimestampData ts = (TimestampData) fieldValue;
-      return ts.getMillisecond() / 1000;
-    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+        return ts.getMillisecond();
+      } else if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
+        return ts.getMillisecond() / 1000;
+      }
+    } else if (schemaType == HoodieSchemaType.DECIMAL) {
       return ((DecimalData) fieldValue).toBigDecimal();
     }
     return fieldValue;
   }
 
   @Override
-  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public Object[] getColumnValues(HoodieSchema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return getColumnValueAsJava(recordSchema, column, props, true);
+  public Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props) {
+    return getColumnValueAsJava(recordSchema.toAvroSchema(), column, props, true);
   }
 
   private Object getColumnValueAsJava(Schema recordSchema, String column, Properties props, boolean allowsNull) {
@@ -205,12 +208,12 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
+  public HoodieRecord joinWith(HoodieRecord other, HoodieSchema targetSchema) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+  public HoodieRecord prependMetaFields(HoodieSchema recordSchema, HoodieSchema targetSchema, MetadataValues metadataValues, Properties props) {
     int metaFieldSize = targetSchema.getFields().size() - recordSchema.getFields().size();
     GenericRowData metaRow = new GenericRowData(metaFieldSize);
     String[] metaVals = metadataValues.getValues();
@@ -223,17 +226,17 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+  public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
     String[] metaVals = new String[HoodieRecord.HOODIE_META_COLUMNS.size()];
     metaVals[ordinal] = value;
-    boolean withOperation = recordSchema.getField(OPERATION_METADATA_FIELD) != null;
+    boolean withOperation = recordSchema.getField(OPERATION_METADATA_FIELD).isPresent();
     RowData rowData = new HoodieRowDataWithUpdatedMetaField(metaVals, ordinal, getData(), withOperation);
     return new HoodieFlinkRecord(getKey(), getOperation(), orderingValue, rowData);
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
-    RowProjection rowProjection = RowDataAvroQueryContexts.getRowProjection(recordSchema, newSchema, renameCols);
+  public HoodieRecord rewriteRecordWithNewSchema(HoodieSchema recordSchema, Properties props, HoodieSchema newSchema, Map<String, String> renameCols) {
+    RowProjection rowProjection = RowDataAvroQueryContexts.getRowProjection(recordSchema.toAvroSchema(), newSchema.toAvroSchema(), renameCols);
     RowData newRow = rowProjection.project(getData());
     return new HoodieFlinkRecord(getKey(), getOperation(), newRow);
   }
@@ -248,7 +251,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public boolean shouldIgnore(Schema recordSchema, Properties props) {
+  public boolean shouldIgnore(HoodieSchema recordSchema, Properties props) {
     return false;
   }
 
@@ -263,36 +266,36 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation,
-                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<Schema> schemaWithoutMetaFields) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(HoodieSchema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation,
+                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<HoodieSchema> schemaWithoutMetaFields) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(HoodieSchema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
+  public HoodieRecord truncateRecordKey(HoodieSchema recordSchema, Properties props, String keyFieldName) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(HoodieSchema recordSchema, Properties props) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
-    IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema, getData());
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema.toAvroSchema(), utcTimezone);
+    IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema.toAvroSchema(), getData());
     return Option.of(new HoodieAvroIndexedRecord(getKey(), indexedRecord, getOperation(), getMetadata(), orderingValue, isDelete));
   }
 
   @Override
-  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+  public ByteArrayOutputStream getAvroBytes(HoodieSchema recordSchema, Properties props) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
-    IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema, getData());
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema.toAvroSchema(), utcTimezone);
+    IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema.toAvroSchema(), getData());
     return HoodieAvroUtils.avroToBytesStream(indexedRecord);
   }
 }

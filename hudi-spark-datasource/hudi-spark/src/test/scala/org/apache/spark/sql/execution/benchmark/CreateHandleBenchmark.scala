@@ -131,7 +131,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
           HoodieRecordUtils.createHoodieRecord(genRec, 0L, hoodieKey, classOf[DefaultHoodieRecordPayload].getName, false, null)
         }
       }).toJavaRDD().collect().stream().map[HoodieRecord[_]](hoodieRec => {
-      hoodieRec.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema.toAvroSchema, dummpProps)
+      hoodieRec.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, dummpProps)
       hoodieRec
     }).collect(Collectors.toList[HoodieRecord[_]])
 

@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -104,18 +105,18 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+  public Comparable<?> doGetOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     return this.getData().getOrderingValue();
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema,
+  public String getRecordKey(HoodieSchema recordSchema,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
     return getRecordKey();
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, String keyFieldName) {
+  public String getRecordKey(HoodieSchema recordSchema, String keyFieldName) {
     return getRecordKey();
   }
 
@@ -125,14 +126,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    return HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled);
+  public Object[] getColumnValues(HoodieSchema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+    return HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema.toAvroSchema(), consistentLogicalTimestampEnabled);
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+  public Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props) {
     try {
-      Option<IndexedRecord> indexedRecordOpt = getData().getInsertValue(recordSchema, props);
+      Option<IndexedRecord> indexedRecordOpt = getData().getInsertValue(recordSchema.toAvroSchema(), props);
       if (indexedRecordOpt.isPresent()) {
         return AvroRecordContext.getFieldValueFromIndexedRecord(indexedRecordOpt.get(), column);
       } else {
@@ -144,15 +145,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
+  public HoodieRecord joinWith(HoodieRecord other, HoodieSchema targetSchema) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+  public HoodieRecord prependMetaFields(HoodieSchema recordSchema, HoodieSchema targetSchema, MetadataValues metadataValues, Properties props) {
     try {
-      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema, props);
-      GenericRecord newAvroRecord = HoodieAvroUtils.projectRecordToNewSchemaShallow(avroRecordOpt.get(), targetSchema);
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema.toAvroSchema(), props);
+      GenericRecord newAvroRecord = HoodieAvroUtils.projectRecordToNewSchemaShallow(avroRecordOpt.get(), targetSchema.toAvroSchema());
       updateMetadataValuesInternal(newAvroRecord, metadataValues);
       return new HoodieAvroIndexedRecord(getKey(), newAvroRecord, getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {
@@ -161,9 +162,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+  public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
     try {
-      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema);
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema.toAvroSchema());
       // value should always be present if the meta fields are being updated since the record is being written
       IndexedRecord avroRecord = avroRecordOpt.orElseThrow(() -> new HoodieIOException("Failed to get insert value for record schema: " + recordSchema));
       avroRecord.put(ordinal, value);
@@ -174,10 +175,10 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
+  public HoodieRecord rewriteRecordWithNewSchema(HoodieSchema recordSchema, Properties props, HoodieSchema newSchema, Map<String, String> renameCols) {
     try {
-      GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
-      GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
+      GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema.toAvroSchema(), props).get();
+      GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema.toAvroSchema(), renameCols);
       return new HoodieAvroIndexedRecord(getKey(), rewriteRecord, getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deserialize record!", e);
@@ -185,8 +186,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
-    GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
+  public HoodieRecord truncateRecordKey(HoodieSchema recordSchema, Properties props, String keyFieldName) throws IOException {
+    GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema.toAvroSchema(), props).get();
     avroRecordPayload.put(keyFieldName, StringUtils.EMPTY_STRING);
     return new HoodieAvroIndexedRecord(getKey(), avroRecordPayload, getOperation(), this.currentLocation, this.newLocation);
   }
@@ -206,12 +207,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+  public boolean shouldIgnore(HoodieSchema recordSchema, Properties props) throws IOException {
     HoodieRecordPayload<?> recordPayload = getData();
     // NOTE: Currently only records borne by [[ExpressionPayload]] can currently be ignored,
     //       as such, we limit exposure of this method only to such payloads
     if (recordPayload instanceof BaseAvroPayload && ((BaseAvroPayload) recordPayload).canProduceSentinel()) {
-      Option<IndexedRecord> insertRecord = recordPayload.getInsertValue(recordSchema, props);
+      Option<IndexedRecord> insertRecord = recordPayload.getInsertValue(recordSchema.toAvroSchema(), props);
       return insertRecord.isPresent() && insertRecord.get().equals(SENTINEL);
     }
 
@@ -225,21 +226,22 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
-      Schema recordSchema, Properties props,
+      HoodieSchema recordSchema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
       Boolean populateMetaFields,
-      Option<Schema> schemaWithoutMetaFields) throws IOException {
-    IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
+      Option<HoodieSchema> schemaWithoutMetaFields) throws IOException {
+    IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema.toAvroSchema(), props).get();
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String[] orderingFields = ConfigUtils.getOrderingFields(props);
+    Option<Schema> avroSchemaWithoutMetaFields = schemaWithoutMetaFields.map(HoodieSchema::toAvroSchema);
     return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, orderingFields, simpleKeyGenFieldsOpt,
-        withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
+        withOperation, partitionNameOp, populateMetaFields, avroSchemaWithoutMetaFields);
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema,
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(HoodieSchema recordSchema,
       Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException();
   }
@@ -249,8 +251,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
-    Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema, props);
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(HoodieSchema recordSchema, Properties props) throws IOException {
+    Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema.toAvroSchema(), props);
     if (avroData.isPresent()) {
       HoodieAvroIndexedRecord record =
           new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata(), getData().getOrderingValue(), isDelete);
@@ -261,14 +263,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+  public ByteArrayOutputStream getAvroBytes(HoodieSchema recordSchema, Properties props) throws IOException {
     if (data instanceof BaseAvroPayload) {
       byte[] data = ((BaseAvroPayload) getData()).getRecordBytes();
       ByteArrayOutputStream baos = new ByteArrayOutputStream(data.length);
       baos.write(data);
       return baos;
     } else {
-      Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
+      Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema.toAvroSchema(), props);
       return avroData.map(HoodieAvroUtils::avroToBytesStream).orElse(new ByteArrayOutputStream(0));
     }
   }
@@ -287,10 +289,10 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+  public Object convertColumnValueForLogicalType(HoodieSchema fieldSchema,
                                                  Object fieldValue,
                                                  boolean keepConsistentLogicalTimestamp) {
     return HoodieAvroUtils.convertValueForAvroLogicalTypes(
-        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
+        fieldSchema.toAvroSchema(), fieldValue, keepConsistentLogicalTimestamp);
   }
 }

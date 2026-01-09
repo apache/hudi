@@ -125,8 +125,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           contextSupplier, populateMetaFields)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
-          GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(
-              schema.toAvroSchema(), CollectionUtils.emptyProps(), schema.toAvroSchema()).getData();
+          GenericRecord avroRecord = (GenericRecord) record.rewriteRecordWithNewSchema(schema, CollectionUtils.emptyProps(), schema).getData();
           if (populateMetaFields) {
             HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
             HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
@@ -149,7 +148,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           config, schema, contextSupplier)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
-          GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(schema.toAvroSchema(), CollectionUtils.emptyProps()).get().getData();
+          GenericRecord avroRecord = (GenericRecord) record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();
           HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
           HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
           writer.writeAvro(record.getRecordKey(), avroRecord);

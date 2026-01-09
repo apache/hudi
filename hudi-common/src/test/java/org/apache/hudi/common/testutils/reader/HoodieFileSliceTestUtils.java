@@ -52,7 +52,6 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -76,6 +75,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlo
 import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
 
@@ -216,7 +216,7 @@ public class HoodieFileSliceTestUtils {
   public static HoodieDeleteBlock getDeleteBlock(
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      Schema schema,
+      HoodieSchema schema,
       Properties props,
       Map<String, Long> keyToPositionMap
   ) {
@@ -238,7 +238,7 @@ public class HoodieFileSliceTestUtils {
   public static HoodieBaseFile createBaseFile(
       String baseFilePath,
       List<IndexedRecord> records,
-      Schema schema,
+      HoodieSchema schema,
       String baseInstantTime
   ) throws IOException {
     HoodieStorage storage = HoodieTestUtils.getStorage(baseFilePath);
@@ -265,10 +265,10 @@ public class HoodieFileSliceTestUtils {
 
     try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
         .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
-                HoodieSchema.fromAvroSchema(schema), new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
+                schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(
-            (String) record.get(schema.getField(ROW_KEY).pos()), record);
+            (String) record.get(schema.getField(ROW_KEY).get().pos()), record);
       }
     }
     return new HoodieBaseFile(baseFilePath);
@@ -278,7 +278,7 @@ public class HoodieFileSliceTestUtils {
       HoodieStorage storage,
       String logFilePath,
       List<IndexedRecord> records,
-      Schema schema,
+      HoodieSchema schema,
       String fileId,
       String baseFileInstantTime,
       String logInstantTime,
@@ -325,7 +325,7 @@ public class HoodieFileSliceTestUtils {
       String basePath,
       String fileId,
       String partitionPath,
-      Schema schema,
+      HoodieSchema schema,
       List<DataGenerationPlan> plans
   ) throws IOException, InterruptedException {
     assert (!plans.isEmpty());
@@ -412,7 +412,7 @@ public class HoodieFileSliceTestUtils {
         basePath,
         fileId,
         partitionPath,
-        AVRO_SCHEMA,
+        HOODIE_SCHEMA,
         plans));
   }
 
@@ -448,7 +448,7 @@ public class HoodieFileSliceTestUtils {
         basePath,
         fileId,
         partitionPath,
-        AVRO_SCHEMA,
+        HOODIE_SCHEMA,
         plans));
   }
 }

@@ -74,7 +74,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
   public void write(HoodieRecord oldRecord) {
     HoodieSchema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     HoodieSchema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
-    String key = oldRecord.getRecordKey(oldSchema.toAvroSchema(), keyGeneratorOpt);
+    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
 
     // To maintain overall sorted order across updates and inserts, write any new inserts whose keys are less than
     // the oldRecord's key.

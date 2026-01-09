@@ -58,7 +58,7 @@ public class FlinkIncrementalConcatHandle<T, I, K, O>
   @Override
   public void write(HoodieRecord oldRecord) {
     HoodieSchema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    String key = oldRecord.getRecordKey(oldSchema.toAvroSchema(), keyGeneratorOpt);
+    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     try {
       fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {

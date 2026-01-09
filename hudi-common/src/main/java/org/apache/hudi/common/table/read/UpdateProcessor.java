@@ -138,12 +138,12 @@ public interface UpdateProcessor<T> {
         GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
         HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
         try {
-          if (hoodieRecord.shouldIgnore(recordSchema.toAvroSchema(), properties)) {
+          if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
             return null;
           } else {
             HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
             // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), properties, readerSchema.toAvroSchema()).toIndexedRecord(readerSchema.toAvroSchema(), properties)
+            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
                 .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
           }
         } catch (IOException e) {

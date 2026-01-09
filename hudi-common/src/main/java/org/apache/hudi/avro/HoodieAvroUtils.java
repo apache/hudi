@@ -953,7 +953,7 @@ public class HoodieAvroUtils {
                                                Schema schema,
                                                boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(schema, new Properties()).get()).getData();
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(HoodieSchema.fromAvroSchema(schema), new Properties()).get()).getData();
       List<Object> list = new ArrayList<>();
       for (String col : columns) {
         list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
@@ -978,7 +978,7 @@ public class HoodieAvroUtils {
                                                                           boolean suffixRecordKey,
                                                                           boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema.toAvroSchema(), PROPERTIES).get().getData();
+      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema, PROPERTIES).get().getData();
       int numColumns = columns.length;
       Object[] values = new Object[columns.length + 1 + (suffixRecordKey ? 1 : 0)];
       values[0] = record.getPartitionPath();
