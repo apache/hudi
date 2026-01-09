@@ -23,10 +23,13 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+import lombok.Value;
+
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.Objects;
 
 import static org.apache.hudi.stats.ValueMetadata.getEmptyValueMetadata;
 
@@ -38,121 +41,29 @@ import static org.apache.hudi.stats.ValueMetadata.getEmptyValueMetadata;
  *        associated with
  */
 @SuppressWarnings("rawtype")
+@Value
 public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializable {
-  private final String filePath;
-  private final String columnName;
+
+  String filePath;
+  String columnName;
   @Nullable
-  private final T minValue;
+  T minValue;
   @Nullable
-  private final T maxValue;
-  private final long nullCount;
-  private final long valueCount;
-  private final long totalSize;
-  private final long totalUncompressedSize;
-  private final ValueMetadata valueMetadata;
-
-  private HoodieColumnRangeMetadata(String filePath,
-                                    String columnName,
-                                    @Nullable T minValue,
-                                    @Nullable T maxValue,
-                                    long nullCount,
-                                    long valueCount,
-                                    long totalSize,
-                                    long totalUncompressedSize,
-                                    ValueMetadata valueMetadata) {
-    this.filePath = filePath;
-    this.columnName = columnName;
-    this.minValue = minValue;
-    this.maxValue = maxValue;
-    this.nullCount = nullCount;
-    this.valueCount = valueCount;
-    this.totalSize = totalSize;
-    this.totalUncompressedSize = totalUncompressedSize;
-    this.valueMetadata = valueMetadata;
-  }
-
-  public String getFilePath() {
-    return this.filePath;
-  }
-
-  public String getColumnName() {
-    return this.columnName;
-  }
-
-  @Nullable
-  public T getMinValue() {
-    return this.minValue;
-  }
+  T maxValue;
+  long nullCount;
+  long valueCount;
+  long totalSize;
+  long totalUncompressedSize;
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  ValueMetadata valueMetadata;
 
   public Object getMinValueWrapped() {
     return getValueMetadata().wrapValue(getMinValue());
   }
 
-  @Nullable
-  public T getMaxValue() {
-    return this.maxValue;
-  }
-
   public Object getMaxValueWrapped() {
     return getValueMetadata().wrapValue(getMaxValue());
-  }
-
-  public long getNullCount() {
-    return nullCount;
-  }
-
-  public long getValueCount() {
-    return valueCount;
-  }
-
-  public long getTotalSize() {
-    return totalSize;
-  }
-
-  public long getTotalUncompressedSize() {
-    return totalUncompressedSize;
-  }
-
-  public ValueMetadata getValueMetadata() {
-    return valueMetadata;
-  }
-
-  @Override
-  public boolean equals(final Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    final HoodieColumnRangeMetadata<?> that = (HoodieColumnRangeMetadata<?>) o;
-    return Objects.equals(getFilePath(), that.getFilePath())
-        && Objects.equals(getColumnName(), that.getColumnName())
-        && Objects.equals(getMinValue(), that.getMinValue())
-        && Objects.equals(getMaxValue(), that.getMaxValue())
-        && Objects.equals(getNullCount(), that.getNullCount())
-        && Objects.equals(getValueCount(), that.getValueCount())
-        && Objects.equals(getTotalSize(), that.getTotalSize())
-        && Objects.equals(getTotalUncompressedSize(), that.getTotalUncompressedSize());
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNullCount());
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieColumnRangeMetadata{"
-        + "filePath ='" + filePath + '\''
-        + ", columnName='" + columnName + '\''
-        + ", minValue=" + minValue
-        + ", maxValue=" + maxValue
-        + ", nullCount=" + nullCount
-        + ", valueCount=" + valueCount
-        + ", totalSize=" + totalSize
-        + ", totalUncompressedSize=" + totalUncompressedSize
-        + '}';
   }
 
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> create(String filePath,

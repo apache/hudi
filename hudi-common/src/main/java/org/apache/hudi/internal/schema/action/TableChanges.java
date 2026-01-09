@@ -26,6 +26,8 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +44,8 @@ public class TableChanges {
 
   /** Deal with update columns changes for table. */
   public static class ColumnUpdateChange extends TableChange.BaseColumnChange {
+
+    @Getter
     private final Map<Integer, Types.Field> updates = new HashMap<>();
 
     private ColumnUpdateChange(InternalSchema schema) {
@@ -70,10 +74,6 @@ public class TableChanges {
         return Types.RecordType.get(newFields);
       }
       return type;
-    }
-
-    public Map<Integer, Types.Field> getUpdates() {
-      return updates;
     }
 
     /**
@@ -242,6 +242,7 @@ public class TableChanges {
 
   /** Deal with delete columns changes for table. */
   public static class ColumnDeleteChange extends TableChange.BaseColumnChange {
+    @Getter
     private final Set<Integer> deletes = new HashSet<>();
 
     @Override
@@ -284,10 +285,6 @@ public class TableChanges {
       return type;
     }
 
-    public Set<Integer> getDeletes() {
-      return deletes;
-    }
-
     @Override
     protected Integer findIdByFullName(String fullName) {
       throw new UnsupportedOperationException("delete change cannot support this method");
@@ -298,7 +295,9 @@ public class TableChanges {
    * Deal with add columns changes for table.
    */
   public static class ColumnAddChange extends TableChange.BaseColumnChange {
+    @Getter
     private final Map<String, Integer> fullColName2Id = new HashMap<>();
+    @Getter
     private final Map<Integer, ArrayList<Types.Field>> parentId2AddCols = new HashMap<>();
     private int nextId;
 
@@ -376,17 +375,8 @@ public class TableChanges {
       this.nextId = internalSchema.getMaxColumnId() + 1;
     }
 
-    public Map<Integer, ArrayList<Types.Field>> getParentId2AddCols() {
-      return parentId2AddCols;
-    }
-
     public Map<Integer, ArrayList<ColumnPositionChange>> getPositionChangeMap() {
       return positionChangeMap;
-    }
-
-    // expose to test
-    public Map<String, Integer> getFullColName2Id() {
-      return fullColName2Id;
     }
 
     protected Integer findIdByFullName(String fullName) {

@@ -21,23 +21,21 @@ package org.apache.hudi.metrics;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Slf4jReporter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 
 /**
  * Hudi Slf4j metrics reporter. Reports the metrics by printing them to the log.
  */
+@Slf4j
 public class Slf4jMetricsReporter extends MetricsReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(Slf4jMetricsReporter.class);
 
   private final Slf4jReporter reporter;
 
   public Slf4jMetricsReporter(MetricRegistry registry) {
     this.reporter = Slf4jReporter.forRegistry(registry)
-        .outputTo(LOG)
+        .outputTo(log)
         .convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS)
         .filter(MetricFilter.ALL)
@@ -49,7 +47,7 @@ public class Slf4jMetricsReporter extends MetricsReporter {
     if (reporter != null) {
       reporter.start(30, TimeUnit.SECONDS);
     } else {
-      LOG.error("Cannot start as the reporter is null.");
+      log.error("Cannot start as the reporter is null.");
     }
   }
 
@@ -58,7 +56,7 @@ public class Slf4jMetricsReporter extends MetricsReporter {
     if (reporter != null) {
       reporter.report();
     } else {
-      LOG.error("Cannot report metrics as the reporter is null.");
+      log.error("Cannot report metrics as the reporter is null.");
     }
   }
 
@@ -67,7 +65,7 @@ public class Slf4jMetricsReporter extends MetricsReporter {
     if (reporter != null) {
       reporter.stop();
     } else {
-      LOG.error("Cannot stop as the reporter is null.");
+      log.error("Cannot stop as the reporter is null.");
     }
   }
 }
