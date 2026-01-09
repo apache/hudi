@@ -250,7 +250,18 @@ public class HiveTestService {
 
     @Override
     public TTransport getTransport(TTransport trans) {
-      return childTransFactory.getTransport(parentTransFactory.getTransport(trans));
+      try {
+        TTransport parentTransport = parentTransFactory.getTransport(trans);
+        return childTransFactory.getTransport(parentTransport);
+      } catch (Exception e) {
+        // In Hive 2.x, TTransportFactory.getTransport() doesn't throw checked exceptions,
+        // but the underlying methods might throw TTransportException or other exceptions.
+        // Wrap any exception in RuntimeException for compatibility with Hive 2.x signature.
+        if (e instanceof RuntimeException) {
+          throw (RuntimeException) e;
+        }
+        throw new RuntimeException("Failed to get transport", e);
+      }
     }
   }
 
