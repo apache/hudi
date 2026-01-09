@@ -198,13 +198,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "enabled, metadata table will have a partition to store the column ranges and will be "
           + "used for pruning files during the index lookups.");
 
-  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      .defaultValue(false)
-      .sinceVersion("0.11.0")
-      .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups for each partition.");
-
-
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
       .defaultValue(2)

@@ -228,6 +228,7 @@ public class MetadataBenchmarkingTool implements Closeable {
             .enable(true)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexColumnStatsFileGroupCount(cfg.colStatsFileGroupCount)
+            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 
@@ -421,6 +422,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     options.put("hoodie.datasource.read.data.skipping.enable", "true");
     options.put("hoodie.metadata.enable", "true");
     options.put("hoodie.metadata.index.column.stats.enable", "true");
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     // Also ensure the columns are specified for column stats
     options.put("hoodie.metadata.index.column.stats.column.list", "age,salary");
     spark.sqlContext().conf().setConfString("hoodie.fileIndex.dataSkippingFailureMode", "strict");
@@ -550,6 +552,15 @@ public class MetadataBenchmarkingTool implements Closeable {
         .setBasePath(metadataBasePath)
         .setConf(engineContext.getStorageConf().newInstance())
         .build();
+
+    // Explicitly disable partition_stats if it exists in table config
+    boolean partitionStatsExists = dataMetaClient.getTableConfig()
+        .isMetadataPartitionAvailable(MetadataPartitionType.PARTITION_STATS);
+    if (partitionStatsExists) {
+      dataMetaClient.getTableConfig().setMetadataPartitionState(
+          dataMetaClient, MetadataPartitionType.PARTITION_STATS.getPartitionPath(), false);
+      LOG.info("Disabled /partition_stats partition in table config");
+    }
 
     // Also mark column_stats partition as inflight for initialization
     boolean colStatsPartitionExists = dataMetaClient.getTableConfig()
@@ -814,9 +825,10 @@ public class MetadataBenchmarkingTool implements Closeable {
 
             // Generate column stats records for this file
             // These records are added to the partition's local list on the executor
+            @SuppressWarnings("unchecked")
             List<HoodieRecord<HoodieMetadataPayload>> fileRecords = HoodieMetadataPayload
                 .createColumnStatsRecords(partitionPath, columnRangeMetadata, false)
-                .map(record -> (HoodieRecord) record)
+                .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
                 .collect(Collectors.toList());
 
             partitionRecords.addAll(fileRecords);
