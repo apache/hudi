@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -80,6 +81,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -87,7 +89,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import scala.Tuple2;
 import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -96,6 +100,31 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 public class MetadataBenchmarkingTool implements Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetadataBenchmarkingTool.class);
+
+  // Table and column constants
+  private static final String TABLE_NAME = "test_mdt_stats_tbl";
+  private static final String COL_TENANT_ID = "tenantID";
+  private static final String COL_AGE = "age";
+
+  // Partition generation constants
+  private static final LocalDate PARTITION_START_DATE = LocalDate.of(2020, 1, 1);
+  private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+  // TenantID column stats range: 30000-60000
+  private static final long TENANT_ID_MIN_BASE = 30000L;
+  private static final int TENANT_ID_RANGE = 30000;
+  private static final long TENANT_ID_MAX = 60000L;
+
+  // Age column stats range: 20-99
+  private static final int AGE_MIN_BASE = 20;
+  private static final int AGE_MIN_RANGE = 30;
+  private static final int AGE_MAX_RANGE = 50;
+
+  // Column stats metadata defaults
+  private static final int COL_STATS_NULL_COUNT = 0;
+  private static final int COL_STATS_VALUE_COUNT = 1000;
+  private static final long COL_STATS_TOTAL_SIZE = 123456L;
+  private static final long COL_STATS_TOTAL_UNCOMPRESSED_SIZE = 123456L;
 
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
@@ -150,14 +179,10 @@ public class MetadataBenchmarkingTool implements Closeable {
    * @return List of column names to index
    */
   private List<String> getColumnsToIndex(int numColumnsToIndex) {
-    List<String> columns = new ArrayList<>();
-    columns.add("tenantID");
-    if (numColumnsToIndex == 2) {
-      columns.add("age");
-    }
-    return columns;
+    return numColumnsToIndex == 2 ? Arrays.asList(COL_TENANT_ID, COL_AGE)
+        : Collections.singletonList(COL_TENANT_ID);
   }
-  
+
   private String getColumnsToIndexString(int numColumnsToIndex) {
     return String.join(",", getColumnsToIndex(numColumnsToIndex));
   }
@@ -193,6 +218,9 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Parameter(names = {"--num-partitions", "-np"}, description = "Number of partitions to create in the table", required = true)
     public Integer numPartitions = 1;
 
+    @Parameter(names = {"--partition-filter-percentage", "-pfp"}, description = "Percentage of partitions to exclude during querying (0 = include all, 100 = exclude all)", required = false)
+    public Integer partitionFilterPercentage = 0;
+
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
         splitter = IdentitySplitter.class)
@@ -208,9 +236,13 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Override
     public String toString() {
       return "MetadataBenchmarkingTool {\n"
-          + "   --num-cols-to-index " + numColumnsToIndex + ", \n"
-          + "   --col-stats-file-group-count " + colStatsFileGroupCount + ", \n"
-          + "\n}";
+          + "   --table-base-path " + tableBasePath + ",\n"
+          + "   --num-files " + numFiles + ",\n"
+          + "   --num-partitions " + numPartitions + ",\n"
+          + "   --num-cols-to-index " + numColumnsToIndex + ",\n"
+          + "   --col-stats-file-group-count " + colStatsFileGroupCount + ",\n"
+          + "   --partition-filter-percentage " + partitionFilterPercentage + "\n"
+          + "}";
     }
   }
 
@@ -248,55 +280,100 @@ public class MetadataBenchmarkingTool implements Closeable {
     List<String> colsToIndex = getColumnsToIndex(cfg.numColumnsToIndex);
     LOG.info("Data table base path: {}", cfg.tableBasePath);
 
-    String tableName = "test_mdt_stats_tbl";
-    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
-    HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(tableName, dataWriteConfig);
+    HoodieWriteConfig dataWriteConfig = getWriteConfig(TABLE_NAME, getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(TABLE_NAME, dataWriteConfig);
 
-    int totalFilesCreated = writeToMetadataTable(numFiles, numPartitions, colsToIndex, dataWriteConfig, dataMetaClient);
-    System.out.println("Completed bootstrapping Metadata table");
+    int totalFilesCreated = bootstrapMetadataTable(numFiles, numPartitions, colsToIndex, dataWriteConfig, dataMetaClient);
+    LOG.info("Completed bootstrapping Metadata table");
 
-    queryAndVerifyColumnStats(dataWriteConfig, dataMetaClient, Collections.emptyMap(), totalFilesCreated);
-
-    System.out.println("Completed query benchmarking");
+    benchmarkDataSkipping(dataWriteConfig, dataMetaClient, totalFilesCreated);
+    LOG.info("Completed query benchmarking");
   }
 
-  private int writeToMetadataTable(int numFiles, int numPartitions, List<String> colsToIndex, HoodieWriteConfig dataWriteConfig, HoodieTableMetaClient dataTableMetaClient) throws Exception {
-    LOG.info("Starting Metadata table benchmarking with {} files, {} partitions, {} columns ({}), {} file groups",
-        numFiles, numPartitions, cfg.numColumnsToIndex, String.join(",", colsToIndex), cfg.colStatsFileGroupCount);
-    List<String> partitions = generatePartitions(numPartitions);
-    HoodieTestTable testTable = HoodieTestTable.of(dataTableMetaClient);
-    try (SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter = new SparkHoodieBackedTableMetadataBenchmarkWriter(
-        engineContext.getStorageConf(), dataWriteConfig, HoodieFailedWritesCleaningPolicy.EAGER, engineContext, Option.empty(), false)) {
+  private int bootstrapMetadataTable(
+      int numFiles, int numPartitions, List<String> colsToIndex,
+      HoodieWriteConfig dataWriteConfig, HoodieTableMetaClient dataTableMetaClient) throws Exception {
 
-      int filesPerPartition = numFiles / numPartitions;
-      String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
-      // Create commit metadata
-      HoodieCommitMetadata commitMetadata = testTable.createCommitMetadata(dataCommitTime, WriteOperationType.INSERT, partitions,
-          filesPerPartition, false);
-      // Add commit to timeline
-      testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
-      LOG.info("Created commit metadata at instant {}", dataCommitTime);
+    LOG.info("Bootstrapping metadata table: {} files, {} partitions, columns [{}], {} col stats file groups",
+        numFiles, numPartitions, String.join(",", colsToIndex), cfg.colStatsFileGroupCount);
+
+    List<String> partitions = generatePartitions(numPartitions);
+    int filesPerPartition = numFiles / numPartitions;
+
+    HoodieTestTable testTable = HoodieTestTable.of(dataTableMetaClient);
+    String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
+    HoodieCommitMetadata commitMetadata = createCommitMetadataAndAddToTimeline(
+        testTable, partitions, filesPerPartition, dataCommitTime);
+
+    HoodieTimer timer = HoodieTimer.start();
+    try (SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter =
+        new SparkHoodieBackedTableMetadataBenchmarkWriter(
+            engineContext.getStorageConf(), dataWriteConfig,
+            HoodieFailedWritesCleaningPolicy.EAGER, engineContext, Option.empty(), false)) {
 
       metadataWriter.initMetadataMetaClient();
-
-      // Convert commit metadata to files partition records and commit
-      @SuppressWarnings("unchecked")
-      List<HoodieRecord> filesRecords = HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
-      System.out.println("Count of files created in the metadata table " + filesRecords.size());
-
-      String instantTimeForFilesPartition = generateUniqueInstantTime(0);
-      Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair = Pair.of(1, engineContext.parallelize(filesRecords, 10));
-      metadataWriter.initializeFilegroupsAndCommit(FILES, FILES.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForFilesPartition);
-
-      // Generate column stats records
-      @SuppressWarnings("rawtypes")
-      HoodieData<HoodieRecord> columnStatsRecords = generateColumnStatsRecordsForCommitMetadata(
-          commitMetadata);
-      String instantTimeForColStatsPartition = generateUniqueInstantTime(1);
-      Pair<Integer, HoodieData<HoodieRecord>> colStatsFileGroupCountAndRecordsPair = Pair.of(cfg.colStatsFileGroupCount, columnStatsRecords);
-      metadataWriter.initializeFilegroupsAndCommit(COLUMN_STATS, COLUMN_STATS.getPartitionPath(), colStatsFileGroupCountAndRecordsPair, instantTimeForColStatsPartition, colsToIndex);
-      return filesRecords.size();
+      bootstrapFilesPartition(metadataWriter, commitMetadata, dataCommitTime);
+      bootstrapColumnStatsPartition(metadataWriter, commitMetadata, colsToIndex);
     }
+    LOG.info("Time taken to perform bootstrapping metadata table is {}", timer.endTimer());
+
+    return filesPerPartition * numPartitions;
+  }
+
+  /**
+   * Creates commit metadata for the test table and adds it to the timeline.
+   */
+  private HoodieCommitMetadata createCommitMetadataAndAddToTimeline(
+      HoodieTestTable testTable, List<String> partitions,
+      int filesPerPartition, String dataCommitTime) throws Exception {
+
+    HoodieCommitMetadata commitMetadata = testTable.createCommitMetadata(
+        dataCommitTime, WriteOperationType.INSERT, partitions, filesPerPartition, false);
+    testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
+    LOG.info("Created commit metadata at instant {} with {} files per partition", dataCommitTime, filesPerPartition);
+
+    return commitMetadata;
+  }
+
+  /**
+   * Bootstraps the FILES partition in the metadata table.
+   */
+  @SuppressWarnings("unchecked")
+  private void bootstrapFilesPartition(
+      SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter,
+      HoodieCommitMetadata commitMetadata,
+      String dataCommitTime) throws IOException {
+    HoodieTimer timer = HoodieTimer.start();
+    List<HoodieRecord> filesRecords = HoodieTableMetadataUtil
+        .convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
+    LOG.info("Bootstrapping FILES partition with {} records", filesRecords.size());
+
+    String instantTime = generateUniqueInstantTime(0);
+    Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecords =
+        Pair.of(1, engineContext.parallelize(filesRecords, 10));
+    metadataWriter.initializeFilegroupsAndCommit(FILES, FILES.getPartitionPath(), fileGroupCountAndRecords, instantTime);
+    LOG.info("Time taken for bootstrapping files partition is {}", timer.endTimer());
+  }
+
+  /**
+   * Bootstraps the COLUMN_STATS partition in the metadata table.
+   */
+  @SuppressWarnings("rawtypes")
+  private void bootstrapColumnStatsPartition(
+      SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter,
+      HoodieCommitMetadata commitMetadata,
+      List<String> colsToIndex) throws IOException {
+
+    HoodieTimer timer = HoodieTimer.start();
+    HoodieData<HoodieRecord> columnStatsRecords = generateColumnStatsRecordsForCommitMetadata(commitMetadata);
+    LOG.info("Bootstrapping COLUMN_STATS partition with {} file groups", cfg.colStatsFileGroupCount);
+
+    String instantTime = generateUniqueInstantTime(1);
+    Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecords =
+        Pair.of(cfg.colStatsFileGroupCount, columnStatsRecords);
+    metadataWriter.initializeFilegroupsAndCommit(
+        COLUMN_STATS, COLUMN_STATS.getPartitionPath(), fileGroupCountAndRecords, instantTime, colsToIndex);
+    LOG.info("Time taken to bootstrap column stats is {}", timer.endTimer());
   }
 
   String generateUniqueInstantTime(int offset) {
@@ -331,13 +408,9 @@ public class MetadataBenchmarkingTool implements Closeable {
     }
 
     List<String> partitions = new ArrayList<>();
-    LocalDate startDate = LocalDate.of(2020, 1, 1);
-    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
     for (int i = 0; i < numPartitions; i++) {
-      LocalDate partitionDate = startDate.plusDays(i);
-      String partitionPath = partitionDate.format(formatter);
-      partitions.add(partitionPath);
+      LocalDate partitionDate = PARTITION_START_DATE.plusDays(i);
+      partitions.add(partitionDate.format(DATE_FORMATTER));
     }
 
     LOG.info("Generated {} partitions from {} to {}",
@@ -349,149 +422,99 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   /**
-   * Query the column stats index using HoodieFileIndex.filterFileSlices and verify results.
+   * Benchmarks data skipping using column stats index via HoodieFileIndex.filterFileSlices.
    *
    * @param dataConfig     The write config for the data table
    * @param dataMetaClient The meta client for the data table
-   * @param expectedStats  The expected column stats for verification
    * @param numFiles       The total number of files in the commit
    */
-  @SuppressWarnings("rawtypes")
-  private void queryAndVerifyColumnStats(
+  private void benchmarkDataSkipping(
       HoodieWriteConfig dataConfig,
       HoodieTableMetaClient dataMetaClient,
-      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats,
       int numFiles) {
 
-    LOG.info("=== STEP 5: Querying column stats index using HoodieFileIndex ===");
+    LOG.info("Running data skipping benchmark");
     dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
 
-    // Create HoodieFileIndex
+    HoodieFileIndex fileIndex = createHoodieFileIndex(dataConfig, dataMetaClient);
+    StructType dataSchema = getDataSchema();
+
+    Seq<Expression> dataFiltersSeq = JavaConverters
+        .asScalaBuffer(Collections.singletonList(buildDataFilter(dataSchema))).toList();
+    Seq<Expression> partitionFiltersSeq = JavaConverters
+        .asScalaBuffer(Collections.singletonList(buildPartitionFilter(dataSchema))).toList();
+
+    long startTime = System.currentTimeMillis();
+    Seq<Tuple2<scala.Option<BaseHoodieTableFileIndex.PartitionPath>, Seq<FileSlice>>> filteredSlices =
+        fileIndex.filterFileSlices(dataFiltersSeq, partitionFiltersSeq, false);
+    long filterTimeMs = System.currentTimeMillis() - startTime;
+
+    int totalFileSlices = countFileSlices(filteredSlices);
+
+    LOG.info("filterFileSlices took {} ms", filterTimeMs);
+    LOG.info("File slices returned: {} / {}", totalFileSlices, numFiles);
+    if (numFiles > 0) {
+      double skippingRatio = ((double) (numFiles - totalFileSlices) / numFiles) * 100.0;
+      LOG.info(String.format("Data skipping ratio: %.2f%%", skippingRatio));
+    }
+  }
+
+  /**
+   * Creates a HoodieFileIndex configured for data skipping with column stats.
+   */
+  @SuppressWarnings("deprecation")
+  private HoodieFileIndex createHoodieFileIndex(HoodieWriteConfig dataConfig, HoodieTableMetaClient metaClient) {
     Map<String, String> options = new HashMap<>();
     options.put("path", dataConfig.getBasePath());
     options.put("hoodie.datasource.read.data.skipping.enable", "true");
     options.put("hoodie.metadata.enable", "true");
     options.put("hoodie.metadata.index.column.stats.enable", "true");
     options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
-    // Also ensure the columns are specified for column stats
-    String columnsToIndexStr = getColumnsToIndexString(cfg.numColumnsToIndex);
-    options.put("hoodie.metadata.index.column.stats.column.list", columnsToIndexStr);
+    options.put("hoodie.metadata.index.column.stats.column.list", getColumnsToIndexString(cfg.numColumnsToIndex));
     spark.sqlContext().conf().setConfString("hoodie.fileIndex.dataSkippingFailureMode", "strict");
 
-    // Use consolidated schema helper method
-    StructType dataSchema = getDataSchema();
-    scala.Option<StructType> schemaOption = scala.Option.apply(dataSchema);
-
-    @SuppressWarnings("deprecation")
     scala.collection.immutable.Map<String, String> scalaOptions = JavaConverters.mapAsScalaMap(options)
-        .toMap(scala.Predef$.MODULE$.<scala.Tuple2<String, String>>conforms());
+        .toMap(scala.Predef$.MODULE$.conforms());
 
-    HoodieFileIndex fileIndex = new HoodieFileIndex(
+    return new HoodieFileIndex(
         spark,
-        dataMetaClient,
-        schemaOption,
+        metaClient,
+        scala.Option.apply(getDataSchema()),
         scalaOptions,
         NoopCache$.MODULE$,
         false,
         false);
+  }
 
-    // Create data filters based on columns to index
-    // Unresolved expressions cause translateIntoColumnStatsIndexFilterExpr to return TrueLiteral (no filtering).
-    List<Expression> dataFilters = new ArrayList<>();
-    String filterString;
-    if (cfg.numColumnsToIndex == 2) {
-      filterString = "age > 70";
-    } else {
-      filterString = "tenantID > 50000"; // More selective filter for 30k-60k range
-    }
-    Expression filter1 = HoodieCatalystExpressionUtils$.MODULE$
-        .resolveExpr(spark, filterString, dataSchema);
-    LOG.info("Using filter: {}", filterString);
-    LOG.info("DEBUG: Resolved filter expression: {}", filter1);
-    LOG.info("DEBUG: Resolved filter resolved: {}", filter1.resolved());
-    LOG.info("DEBUG: Resolved filter tree:\n{}", filter1.treeString());
+  /**
+   * Builds a data filter expression based on the indexed columns.
+   */
+  private Expression buildDataFilter(StructType dataSchema) {
+    String filterString = (cfg.numColumnsToIndex == 2)
+        ? COL_AGE + " > 70"
+        : COL_TENANT_ID + " > 50000";
+    LOG.info("Using data filter: {}", filterString);
+    return HoodieCatalystExpressionUtils$.MODULE$.resolveExpr(spark, filterString, dataSchema);
+  }
 
-    dataFilters.add(filter1);
-
+  /**
+   * Builds a partition filter expression based on the configured filter percentage.
+   */
+  private Expression buildPartitionFilter(StructType dataSchema) {
     String partitionFilter = getPartitionFilter();
-    Expression partitionFilter1 = HoodieCatalystExpressionUtils$.MODULE$
-        .resolveExpr(spark, partitionFilter, dataSchema);
+    LOG.info("Using partition filter: {}", partitionFilter);
+    return HoodieCatalystExpressionUtils$.MODULE$.resolveExpr(spark, partitionFilter, dataSchema);
+  }
 
-    List<Expression> partitionFilters = Collections.singletonList(partitionFilter1);
-
-    // Convert to Scala Seq
-    scala.collection.immutable.List<Expression> dataFiltersList = JavaConverters.asScalaBuffer(dataFilters)
-        .toList();
-    scala.collection.Seq<Expression> dataFiltersSeq = dataFiltersList;
-    scala.collection.immutable.List<Expression> partitionFiltersList = JavaConverters
-        .asScalaBuffer(partitionFilters).toList();
-    scala.collection.Seq<Expression> partitionFiltersSeq = partitionFiltersList;
-
-    // Call filterFileSlices with timing
-    long startTime = System.currentTimeMillis();
-    scala.collection.Seq<scala.Tuple2<scala.Option<BaseHoodieTableFileIndex.PartitionPath>,
-        scala.collection.Seq<FileSlice>>> filteredSlices = fileIndex
-        .filterFileSlices(
-            dataFiltersSeq,
-            partitionFiltersSeq,
-            false);
-    long endTime = System.currentTimeMillis();
-    long filterTimeMs = endTime - startTime;
-    LOG.info("=== filterFileSlices benchmark: {} ms ===", filterTimeMs);
-
-    LOG.info("Filtered File Slices Min/Max Values:");
-    String headerFormat;
-    String header;
-    if (cfg.numColumnsToIndex == 2) {
-      headerFormat = "%-30s %-20s %-20s %-20s %-20s";
-      header = String.format(headerFormat, "FileName", "tenantID_min", "tenantID_max", "age_min", "age_max");
-    } else {
-      headerFormat = "%-30s %-20s %-20s";
-      header = String.format(headerFormat, "FileName", "tenantID_min", "tenantID_max");
-    }
-    LOG.info(header);
-    LOG.info(String.join("", Collections.nCopies(100, "-")));
-
-    int totalFileSlices = 0;
+  /**
+   * Counts total file slices across all partitions.
+   */
+  private int countFileSlices(Seq<Tuple2<scala.Option<BaseHoodieTableFileIndex.PartitionPath>, Seq<FileSlice>>> filteredSlices) {
+    int total = 0;
     for (int j = 0; j < filteredSlices.size(); j++) {
-      scala.Tuple2<scala.Option<BaseHoodieTableFileIndex.PartitionPath>,
-          scala.collection.Seq<FileSlice>> tuple = filteredSlices.apply(j);
-      scala.collection.Seq<FileSlice> fileSliceSeq = tuple._2();
-      totalFileSlices += fileSliceSeq.size();
-
-      for (int k = 0; k < fileSliceSeq.size(); k++) {
-        FileSlice fileSlice = fileSliceSeq.apply(k);
-        String fileName = fileSlice.getBaseFile().get().getFileName();
-
-        Map<String, HoodieColumnRangeMetadata<Comparable>> fileExpectedStats = expectedStats.get(fileName);
-        if (fileExpectedStats != null) {
-          HoodieColumnRangeMetadata<Comparable> tenantIDStats = fileExpectedStats.get("tenantID");
-          Object tenantIDMin = (tenantIDStats != null) ? tenantIDStats.getMinValue() : "null";
-          Object tenantIDMax = (tenantIDStats != null) ? tenantIDStats.getMaxValue() : "null";
-          
-          if (cfg.numColumnsToIndex == 2) {
-            HoodieColumnRangeMetadata<Comparable> ageStats = fileExpectedStats.get("age");
-            Object ageMin = (ageStats != null) ? ageStats.getMinValue() : "null";
-            Object ageMax = (ageStats != null) ? ageStats.getMaxValue() : "null";
-            LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
-                fileName, tenantIDMin.toString(), tenantIDMax.toString(), ageMin.toString(),
-                ageMax.toString()));
-          } else {
-            LOG.info(String.format("%-30s %-20s %-20s",
-                fileName, tenantIDMin.toString(), tenantIDMax.toString()));
-          }
-        }
-      }
+      total += filteredSlices.apply(j)._2().size();
     }
-
-    LOG.info(String.join("", Collections.nCopies(100, "-")));
-    LOG.info("Total file slices returned: {}", totalFileSlices);
-    LOG.info("Total files in commit: {}", numFiles);
-
-    if (numFiles > 0) {
-      double skippingRatio = ((double) (numFiles - totalFileSlices) / numFiles) * 100.0;
-      LOG.info(String.format("Data skipping ratio: %.2f%%", skippingRatio));
-    }
+    return total;
   }
 
   /**
@@ -506,101 +529,95 @@ public class MetadataBenchmarkingTool implements Closeable {
   private HoodieData<HoodieRecord> generateColumnStatsRecordsForCommitMetadata(
       HoodieCommitMetadata commitMetadata) {
 
-    // Extract partition to writeStats mapping
     Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
+    List<Map.Entry<String, List<HoodieWriteStat>>> partitionEntries = new ArrayList<>(partitionToWriteStats.entrySet());
 
-    // Create a list of partition entries to distribute
-    // This only holds metadata (partition paths and file references), not actual records
-    List<Map.Entry<String, List<HoodieWriteStat>>> partitionEntries =
-        new ArrayList<>(partitionToWriteStats.entrySet());
-
-    LOG.info("Processing {} table partitions for column stats generation with total {} files",
+    LOG.info("Processing {} partitions with {} total files for column stats generation",
         partitionEntries.size(),
         partitionToWriteStats.values().stream().mapToInt(List::size).sum());
 
-    // Capture config for serialization into the closure
     final int numColumnsToIndex = cfg.numColumnsToIndex;
 
-    // Parallelize by table partition - each Spark partition processes one table partition
-    // Use number of table partitions as the parallelism level
-    JavaRDD<Map.Entry<String, List<HoodieWriteStat>>> partitionsRDD =
-        jsc.parallelize(partitionEntries, partitionEntries.size());
+    JavaRDD<HoodieRecord> recordsRDD = jsc
+        .parallelize(partitionEntries, partitionEntries.size())
+        .flatMap(entry -> processPartitionWriteStats(entry.getKey(), entry.getValue(), numColumnsToIndex).iterator());
 
-    // Process each table partition separately on executors
-    // Each Spark task generates column stats records for ALL files in its assigned table partition
-    JavaRDD<HoodieRecord> recordsRDD = partitionsRDD.flatMap(
-        partitionEntry -> {
-          String partitionPath = partitionEntry.getKey();
-          List<HoodieWriteStat> writeStats = partitionEntry.getValue();
-
-          // Process all files in this table partition
-          // Records are accumulated locally on the executor, not in driver memory
-          List<HoodieRecord> partitionRecords = new ArrayList<>();
-
-          for (HoodieWriteStat writeStat : writeStats) {
-            String filePath = writeStat.getPath();
-            String fileName = new StoragePath(filePath).getName();
-
-            // Use fileName hash as seed for deterministic but unique random values per file
-            Random fileRandom = new Random(fileName.hashCode());
-
-            List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
-
-            // Generate stats for tenantID (always first)
-            // tenantID range: 30000-60000 (30k-60k)
-            long minTenantID = 30000L + fileRandom.nextInt(30000); // Range: 30000-59999
-            long maxTenantID = minTenantID + fileRandom.nextInt((int)(60000L - minTenantID + 1)); // Range: minTenantID to 60000
-            @SuppressWarnings({"rawtypes", "unchecked"})
-            HoodieColumnRangeMetadata<Comparable> tenantIDStats = (HoodieColumnRangeMetadata<Comparable>) 
-                (HoodieColumnRangeMetadata<?>) HoodieColumnRangeMetadata.create(
-                    fileName,
-                    "tenantID",
-                    minTenantID,
-                    maxTenantID,
-                    0,
-                    1000,
-                    123456,
-                    123456,
-                    ValueMetadata.V1EmptyMetadata.get());
-            columnRangeMetadata.add(tenantIDStats);
-
-            // Generate stats for age if numColumnsToIndex == 2
-            if (numColumnsToIndex == 2) {
-              int minAge = 20 + fileRandom.nextInt(30);
-              int maxAge = minAge + fileRandom.nextInt(50); // Range: minAge to (minAge + 49)
-              @SuppressWarnings({"rawtypes", "unchecked"})
-              HoodieColumnRangeMetadata<Comparable> ageStats = (HoodieColumnRangeMetadata<Comparable>) 
-                  (HoodieColumnRangeMetadata<?>) HoodieColumnRangeMetadata.create(
-                      fileName,
-                      "age",
-                      minAge,
-                      maxAge,
-                      0,
-                      1000,
-                      123456,
-                      123456,
-                      ValueMetadata.V1EmptyMetadata.get());
-              columnRangeMetadata.add(ageStats);
-            }
-
-            // Generate column stats records for this file
-            // These records are added to the partition's local list on the executor
-            @SuppressWarnings("unchecked")
-            List<HoodieRecord<HoodieMetadataPayload>> fileRecords = HoodieMetadataPayload
-                .createColumnStatsRecords(partitionPath, columnRangeMetadata, false)
-                .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
-                .collect(Collectors.toList());
-
-            partitionRecords.addAll(fileRecords);
-          }
-
-          // Return all records for this table partition as an iterator
-          return partitionRecords.iterator();
-        }
-    );
-
-    // Return as HoodieData - records stay distributed across Spark partitions
     return HoodieJavaRDD.of(recordsRDD);
+  }
+
+  /**
+   * Processes all write stats for a partition and generates column stats records.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<HoodieRecord> processPartitionWriteStats(
+      String partitionPath, List<HoodieWriteStat> writeStats, int numColumnsToIndex) {
+
+    List<HoodieRecord> partitionRecords = new ArrayList<>();
+
+    for (HoodieWriteStat writeStat : writeStats) {
+      String fileName = new StoragePath(writeStat.getPath()).getName();
+      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata =
+          generateColumnRangeMetadataForFile(fileName, numColumnsToIndex);
+
+      List<HoodieRecord<HoodieMetadataPayload>> fileRecords = HoodieMetadataPayload
+          .createColumnStatsRecords(partitionPath, columnRangeMetadata, false)
+          .map(record -> (HoodieRecord<HoodieMetadataPayload>) record)
+          .collect(Collectors.toList());
+
+      partitionRecords.addAll(fileRecords);
+    }
+
+    return partitionRecords;
+  }
+
+  /**
+   * Generates column range metadata for a single file.
+   */
+  private static List<HoodieColumnRangeMetadata<Comparable>> generateColumnRangeMetadataForFile(
+      String fileName, int numColumnsToIndex) {
+
+    Random fileRandom = new Random(fileName.hashCode());
+    List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
+
+    columnRangeMetadata.add(createTenantIDStats(fileName, fileRandom));
+
+    if (numColumnsToIndex == 2) {
+      columnRangeMetadata.add(createAgeStats(fileName, fileRandom));
+    }
+
+    return columnRangeMetadata;
+  }
+
+  /**
+   * Creates column stats for tenantID column with random values in range 30000-60000.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static HoodieColumnRangeMetadata<Comparable> createTenantIDStats(String fileName, Random random) {
+    long minTenantID = TENANT_ID_MIN_BASE + random.nextInt(TENANT_ID_RANGE);
+    long maxTenantID = minTenantID + random.nextInt((int) (TENANT_ID_MAX - minTenantID + 1));
+
+    return (HoodieColumnRangeMetadata<Comparable>) (HoodieColumnRangeMetadata<?>)
+        HoodieColumnRangeMetadata.create(
+            fileName, COL_TENANT_ID, minTenantID, maxTenantID,
+            COL_STATS_NULL_COUNT, COL_STATS_VALUE_COUNT,
+            COL_STATS_TOTAL_SIZE, COL_STATS_TOTAL_UNCOMPRESSED_SIZE,
+            ValueMetadata.V1EmptyMetadata.get());
+  }
+
+  /**
+   * Creates column stats for age column with random values in range 20-99.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static HoodieColumnRangeMetadata<Comparable> createAgeStats(String fileName, Random random) {
+    int minAge = AGE_MIN_BASE + random.nextInt(AGE_MIN_RANGE);
+    int maxAge = minAge + random.nextInt(AGE_MAX_RANGE);
+
+    return (HoodieColumnRangeMetadata<Comparable>) (HoodieColumnRangeMetadata<?>)
+        HoodieColumnRangeMetadata.create(
+            fileName, COL_AGE, minAge, maxAge,
+            COL_STATS_NULL_COUNT, COL_STATS_VALUE_COUNT,
+            COL_STATS_TOTAL_SIZE, COL_STATS_TOTAL_UNCOMPRESSED_SIZE,
+            ValueMetadata.V1EmptyMetadata.get());
   }
 
   private HoodieWriteConfig getWriteConfig(String tableName, String schemaStr, String basePath, HoodieFailedWritesCleaningPolicy cleaningPolicy) {
@@ -631,53 +648,53 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   /**
-   * Generates a partition filter expression to filter out approximately 25% of the data.
+   * Generates a partition filter expression based on the configured partition filter percentage.
    * Uses the partition field 'dt' with a greater-than comparison.
    *
    * Since partitions are generated as consecutive dates starting from 2020-01-01,
-   * this method calculates the date threshold that filters out the first ~25% of partitions.
+   * this method calculates the date threshold based on the configured percentage.
    *
-   * Example:
+   * Example with partitionFilterPercentage = 25:
    * numPartitions = 4   -> "dt > '2020-01-01'" (filters out 1 partition, keeps 3 = 75%)
    * numPartitions = 10  -> "dt > '2020-01-03'" (filters out 3 partitions, keeps 7 = 70%)
    * numPartitions = 100 -> "dt > '2020-01-25'" (filters out 25 partitions, keeps 75 = 75%)
-   * numPartitions = 1   -> "" (no filtering possible for single partition)
    *
-   * @param numPartitions Number of partitions in the table
-   * @return Filter expression string or empty string if filtering is not applicable
-   */
-  private String getPartitionFilter(int numPartitions) {
-    // Can't filter meaningfully with only 1 partition
-    if (numPartitions <= 1) {
-      return "";
-    }
-
-    // Calculate number of partitions to exclude (approximately 25%)
-    int numPartitionsToExclude = (int) Math.ceil(numPartitions * 0.25);
-
-    // Ensure we exclude at least 1 partition
-    numPartitionsToExclude = Math.max(1, numPartitionsToExclude);
-
-    // The cutoff date is the last date to exclude (0-indexed: numPartitionsToExclude - 1)
-    LocalDate startDate = LocalDate.of(2020, 1, 1);
-    LocalDate cutoffDate = startDate.plusDays(numPartitionsToExclude - 1);
-
-    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    String cutoffDateStr = cutoffDate.format(formatter);
-
-    return "dt > '" + cutoffDateStr + "'";
-  }
-
-  /**
-   * Generates a partition filter using the configured number of partitions.
+   * Special cases:
+   * partitionFilterPercentage = 0   -> "" (include all partitions)
+   * partitionFilterPercentage = 100 -> "dt > '9999-12-31'" (exclude all partitions)
+   *
    * @return Filter expression string or empty string if filtering is not applicable
    */
   private String getPartitionFilter() {
-    return getPartitionFilter(cfg.numPartitions);
+    int numPartitions = cfg.numPartitions;
+    int filterPercentage = cfg.partitionFilterPercentage;
+
+    // If percentage is 0, include all partitions (no filter)
+    if (filterPercentage <= 0) {
+      return "dt > '1000-00-00'";
+    }
+
+    // If percentage is 100, exclude all partitions
+    if (filterPercentage >= 100) {
+      return "dt > '9999-12-31'";
+    }
+
+    // Calculate number of partitions to exclude based on percentage
+    int numPartitionsToExclude = (int) Math.ceil(numPartitions * (filterPercentage / 100.0));
+
+    // If calculated exclusion is 0, no filter needed
+    if (numPartitionsToExclude <= 0) {
+      return "dt > '1000-00-00'";
+    }
+
+    // The cutoff date is the last date to exclude (0-indexed: numPartitionsToExclude - 1)
+    LocalDate cutoffDate = PARTITION_START_DATE.plusDays(numPartitionsToExclude - 1);
+    String cutoffDateStr = cutoffDate.format(DATE_FORMATTER);
+
+    return "dt > '" + cutoffDateStr + "'";
   }
 
   public void close() {
     engineContext.cancelAllJobs();
   }
 }
-
