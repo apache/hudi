@@ -36,6 +36,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -69,6 +70,11 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
       table.getContext().setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of matching static partitions");
       return HoodieJavaPairRDD.getJavaPairRDD(table.getContext().parallelize(partitionPaths, partitionPaths.size()).mapToPair(
           partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    } else if (!table.isPartitioned()) {
+      // Do not need to check for partition paths for non-partitioned tables
+      Map<String, List<String>> result = new HashMap<>();
+      result.put("", getAllExistingFileIds(""));
+      return result;
     } else {
       // dynamic insert overwrite partitions
       return HoodieJavaPairRDD.getJavaPairRDD(writeStatuses.map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
