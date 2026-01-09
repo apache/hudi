@@ -412,9 +412,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
     } else if (schemaType == HoodieSchemaType.TIMESTAMP && keepConsistentLogicalTimestamp) {
       HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
-      if (timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MILLIS)) {
-        return (Long) fieldValue;
-      } else if (timestampSchema.getPrecision().equals(HoodieSchema.TimePrecision.MICROS)) {
+      if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+        return fieldValue;
+      } else if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
         return ((Long) fieldValue) / 1000;
       }
     } else if (schemaType == HoodieSchemaType.DECIMAL) {
