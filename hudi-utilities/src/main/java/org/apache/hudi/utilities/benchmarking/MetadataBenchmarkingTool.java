@@ -22,12 +22,10 @@ import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.HoodieFileIndex;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -38,26 +36,19 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 
@@ -71,6 +62,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.execution.datasources.NoopCache$;
 import org.apache.spark.sql.types.StructType;
+import org.bouncycastle.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -233,6 +225,9 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2020-01-01'\")")
     public String partitionFilter = "dt = '2025-01-01'";
+
+    @Parameter(names = {"--data-filter", "-pf"}, description = "data filter predicate for querying (e.g., \"age > 70\")")
+    public String dataFilters = "";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
@@ -495,7 +490,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     StructType dataSchema = getDataSchema();
 
     Seq<Expression> dataFiltersSeq = JavaConverters
-        .asScalaBuffer(Collections.singletonList(buildDataFilter(dataSchema))).toList();
+        .asScalaBuffer(buildDataFilters(dataSchema)).toList();
     Seq<Expression> partitionFiltersSeq = JavaConverters
         .asScalaBuffer(Collections.singletonList(buildPartitionFilter(dataSchema))).toList();
 
@@ -544,12 +539,34 @@ public class MetadataBenchmarkingTool implements Closeable {
   /**
    * Builds a data filter expression based on the indexed columns.
    */
-  private Expression buildDataFilter(StructType dataSchema) {
-    String filterString = (cfg.numColumnsToIndex == 2)
-        ? COL_AGE + " > 70"
-        : COL_TENANT_ID + " > 50000";
-    LOG.info("Using data filter: {}", filterString);
-    return HoodieCatalystExpressionUtils$.MODULE$.resolveExpr(spark, filterString, dataSchema);
+  private List<Expression> buildDataFilters(StructType dataSchema) {
+    final List<String> filterStrings;
+
+    if (StringUtils.nonEmpty(cfg.dataFilters)) {
+      filterStrings = Arrays.stream(Strings.split(cfg.dataFilters, ','))
+          .map(String::trim)
+          .filter(StringUtils::nonEmpty)
+          .collect(Collectors.toList());
+    } else {
+      filterStrings = getDefaultDataFilters();
+    }
+
+    LOG.info("Using data filters: {}", filterStrings);
+
+    return filterStrings.stream()
+        .map(filter ->
+            HoodieCatalystExpressionUtils$.MODULE$.resolveExpr(spark, filter, dataSchema))
+        .collect(Collectors.toList());
+  }
+
+  private List<String> getDefaultDataFilters() {
+    if (cfg.numColumnsToIndex == 1) {
+      return Collections.singletonList(COL_AGE + " > 70");
+    }
+    return Arrays.asList(
+        COL_AGE + " > 70",
+        COL_TENANT_ID + " > 50000"
+    );
   }
 
   /**
