@@ -245,7 +245,7 @@ public class TestHiveSyncTool {
       throw new HoodieHiveSyncException("Failed to get the metastore location from the table " + tableName, e);
     }
   }
-  
+
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncAllPartition() throws Exception {
@@ -288,7 +288,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     // Drop partition with HMSDDLExecutor
     try (HMSDDLExecutor hmsExecutor =
-            new HMSDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()))) {
+             new HMSDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()))) {
       hmsExecutor.dropPartitionsToTable(HiveTestUtil.TABLE_NAME, Collections.singletonList("2010/02/03"));
     }
 
@@ -1033,34 +1033,34 @@ public class TestHiveSyncTool {
     String roTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
     reInitHiveSyncClient();
     assertFalse(hiveClient.tableExists(roTableName),
-            "Table " + roTableName + " should not exist initially");
+        "Table " + roTableName + " should not exist initially");
     assertFalse(hiveClient.tableExists(snapshotTableName),
-            "Table " + snapshotTableName + " should not exist initially");
+        "Table " + snapshotTableName + " should not exist initially");
     reSyncHiveTable();
     switch (strategy) {
       case RO:
         assertFalse(hiveClient.tableExists(snapshotTableName),
-                "Table " + snapshotTableName
-                        + " should not exist initially");
+            "Table " + snapshotTableName
+                + " should not exist initially");
         assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
-                "Table " + HiveTestUtil.TABLE_NAME
-                        + " should exist after sync completes");
+            "Table " + HiveTestUtil.TABLE_NAME
+                + " should exist after sync completes");
         break;
       case RT:
         assertFalse(hiveClient.tableExists(roTableName),
-                "Table " + roTableName
-                        + " should not exist initially");
+            "Table " + roTableName
+                + " should not exist initially");
         assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
-                "Table " + HiveTestUtil.TABLE_NAME
-                        + " should exist after sync completes");
+            "Table " + HiveTestUtil.TABLE_NAME
+                + " should exist after sync completes");
         break;
       default:
         assertTrue(hiveClient.tableExists(roTableName),
-                "Table " + roTableName
-                        + " should exist after sync completes");
+            "Table " + roTableName
+                + " should exist after sync completes");
         assertTrue(hiveClient.tableExists(snapshotTableName),
-                "Table " + snapshotTableName
-                        + " should exist after sync completes");
+            "Table " + snapshotTableName
+                + " should exist after sync completes");
     }
   }
 
@@ -1077,11 +1077,11 @@ public class TestHiveSyncTool {
     MessageType schema = hiveClient.getStorageSchema(true);
 
     assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
-            "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
+        "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
     String initInputFormatClassName = strategy.equals(HoodieSyncTableStrategy.RO)
-            ? HoodieParquetRealtimeInputFormat.class.getName()
-            : HoodieParquetInputFormat.class.getName();
+        ? HoodieParquetRealtimeInputFormat.class.getName()
+        : HoodieParquetInputFormat.class.getName();
 
     String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(HoodieFileFormat.PARQUET);
     String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(HoodieFileFormat.PARQUET);
@@ -1089,28 +1089,28 @@ public class TestHiveSyncTool {
     // Create table 'test1'.
     hiveClient.createDatabase(HiveTestUtil.DB_NAME);
     hiveClient.createTable(HiveTestUtil.TABLE_NAME, schema, initInputFormatClassName,
-            outputFormatClassName, serDeFormatClassName, new HashMap<>(), new HashMap<>());
+        outputFormatClassName, serDeFormatClassName, new HashMap<>(), new HashMap<>());
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
-            "Table " + HiveTestUtil.TABLE_NAME + " should exist initially");
+        "Table " + HiveTestUtil.TABLE_NAME + " should exist initially");
 
     String targetInputFormatClassName = strategy.equals(HoodieSyncTableStrategy.RO)
-            ? HoodieParquetInputFormat.class.getName()
-            : HoodieParquetRealtimeInputFormat.class.getName();
+        ? HoodieParquetInputFormat.class.getName()
+        : HoodieParquetRealtimeInputFormat.class.getName();
 
     StorageDescriptor storageDescriptor = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
     assertEquals(initInputFormatClassName, storageDescriptor.getInputFormat(),
-            "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
+        "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
     assertFalse(storageDescriptor.getSerdeInfo().getParameters().containsKey(ConfigUtils.IS_QUERY_AS_RO_TABLE),
-            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should not exist");
+        "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should not exist");
 
     reSyncHiveTable();
     storageDescriptor = hiveClient.getMetastoreStorageDescriptor(HiveTestUtil.TABLE_NAME);
     assertEquals(targetInputFormatClassName,
-            storageDescriptor.getInputFormat(),
-            "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
+        storageDescriptor.getInputFormat(),
+        "Table " + HiveTestUtil.TABLE_NAME + " inputFormat should be " + targetInputFormatClassName);
     assertEquals(storageDescriptor.getSerdeInfo().getParameters().get(ConfigUtils.IS_QUERY_AS_RO_TABLE),
-            strategy.equals(HoodieSyncTableStrategy.RO) ? "true" : "false",
-            "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should be ");
+        strategy.equals(HoodieSyncTableStrategy.RO) ? "true" : "false",
+        "Table " + HiveTestUtil.TABLE_NAME + " serdeInfo parameter " + ConfigUtils.IS_QUERY_AS_RO_TABLE + " should be ");
 
   }
 
