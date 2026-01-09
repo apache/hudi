@@ -107,7 +107,7 @@ public class MetadataBenchmarkingTool implements Closeable {
   private static final String COL_AGE = "age";
 
   // Partition generation constants
-  private static final LocalDate PARTITION_START_DATE = LocalDate.of(2020, 1, 1);
+  private static final LocalDate PARTITION_START_DATE = LocalDate.of(2025, 1, 1);
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
   // TenantID column stats range: 30000-60000
@@ -203,6 +203,19 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   public static class Config implements Serializable {
+
+    /**
+     * Benchmark mode options.
+     */
+    public enum BenchmarkMode {
+      BOOTSTRAP,           // Only bootstrap metadata table
+      QUERY,               // Only run data skipping benchmark
+      BOOTSTRAP_AND_QUERY  // Run both (default)
+    }
+
+    @Parameter(names = {"--mode", "-m"}, description = "Benchmark mode: BOOTSTRAP (write only), QUERY (read only), BOOTSTRAP_AND_QUERY (default)")
+    public BenchmarkMode mode = BenchmarkMode.BOOTSTRAP_AND_QUERY;
+
     @Parameter(names = {"--table-base-path", "-tbp"}, description = "Base path for the Hudi table", required = true)
     public String tableBasePath = null;
 
@@ -218,8 +231,8 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Parameter(names = {"--num-partitions", "-np"}, description = "Number of partitions to create in the table", required = true)
     public Integer numPartitions = 1;
 
-    @Parameter(names = {"--partition-filter-percentage", "-pfp"}, description = "Percentage of partitions to exclude during querying (0 = include all, 100 = exclude all)", required = false)
-    public Integer partitionFilterPercentage = 0;
+    @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2020-01-01'\")")
+    public String partitionFilter = "dt = '2020-01-01'";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
@@ -236,12 +249,13 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Override
     public String toString() {
       return "MetadataBenchmarkingTool {\n"
+          + "   --mode " + mode + ",\n"
           + "   --table-base-path " + tableBasePath + ",\n"
           + "   --num-files " + numFiles + ",\n"
           + "   --num-partitions " + numPartitions + ",\n"
           + "   --num-cols-to-index " + numColumnsToIndex + ",\n"
           + "   --col-stats-file-group-count " + colStatsFileGroupCount + ",\n"
-          + "   --partition-filter-percentage " + partitionFilterPercentage + "\n"
+          + "   --partition-filter " + partitionFilter + "\n"
           + "}";
     }
   }
@@ -279,15 +293,24 @@ public class MetadataBenchmarkingTool implements Closeable {
     int numPartitions = cfg.numPartitions;
     List<String> colsToIndex = getColumnsToIndex(cfg.numColumnsToIndex);
     LOG.info("Data table base path: {}", cfg.tableBasePath);
+    LOG.info("Benchmark mode: {}", cfg.mode);
 
-    HoodieWriteConfig dataWriteConfig = getWriteConfig(TABLE_NAME, getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
-    HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(TABLE_NAME, dataWriteConfig);
+    HoodieWriteConfig dataWriteConfig = getWriteConfig(getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
 
-    int totalFilesCreated = bootstrapMetadataTable(numFiles, numPartitions, colsToIndex, dataWriteConfig, dataMetaClient);
-    LOG.info("Completed bootstrapping Metadata table");
+    int totalFilesCreated = cfg.numFiles;
+    if (cfg.mode == Config.BenchmarkMode.BOOTSTRAP || cfg.mode == Config.BenchmarkMode.BOOTSTRAP_AND_QUERY) {
+      HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(TABLE_NAME, dataWriteConfig);
+      // totalFilesCreated during bootstrapping can be slightly lower than expected as we're ignoring the extra files after filling all
+      // partitions equally, Need to address them in next iterations
+      totalFilesCreated = bootstrapMetadataTable(numFiles, numPartitions, colsToIndex, dataWriteConfig, dataMetaClient);
+      LOG.info("Completed bootstrapping Metadata table");
+    }
 
-    benchmarkDataSkipping(dataWriteConfig, dataMetaClient, totalFilesCreated);
-    LOG.info("Completed query benchmarking");
+    if (cfg.mode == Config.BenchmarkMode.QUERY || cfg.mode == Config.BenchmarkMode.BOOTSTRAP_AND_QUERY) {
+      HoodieTableMetaClient dataMetaClient = loadExistingMetaClient(dataWriteConfig);
+      benchmarkDataSkipping(dataWriteConfig, dataMetaClient, totalFilesCreated);
+      LOG.info("Completed query benchmarking");
+    }
   }
 
   private int bootstrapMetadataTable(
@@ -300,6 +323,9 @@ public class MetadataBenchmarkingTool implements Closeable {
     List<String> partitions = generatePartitions(numPartitions);
     int filesPerPartition = numFiles / numPartitions;
 
+    // Create partition directories on the filesystem
+    createPartitionPaths(dataTableMetaClient, partitions);
+
     HoodieTestTable testTable = HoodieTestTable.of(dataTableMetaClient);
     String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
     HoodieCommitMetadata commitMetadata = createCommitMetadataAndAddToTimeline(
@@ -307,9 +333,9 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     HoodieTimer timer = HoodieTimer.start();
     try (SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter =
-        new SparkHoodieBackedTableMetadataBenchmarkWriter(
-            engineContext.getStorageConf(), dataWriteConfig,
-            HoodieFailedWritesCleaningPolicy.EAGER, engineContext, Option.empty(), false)) {
+             new SparkHoodieBackedTableMetadataBenchmarkWriter(
+                 engineContext.getStorageConf(), dataWriteConfig,
+                 HoodieFailedWritesCleaningPolicy.EAGER, engineContext, Option.empty(), false)) {
 
       metadataWriter.initMetadataMetaClient();
       bootstrapFilesPartition(metadataWriter, commitMetadata, dataCommitTime);
@@ -391,6 +417,35 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   /**
+   * Loads an existing HoodieTableMetaClient. Throws exception if table doesn't exist.
+   * Used in QUERY mode where the table must already exist.
+   */
+  private HoodieTableMetaClient loadExistingMetaClient(HoodieWriteConfig dataConfig) {
+    try {
+      return HoodieTableMetaClient.builder()
+          .setConf(engineContext.getStorageConf())
+          .setBasePath(dataConfig.getBasePath())
+          .build();
+    } catch (Exception e) {
+      throw new IllegalStateException(
+          "Table does not exist at " + dataConfig.getBasePath() + ". "
+              + "QUERY mode requires an existing table. Use BOOTSTRAP or BOOTSTRAP_AND_QUERY mode first.", e);
+    }
+  }
+
+  /**
+   * Creates partition directories on the filesystem.
+   */
+  private void createPartitionPaths(HoodieTableMetaClient metaClient, List<String> partitions) throws IOException {
+    StoragePath basePath = metaClient.getBasePath();
+    for (String partition : partitions) {
+      StoragePath fullPartitionPath = new StoragePath(basePath, partition);
+      metaClient.getStorage().createDirectory(fullPartitionPath);
+    }
+    LOG.info("Created {} partition directories under {}", partitions.size(), basePath);
+  }
+
+  /**
    * Generates a list of date-based partition paths incrementing by day.
    * Starting from 2020-01-01, creates partitions for consecutive days based on numPartitions.
    * <p>
@@ -413,7 +468,7 @@ public class MetadataBenchmarkingTool implements Closeable {
       partitions.add(partitionDate.format(DATE_FORMATTER));
     }
 
-    LOG.info("Generated {} partitions from {} to {}",
+    LOG.warn("Generated {} partitions: {} to {}. Ensure --partition-filter matches these partitions.",
         numPartitions,
         partitions.get(0),
         partitions.get(partitions.size() - 1));
@@ -620,20 +675,10 @@ public class MetadataBenchmarkingTool implements Closeable {
             ValueMetadata.V1EmptyMetadata.get());
   }
 
-  private HoodieWriteConfig getWriteConfig(String tableName, String schemaStr, String basePath, HoodieFailedWritesCleaningPolicy cleaningPolicy) {
+  private HoodieWriteConfig getWriteConfig(String schemaStr, String basePath, HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withProperties(props)
-        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
-        .withWriteStatusClass(MetadataMergeWriteStatus.class)
-        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
-        .forTable(tableName)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()).build())
+        .forTable(TABLE_NAME)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)
@@ -648,50 +693,12 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   /**
-   * Generates a partition filter expression based on the configured partition filter percentage.
-   * Uses the partition field 'dt' with a greater-than comparison.
+   * Returns the partition filter predicate from configuration.
    *
-   * Since partitions are generated as consecutive dates starting from 2020-01-01,
-   * this method calculates the date threshold based on the configured percentage.
-   *
-   * Example with partitionFilterPercentage = 25:
-   * numPartitions = 4   -> "dt > '2020-01-01'" (filters out 1 partition, keeps 3 = 75%)
-   * numPartitions = 10  -> "dt > '2020-01-03'" (filters out 3 partitions, keeps 7 = 70%)
-   * numPartitions = 100 -> "dt > '2020-01-25'" (filters out 25 partitions, keeps 75 = 75%)
-   *
-   * Special cases:
-   * partitionFilterPercentage = 0   -> "" (include all partitions)
-   * partitionFilterPercentage = 100 -> "dt > '9999-12-31'" (exclude all partitions)
-   *
-   * @return Filter expression string or empty string if filtering is not applicable
+   * @return Partition filter expression string
    */
   private String getPartitionFilter() {
-    int numPartitions = cfg.numPartitions;
-    int filterPercentage = cfg.partitionFilterPercentage;
-
-    // If percentage is 0, include all partitions (no filter)
-    if (filterPercentage <= 0) {
-      return "dt > '1000-00-00'";
-    }
-
-    // If percentage is 100, exclude all partitions
-    if (filterPercentage >= 100) {
-      return "dt > '9999-12-31'";
-    }
-
-    // Calculate number of partitions to exclude based on percentage
-    int numPartitionsToExclude = (int) Math.ceil(numPartitions * (filterPercentage / 100.0));
-
-    // If calculated exclusion is 0, no filter needed
-    if (numPartitionsToExclude <= 0) {
-      return "dt > '1000-00-00'";
-    }
-
-    // The cutoff date is the last date to exclude (0-indexed: numPartitionsToExclude - 1)
-    LocalDate cutoffDate = PARTITION_START_DATE.plusDays(numPartitionsToExclude - 1);
-    String cutoffDateStr = cutoffDate.format(DATE_FORMATTER);
-
-    return "dt > '" + cutoffDateStr + "'";
+    return cfg.partitionFilter;
   }
 
   public void close() {
