@@ -118,12 +118,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, false);
   }
 
-  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
-                                       HoodieWriteConfig writeConfig,
-                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                       HoodieEngineContext engineContext,
-                                       Option<String> inflightInstantTimestamp,
-                                       boolean streamingWrites) {
+  protected SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                 HoodieEngineContext engineContext,
+                                                 Option<String> inflightInstantTimestamp,
+                                                 boolean streamingWrites) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, streamingWrites);
   }
 

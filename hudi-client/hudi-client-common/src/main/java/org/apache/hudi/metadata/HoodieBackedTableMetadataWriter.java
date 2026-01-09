@@ -692,19 +692,19 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     });
   }
 
-  void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
-                                     String relativePartitionPath,
-                                     Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
-                                     String instantTimeForPartition) throws IOException {
+  public void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
+                                            String relativePartitionPath,
+                                            Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
+                                            String instantTimeForPartition) throws IOException {
     initializeFilegroupsAndCommit(partitionType, relativePartitionPath, fileGroupCountAndRecordsPair,
         instantTimeForPartition, Collections.emptyList());
   }
 
-  void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
-                                     String relativePartitionPath,
-                                     Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
-                                     String instantTimeForPartition,
-                                     List<String> columnsToIndex) throws IOException {
+  public void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
+                                            String relativePartitionPath,
+                                            Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
+                                            String instantTimeForPartition,
+                                            List<String> columnsToIndex) throws IOException {
     String partitionTypeName = partitionType.name();
     LOG.info("Initializing {} index with {} mappings", partitionTypeName, fileGroupCountAndRecordsPair.getKey());
     HoodieTimer partitionInitTimer = HoodieTimer.start();
@@ -936,7 +936,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return TIMELINE_HISTORY_PATH.defaultValue();
   }
 
-  private HoodieTableMetaClient initializeMetaClient() throws IOException {
+  protected HoodieTableMetaClient initializeMetaClient() throws IOException {
     HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)

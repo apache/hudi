@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.benchmarking;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
@@ -39,6 +39,8 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -67,6 +69,8 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+import org.apache.hudi.utilities.IdentitySplitter;
+import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -81,6 +85,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -94,6 +99,10 @@ import java.util.Random;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
+
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 
 public class MetadataBenchmarkingTool implements Closeable {
 
@@ -198,12 +207,94 @@ public class MetadataBenchmarkingTool implements Closeable {
 
 
     try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(spark, cfg)) {
-      metadataBenchmarkingTool.run();
+      metadataBenchmarkingTool.run1();
     } catch (Throwable throwable) {
       LOG.error("Failed to get table size stats for " + cfg, throwable);
     } finally {
       spark.stop();
     }
+  }
+
+  public void run1() throws Exception {
+    int numFiles = cfg.numFiles;
+    int numPartitions = cfg.numPartitions;
+    LOG.info("Starting Metadata table benchmarking with {} files, {} partitions, {} columns, {} file groups",
+        numFiles, numPartitions, cfg.colsToIndex, cfg.colStatsFileGroupCount);
+    LOG.info("Data table base path: {}", cfg.tableBasePath);
+
+    String tableName = "test_mdt_stats_tbl";
+    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, AVRO_SCHEMA, cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
+    // why are we generating write config twice for data table?
+    HoodieWriteConfig dataConfig =  HoodieWriteConfig.newBuilder()
+        .withProperties(dataWriteConfig.getProps())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .fromProperties(metadataConfig.getProps())
+            .enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withMetadataIndexColumnStatsFileGroupCount(cfg.colStatsFileGroupCount)
+            .withMetadataIndexPartitionStats(false)
+            .build())
+        .build();
+
+    HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(tableName, dataConfig);
+
+    List<String> colsToIndex = java.util.Arrays.asList("age", "salary"); // wire in with top level config.
+
+    List<String> partitions = generatePartitions(numPartitions);
+    HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
+    int totalFilesCreated = -1;
+    try (SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter = new SparkHoodieBackedTableMetadataBenchmarkWriter(
+        engineContext.getStorageConf(), dataConfig, HoodieFailedWritesCleaningPolicy.EAGER, engineContext, Option.empty(), false)) {
+
+      int filesPerPartition = numFiles / numPartitions;
+      String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
+      // Create commit metadata
+      HoodieCommitMetadata commitMetadata = testTable.createCommitMetadata(dataCommitTime, WriteOperationType.INSERT, partitions,
+          filesPerPartition, false);
+      // Add commit to timeline
+      testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
+      LOG.info("Created commit metadata at instant {}", dataCommitTime);
+
+      metadataWriter.initMetadataMetaClient();
+      String dataTableInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+
+      // Convert commit metadata to files partition records and commit
+      @SuppressWarnings("unchecked")
+      List<HoodieRecord> filesRecords = HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
+      totalFilesCreated = filesRecords.size();
+      String instantTimeForFilesPartition = generateUniqueInstantTime(dataTableInstantTime, dataMetaClient, 0);
+      Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair = Pair.of(1, engineContext.parallelize(filesRecords, 10));
+      metadataWriter.initializeFilegroupsAndCommit(FILES, FILES.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForFilesPartition);
+
+      // Generate column stats records
+      @SuppressWarnings("rawtypes")
+      HoodieData<HoodieRecord> columnStatsRecords = generateColumnStatsRecordsForCommitMetadataDistributed(
+          commitMetadata);
+      String instantTimeForColStatsPartition = generateUniqueInstantTime(dataTableInstantTime, dataMetaClient, 1);
+      Pair<Integer, HoodieData<HoodieRecord>> colStatsFileGroupCountAndRecordsPair = Pair.of(cfg.colStatsFileGroupCount, columnStatsRecords);
+      metadataWriter.initializeFilegroupsAndCommit(COLUMN_STATS, COLUMN_STATS.getPartitionPath(), colStatsFileGroupCountAndRecordsPair, instantTimeForColStatsPartition, colsToIndex);
+    }
+    System.out.println("Completed bootstrapping Metadata table");
+
+    queryAndVerifyColumnStats(dataConfig, dataMetaClient, Collections.emptyMap(), totalFilesCreated);
+
+    System.out.println("Completed query benchmarking");
+
+  }
+
+  String generateUniqueInstantTime(String initializationTime, HoodieTableMetaClient dataMetaClient, int offset) {
+    return HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
+  }
+
+  private HoodieTableMetaClient initializeDataTableMetaClient(String tableName, HoodieWriteConfig dataConfig) throws IOException {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableVersion(HoodieTableVersion.NINE)
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(tableName)
+        .setPartitionFields("dt")
+        .setRecordKeyFields("id")
+        .initTable(engineContext.getStorageConf(), dataConfig.getBasePath());
   }
 
   public void run() throws Exception {
@@ -564,16 +655,16 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     // Also mark column_stats partition as inflight for initialization
     boolean colStatsPartitionExists = dataMetaClient.getTableConfig()
-        .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
+        .isMetadataPartitionAvailable(COLUMN_STATS);
     if (!colStatsPartitionExists) {
       dataMetaClient.getTableConfig().setMetadataPartitionsInflight(
-          dataMetaClient, MetadataPartitionType.COLUMN_STATS);
+          dataMetaClient, COLUMN_STATS);
       LOG.info("Marked /column_stats partition as inflight for initialization");
 
       // Create index definition for column stats - this tells data skipping which columns are indexed
       org.apache.hudi.common.model.HoodieIndexDefinition colStatsIndexDef =
           new org.apache.hudi.common.model.HoodieIndexDefinition.Builder()
-              .withIndexName(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+              .withIndexName(COLUMN_STATS.getPartitionPath())
               .withIndexType("column_stats")
               .withSourceFields(java.util.Arrays.asList("age", "salary"))
               .build();
@@ -627,7 +718,7 @@ public class MetadataBenchmarkingTool implements Closeable {
       // Check metadata table state after tagging
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
       LOG.info("AFTER tagging - Metadata table exists: {}, partitions: {}",
-          metadataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
+          metadataMetaClient.getTableConfig().isMetadataPartitionAvailable(FILES),
           metadataMetaClient.getTableConfig().getMetadataPartitions());
 
       // Convert back to JavaRDD - taggedResult contains all records from all partitions
@@ -640,8 +731,8 @@ public class MetadataBenchmarkingTool implements Closeable {
           LOG.info("DEBUG: Record key={}, location={}", r.getRecordKey(), r.getCurrentLocation()));
 
       Map<String, Integer> mdtPartitionFileGroupCountMap = new HashMap<>();
-      mdtPartitionFileGroupCountMap.put(MetadataPartitionType.FILES.getPartitionPath(), 1);
-      mdtPartitionFileGroupCountMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), cfg.colStatsFileGroupCount);
+      mdtPartitionFileGroupCountMap.put(FILES.getPartitionPath(), 1);
+      mdtPartitionFileGroupCountMap.put(COLUMN_STATS.getPartitionPath(), cfg.colStatsFileGroupCount);
 
       JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.bulkInsertPreppedRecords(allTaggedRecords, mdtCommitTime,
           Option.of(new SparkCustomHoodieMetadataBulkInsertPartitioner(new CustomMetadataTableFileGroupIndexParser(mdtPartitionFileGroupCountMap))));
@@ -650,14 +741,14 @@ public class MetadataBenchmarkingTool implements Closeable {
 
       if (!colStatsPartitionExists) {
         dataMetaClient.getTableConfig().setMetadataPartitionState(
-            dataMetaClient, MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true);
+            dataMetaClient, COLUMN_STATS.getPartitionPath(), true);
         LOG.info("Marked /column_stats partition as completed");
       }
 
       // Verify final state
       dataMetaClient = HoodieTableMetaClient.reload(dataMetaClient);
       LOG.info("AFTER commit - Metadata table exists: {}, partitions: {}",
-          dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES),
+          dataMetaClient.getTableConfig().isMetadataPartitionAvailable(FILES),
           dataMetaClient.getTableConfig().getMetadataPartitions());
     }
     return expectedStats;

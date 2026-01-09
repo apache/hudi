@@ -89,7 +89,7 @@ Number of date-based partitions to create. Partitions are generated sequentially
 ### Basic Example
 ```bash
 spark-submit \
-  --class org.apache.hudi.utilities.MetadataBenchmarkingTool \
+  --class org.apache.hudi.utilities.benchmarking.MetadataBenchmarkingTool \
   --master "local[*]" \
   packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.2.0-SNAPSHOT.jar \
   --table-base-path /tmp/hudi_test \

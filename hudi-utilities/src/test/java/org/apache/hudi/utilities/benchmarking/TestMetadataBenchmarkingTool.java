@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.benchmarking;
 
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
@@ -78,7 +78,7 @@ public class TestMetadataBenchmarkingTool {
     // Run MetadataBenchmarkingTool
     assertDoesNotThrow(() -> {
       try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(sparkSession, config)) {
-        metadataBenchmarkingTool.run();
+        metadataBenchmarkingTool.run1();
       }
     }, "MetadataBenchmarkingTool.run() should complete without throwing exceptions");
 
