@@ -53,7 +53,7 @@ public class RecordIndexCache implements Closeable {
   public RecordIndexCache(Configuration conf, long initCheckpointId) {
     this.caches = new TreeMap<>(Comparator.reverseOrder());
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    this.maxCacheSizeInBytes = conf.get(FlinkOptions.BUCKET_ASSIGN_INFLIGHT_INDEX_CACHE_SIZE) * 1024 * 1024;
+    this.maxCacheSizeInBytes = conf.get(FlinkOptions.INDEX_RLI_CACHE_SIZE) * 1024 * 1024;
     addCheckpointCache(initCheckpointId);
   }
 

@@ -274,6 +274,14 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(".*")
       .withDescription("Whether to load partitions in state if partition path matching， default `*`");
 
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_CACHE_SIZE = ConfigOptions
+      .key("index.rli.cache.size")
+      .longType()
+      .defaultValue(100L) // default 100 MB
+      .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
+          + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
@@ -628,14 +636,6 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do bucket assign, default same as the write task parallelism");
-
-  @AdvancedConfig
-  public static final ConfigOption<Long> BUCKET_ASSIGN_INFLIGHT_INDEX_CACHE_SIZE = ConfigOptions
-      .key("write.bucket_assign.inflight.cache.size")
-      .longType()
-      .defaultValue(100L) // default 100 MB
-      .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
-          + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
 
   @AdvancedConfig
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions

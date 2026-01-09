@@ -52,7 +52,7 @@ public class TestRecordIndexCache {
   @BeforeEach
   void setUp() {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.BUCKET_ASSIGN_INFLIGHT_INDEX_CACHE_SIZE, 100L); // 100MB cache size
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 100L); // 100MB cache size
     this.cache = new RecordIndexCache(conf, 1L);
   }
 
@@ -220,7 +220,7 @@ public class TestRecordIndexCache {
   void testSpillToDisk() throws IOException {
     // Create a new cache with a very small size to force spilling
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.BUCKET_ASSIGN_INFLIGHT_INDEX_CACHE_SIZE, 1L); // 1MB cache size to force spilling
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L); // 1MB cache size to force spilling
 
     try (RecordIndexCache smallCache = new RecordIndexCache(conf, 1L)) {
       String recordKeyPrefix = "key";
@@ -247,7 +247,7 @@ public class TestRecordIndexCache {
   void testSpillWithMultipleCheckpoints() throws IOException {
     // Create a new cache with a very small size to force spilling
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.BUCKET_ASSIGN_INFLIGHT_INDEX_CACHE_SIZE, 1L); // 1MB cache size to force spilling
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L); // 1MB cache size to force spilling
 
     try (RecordIndexCache smallCache = new RecordIndexCache(conf, 1L)) {
       // Add records to multiple checkpoints
