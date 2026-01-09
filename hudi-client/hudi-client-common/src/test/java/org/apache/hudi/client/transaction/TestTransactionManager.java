@@ -20,6 +20,7 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -32,7 +33,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -40,11 +44,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestTransactionManager extends HoodieCommonTestHarness {
@@ -263,6 +270,106 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
       }
     });
 
+  }
+
+  /**
+   * Test that verifies configuration resources added via addResource() in createLockManager()
+   * are accessible to the LockManager's StorageConfiguration and LockProvider.
+   *
+   * This comprehensive test demonstrates that when fs.getConf().addResource(fs.getConf()) is called:
+   * 1. Configuration properties set in FileSystem configuration are accessible through LockManager's StorageConfiguration
+   * 2. Multiple configuration properties are all accessible
+   * 3. Custom LockProviders can read configuration properties during initialization
+   * 4. The LockProvider can successfully use the lock with the verified configuration
+   */
+  @Test
+  public void testCreateLockManagerConfigurationResourceAccess() throws Exception {
+    // Set up multiple test configuration properties in the FileSystem configuration
+    final String testConfigKey = "hudi.test.lock.config.verification";
+    final String testConfigValue = "verified";
+    final String testConfigKey1 = "hudi.test.config.property1";
+    final String testConfigValue1 = "value1";
+    final String testConfigKey2 = "hudi.test.config.property2";
+    final String testConfigValue2 = "value2";
+    final String testConfigKey3 = "hudi.test.config.property3";
+    final String testConfigValue3 = "value3";
+
+    FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
+    Configuration fsConf = fs.getConf();
+
+    // Set multiple properties in the FileSystem configuration
+    fsConf.set(testConfigKey, testConfigValue);
+    fsConf.set(testConfigKey1, testConfigValue1);
+    fsConf.set(testConfigKey2, testConfigValue2);
+    fsConf.set(testConfigKey3, testConfigValue3);
+
+    // Create a TransactionManager with ConfigurationVerifyingLockProvider
+    // The createLockManager method calls fs.getConf().addResource(fs.getConf())
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ConfigurationVerifyingLockProvider.class)
+            .withLockWaitTimeInMillis(50L)
+            .withNumRetries(2)
+            .withRetryWaitTimeInMillis(10L)
+            .withClientNumRetries(2)
+            .withClientRetryWaitTimeInMillis(10L)
+            .build())
+        .forTable("testtable")
+        .build();
+
+    TransactionManager testTransactionManager = new TransactionManager(writeConfig, metaClient.getStorage());
+
+    // Use reflection to access the LockManager's storageConf field
+    Field lockManagerField = TransactionManager.class.getDeclaredField("lockManager");
+    lockManagerField.setAccessible(true);
+    LockManager lockManager = (LockManager) lockManagerField.get(testTransactionManager);
+
+    // Access the storageConf field from LockManager
+    Field storageConfField = LockManager.class.getDeclaredField("storageConf");
+    storageConfField.setAccessible(true);
+    StorageConfiguration<?> storageConf = (StorageConfiguration<?>) storageConfField.get(lockManager);
+
+    // Verify that StorageConfiguration is not null
+    assertNotNull(storageConf, "StorageConfiguration should not be null");
+    Configuration hadoopConf = storageConf.unwrapAs(Configuration.class);
+
+    // Verify that all configuration properties are accessible through the StorageConfiguration
+    assertEquals(testConfigValue, hadoopConf.get(testConfigKey),
+        "Primary configuration property should be accessible through LockManager's StorageConfiguration");
+    assertEquals(testConfigValue1, hadoopConf.get(testConfigKey1),
+        "First additional configuration property should be accessible");
+    assertEquals(testConfigValue2, hadoopConf.get(testConfigKey2),
+        "Second additional configuration property should be accessible");
+    assertEquals(testConfigValue3, hadoopConf.get(testConfigKey3),
+        "Third additional configuration property should be accessible");
+
+    // Trigger lock provider initialization by calling getLockProvider()
+    // This will instantiate ConfigurationVerifyingLockProvider which reads the config
+    org.apache.hudi.common.lock.LockProvider<?> lockProvider = lockManager.getLockProvider();
+
+    // Verify that the lock provider is of the expected type
+    Assertions.assertTrue(lockProvider instanceof ConfigurationVerifyingLockProvider,
+        "LockProvider should be an instance of ConfigurationVerifyingLockProvider");
+
+    ConfigurationVerifyingLockProvider verifyingProvider = (ConfigurationVerifyingLockProvider) lockProvider;
+
+    // Verify that the configuration property was successfully read by the LockProvider
+    String verifiedValue = verifyingProvider.getVerifiedConfigValue();
+    assertEquals(testConfigValue, verifiedValue,
+        "ConfigurationVerifyingLockProvider should have successfully read the configuration property");
+
+    // Test that the lock provider can actually use the lock
+    assertDoesNotThrow(() -> {
+      verifyingProvider.tryLock(100, TimeUnit.MILLISECONDS);
+      verifyingProvider.unlock();
+    }, "LockProvider should be able to acquire and release locks");
+
+    testTransactionManager.close();
   }
 
   private Option<HoodieInstant> getInstant(String timestamp) {

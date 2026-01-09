@@ -42,8 +42,8 @@ public class TransactionManager implements Serializable {
   protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
-  public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
-    this(createLockManager(config, fs), config.isLockRequired());
+  public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
+    this(createLockManager(config, (FileSystem) storage.getFileSystem()), config.isLockRequired());
   }
 
   protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
@@ -51,7 +51,7 @@ public class TransactionManager implements Serializable {
     this.isLockRequired = isLockRequired;
   }
 
-  private static LockManager createLockManager(HoodieWriteConfig config, FileSystem fs) {
+  static LockManager createLockManager(HoodieWriteConfig config, FileSystem fs) {
     fs.getConf().addResource(fs.getConf());
     return new LockManager(config, fs);
   }
