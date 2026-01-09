@@ -43,7 +43,7 @@ public class CdcInputSplit extends MergeOnReadInputSplit {
       long maxCompactionMemoryInBytes,
       String fileId,
       HoodieCDCFileSplit[] changes) {
-    super(splitNum, null, Option.empty(), "", tablePath, "",
+    super(splitNum, null, Option.empty(), "", tablePath,
         maxCompactionMemoryInBytes, "", null, fileId);
     this.changes = changes;
   }

@@ -27,6 +27,7 @@ import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 
@@ -104,16 +105,19 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   @Override
   public void close() throws Exception {
     currentSplitId = null;
+    readerFunction.close();
   }
 
+  /**
+   * SourceSplitReader only reads splits sequentially. When waiting for watermark alignment
+   * the SourceOperator will stop processing and recycling the fetched batches. Based on this the
+   * `pauseOrResumeSplits` and the `wakeUp` are left empty.
+   * @param splitsToPause splits to pause
+   * @param splitsToResume splits to resume
+   */
   @Override
   public void pauseOrResumeSplits(
       Collection<HoodieSourceSplit> splitsToPause,
       Collection<HoodieSourceSplit> splitsToResume) {
-    // SourceSplitReader only reads splits sequentially. When waiting for watermark alignment
-    // the SourceOperator will stop processing and recycling the fetched batches. This exhausts the
-    // {@link ArrayPoolDataIteratorBatcher#pool} and the `currentReader.next()` call will be
-    // blocked even without split-level watermark alignment. Based on this the
-    // `pauseOrResumeSplits` and the `wakeUp` are left empty.
   }
 }

@@ -409,7 +409,7 @@ public class IncrementalInputSplits implements Serializable {
       String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
       return new MergeOnReadInputSplit(cnt.getAndAdd(1),
           basePath, logPaths, latestCommit,
-          metaClient.getBasePath().toString(), fileSlice.getPartitionPath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
     }).sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit)).collect(Collectors.toList());
   }
 

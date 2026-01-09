@@ -28,13 +28,12 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
-import org.apache.hudi.source.reader.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.HoodieTable;
 
@@ -53,13 +52,9 @@ public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunct
   private final HoodieReaderContext<RowData> readerContext;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
-  private final String mergeType;
   private final Option<InternalSchema> internalSchemaOption;
   private final TypedProperties props;
-
-  public MergeOnReadSplitReaderFunction(HoodieTable<RowData, I, K, O> hoodieTable, HoodieReaderContext<RowData> readerContext) {
-    this(hoodieTable, readerContext, null, null, FlinkOptions.REALTIME_PAYLOAD_COMBINE, Option.empty());
-  }
+  private HoodieFileGroupReader<RowData> fileGroupReader;
 
   public MergeOnReadSplitReaderFunction(
       HoodieTable<RowData, I, K, O> hoodieTable,
@@ -68,26 +63,38 @@ public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunct
       HoodieSchema requiredSchema,
       String mergeType,
       Option<InternalSchema> internalSchemaOption) {
+
+    ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
+    ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
+
     this.hoodieTable = hoodieTable;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
-    this.mergeType = mergeType;
     this.internalSchemaOption = internalSchemaOption;
     this.props = new TypedProperties();
     this.props.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
+    this.fileGroupReader = null;
   }
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
     final String splitId = split.splitId();
-    try (HoodieFileGroupReader<RowData> fileGroupReader = createFileGroupReader(split)) {
+    try {
+      this.fileGroupReader = createFileGroupReader(split);
       final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
-      BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getRecordOffset());
-      records.seek(split.getRecordOffset());
+      BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
+      records.seek(split.getConsumed());
       return records;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from file group: " + split.getFileId(), e);
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (fileGroupReader != null) {
+      fileGroupReader.close();
     }
   }
 
@@ -114,15 +121,11 @@ public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunct
         .withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withFileSlice(fileSlice)
         .withProps(props)
-        .withShouldUseRecordPosition(true);
+        .withShouldUseRecordPosition(true)
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requiredSchema);
 
-    // Add schemas if provided
-    if (tableSchema != null) {
-      builder.withDataSchema(tableSchema);
-    }
-    if (requiredSchema != null) {
-      builder.withRequestedSchema(requiredSchema);
-    }
+
     if (internalSchemaOption.isPresent()) {
       builder.withInternalSchema(internalSchemaOption);
     }

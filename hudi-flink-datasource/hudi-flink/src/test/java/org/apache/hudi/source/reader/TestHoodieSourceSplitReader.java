@@ -20,6 +20,7 @@ package org.apache.hudi.source.reader;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 
@@ -39,6 +40,10 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -235,6 +240,115 @@ public class TestHoodieSourceSplitReader {
     assertEquals(split, readerFunction.getLastReadSplit());
   }
 
+  @Test
+  public void testComparatorSortsSplitsCorrectly() throws IOException {
+    List<String> testData = Collections.singletonList("record");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    // Comparator that sorts by split number
+    SerializableComparator<HoodieSourceSplit> comparator =
+        (s1, s2) -> Integer.compare(s1.getSplitNum(), s2.getSplitNum());
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(mockContext, readerFunction, comparator);
+
+    // Add splits in random order
+    HoodieSourceSplit split5 = createTestSplit(5, "file5");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    HoodieSourceSplit split8 = createTestSplit(8, "file8");
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+
+    SplitsAddition<HoodieSourceSplit> splitsChange =
+        new SplitsAddition<>(Arrays.asList(split5, split2, split8, split1));
+    reader.handleSplitsChanges(splitsChange);
+
+    // Should fetch in sorted order: 1, 2, 5, 8
+    assertEquals(split1.splitId(), reader.fetch().nextSplit());
+    assertEquals(split2.splitId(), reader.fetch().nextSplit());
+    assertEquals(split5.splitId(), reader.fetch().nextSplit());
+    assertEquals(split8.splitId(), reader.fetch().nextSplit());
+  }
+
+  @Test
+  public void testContextIndexRetrieved() {
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
+
+    // Verify that context's index is retrieved during construction
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+
+    verify(mockContext, times(1)).getIndexOfSubtask();
+  }
+
+  @Test
+  public void testReaderFunctionClosedOnReaderClose() throws Exception {
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+
+    reader.close();
+
+    assertTrue(readerFunction.isClosed(), "Reader function should be closed");
+  }
+
+  @Test
+  public void testFetchEmptyResultWhenNoSplitsAdded() throws IOException {
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
+
+    assertNotNull(result);
+    assertNull(result.nextSplit());
+    assertEquals(0, readerFunction.getReadCount(), "Should not read any splits");
+  }
+
+  @Test
+  public void testSplitOrderPreservedWithoutComparator() throws IOException {
+    List<String> testData = Collections.singletonList("record");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    // No comparator - should preserve insertion order
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+
+    HoodieSourceSplit split3 = createTestSplit(3, "file3");
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+
+    SplitsAddition<HoodieSourceSplit> splitsChange =
+        new SplitsAddition<>(Arrays.asList(split3, split1, split2));
+    reader.handleSplitsChanges(splitsChange);
+
+    // Should fetch in insertion order: 3, 1, 2
+    assertEquals(split3.splitId(), reader.fetch().nextSplit());
+    assertEquals(split1.splitId(), reader.fetch().nextSplit());
+    assertEquals(split2.splitId(), reader.fetch().nextSplit());
+  }
+
+  @Test
+  public void testCurrentSplitTracking() throws IOException {
+    List<String> testData = Arrays.asList("record1", "record2");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+
+    reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split1, split2)));
+
+    // Fetch first split
+    reader.fetch();
+    assertEquals(split1, readerFunction.getLastReadSplit());
+
+    // Fetch second split
+    reader.fetch();
+    assertEquals(split2, readerFunction.getLastReadSplit());
+  }
+
   /**
    * Helper method to create a test HoodieSourceSplit.
    */
@@ -245,7 +359,6 @@ public class TestHoodieSourceSplitReader {
         Option.of(Collections.emptyList()),
         "/test/table",
         "/test/partition",
-        "20231201000000",
         "read_optimized",
         fileId
     );
@@ -258,6 +371,7 @@ public class TestHoodieSourceSplitReader {
     private final List<String> testData;
     private int readCount = 0;
     private HoodieSourceSplit lastReadSplit = null;
+    private boolean closed = false;
 
     public TestSplitReaderFunction() {
       this(Collections.emptyList());
@@ -276,8 +390,13 @@ public class TestHoodieSourceSplitReader {
           split.splitId(),
           iterator,
           split.getFileOffset(),
-          split.getRecordOffset()
+          split.getConsumed()
       );
+    }
+
+    @Override
+    public void close() throws Exception {
+      closed = true;
     }
 
     public int getReadCount() {
@@ -286,6 +405,10 @@ public class TestHoodieSourceSplitReader {
 
     public HoodieSourceSplit getLastReadSplit() {
       return lastReadSplit;
+    }
+
+    public boolean isClosed() {
+      return closed;
     }
 
     private ClosableIterator<String> createClosableIterator(List<String> items) {

@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.reader;
+package org.apache.hudi.source.reader.function;
 
+import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
@@ -30,4 +31,6 @@ import java.io.Serializable;
 public interface SplitReaderFunction<T> extends Serializable {
 
   RecordsWithSplitIds<HoodieRecordWithPosition<T>> read(HoodieSourceSplit split);
+
+  void close() throws Exception;
 }

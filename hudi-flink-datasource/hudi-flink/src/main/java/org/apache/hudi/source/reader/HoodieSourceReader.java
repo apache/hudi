@@ -22,12 +22,15 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
+
+import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 import org.apache.hudi.source.split.SplitRequestEvent;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -51,7 +54,7 @@ public class HoodieSourceReader<T> extends
     // We request a split only if we did not get splits during the checkpoint restore.
     // Otherwise, reader restarts will keep requesting more and more splits.
     if (getNumberOfCurrentlyAssignedSplits() == 0) {
-      requestSplit(new ArrayList<>());
+      requestSplit(Collections.emptyList());
     }
   }
 

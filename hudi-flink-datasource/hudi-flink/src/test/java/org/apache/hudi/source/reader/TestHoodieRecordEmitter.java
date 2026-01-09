@@ -76,7 +76,7 @@ public class TestHoodieRecordEmitter {
 
     // Verify split position was updated
     assertEquals(fileOffset, mockSplit.getFileOffset());
-    assertEquals(recordOffset, mockSplit.getRecordOffset());
+    assertEquals(recordOffset, mockSplit.getConsumed());
   }
 
   @Test
@@ -102,7 +102,7 @@ public class TestHoodieRecordEmitter {
 
     // Verify final split position
     assertEquals(0, mockSplit.getFileOffset());
-    assertEquals(3L, mockSplit.getRecordOffset());
+    assertEquals(3L, mockSplit.getConsumed());
   }
 
   @Test
@@ -116,15 +116,15 @@ public class TestHoodieRecordEmitter {
 
     emitter.emitRecord(record1, mockOutput, mockSplit);
     assertEquals(0, mockSplit.getFileOffset());
-    assertEquals(10L, mockSplit.getRecordOffset());
+    assertEquals(10L, mockSplit.getConsumed());
 
     emitter.emitRecord(record2, mockOutput, mockSplit);
     assertEquals(1, mockSplit.getFileOffset());
-    assertEquals(20L, mockSplit.getRecordOffset());
+    assertEquals(20L, mockSplit.getConsumed());
 
     emitter.emitRecord(record3, mockOutput, mockSplit);
     assertEquals(2, mockSplit.getFileOffset());
-    assertEquals(30L, mockSplit.getRecordOffset());
+    assertEquals(30L, mockSplit.getConsumed());
   }
 
   @Test
@@ -164,7 +164,7 @@ public class TestHoodieRecordEmitter {
       emitter.emitRecord(record, mockOutput, mockSplit);
 
       assertEquals(0, mockSplit.getFileOffset());
-      assertEquals(i, mockSplit.getRecordOffset());
+      assertEquals(i, mockSplit.getConsumed());
     }
 
     verify(mockOutput, times(10)).collect(org.mockito.ArgumentMatchers.anyString());
@@ -178,20 +178,20 @@ public class TestHoodieRecordEmitter {
     emitter.emitRecord(new HoodieRecordWithPosition<>("f0r2", 0, 2L), mockOutput, mockSplit);
 
     assertEquals(0, mockSplit.getFileOffset());
-    assertEquals(2L, mockSplit.getRecordOffset());
+    assertEquals(2L, mockSplit.getConsumed());
 
     // File 1, records 0-1
     emitter.emitRecord(new HoodieRecordWithPosition<>("f1r0", 1, 0L), mockOutput, mockSplit);
     emitter.emitRecord(new HoodieRecordWithPosition<>("f1r1", 1, 1L), mockOutput, mockSplit);
 
     assertEquals(1, mockSplit.getFileOffset());
-    assertEquals(1L, mockSplit.getRecordOffset());
+    assertEquals(1L, mockSplit.getConsumed());
 
     // File 2, record 0
     emitter.emitRecord(new HoodieRecordWithPosition<>("f2r0", 2, 0L), mockOutput, mockSplit);
 
     assertEquals(2, mockSplit.getFileOffset());
-    assertEquals(0L, mockSplit.getRecordOffset());
+    assertEquals(0L, mockSplit.getConsumed());
 
     verify(mockOutput, times(6)).collect(org.mockito.ArgumentMatchers.anyString());
   }
@@ -206,7 +206,6 @@ public class TestHoodieRecordEmitter {
         Option.of(Collections.emptyList()),
         "/test/table/path",
         "/test/partition",
-        "20231201000000",
         "read_optimized",
         "file-1"
     );

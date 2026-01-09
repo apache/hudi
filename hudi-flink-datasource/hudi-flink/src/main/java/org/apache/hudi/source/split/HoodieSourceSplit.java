@@ -52,8 +52,6 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   private final String partitionPath;
   // source merge type
   private final String mergeType;
-  // the latest commit instant time
-  private final String latestCommit;
   // file id of file splice
   @Setter
   protected String fileId;
@@ -64,7 +62,6 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
 
   // for failure recovering
   private int fileOffset;
-  private long recordOffset;
 
   public HoodieSourceSplit(
       int splitNum,
@@ -72,7 +69,6 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
       Option<List<String>> logPaths,
       String tablePath,
       String partitionPath,
-      String latestCommit,
       String mergeType,
       String fileId) {
     this.splitNum = splitNum;
@@ -80,48 +76,14 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     this.logPaths = logPaths;
     this.tablePath = tablePath;
     this.partitionPath = partitionPath;
-    this.latestCommit = latestCommit;
     this.mergeType = mergeType;
     this.fileId = fileId;
     this.fileOffset = 0;
-    this.recordOffset = 0L;
   }
 
   @Override
   public String splitId() {
     return toString();
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public Option<String> getBasePath() {
-    return basePath;
-  }
-
-  public Option<List<String>> getLogPaths() {
-    return logPaths;
-  }
-
-  public String getTablePath() {
-    return tablePath;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getLatestCommit() {
-    return latestCommit;
-  }
-
-  public String getMergeType() {
-    return mergeType;
   }
 
   public void consume() {
@@ -134,7 +96,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
 
   public void updatePosition(int newFileOffset, long newRecordOffset) {
     fileOffset = newFileOffset;
-    recordOffset = newRecordOffset;
+    consumed = newRecordOffset;
   }
 
   @Override
@@ -147,14 +109,14 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     }
 
     HoodieSourceSplit that = (HoodieSourceSplit) o;
-    return splitNum == that.splitNum && consumed == that.consumed && fileOffset == that.fileOffset && recordOffset == that.recordOffset && Objects.equals(basePath, that.basePath)
+    return splitNum == that.splitNum && consumed == that.consumed && fileOffset == that.fileOffset && Objects.equals(basePath, that.basePath)
         && Objects.equals(logPaths, that.logPaths) && Objects.equals(tablePath, that.tablePath) && Objects.equals(partitionPath, that.partitionPath)
-        && Objects.equals(mergeType, that.mergeType) && Objects.equals(latestCommit, that.latestCommit) && Objects.equals(fileId, that.fileId);
+        && Objects.equals(mergeType, that.mergeType) && Objects.equals(fileId, that.fileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, latestCommit, fileId, consumed, fileOffset, recordOffset);
+    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, fileId, consumed, fileOffset);
   }
 
   @Override
@@ -165,7 +127,6 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
         + ", logPaths=" + logPaths
         + ", tablePath='" + tablePath + '\''
         + ", partitionPath='" + partitionPath + '\''
-        + ", lastCommit='" + latestCommit + '\''
         + ", mergeType='" + mergeType + '\''
         + '}';
   }

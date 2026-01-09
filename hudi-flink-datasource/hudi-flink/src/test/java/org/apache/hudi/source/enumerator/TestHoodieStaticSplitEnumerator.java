@@ -222,7 +222,6 @@ public class TestHoodieStaticSplitEnumerator {
         Option.empty(),
         "/table/path",
         "/table/path/partition1",
-        "",
         "read_optimized",
         fileId
     );

@@ -21,7 +21,7 @@ package org.apache.hudi.source.reader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
@@ -33,6 +33,7 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
  */
 public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosition<T>> {
   private String splitId;
+  private String nextSprintId;
   private final ClosableIterator<T> recordIterator;
   private final Set<String> finishedSplits;
   private final HoodieRecordWithPosition<T> recordAndPosition;
@@ -52,6 +53,7 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
         recordIterator != null, "recordIterator can be empty but not null");
 
     this.splitId = splitId;
+    this.nextSprintId = splitId;
     this.recordIterator = recordIterator;
     this.finishedSplits = finishedSplits;
     this.recordAndPosition = new HoodieRecordWithPosition<>();
@@ -62,11 +64,14 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
   @Nullable
   @Override
   public String nextSplit() {
-    String nextSplit = this.splitId;
-    // set the splitId to null to indicate no more splits
-    // this class only contains record for one split
-    this.splitId = null;
-    return nextSplit;
+    if (splitId.equals(nextSprintId)) {
+      // set the nextSprintId to null to indicate no more splits
+      // this class only contains record for one split
+      nextSprintId = null;
+      return splitId;
+    } else {
+      return nextSprintId;
+    }
   }
 
   @Nullable
@@ -74,9 +79,11 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
   public HoodieRecordWithPosition<T> nextRecordFromSplit() {
     if (recordIterator.hasNext()) {
       recordAndPosition.record(recordIterator.next());
-      position++;
+      position = position + 1;
       return recordAndPosition;
     } else {
+      finishedSplits.add(splitId);
+      recordIterator.close();
       return null;
     }
   }
@@ -86,9 +93,17 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
     return finishedSplits;
   }
 
+  @Override
+  public void recycle() {
+    if (recordIterator != null) {
+      recordIterator.close();
+    }
+  }
+
   public void seek(long startingRecordOffset) {
     for (long i = 0; i < startingRecordOffset; ++i) {
       if (recordIterator.hasNext()) {
+        position = position + 1;
         recordIterator.next();
       } else {
         throw new IllegalStateException(
@@ -104,6 +119,6 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
       String splitId, ClosableIterator<T> recordIterator, int fileOffset, long startingRecordOffset) {
 
     return new BatchRecords<>(
-        splitId, recordIterator, fileOffset, startingRecordOffset, Collections.emptySet());
+        splitId, recordIterator, fileOffset, startingRecordOffset, new HashSet<>());
   }
 }
