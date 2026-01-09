@@ -29,10 +29,10 @@ import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.IHMSHandler;
 import org.apache.hadoop.hive.metastore.RetryingHMSHandler;
+import java.lang.reflect.Constructor;
 import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
 import org.apache.hadoop.hive.metastore.TUGIBasedProcessor;
 import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -41,7 +41,6 @@ import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
-import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
@@ -51,7 +50,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
@@ -149,7 +147,15 @@ public class HiveTestService {
     hadoopConf.set("datanucleus.schema.autoCreateTables", "true");
     hadoopConf.set("datanucleus.autoCreateSchema", "true");
     hadoopConf.set("datanucleus.fixedDatastore", "false");
+    // Additional DataNucleus properties for Hive 3.x compatibility
+    hadoopConf.set("datanucleus.schema.autoCreateAll", "true");
+    hadoopConf.set("datanucleus.validateTables", "false");
+    hadoopConf.set("datanucleus.validateConstraints", "false");
     HiveConf conf = new HiveConf(hadoopConf, HiveConf.class);
+    // Also set in HiveConf for Hive 3.x
+    conf.set("datanucleus.schema.autoCreateAll", "true");
+    conf.set("datanucleus.validateTables", "false");
+    conf.set("datanucleus.validateConstraints", "false");
     conf.setBoolVar(ConfVars.HIVE_IN_TEST, true);
     conf.setBoolVar(ConfVars.METASTORE_SCHEMA_VERIFICATION, false);
     final int hs2ThriftPort = hadoopConf.getInt(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, HS2_THRIFT_PORT);
@@ -257,17 +263,6 @@ public class HiveTestService {
     public TServerSocketKeepAlive(InetSocketAddress address) throws TTransportException {
       super(address, 0);
     }
-
-    @Override
-    protected TSocket acceptImpl() throws TTransportException {
-      TSocket ts = super.acceptImpl();
-      try {
-        ts.getSocket().setKeepAlive(true);
-      } catch (SocketException e) {
-        throw new TTransportException(e);
-      }
-      return ts;
-    }
   }
 
   private TServer startMetaStore(HiveConf conf) throws IOException {
@@ -288,13 +283,20 @@ public class HiveTestService {
       TProcessor processor;
       TTransportFactory transFactory;
 
-      HiveMetaStore.HMSHandler baseHandler = new HiveMetaStore.HMSHandler("new db based metaserver", conf, false);
+      // Use reflection to handle different HMSHandler constructor signatures between Hive 2.x and 3.x
+      // Hive 2.x: HMSHandler(String name, HiveConf conf, boolean allowEmbedded)
+      // Hive 3.x: HMSHandler(String name, HiveConf conf)
+      HiveMetaStore.HMSHandler baseHandler = createHMSHandler(conf);
       IHMSHandler handler = RetryingHMSHandler.getProxy(conf, baseHandler, true);
 
       if (conf.getBoolVar(ConfVars.METASTORE_EXECUTE_SET_UGI)) {
+        // Use reflection to handle different TUGIContainingTransport classes between Hive 2.x and 3.x
+        // Hive 2.x uses: org.apache.hadoop.hive.thrift.TUGIContainingTransport
+        // Hive 3.x uses: org.apache.hadoop.hive.metastore.security.TUGIContainingTransport
+        TTransportFactory tugiFactory = createTUGIContainingTransportFactory();
         transFactory = useFramedTransport
-            ? new ChainedTTransportFactory(new TFramedTransport.Factory(), new TUGIContainingTransport.Factory())
-            : new TUGIContainingTransport.Factory();
+            ? new ChainedTTransportFactory(new TFramedTransport.Factory(), tugiFactory)
+            : tugiFactory;
 
         processor = new TUGIBasedProcessor<>(handler);
         LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
@@ -313,6 +315,87 @@ public class HiveTestService {
       return tServer;
     } catch (Throwable x) {
       throw new IOException(x);
+    }
+  }
+
+  /**
+   * Creates an HMSHandler instance using reflection to support both Hive 2.x and 3.x.
+   * Hive 3.1.3 uses: HMSHandler(String name, Configuration conf) or HMSHandler(String name, Configuration conf, boolean)
+   * Hive 2.x uses: HMSHandler(String name, HiveConf conf, boolean allowEmbedded)
+   * Some versions may use: HMSHandler(String name, HiveConf conf)
+   */
+  private HiveMetaStore.HMSHandler createHMSHandler(HiveConf conf) throws IOException {
+    String handlerName = "new db based metaserver";
+    Class<?> hmsHandlerClass = HiveMetaStore.HMSHandler.class;
+
+    // Try Hive 3.x constructor with Configuration (2 parameters: String, Configuration)
+    try {
+      Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, Configuration.class);
+      return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf);
+    } catch (NoSuchMethodException e) {
+      // Continue to next option
+    } catch (Exception e) {
+      throw new IOException("Failed to create HMSHandler using (String, Configuration) constructor", e);
+    }
+
+    // Try Hive 3.x constructor with Configuration (3 parameters: String, Configuration, boolean)
+    try {
+      Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, Configuration.class, boolean.class);
+      return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf, false);
+    } catch (NoSuchMethodException e) {
+      // Continue to next option
+    } catch (Exception e) {
+      throw new IOException("Failed to create HMSHandler using (String, Configuration, boolean) constructor", e);
+    }
+
+    // Try Hive 3.x constructor with HiveConf (2 parameters: String, HiveConf)
+    try {
+      Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, HiveConf.class);
+      return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf);
+    } catch (NoSuchMethodException e) {
+      // Continue to next option
+    } catch (Exception e) {
+      throw new IOException("Failed to create HMSHandler using (String, HiveConf) constructor", e);
+    }
+
+    // Try Hive 2.x constructor (3 parameters: String, HiveConf, boolean)
+    try {
+      Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, HiveConf.class, boolean.class);
+      return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf, false);
+    } catch (NoSuchMethodException e) {
+      throw new IOException("Failed to create HMSHandler. No compatible constructor found. "
+          + "Available constructors: " + java.util.Arrays.toString(hmsHandlerClass.getConstructors()), e);
+    } catch (Exception e) {
+      throw new IOException("Failed to create HMSHandler using (String, HiveConf, boolean) constructor", e);
+    }
+  }
+
+  /**
+   * Creates a TUGIContainingTransport.Factory instance using reflection to support both Hive 2.x and 3.x.
+   * Hive 2.x uses: org.apache.hadoop.hive.thrift.TUGIContainingTransport
+   * Hive 3.x uses: org.apache.hadoop.hive.metastore.security.TUGIContainingTransport
+   */
+  private TTransportFactory createTUGIContainingTransportFactory() throws IOException {
+    // Try Hive 3.x first (metastore.security package)
+    try {
+      Class<?> factoryClass = Class.forName("org.apache.hadoop.hive.metastore.security.TUGIContainingTransport$Factory");
+      Constructor<?> factoryConstructor = factoryClass.getConstructor();
+      return (TTransportFactory) factoryConstructor.newInstance();
+    } catch (ClassNotFoundException e) {
+      // Hive 3.x class not found, try Hive 2.x
+    } catch (Exception e) {
+      throw new IOException("Failed to create TUGIContainingTransport.Factory using Hive 3.x class", e);
+    }
+
+    // Try Hive 2.x (thrift package)
+    try {
+      Class<?> factoryClass = Class.forName("org.apache.hadoop.hive.thrift.TUGIContainingTransport$Factory");
+      Constructor<?> factoryConstructor = factoryClass.getConstructor();
+      return (TTransportFactory) factoryConstructor.newInstance();
+    } catch (ClassNotFoundException e) {
+      throw new IOException("Failed to create TUGIContainingTransport.Factory. Neither Hive 2.x nor 3.x class found", e);
+    } catch (Exception e) {
+      throw new IOException("Failed to create TUGIContainingTransport.Factory using Hive 2.x class", e);
     }
   }
 }

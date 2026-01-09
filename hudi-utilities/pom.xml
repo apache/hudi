@@ -196,6 +196,14 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
       <version>${kafka.version}</version>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <!-- Prevents NoClassDefFoundError: io/netty/util/Recycler$EnhancedHandle -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Pulsar -->
@@ -211,6 +219,12 @@
         <exclusion>
           <groupId>com.google.protobuf</groupId>
           <artifactId>protobuf-java</artifactId>
+        </exclusion>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <!-- Prevents NoClassDefFoundError: io/netty/util/Recycler$EnhancedHandle -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -361,23 +375,59 @@
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-avro-serializer</artifactId>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <!-- Prevents NoClassDefFoundError: io/netty/util/Recycler$EnhancedHandle -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-config</artifactId>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-utils</artifactId>
       <version>${confluent.version}</version>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-schema-registry-client</artifactId>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-protobuf-serializer</artifactId>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Httpcomponents -->
