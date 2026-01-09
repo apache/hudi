@@ -19,10 +19,10 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.MessageType;
 
@@ -50,7 +50,7 @@ public abstract class HoodieAvroParquetSchemaConverter {
     }
   }
 
-  public abstract MessageType convert(Schema schema);
+  public abstract MessageType convert(HoodieSchema schema);
 
-  public abstract Schema convert(MessageType schema);
+  public abstract HoodieSchema convert(MessageType schema);
 }

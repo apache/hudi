@@ -116,7 +116,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
       // and therefore if we convert to Avro directly we'll lose logical type-info.
-      MessageType messageType = parquetUtils.readSchema(storage, path);
+      MessageType messageType = parquetUtils.readMessageType(storage, path);
       RowType rowType = ParquetSchemaConverter.convertToRowType(messageType);
       fileRowType = DataTypes.of(rowType);
     }

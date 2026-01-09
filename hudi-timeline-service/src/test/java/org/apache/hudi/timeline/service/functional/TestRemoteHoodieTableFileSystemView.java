@@ -40,10 +40,9 @@ import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -53,15 +52,14 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Bring up a remote Timeline Server and run all test-cases of TestHoodieTableFileSystemView against it.
  */
+@Slf4j
 public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestRemoteHoodieTableFileSystemView.class);
   private static int DEFAULT_READ_TIMEOUT_SECS = 60;
 
   private TimelineService server = null;
@@ -92,7 +90,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
-    LOG.info("Connecting to Timeline Server :{}", server.getServerPort());
+    log.info("Connecting to Timeline Server: {}", server.getServerPort());
     view = initFsView(metaClient, server.getServerPort(), false);
     return view;
   }

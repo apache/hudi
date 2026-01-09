@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -703,19 +704,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create the first commit
     SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
-    createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
+    String firstCommitTime = InProcessTimeGenerator.createNewInstantTime();
+    createCommitWithInsertsForPartition(cfg, client, "000", firstCommitTime, 100, "2016/03/01");
     client.close();
     int numConcurrentWriters = 5;
     ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
 
     List<Future<?>> futures = new ArrayList<>(numConcurrentWriters);
     for (int loop = 0; loop < numConcurrentWriters; loop++) {
-      String newCommitTime = "00" + (loop + 2);
       String partition = "2016/03/0" + (loop + 2);
       futures.add(executors.submit(() -> {
         try {
           SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
-          createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+          createCommitWithInsertsForPartition(cfg, writeClient, "001", InProcessTimeGenerator.createNewInstantTime(), 100, partition);
           writeClient.close();
         } catch (Exception e) {
           throw new RuntimeException(e);

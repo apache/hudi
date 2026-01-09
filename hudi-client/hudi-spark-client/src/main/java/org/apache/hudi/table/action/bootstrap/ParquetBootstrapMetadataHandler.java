@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -71,8 +70,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-    Schema schema = getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
-    return HoodieSchema.fromAvroSchema(schema);
+    return getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
   }
 
   @Override

@@ -19,15 +19,12 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Conversions;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.StringType;
 import org.apache.avro.generic.GenericRecord;
@@ -82,12 +79,12 @@ public class AvroOrcUtils {
    *
    * @param type        ORC schema of the value Object.
    * @param colVector   The column vector to store the value Object.
-   * @param avroSchema  Avro schema of the value Object.
+   * @param schema      Schema of the value Object.
    *                    Only used to check logical types for timestamp unit conversion.
    * @param value       Object to be added to the column vector
    * @param vectorPos   The position in the vector where value will be stored at.
    */
-  public static void addToVector(TypeDescription type, ColumnVector colVector, Schema avroSchema, Object value, int vectorPos) {
+  public static void addToVector(TypeDescription type, ColumnVector colVector, HoodieSchema schema, Object value, int vectorPos) {
 
     final int currentVecLength = colVector.isNull.length;
     if (vectorPos >= currentVecLength) {
@@ -99,11 +96,10 @@ public class AvroOrcUtils {
       return;
     }
 
-    if (avroSchema.getType().equals(Schema.Type.UNION)) {
-      avroSchema = getActualSchemaType(avroSchema);
+    HoodieSchemaType schemaType = schema.getType();
+    if (schemaType == HoodieSchemaType.UNION) {
+      schema = getActualSchemaType(schema);
     }
-
-    LogicalType logicalType = avroSchema != null ? avroSchema.getLogicalType() : null;
 
     switch (type.getCategory()) {
       case BOOLEAN:
@@ -170,7 +166,7 @@ public class AvroOrcUtils {
       case DATE:
         LongColumnVector dateColVec = (LongColumnVector) colVector;
         int daysSinceEpoch;
-        if (logicalType instanceof LogicalTypes.Date) {
+        if (schemaType == HoodieSchemaType.DATE) {
           daysSinceEpoch = (int) value;
         } else if (value instanceof java.sql.Date) {
           daysSinceEpoch = DateWritable.dateToDays((java.sql.Date) value);
@@ -178,7 +174,7 @@ public class AvroOrcUtils {
           daysSinceEpoch = DateWritable.millisToDays(((Date) value).getTime());
         } else {
           throw new IllegalStateException(String.format(
-              "Unrecognized type for Avro DATE field value, which has type %s, value %s",
+              "Unrecognized type for DATE field value, which has type %s, value %s",
               value.getClass().getName(),
               value
           ));
@@ -186,15 +182,16 @@ public class AvroOrcUtils {
         dateColVec.vector[vectorPos] = daysSinceEpoch;
         break;
       case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
         TimestampColumnVector tsColVec = (TimestampColumnVector) colVector;
 
         long time;
         int nanos = 0;
 
         // The unit for Timestamp in ORC is millis, convert timestamp to millis if needed
-        if (logicalType instanceof LogicalTypes.TimestampMillis) {
+        if (TimePrecision.MILLIS == timestampSchema.getPrecision()) {
           time = (long) value;
-        } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
+        } else if (TimePrecision.MICROS == timestampSchema.getPrecision()) {
           final long logicalTsValue = (long) value;
           time = logicalTsValue / MICROS_PER_MILLI;
           nanos = NANOS_PER_MICRO * ((int) (logicalTsValue % MICROS_PER_MILLI));
@@ -210,7 +207,7 @@ public class AvroOrcUtils {
           time = dateValue.getTime();
         } else {
           throw new IllegalStateException(String.format(
-              "Unrecognized type for Avro TIMESTAMP field value, which has type %s, value %s",
+              "Unrecognized type for TIMESTAMP field value, which has type %s, value %s",
               value.getClass().getName(),
               value
           ));
@@ -262,11 +259,11 @@ public class AvroOrcUtils {
           }
         } else if (value instanceof GenericData.Fixed) {
           final BigDecimal decimal = new Conversions.DecimalConversion()
-              .fromFixed((GenericData.Fixed) value, avroSchema, logicalType);
+              .fromFixed((GenericData.Fixed) value, schema.toAvroSchema(), schema.toAvroSchema().getLogicalType());
           decimalValue = HiveDecimal.create(decimal);
         } else {
           throw new IllegalStateException(String.format(
-              "Unexpected type for decimal (%s), cannot convert from Avro value",
+              "Unexpected type for decimal (%s), cannot convert from value",
               value.getClass().getCanonicalName()
           ));
         }
@@ -285,7 +282,7 @@ public class AvroOrcUtils {
 
         TypeDescription listType = type.getChildren().get(0);
         for (Object listItem : list) {
-          addToVector(listType, listColVec.child, avroSchema.getElementType(), listItem, listColVec.childCount++);
+          addToVector(listType, listColVec.child, schema.getElementType(), listItem, listColVec.childCount++);
         }
         break;
       case MAP:
@@ -296,7 +293,7 @@ public class AvroOrcUtils {
         mapColumnVector.lengths[vectorPos] = mapValue.size();
 
         // keys are always strings
-        Schema keySchema = Schema.create(Schema.Type.STRING);
+        HoodieSchema keySchema = HoodieSchema.create(HoodieSchemaType.STRING);
         for (Map.Entry<String, ?> entry : mapValue.entrySet()) {
           addToVector(
               type.getChildren().get(0),
@@ -309,7 +306,7 @@ public class AvroOrcUtils {
           addToVector(
               type.getChildren().get(1),
               mapColumnVector.values,
-              avroSchema.getValueType(),
+              schema.getValueType(),
               entry.getValue(),
               mapColumnVector.childCount
           );
@@ -327,7 +324,7 @@ public class AvroOrcUtils {
           String fieldName = type.getFieldNames().get(i);
           Object fieldValue = record.get(fieldName);
           TypeDescription fieldType = type.getChildren().get(i);
-          addToVector(fieldType, structColVec.fields[i], avroSchema.getFields().get(i).schema(), fieldValue, vectorPos);
+          addToVector(fieldType, structColVec.fields[i], schema.getFields().get(i).schema(), fieldValue, vectorPos);
         }
 
         break;
@@ -335,7 +332,7 @@ public class AvroOrcUtils {
         UnionColumnVector unionColVec = (UnionColumnVector) colVector;
 
         List<TypeDescription> childTypes = type.getChildren();
-        boolean added = addUnionValue(unionColVec, childTypes, avroSchema, value, vectorPos);
+        boolean added = addUnionValue(unionColVec, childTypes, schema, value, vectorPos);
 
         if (!added) {
           throw new IllegalStateException(String.format(
@@ -356,7 +353,7 @@ public class AvroOrcUtils {
    *
    * @param unionVector       The vector to store value.
    * @param unionChildTypes   All possible types for the value Object.
-   * @param avroSchema        Avro union schema for the value Object.
+   * @param schema            Union schema for the value Object.
    * @param value             Object to be added to the unionVector
    * @param vectorPos         The position in the vector where value will be stored at.
    * @return                  succeeded or failed
@@ -364,7 +361,7 @@ public class AvroOrcUtils {
   public static boolean addUnionValue(
       UnionColumnVector unionVector,
       List<TypeDescription> unionChildTypes,
-      Schema avroSchema,
+      HoodieSchema schema,
       Object value,
       int vectorPos
   ) {
@@ -434,7 +431,7 @@ public class AvroOrcUtils {
           if (value == null) {
             matches = children == null || children.size() == 0;
           } else {
-            matches = addUnionValue(unionVector, children, avroSchema, value, vectorPos);
+            matches = addUnionValue(unionVector, children, schema, value, vectorPos);
           }
           break;
         default:
@@ -458,7 +455,7 @@ public class AvroOrcUtils {
         unionVector.isNull[vectorPos] = true;
         unionVector.noNulls = false;
       } else {
-        addToVector(matchType, unionVector.fields[matchIndex], avroSchema.getTypes().get(matchIndex), value, vectorPos);
+        addToVector(matchType, unionVector.fields[matchIndex], schema.getTypes().get(matchIndex), value, vectorPos);
       }
       return true;
     } else {
@@ -471,12 +468,12 @@ public class AvroOrcUtils {
    *
    * @param type        ORC schema of the object to read.
    * @param colVector   The column vector to read.
-   * @param avroSchema  Avro schema of the object to read.
+   * @param schema      Schema of the object to read.
    *                    Only used to check logical types for timestamp unit conversion.
    * @param vectorPos   The position in the vector where the value to read is stored at.
    * @return            The object being read.
    */
-  public static Object readFromVector(TypeDescription type, ColumnVector colVector, Schema avroSchema, int vectorPos) {
+  public static Object readFromVector(TypeDescription type, ColumnVector colVector, HoodieSchema schema, int vectorPos) {
 
     if (colVector.isRepeating) {
       vectorPos = 0;
@@ -486,10 +483,9 @@ public class AvroOrcUtils {
       return null;
     }
 
-    if (avroSchema.getType().equals(Schema.Type.UNION)) {
-      avroSchema = getActualSchemaType(avroSchema);
+    if (schema.getType() == HoodieSchemaType.UNION) {
+      schema = getActualSchemaType(schema);
     }
-    LogicalType logicalType = avroSchema != null ? avroSchema.getLogicalType() : null;
 
     switch (type.getCategory()) {
       case BOOLEAN:
@@ -516,7 +512,7 @@ public class AvroOrcUtils {
           throw new HoodieIOException("CHAR/VARCHAR has length " + result.length() + " greater than Max Length allowed");
         }
       case STRING:
-        String stringType = avroSchema.getProp(GenericData.STRING_PROP);
+        Object stringType = schema.getProp(GenericData.STRING_PROP);
         Object parsedValue;
         if (stringType == null || !stringType.equals(StringType.String)) {
           int stringLength = ((BytesColumnVector) colVector).length[vectorPos];
@@ -527,10 +523,10 @@ public class AvroOrcUtils {
         } else {
           parsedValue = ((BytesColumnVector) colVector).toString(vectorPos);
         }
-        if (avroSchema.getType() == Schema.Type.ENUM) {
+        if (schema.getType() == HoodieSchemaType.ENUM) {
           String enumValue = parsedValue.toString();
           if (!enumValue.isEmpty()) {
-            return new GenericData.EnumSymbol(avroSchema, enumValue);
+            return new GenericData.EnumSymbol(schema.toAvroSchema(), enumValue);
           }
         }
         return parsedValue;
@@ -538,12 +534,13 @@ public class AvroOrcUtils {
         // convert to daysSinceEpoch for LogicalType.Date
         return (int) ((LongColumnVector) colVector).vector[vectorPos];
       case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
         // The unit of time in ORC is millis. Convert (time,nanos) to the desired unit per logicalType
         long time = ((TimestampColumnVector) colVector).time[vectorPos];
         int nanos = ((TimestampColumnVector) colVector).nanos[vectorPos];
-        if (logicalType instanceof LogicalTypes.TimestampMillis) {
+        if (TimePrecision.MILLIS == timestampSchema.getPrecision()) {
           return time;
-        } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
+        } else if (TimePrecision.MICROS == timestampSchema.getPrecision()) {
           return time * MICROS_PER_MILLI + nanos / NANOS_PER_MICRO;
         } else {
           return ((TimestampColumnVector) colVector).getTimestampAsLong(vectorPos);
@@ -556,18 +553,16 @@ public class AvroOrcUtils {
         // return a ByteBuffer to be consistent with AvroRecordConverter
         return ByteBuffer.wrap(binaryBytes);
       case DECIMAL:
+        HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
         // HiveDecimal always ignores trailing zeros, thus modifies the scale implicitly,
         // therefore, the scale must be enforced here.
         BigDecimal bigDecimal = ((DecimalColumnVector) colVector).vector[vectorPos]
             .getHiveDecimal().bigDecimalValue()
-            .setScale(((LogicalTypes.Decimal) logicalType).getScale());
-        Schema.Type baseType = avroSchema.getType();
-        if (baseType.equals(Schema.Type.FIXED)) {
-          return new Conversions.DecimalConversion().toFixed(bigDecimal, avroSchema, logicalType);
-        } else if (baseType.equals(Schema.Type.BYTES)) {
-          return ByteBuffer.wrap(bigDecimal.unscaledValue().toByteArray());
+            .setScale(decimalSchema.getScale());
+        if (decimalSchema.isFixed()) {
+          return new Conversions.DecimalConversion().toFixed(bigDecimal, schema.toAvroSchema(), schema.toAvroSchema().getLogicalType());
         } else {
-          throw new HoodieIOException(baseType.getName() + "is not a valid type for LogicalTypes.DECIMAL.");
+          return ByteBuffer.wrap(bigDecimal.unscaledValue().toByteArray());
         }
       case LIST:
         ArrayList<Object> list = new ArrayList<>();
@@ -577,90 +572,46 @@ public class AvroOrcUtils {
         list.ensureCapacity(listLength);
         TypeDescription childType = type.getChildren().get(0);
         for (int i = 0; i < listLength; i++) {
-          list.add(readFromVector(childType, listVector.child, avroSchema.getElementType(), listOffset + i));
+          list.add(readFromVector(childType, listVector.child, schema.getElementType(), listOffset + i));
         }
         return list;
       case MAP:
-        Map<String, Object> map = new HashMap<String, Object>();
+        Map<String, Object> map = new HashMap<>();
         MapColumnVector mapVector = (MapColumnVector) colVector;
         int mapLength = (int) mapVector.lengths[vectorPos];
         int mapOffset = (int) mapVector.offsets[vectorPos];
-        // keys are always strings for maps in Avro
-        Schema keySchema = Schema.create(Schema.Type.STRING);
+        // keys are always strings for maps
+        HoodieSchema keySchema = HoodieSchema.create(HoodieSchemaType.STRING);
         for (int i = 0; i < mapLength; i++) {
           map.put(
               readFromVector(type.getChildren().get(0), mapVector.keys, keySchema, i + mapOffset).toString(),
               readFromVector(type.getChildren().get(1), mapVector.values,
-                  avroSchema.getValueType(), i + mapOffset));
+                  schema.getValueType(), i + mapOffset));
         }
         return map;
       case STRUCT:
         StructColumnVector structVector = (StructColumnVector) colVector;
         List<TypeDescription> children = type.getChildren();
-        GenericData.Record record = new GenericData.Record(avroSchema);
+        GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
         for (int i = 0; i < children.size(); i++) {
           record.put(i, readFromVector(children.get(i), structVector.fields[i],
-              avroSchema.getFields().get(i).schema(), vectorPos));
+              schema.getFields().get(i).schema(), vectorPos));
         }
         return record;
       case UNION:
         UnionColumnVector unionVector = (UnionColumnVector) colVector;
         int tag = unionVector.tags[vectorPos];
         ColumnVector fieldVector = unionVector.fields[tag];
-        return readFromVector(type.getChildren().get(tag), fieldVector, avroSchema.getTypes().get(tag), vectorPos);
+        return readFromVector(type.getChildren().get(tag), fieldVector, schema.getTypes().get(tag), vectorPos);
       default:
         throw new HoodieIOException("Unrecognized TypeDescription " + type);
     }
   }
 
-  public static TypeDescription createOrcSchema(Schema avroSchema) {
+  public static TypeDescription createOrcSchema(HoodieSchema schema) {
 
-    LogicalType logicalType = avroSchema.getLogicalType();
+    final HoodieSchemaType type = schema.getType();
 
-    if (logicalType != null) {
-      if (logicalType instanceof LogicalTypes.Decimal) {
-        return TypeDescription.createDecimal()
-            .withPrecision(((LogicalTypes.Decimal) logicalType).getPrecision())
-            .withScale(((LogicalTypes.Decimal) logicalType).getScale());
-      } else if (logicalType instanceof LogicalTypes.Date) {
-        // The date logical type represents a date within the calendar, with no reference to a particular time zone
-        // or time of day.
-        //
-        // A date logical type annotates an Avro int, where the int stores the number of days from the unix epoch, 1
-        // January 1970 (ISO calendar).
-        return TypeDescription.createDate();
-      } else if (logicalType instanceof LogicalTypes.TimeMillis) {
-        // The time-millis logical type represents a time of day, with no reference to a particular calendar, time
-        // zone or date, with a precision of one millisecond.
-        //
-        // A time-millis logical type annotates an Avro int, where the int stores the number of milliseconds after
-        // midnight, 00:00:00.000.
-        return TypeDescription.createInt();
-      } else if (logicalType instanceof LogicalTypes.TimeMicros) {
-        // The time-micros logical type represents a time of day, with no reference to a particular calendar, time
-        // zone or date, with a precision of one microsecond.
-        //
-        // A time-micros logical type annotates an Avro long, where the long stores the number of microseconds after
-        // midnight, 00:00:00.000000.
-        return TypeDescription.createLong();
-      } else if (logicalType instanceof LogicalTypes.TimestampMillis) {
-        // The timestamp-millis logical type represents an instant on the global timeline, independent of a
-        // particular time zone or calendar, with a precision of one millisecond.
-        //
-        // A timestamp-millis logical type annotates an Avro long, where the long stores the number of milliseconds
-        // from the unix epoch, 1 January 1970 00:00:00.000 UTC.
-        return TypeDescription.createTimestamp();
-      } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
-        // The timestamp-micros logical type represents an instant on the global timeline, independent of a
-        // particular time zone or calendar, with a precision of one microsecond.
-        //
-        // A timestamp-micros logical type annotates an Avro long, where the long stores the number of microseconds
-        // from the unix epoch, 1 January 1970 00:00:00.000000 UTC.
-        return TypeDescription.createTimestamp();
-      }
-    }
-
-    final Schema.Type type = avroSchema.getType();
     switch (type) {
       case NULL:
         // empty union represents null type
@@ -671,13 +622,74 @@ public class AvroOrcUtils {
       case INT:
         return TypeDescription.createInt();
       case BYTES:
+      case FIXED:
         return TypeDescription.createBinary();
+      case DECIMAL:
+        return TypeDescription.createDecimal()
+            .withPrecision(((HoodieSchema.Decimal) schema).getPrecision())
+            .withScale(((HoodieSchema.Decimal) schema).getScale());
+      case DATE:
+        // The date logical type represents a date within the calendar, with no reference to a particular time zone
+        // or time of day.
+        //
+        // A date logical type annotates an Avro int, where the int stores the number of days from the unix epoch, 1
+        // January 1970 (ISO calendar).
+        return TypeDescription.createDate();
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
+        if (timeSchema.getPrecision() == TimePrecision.MILLIS) {
+          // The time-millis logical type represents a time of day, with no reference to a particular calendar, time
+          // zone or date, with a precision of one millisecond.
+          //
+          // A time-millis logical type annotates an Avro int, where the int stores the number of milliseconds after
+          // midnight, 00:00:00.000.
+          return TypeDescription.createInt();
+        } else if (timeSchema.getPrecision() == TimePrecision.MICROS) {
+          // The time-micros logical type represents a time of day, with no reference to a particular calendar, time
+          // zone or date, with a precision of one microsecond.
+          //
+          // A time-micros logical type annotates an Avro long, where the long stores the number of microseconds after
+          // midnight, 00:00:00.000000.
+          return TypeDescription.createLong();
+        } else {
+          throw new IllegalStateException(
+              String.format("Unrecognized TimePrecision for: %s for Time type: %s", timeSchema.getPrecision(), timeSchema));
+        }
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
+        // NOTE: Preserving old behavior from before HoodieSchema refactoring:
+        // - UTC-adjusted timestamps (TimestampMillis/Micros) are converted to ORC Timestamp
+        // - Local timestamps (LocalTimestampMillis/Micros) are converted to ORC Long
+        // This is because the old code did not handle LocalTimestamp logical types explicitly,
+        // causing them to fall through to the base type (LONG) conversion.
+        if (!timestampSchema.isUtcAdjusted()) {
+          // Local timestamp - treat as ORC Long (old behavior)
+          return TypeDescription.createLong();
+        }
+        if (timestampSchema.getPrecision() == TimePrecision.MILLIS) {
+          // The timestamp-millis logical type represents an instant on the global timeline, independent of a
+          // particular time zone or calendar, with a precision of one millisecond.
+          //
+          // A timestamp-millis logical type annotates an Avro long, where the long stores the number of milliseconds
+          // from the unix epoch, 1 January 1970 00:00:00.000 UTC.
+          return TypeDescription.createTimestamp();
+        } else if (timestampSchema.getPrecision() == TimePrecision.MICROS) {
+          // The timestamp-micros logical type represents an instant on the global timeline, independent of a
+          // particular time zone or calendar, with a precision of one microsecond.
+          //
+          // A timestamp-micros logical type annotates an Avro long, where the long stores the number of microseconds
+          // from the unix epoch, 1 January 1970 00:00:00.000000 UTC.
+          return TypeDescription.createTimestamp();
+        } else {
+          throw new IllegalStateException(
+              String.format("Unrecognized TimePrecision for: %s for Timestamp type: %s", timestampSchema.getPrecision(), timestampSchema));
+        }
       case ARRAY:
-        return TypeDescription.createList(createOrcSchema(avroSchema.getElementType()));
+        return TypeDescription.createList(createOrcSchema(schema.getElementType()));
       case RECORD:
         final TypeDescription recordStruct = TypeDescription.createStruct();
-        for (Schema.Field field : avroSchema.getFields()) {
-          final Schema fieldSchema = field.schema();
+        for (HoodieSchemaField field : schema.getFields()) {
+          final HoodieSchema fieldSchema = field.schema();
           final TypeDescription fieldType = createOrcSchema(fieldSchema);
           if (fieldType != null) {
             recordStruct.addField(field.name(), fieldType);
@@ -688,11 +700,11 @@ public class AvroOrcUtils {
         return TypeDescription.createMap(
             // in Avro maps, keys are always strings
             TypeDescription.createString(),
-            createOrcSchema(avroSchema.getValueType())
+            createOrcSchema(schema.getValueType())
         );
       case UNION:
-        final List<Schema> nonNullMembers = avroSchema.getTypes().stream().filter(
-            schema -> !Schema.Type.NULL.equals(schema.getType())
+        final List<HoodieSchema> nonNullMembers = schema.getTypes().stream().filter(
+            s -> HoodieSchemaType.NULL != s.getType()
         ).collect(Collectors.toList());
 
         if (nonNullMembers.isEmpty()) {
@@ -706,7 +718,7 @@ public class AvroOrcUtils {
         } else {
           // more than one non-null type; represent as an actual ORC union of them
           final TypeDescription union = TypeDescription.createUnion();
-          for (final Schema childSchema : nonNullMembers) {
+          for (final HoodieSchema childSchema : nonNullMembers) {
             union.addUnionChild(createOrcSchema(childSchema));
           }
           return union;
@@ -722,68 +734,60 @@ public class AvroOrcUtils {
       case ENUM:
         // represent as String for now
         return TypeDescription.createString();
-      case FIXED:
-        return TypeDescription.createBinary();
       default:
-        throw new IllegalStateException(String.format("Unrecognized Avro type: %s", type.getName()));
+        throw new IllegalStateException(String.format("Unrecognized type: %s", type.name()));
     }
   }
 
-  public static Schema createAvroSchema(TypeDescription orcSchema) {
+  public static HoodieSchema createSchema(TypeDescription orcSchema) {
     switch (orcSchema.getCategory()) {
       case BOOLEAN:
-        return Schema.create(Schema.Type.BOOLEAN);
+        return HoodieSchema.create(HoodieSchemaType.BOOLEAN);
       case BYTE:
         // tinyint (8 bit), use int to hold it
-        return Schema.create(Schema.Type.INT);
+        return HoodieSchema.create(HoodieSchemaType.INT);
       case SHORT:
         // smallint (16 bit), use int to hold it
-        return Schema.create(Schema.Type.INT);
+        return HoodieSchema.create(HoodieSchemaType.INT);
       case INT:
         // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MILLIS, but there is no way to distinguish
-        return Schema.create(Schema.Type.INT);
+        return HoodieSchema.create(HoodieSchemaType.INT);
       case LONG:
         // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MICROS, but there is no way to distinguish
-        return Schema.create(Schema.Type.LONG);
+        return HoodieSchema.create(HoodieSchemaType.LONG);
       case FLOAT:
-        return Schema.create(Schema.Type.FLOAT);
+        return HoodieSchema.create(HoodieSchemaType.FLOAT);
       case DOUBLE:
-        return Schema.create(Schema.Type.DOUBLE);
+        return HoodieSchema.create(HoodieSchemaType.DOUBLE);
       case VARCHAR:
       case CHAR:
       case STRING:
-        return Schema.create(Schema.Type.STRING);
+        return HoodieSchema.create(HoodieSchemaType.STRING);
       case DATE:
-        Schema date = Schema.create(Schema.Type.INT);
-        LogicalTypes.date().addToSchema(date);
-        return date;
+        return HoodieSchema.create(HoodieSchemaType.DATE);
       case TIMESTAMP:
         // Cannot distinguish between TIMESTAMP_MILLIS and TIMESTAMP_MICROS
         // Assume TIMESTAMP_MILLIS because Timestamp in ORC is in millis
-        Schema timestamp = Schema.create(Schema.Type.LONG);
-        LogicalTypes.timestampMillis().addToSchema(timestamp);
-        return timestamp;
+        return HoodieSchema.createTimestampMillis();
       case BINARY:
-        return Schema.create(Schema.Type.BYTES);
+        return HoodieSchema.create(HoodieSchemaType.BYTES);
       case DECIMAL:
-        Schema decimal = Schema.create(Schema.Type.BYTES);
-        LogicalTypes.decimal(orcSchema.getPrecision(), orcSchema.getScale()).addToSchema(decimal);
-        return decimal;
+        return HoodieSchema.createDecimal(orcSchema.getPrecision(), orcSchema.getScale());
       case LIST:
-        return Schema.createArray(createAvroSchema(orcSchema.getChildren().get(0)));
+        return HoodieSchema.createArray(createSchema(orcSchema.getChildren().get(0)));
       case MAP:
-        return Schema.createMap(createAvroSchema(orcSchema.getChildren().get(1)));
+        return HoodieSchema.createMap(createSchema(orcSchema.getChildren().get(1)));
       case STRUCT:
-        List<Field> childFields = new ArrayList<>();
+        List<HoodieSchemaField> childFields = new ArrayList<>();
         for (int i = 0; i < orcSchema.getChildren().size(); i++) {
           TypeDescription childType = orcSchema.getChildren().get(i);
           String childName = orcSchema.getFieldNames().get(i);
-          childFields.add(new Field(childName, createAvroSchema(childType), "", null));
+          childFields.add(HoodieSchemaField.of(childName, createSchema(childType), "", null));
         }
-        return Schema.createRecord(childFields);
+        return HoodieSchema.createRecord("record", null, null, childFields);
       case UNION:
-        return Schema.createUnion(orcSchema.getChildren().stream()
-            .map(AvroOrcUtils::createAvroSchema)
+        return HoodieSchema.createUnion(orcSchema.getChildren().stream()
+            .map(AvroOrcUtils::createSchema)
             .collect(Collectors.toList()));
       default:
         throw new IllegalStateException(String.format("Unrecognized ORC type: %s", orcSchema.getCategory().getName()));
@@ -797,18 +801,18 @@ public class AvroOrcUtils {
    * the nullability of an Avro type. To achieve consistency between the Avro and ORC schema,
    * non-NULL types are extracted from the union type.
    * @param unionSchema       A schema of union type.
-   * @return  An Avro schema that is either NULL or a UNION without NULL fields.
+   * @return  A schema that is either NULL or a UNION without NULL fields.
    */
-  private static Schema getActualSchemaType(Schema unionSchema) {
-    final List<Schema> nonNullMembers = unionSchema.getTypes().stream().filter(
-        schema -> !Schema.Type.NULL.equals(schema.getType())
-    ).collect(Collectors.toList());
+  private static HoodieSchema getActualSchemaType(HoodieSchema unionSchema) {
+    final List<HoodieSchema> nonNullMembers = unionSchema.getTypes().stream()
+        .filter(schema -> HoodieSchemaType.NULL != schema.getType())
+        .collect(Collectors.toList());
     if (nonNullMembers.isEmpty()) {
-      return Schema.create(Schema.Type.NULL);
+      return HoodieSchema.create(HoodieSchemaType.NULL);
     } else if (nonNullMembers.size() == 1) {
       return nonNullMembers.get(0);
     } else {
-      return Schema.createUnion(nonNullMembers);
+      return HoodieSchema.createUnion(nonNullMembers);
     }
   }
 

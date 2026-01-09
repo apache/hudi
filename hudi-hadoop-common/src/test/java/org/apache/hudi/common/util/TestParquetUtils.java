@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -29,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -37,8 +37,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -66,7 +64,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCHEMA;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -157,7 +155,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
 
     String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
-    Schema schema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeyPartitionPathSchema();
     writeParquetFile(typeCode, filePath, rowKeys, schema, true, partitionPath);
 
     // Read and verify
@@ -187,7 +185,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
 
     String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
-    Schema schema = getSchemaWithFields(Arrays.asList(new String[] {"abc", "def"}));
+    HoodieSchema schema = getSchemaWithFields(Arrays.asList(new String[] {"abc", "def"}));
     writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys, schema, true, partitionPath,
         false, "abc", "def");
 
@@ -256,7 +254,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(1000, 0.0001, 10000, BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema.toAvroSchema(), Option.of(filter), new Properties());
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, Option.of(filter), new Properties());
     try (ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE)) {
       valueList.forEach(entry -> {
@@ -297,7 +295,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   private HoodieSchema getSchema(String recordKeyField, String partitionPathField, String dataField) {
-    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>();
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(3);
 
     HoodieSchemaField recordKeySchemaField =
         HoodieSchemaField.of(recordKeyField, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE);
@@ -309,8 +307,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     toBeAddedFields.add(recordKeySchemaField);
     toBeAddedFields.add(partitionPathSchemaField);
     toBeAddedFields.add(dataSchemaField);
-    HoodieSchema recordSchema = HoodieSchema.createRecord("HoodieRecord", "", "", false, toBeAddedFields);
-    return recordSchema;
+    return HoodieSchema.createRecord("HoodieRecord", "", "", false, toBeAddedFields);
   }
 
   private void validateColumnRangeMetadata(HoodieColumnRangeMetadata metadata,
@@ -329,25 +326,25 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys) throws Exception {
-    writeParquetFile(typeCode, filePath, rowKeys, HoodieAvroUtils.getRecordKeySchema(), false, "");
+    writeParquetFile(typeCode, filePath, rowKeys, HoodieSchemaUtils.getRecordKeySchema(), false, "");
   }
 
-  private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, Schema schema, boolean addPartitionPathField, String partitionPath) throws Exception {
+  private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, HoodieSchema schema, boolean addPartitionPathField, String partitionPath) throws Exception {
     writeParquetFile(typeCode, filePath, rowKeys, schema, addPartitionPathField, partitionPath,
         true, null, null);
   }
 
-  private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, Schema schema, boolean addPartitionPathField, String partitionPathValue,
+  private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, HoodieSchema schema, boolean addPartitionPathField, String partitionPathValue,
                                 boolean useMetaFields, String recordFieldName, String partitionFieldName) throws Exception {
     // Write out a parquet file
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(1000, 0.0001, 10000, typeCode);
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, Option.of(filter), new Properties());
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()), schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {
-      GenericRecord rec = new GenericData.Record(schema);
+      GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
       rec.put(useMetaFields ? HoodieRecord.RECORD_KEY_METADATA_FIELD : recordFieldName, rowKey);
       if (addPartitionPathField) {
         rec.put(useMetaFields ? HoodieRecord.PARTITION_PATH_METADATA_FIELD : partitionFieldName, partitionPathValue);
@@ -358,17 +355,14 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writer.close();
   }
 
-  private static Schema getSchemaWithFields(List<String> fields) {
-    List<Schema.Field> toBeAddedFields = new ArrayList<>();
-    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
-
+  private static HoodieSchema getSchemaWithFields(List<String> fields) {
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(fields.size());
     for (String field: fields) {
-      Schema.Field schemaField =
-          new Schema.Field(field, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      HoodieSchemaField schemaField =
+          HoodieSchemaField.of(field, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
       toBeAddedFields.add(schemaField);
     }
-    recordSchema.setFields(toBeAddedFields);
-    return recordSchema;
+    return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, toBeAddedFields);
   }
 
   class TestBaseKeyGen extends BaseKeyGenerator {
@@ -404,7 +398,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadSchemaHash() throws Exception {
+  public void testReadMessageTypeHash() throws Exception {
     // Given: Create a parquet file with a specific schema
     List<String> rowKeys = Arrays.asList("row1", "row2", "row3");
     String filePath = Paths.get(basePath, "test_schema_hash.parquet").toUri().toString();
@@ -425,7 +419,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadSchemaHash_DifferentSchemas() throws Exception {
+  public void testReadMessageTypeHash_DifferentSchemas() throws Exception {
     // Given: Create two parquet files with different schemas
     List<String> rowKeys = Arrays.asList("row1", "row2");
     
@@ -447,7 +441,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadSchemaHash_NonExistentFile() throws Exception {
+  public void testReadMessageTypeHash_NonExistentFile() throws Exception {
     // Given: Non-existent file path
     StoragePath nonExistentPath = new StoragePath("/non/existent/file.parquet");
     
@@ -469,7 +463,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     
     // When: Reading schema hash vs direct schema read
     Integer schemaHashFromUtils = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath), storagePath);
-    MessageType directSchema = parquetUtils.readSchema(HoodieTestUtils.getStorage(filePath), storagePath);
+    MessageType directSchema = parquetUtils.readMessageType(HoodieTestUtils.getStorage(filePath), storagePath);
     Integer directSchemaHash = directSchema.hashCode();
     
     // Then: Hash from utility method should match direct schema hash
@@ -479,7 +473,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
   private void writeParquetFileWithExtendedSchema(String filePath, List<String> rowKeys) throws Exception {
     // Create an extended schema with an additional field
-    List<HoodieSchemaField> fields = new ArrayList<>();
+    List<HoodieSchemaField> fields = new ArrayList<>(4);
     fields.add(HoodieSchemaField.of("_row_key", HoodieSchema.create(HoodieSchemaType.STRING), "", (Object) null));
     fields.add(HoodieSchemaField.of("time", HoodieSchema.create(HoodieSchemaType.LONG), "", (Object) null));
     fields.add(HoodieSchemaField.of("number", HoodieSchema.create(HoodieSchemaType.LONG), "", (Object) null));
@@ -489,7 +483,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1, BloomFilterTypeCode.SIMPLE.name());
 
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(extendedSchema.toAvroSchema()), extendedSchema.toAvroSchema(), Option.of(filter), new Properties());
+        new AvroSchemaConverter().convert(extendedSchema.toAvroSchema()), extendedSchema, Option.of(filter), new Properties());
 
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
