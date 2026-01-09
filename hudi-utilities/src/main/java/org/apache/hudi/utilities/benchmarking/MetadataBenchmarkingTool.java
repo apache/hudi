@@ -232,7 +232,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     public Integer numPartitions = 1;
 
     @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2020-01-01'\")")
-    public String partitionFilter = "dt = '2020-01-01'";
+    public String partitionFilter = "dt = '2025-01-01'";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
