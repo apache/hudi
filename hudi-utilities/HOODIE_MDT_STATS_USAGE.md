@@ -29,7 +29,7 @@
 | Parameter | Short Flag | Description | Example Value |
 |-----------|------------|-------------|---------------|
 | `--table-base-path` | `-tbp` | Base path where the Hudi table will be created | `/tmp/hudi_table` |
-| `--cols-to-index` | `-cols` | Comma-separated list of columns to index | `age,salary` |
+| `--num-cols-to-index` | `-num-cols` | Number of columns to index (1 for tenantID, 2 for tenantID & age) | `2` |
 | `--col-stats-file-group-count` | `-col-fg-count` | Number of file groups for the column stats partition in metadata table | `10` |
 | `--num-files` | `-nf` | Total number of data files to create across all partitions | `1000` |
 | `--num-partitions` | `-np` | Number of date partitions to generate (starting from 2020-01-01) | `5` |
@@ -38,7 +38,6 @@
 
 | Parameter | Short Flag | Description | Usage |
 |-----------|------------|-------------|-------|
-| `--files-per-commit` | `-fpc` | Number of files to create per commit. If not specified or >= num-files, all files will be in one commit | `--files-per-commit 1000` |
 | `--props` | | Path to properties file containing Hudi configurations | `--props /path/to/config.properties` |
 | `--hoodie-conf` | | Individual Hudi configuration (can be specified multiple times) | `--hoodie-conf hoodie.metadata.enable=true` |
 | `--help` | `-h` | Display help message | `--help` |
@@ -48,17 +47,16 @@
 ### `--table-base-path`
 The location where the test Hudi table will be created. Can be a local filesystem path or HDFS path.
 
-### `--cols-to-index`
-Comma-separated list of columns for which statistics will be generated. Specify column names as a string.
+### `--num-cols-to-index`
+Number of columns to index for column statistics. Accepts values 1 or 2.
 
 **Supported columns:**
-- `age` - Integer type, values range 20-100
-- `salary` - Long type, values range 50000-250000
+- `tenantID` - Long type, values range 30000-60000 (30k-60k), always indexed
+- `age` - Integer type, values range 20-100, indexed only when `--num-cols-to-index 2`
 
 **Examples:**
-- Single column: `--cols-to-index age`
-- Multiple columns: `--cols-to-index age,salary`
-- All columns: `--cols-to-index age,salary` (current maximum supported)
+- Single column (tenantID only): `--num-cols-to-index 1`
+- Two columns (tenantID & age): `--num-cols-to-index 2`
 
 ### `--col-stats-file-group-count`
 Determines the parallelism and file distribution in the metadata table's column stats partition. Higher values mean:
@@ -76,27 +74,32 @@ Number of date-based partitions to create. Partitions are generated sequentially
 - `3` → `["2020-01-01", "2020-01-02", "2020-01-03"]`
 - `10` → `["2020-01-01" through "2020-01-10"]`
 
-### `--files-per-commit`
-**Optional parameter** that controls how many files are created in each commit. This allows testing scenarios with multiple commits instead of a single commit. Default value is 1000
-
-**Examples:**
-- `--num-files 1000 --files-per-commit 1000` → 1 commit with 1000 files
-- `--num-files 5000 --files-per-commit 1000` → 5 commits, each with 1000 files
-- `--num-files 2500 --files-per-commit 1000` → 3 commits (1000, 1000, 500 files)
 
 ## Example Usage
 
 ### Basic Example
+### Example 1: Index tenantID only
 ```bash
 spark-submit \
   --class org.apache.hudi.utilities.benchmarking.MetadataBenchmarkingTool \
   --master "local[*]" \
   packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.2.0-SNAPSHOT.jar \
   --table-base-path /tmp/hudi_test \
-  --cols-to-index age,salary \
+  --num-cols-to-index 1 \
   --col-stats-file-group-count 10 \
   --num-files 1000 \
-  --num-partitions 5 \
-  --files-per-commit 1000
+  --num-partitions 5
 ```
-Omit `--files-per-commit` to create all files in a single commit, or set it to a value less than `--num-files` to create multiple commits.
+
+### Example 2: Index tenantID & age
+```bash
+spark-submit \
+  --class org.apache.hudi.utilities.benchmarking.MetadataBenchmarkingTool \
+  --master "local[*]" \
+  packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.2.0-SNAPSHOT.jar \
+  --table-base-path /tmp/hudi_test \
+  --num-cols-to-index 2 \
+  --col-stats-file-group-count 10 \
+  --num-files 1000 \
+  --num-partitions 5
+```

@@ -108,8 +108,6 @@ public class MetadataBenchmarkingTool implements Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetadataBenchmarkingTool.class);
 
-  private static final int INITIAL_ROW_COUNT = 50; // Rows to insert in STEP 1
-
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
@@ -120,20 +118,56 @@ public class MetadataBenchmarkingTool implements Closeable {
 
   private final HoodieEngineContext engineContext;
 
-  private static final String AVRO_SCHEMA =
-      "{\n"
-          + "  \"type\": \"record\",\n"
-          + "  \"name\": \"Employee\",\n"
-          + "  \"namespace\": \"com.example.avro\",\n"
-          + "  \"fields\": [\n"
-          + "    { \"name\": \"id\", \"type\": \"string\" },\n"
-          + "    { \"name\": \"name\", \"type\": \"string\" },\n"
-          + "    { \"name\": \"city\", \"type\": \"string\" },\n"
-          + "    { \"name\": \"age\", \"type\": \"int\" },\n"
-          + "    { \"name\": \"salary\", \"type\": \"double\" },\n"
-          + "    { \"name\": \"dt\", \"type\": \"string\" }\n"
-          + "  ]\n"
-          + "}\n";
+  /**
+   * Returns the AVRO schema string for the table.
+   * Schema includes: id, name, city, age, tenantID, dt
+   */
+  private static String getAvroSchema() {
+    return "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"Employee\",\n"
+        + "  \"namespace\": \"com.example.avro\",\n"
+        + "  \"fields\": [\n"
+        + "    { \"name\": \"id\", \"type\": \"string\" },\n"
+        + "    { \"name\": \"name\", \"type\": \"string\" },\n"
+        + "    { \"name\": \"city\", \"type\": \"string\" },\n"
+        + "    { \"name\": \"age\", \"type\": \"int\" },\n"
+        + "    { \"name\": \"tenantID\", \"type\": \"long\" },\n"
+        + "    { \"name\": \"dt\", \"type\": \"string\" }\n"
+        + "  ]\n"
+        + "}\n";
+  }
+
+  /**
+   * Returns the Spark StructType schema for data skipping queries.
+   * Reused across multiple places to avoid duplication.
+   */
+  private static StructType getDataSchema() {
+    return new StructType()
+        .add("id", "string")
+        .add("name", "string")
+        .add("city", "string")
+        .add("age", "int")
+        .add("tenantID", "long");
+  }
+
+  /**
+   * Returns the list of columns to index based on numColumnsToIndex config.
+   * @param numColumnsToIndex 1 for tenantID only, 2 for tenantID & age
+   * @return List of column names to index
+   */
+  private List<String> getColumnsToIndex(int numColumnsToIndex) {
+    List<String> columns = new ArrayList<>();
+    columns.add("tenantID");
+    if (numColumnsToIndex == 2) {
+      columns.add("age");
+    }
+    return columns;
+  }
+  
+  private String getColumnsToIndexString(int numColumnsToIndex) {
+    return String.join(",", getColumnsToIndex(numColumnsToIndex));
+  }
 
   public MetadataBenchmarkingTool(SparkSession spark, Config cfg) {
     this.spark = spark;
@@ -151,19 +185,19 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   public static class Config implements Serializable {
-    @Parameter(names = {"--table-base-path", "-tbp"}, description = "Number of columns to index", required = true)
+    @Parameter(names = {"--table-base-path", "-tbp"}, description = "Base path for the Hudi table", required = true)
     public String tableBasePath = null;
 
-    @Parameter(names = {"--cols-to-index", "-num-cols"}, description = "Number of columns to index", required = true)
-    public String colsToIndex = "age,salary";
+    @Parameter(names = {"--num-cols-to-index", "-num-cols"}, description = "Number of columns to index (1 for tenantID, 2 for tenantID & age)", required = true)
+    public Integer numColumnsToIndex = 1;
 
-    @Parameter(names = {"--col-stats-file-group-count", "-col-fg-count"}, description = "Target Base path for the table", required = true)
+    @Parameter(names = {"--col-stats-file-group-count", "-col-fg-count"}, description = "Number of file groups for column stats partition in metadata table", required = true)
     public Integer colStatsFileGroupCount = 10;
 
-    @Parameter(names = {"--num-files", "-nf"}, description = "Target Base path for the table", required = true)
+    @Parameter(names = {"--num-files", "-nf"}, description = "Number of files to create in the table", required = true)
     public Integer numFiles = 1000;
 
-    @Parameter(names = {"--num-partitions", "-np"}, description = "Target Base path for the table", required = true)
+    @Parameter(names = {"--num-partitions", "-np"}, description = "Number of partitions to create in the table", required = true)
     public Integer numPartitions = 1;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
@@ -171,8 +205,8 @@ public class MetadataBenchmarkingTool implements Closeable {
         splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
-    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "hoodie client for clustering")
+    @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
+        + "Hoodie client")
     public String propsFilePath = null;
 
     @Parameter(names = {"--help", "-h"}, help = true)
@@ -180,8 +214,8 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     @Override
     public String toString() {
-      return "TableSizeStats {\n"
-          + "   --col-to-index " + colsToIndex + ", \n"
+      return "MetadataBenchmarkingTool {\n"
+          + "   --num-cols-to-index " + numColumnsToIndex + ", \n"
           + "   --col-stats-file-group-count " + colStatsFileGroupCount + ", \n"
           + "\n}";
     }
@@ -218,12 +252,14 @@ public class MetadataBenchmarkingTool implements Closeable {
   public void run1() throws Exception {
     int numFiles = cfg.numFiles;
     int numPartitions = cfg.numPartitions;
-    LOG.info("Starting Metadata table benchmarking with {} files, {} partitions, {} columns, {} file groups",
-        numFiles, numPartitions, cfg.colsToIndex, cfg.colStatsFileGroupCount);
+    List<String> columnsToIndex = getColumnsToIndex(cfg.numColumnsToIndex);
+    String columnsToIndexStr = getColumnsToIndexString(cfg.numColumnsToIndex);
+    LOG.info("Starting Metadata table benchmarking with {} files, {} partitions, {} columns ({}), {} file groups",
+        numFiles, numPartitions, cfg.numColumnsToIndex, columnsToIndexStr, cfg.colStatsFileGroupCount);
     LOG.info("Data table base path: {}", cfg.tableBasePath);
 
     String tableName = "test_mdt_stats_tbl";
-    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, AVRO_SCHEMA, cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
     HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
     // why are we generating write config twice for data table?
     HoodieWriteConfig dataConfig =  HoodieWriteConfig.newBuilder()
@@ -239,7 +275,7 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(tableName, dataConfig);
 
-    List<String> colsToIndex = java.util.Arrays.asList("age", "salary"); // wire in with top level config.
+    List<String> colsToIndex = columnsToIndex;
 
     List<String> partitions = generatePartitions(numPartitions);
     HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
@@ -301,8 +337,10 @@ public class MetadataBenchmarkingTool implements Closeable {
     int numFiles = cfg.numFiles;
     int numPartitions = cfg.numPartitions;
 
-    LOG.info("Starting MDT stats test with {} files, {} partitions, {} columns, {} file groups",
-        numFiles, numPartitions, cfg.colsToIndex, cfg.colStatsFileGroupCount);
+    List<String> columnsToIndex = getColumnsToIndex(cfg.numColumnsToIndex);
+    String columnsToIndexStr = getColumnsToIndexString(cfg.numColumnsToIndex);
+    LOG.info("Starting MDT stats test with {} files, {} partitions, {} columns ({}), {} file groups",
+        numFiles, numPartitions, cfg.numColumnsToIndex, columnsToIndexStr, cfg.colStatsFileGroupCount);
     LOG.info("Data table base path: {}", cfg.tableBasePath);
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(cfg.tableBasePath);
     LOG.info("Metadata table base path: {}", metadataTableBasePath);
@@ -310,7 +348,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     String tableName = "test_mdt_stats_tbl";
     // initializeTableWithSampleData(tableName);
     // Create data table config with metadata enabled
-    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, AVRO_SCHEMA, cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieWriteConfig dataWriteConfig = getWriteConfig(tableName, getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
     HoodieMetadataConfig metadataConfig = dataWriteConfig.getMetadataConfig();
     HoodieWriteConfig dataConfig = HoodieWriteConfig.newBuilder()
         .withProperties(dataWriteConfig.getProps())
@@ -430,66 +468,6 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   /**
-   * Print column stats for verification - shows min/max values for up to 10 files per partition.
-   * This helps verify that column stats were constructed properly before querying.
-   *
-   * @param commitMetadata The commit metadata containing partition and file information
-   * @param expectedStats  The expected column stats map (file name -> column name -> stats)
-   */
-  @SuppressWarnings("rawtypes")
-  private void printColumnStatsForVerification(
-      HoodieCommitMetadata commitMetadata,
-      Map<String, Map<String, HoodieColumnRangeMetadata<Comparable>>> expectedStats) {
-
-    LOG.info("=== STEP 4: Verifying column stats construction (max 10 files per partition) ===");
-
-    Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
-
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
-      String partitionPath = entry.getKey();
-      List<HoodieWriteStat> writeStats = entry.getValue();
-
-      LOG.info("Partition: {} ({} files total)", partitionPath, writeStats.size());
-      LOG.info(String.format("%-50s %-15s %-15s %-15s %-15s",
-          "FileName", "age_min", "age_max", "salary_min", "salary_max"));
-      LOG.info(String.join("", Collections.nCopies(110, "-")));
-
-      int filesDisplayed = 0;
-      for (HoodieWriteStat writeStat : writeStats) {
-        if (filesDisplayed >= 10) {
-          LOG.info("... and {} more files", writeStats.size() - 10);
-          break;
-        }
-
-        String filePath = writeStat.getPath();
-        String fileName = new StoragePath(filePath).getName();
-
-        Map<String, HoodieColumnRangeMetadata<Comparable>> fileStats = expectedStats.get(fileName);
-        if (fileStats != null) {
-          HoodieColumnRangeMetadata<Comparable> ageStats = fileStats.get("age");
-          HoodieColumnRangeMetadata<Comparable> salaryStats = fileStats.get("salary");
-
-          String ageMin = (ageStats != null) ? String.valueOf(ageStats.getMinValue()) : "N/A";
-          String ageMax = (ageStats != null) ? String.valueOf(ageStats.getMaxValue()) : "N/A";
-          String salaryMin = (salaryStats != null) ? String.valueOf(salaryStats.getMinValue()) : "N/A";
-          String salaryMax = (salaryStats != null) ? String.valueOf(salaryStats.getMaxValue()) : "N/A";
-
-          LOG.info(String.format("%-50s %-15s %-15s %-15s %-15s",
-              fileName.length() > 48 ? fileName.substring(0, 48) + ".." : fileName,
-              ageMin, ageMax, salaryMin, salaryMax));
-        } else {
-          LOG.info(String.format("%-50s %-15s", fileName, "NO STATS FOUND"));
-        }
-
-        filesDisplayed++;
-      }
-    }
-
-    LOG.info("");
-    LOG.info("Total files with stats: {}", expectedStats.size());
-  }
-
-  /**
    * Query the column stats index using HoodieFileIndex.filterFileSlices and verify results.
    *
    * @param dataConfig     The write config for the data table
@@ -515,16 +493,12 @@ public class MetadataBenchmarkingTool implements Closeable {
     options.put("hoodie.metadata.index.column.stats.enable", "true");
     options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     // Also ensure the columns are specified for column stats
-    options.put("hoodie.metadata.index.column.stats.column.list", "age,salary");
+    String columnsToIndexStr = getColumnsToIndexString(cfg.numColumnsToIndex);
+    options.put("hoodie.metadata.index.column.stats.column.list", columnsToIndexStr);
     spark.sqlContext().conf().setConfString("hoodie.fileIndex.dataSkippingFailureMode", "strict");
 
-    // Create schema with the columns used for data skipping
-    StructType dataSchema = new StructType()
-        .add("id", "string")
-        .add("name", "string")
-        .add("city", "string")
-        .add("age", "int")
-        .add("salary", "long");
+    // Use consolidated schema helper method
+    StructType dataSchema = getDataSchema();
     scala.Option<StructType> schemaOption = scala.Option.apply(dataSchema);
 
     @SuppressWarnings("deprecation")
@@ -540,20 +514,23 @@ public class MetadataBenchmarkingTool implements Closeable {
         false,
         false);
 
-    // Create data filters for age and salary columns
+    // Create data filters based on columns to index
     // Unresolved expressions cause translateIntoColumnStatsIndexFilterExpr to return TrueLiteral (no filtering).
     List<Expression> dataFilters = new ArrayList<>();
-    String filterString = "age > 90";
+    String filterString;
+    if (cfg.numColumnsToIndex == 2) {
+      filterString = "age > 70";
+    } else {
+      filterString = "tenantID > 50000"; // More selective filter for 30k-60k range
+    }
     Expression filter1 = org.apache.spark.sql.HoodieCatalystExpressionUtils$.MODULE$
         .resolveExpr(spark, filterString, dataSchema);
+    LOG.info("Using filter: {}", filterString);
     LOG.info("DEBUG: Resolved filter expression: {}", filter1);
     LOG.info("DEBUG: Resolved filter resolved: {}", filter1.resolved());
     LOG.info("DEBUG: Resolved filter tree:\n{}", filter1.treeString());
 
     dataFilters.add(filter1);
-    // Expression filter2 = org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr(
-    //     sparkSession, "salary > 100000", dataSchema);
-    // dataFilters.add(filter2);
 
     List<Expression> partitionFilters = new ArrayList<>(); // Empty partition filters
 
@@ -565,17 +542,29 @@ public class MetadataBenchmarkingTool implements Closeable {
         .asScalaBuffer(partitionFilters).toList();
     scala.collection.Seq<Expression> partitionFiltersSeq = partitionFiltersList;
 
-    // Call filterFileSlices
+    // Call filterFileSlices with timing
+    long startTime = System.currentTimeMillis();
     scala.collection.Seq<scala.Tuple2<scala.Option<org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath>,
         scala.collection.Seq<FileSlice>>> filteredSlices = fileIndex
         .filterFileSlices(
             dataFiltersSeq,
             partitionFiltersSeq,
             false);
+    long endTime = System.currentTimeMillis();
+    long filterTimeMs = endTime - startTime;
+    LOG.info("=== filterFileSlices benchmark: {} ms ===", filterTimeMs);
 
     LOG.info("Filtered File Slices Min/Max Values:");
-    LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
-        "FileName", "age_min", "age_max", "salary_min", "salary_max"));
+    String headerFormat;
+    String header;
+    if (cfg.numColumnsToIndex == 2) {
+      headerFormat = "%-30s %-20s %-20s %-20s %-20s";
+      header = String.format(headerFormat, "FileName", "tenantID_min", "tenantID_max", "age_min", "age_max");
+    } else {
+      headerFormat = "%-30s %-20s %-20s";
+      header = String.format(headerFormat, "FileName", "tenantID_min", "tenantID_max");
+    }
+    LOG.info(header);
     LOG.info(String.join("", Collections.nCopies(100, "-")));
 
     int totalFileSlices = 0;
@@ -591,17 +580,21 @@ public class MetadataBenchmarkingTool implements Closeable {
 
         Map<String, HoodieColumnRangeMetadata<Comparable>> fileExpectedStats = expectedStats.get(fileName);
         if (fileExpectedStats != null) {
-          HoodieColumnRangeMetadata<Comparable> ageStats = fileExpectedStats.get("age");
-          HoodieColumnRangeMetadata<Comparable> salaryStats = fileExpectedStats.get("salary");
-
-          Object ageMin = (ageStats != null) ? ageStats.getMinValue() : "null";
-          Object ageMax = (ageStats != null) ? ageStats.getMaxValue() : "null";
-          Object salaryMin = (salaryStats != null) ? salaryStats.getMinValue() : "null";
-          Object salaryMax = (salaryStats != null) ? salaryStats.getMaxValue() : "null";
-
-          LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
-              fileName, ageMin.toString(), ageMax.toString(), salaryMin.toString(),
-              salaryMax.toString()));
+          HoodieColumnRangeMetadata<Comparable> tenantIDStats = fileExpectedStats.get("tenantID");
+          Object tenantIDMin = (tenantIDStats != null) ? tenantIDStats.getMinValue() : "null";
+          Object tenantIDMax = (tenantIDStats != null) ? tenantIDStats.getMaxValue() : "null";
+          
+          if (cfg.numColumnsToIndex == 2) {
+            HoodieColumnRangeMetadata<Comparable> ageStats = fileExpectedStats.get("age");
+            Object ageMin = (ageStats != null) ? ageStats.getMinValue() : "null";
+            Object ageMax = (ageStats != null) ? ageStats.getMaxValue() : "null";
+            LOG.info(String.format("%-30s %-20s %-20s %-20s %-20s",
+                fileName, tenantIDMin.toString(), tenantIDMax.toString(), ageMin.toString(),
+                ageMax.toString()));
+          } else {
+            LOG.info(String.format("%-30s %-20s %-20s",
+                fileName, tenantIDMin.toString(), tenantIDMax.toString()));
+          }
         }
       }
     }
@@ -662,14 +655,15 @@ public class MetadataBenchmarkingTool implements Closeable {
       LOG.info("Marked /column_stats partition as inflight for initialization");
 
       // Create index definition for column stats - this tells data skipping which columns are indexed
+      List<String> columnsToIndex = getColumnsToIndex(cfg.numColumnsToIndex);
       org.apache.hudi.common.model.HoodieIndexDefinition colStatsIndexDef =
           new org.apache.hudi.common.model.HoodieIndexDefinition.Builder()
               .withIndexName(COLUMN_STATS.getPartitionPath())
               .withIndexType("column_stats")
-              .withSourceFields(java.util.Arrays.asList("age", "salary"))
+              .withSourceFields(columnsToIndex)
               .build();
       dataMetaClient.buildIndexDefinition(colStatsIndexDef);
-      LOG.info("Created column stats index definition for columns: age, salary");
+      LOG.info("Created column stats index definition for columns: {}", String.join(", ", columnsToIndex));
     }
 
     // Convert commit metadata to files partition records
@@ -841,7 +835,7 @@ public class MetadataBenchmarkingTool implements Closeable {
         partitionToWriteStats.values().stream().mapToInt(List::size).sum());
 
     // Capture config for serialization into the closure
-    final String columnsToIndex = cfg.colsToIndex;
+    final int numColumnsToIndex = cfg.numColumnsToIndex;
 
     // Parallelize by table partition - each Spark partition processes one table partition
     // Use number of table partitions as the parallelism level
@@ -868,50 +862,41 @@ public class MetadataBenchmarkingTool implements Closeable {
 
             List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
 
-            // Generate stats for configured columns
-            String[] columnNames = columnsToIndex.split(",");
-            int numColumns = columnNames.length;
-            for (int colIdx = 0; colIdx < numColumns; colIdx++) {
-              String colName = columnNames[colIdx];
+            // Generate stats for tenantID (always first)
+            // tenantID range: 30000-60000 (30k-60k)
+            long minTenantID = 30000L + fileRandom.nextInt(30000); // Range: 30000-59999
+            long maxTenantID = minTenantID + fileRandom.nextInt((int)(60000L - minTenantID + 1)); // Range: minTenantID to 60000
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            HoodieColumnRangeMetadata<Comparable> tenantIDStats = (HoodieColumnRangeMetadata<Comparable>) 
+                (HoodieColumnRangeMetadata<?>) HoodieColumnRangeMetadata.create(
+                    fileName,
+                    "tenantID",
+                    minTenantID,
+                    maxTenantID,
+                    0,
+                    1000,
+                    123456,
+                    123456,
+                    ValueMetadata.V1EmptyMetadata.get());
+            columnRangeMetadata.add(tenantIDStats);
 
-              Comparable minValue;
-              Comparable maxValue;
-
-              if (colIdx == 0) {
-                // age column: values between 20-100
-                int minAge = 20 + fileRandom.nextInt(30);
-                int maxAge = minAge + fileRandom.nextInt(50);
-                minValue = minAge;
-                maxValue = maxAge;
-              } else {
-                // salary column: values between 50000-250000
-                long minSalary = 50000L + fileRandom.nextInt(100000);
-                long maxSalary = minSalary + fileRandom.nextInt(100000);
-                minValue = minSalary;
-                maxValue = maxSalary;
-              }
-
+            // Generate stats for age if numColumnsToIndex == 2
+            if (numColumnsToIndex == 2) {
+              int minAge = 20 + fileRandom.nextInt(30);
+              int maxAge = minAge + fileRandom.nextInt(50); // Range: minAge to (minAge + 49)
               @SuppressWarnings({"rawtypes", "unchecked"})
-              int compareResult = minValue.compareTo(maxValue);
-              if (compareResult > 0) {
-                Comparable temp = minValue;
-                minValue = maxValue;
-                maxValue = temp;
-              }
-
-              @SuppressWarnings({"rawtypes", "unchecked"})
-              HoodieColumnRangeMetadata<Comparable> colStats = HoodieColumnRangeMetadata.create(
-                  fileName,
-                  colName,
-                  minValue,
-                  maxValue,
-                  0,
-                  1000,
-                  123456,
-                  123456,
-                  ValueMetadata.V1EmptyMetadata.get());
-
-              columnRangeMetadata.add(colStats);
+              HoodieColumnRangeMetadata<Comparable> ageStats = (HoodieColumnRangeMetadata<Comparable>) 
+                  (HoodieColumnRangeMetadata<?>) HoodieColumnRangeMetadata.create(
+                      fileName,
+                      "age",
+                      minAge,
+                      maxAge,
+                      0,
+                      1000,
+                      123456,
+                      123456,
+                      ValueMetadata.V1EmptyMetadata.get());
+              columnRangeMetadata.add(ageStats);
             }
 
             // Generate column stats records for this file
@@ -932,10 +917,6 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     // Return as HoodieData - records stay distributed across Spark partitions
     return HoodieJavaRDD.of(recordsRDD);
-  }
-
-  private String[] getColumnsToIndex() {
-    return cfg.colsToIndex.split(",");
   }
 
   private HoodieWriteConfig getWriteConfig(String tableName, String schemaStr, String basePath, HoodieFailedWritesCleaningPolicy cleaningPolicy) {

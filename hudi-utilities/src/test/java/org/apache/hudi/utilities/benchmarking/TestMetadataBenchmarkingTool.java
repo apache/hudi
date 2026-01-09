@@ -61,28 +61,53 @@ public class TestMetadataBenchmarkingTool {
   }
 
   @Test
-  public void testMetadataBenchmarkingToolRun(@TempDir Path tempDir) {
+  public void testMetadataBenchmarkingToolRunWithTwoColumns(@TempDir Path tempDir) {
     LOG.info("Running MetadataBenchmarkingTool test with temp directory: {}", tempDir);
 
-    // Create config for MetadataBenchmarkingTool
+    // Create config for MetadataBenchmarkingTool with 2 columns (tenantID & age)
     MetadataBenchmarkingTool.Config config = new MetadataBenchmarkingTool.Config();
-    config.tableBasePath = tempDir.resolve("test_table").toString();
-    config.colsToIndex = "age,salary";
+    config.tableBasePath = tempDir.resolve("test_table_2cols").toString();
+    config.numColumnsToIndex = 2; // tenantID & age
     config.colStatsFileGroupCount = 10;
     config.numFiles = 100;
     config.numPartitions = 3;
 
     LOG.info("Test config: tableBasePath={}, numFiles={}, numPartitions={}, numColumnsToIndex={}, colStatsFileGroupCount={}",
-        config.tableBasePath, config.numFiles, config.numPartitions, config.colsToIndex, config.colStatsFileGroupCount);
+        config.tableBasePath, config.numFiles, config.numPartitions, config.numColumnsToIndex, config.colStatsFileGroupCount);
 
     // Run MetadataBenchmarkingTool
     assertDoesNotThrow(() -> {
       try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(sparkSession, config)) {
         metadataBenchmarkingTool.run1();
       }
-    }, "MetadataBenchmarkingTool.run() should complete without throwing exceptions");
+    }, "MetadataBenchmarkingTool.run1() should complete without throwing exceptions");
 
-    LOG.info("MetadataBenchmarkingTool test completed successfully");
+    LOG.info("MetadataBenchmarkingTool test with 2 columns completed successfully");
+  }
+
+  @Test
+  public void testMetadataBenchmarkingToolRunWithOneColumn(@TempDir Path tempDir) {
+    LOG.info("Running MetadataBenchmarkingTool test with temp directory: {}", tempDir);
+
+    // Create config for MetadataBenchmarkingTool with 1 column (tenantID only)
+    MetadataBenchmarkingTool.Config config = new MetadataBenchmarkingTool.Config();
+    config.tableBasePath = tempDir.resolve("test_table_1col").toString();
+    config.numColumnsToIndex = 1; // tenantID only
+    config.colStatsFileGroupCount = 10;
+    config.numFiles = 100;
+    config.numPartitions = 3;
+
+    LOG.info("Test config: tableBasePath={}, numFiles={}, numPartitions={}, numColumnsToIndex={}, colStatsFileGroupCount={}",
+        config.tableBasePath, config.numFiles, config.numPartitions, config.numColumnsToIndex, config.colStatsFileGroupCount);
+
+    // Run MetadataBenchmarkingTool
+    assertDoesNotThrow(() -> {
+      try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(sparkSession, config)) {
+        metadataBenchmarkingTool.run1();
+      }
+    }, "MetadataBenchmarkingTool.run1() should complete without throwing exceptions");
+
+    LOG.info("MetadataBenchmarkingTool test with 1 column completed successfully");
   }
 }
 
