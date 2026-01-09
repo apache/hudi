@@ -410,6 +410,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
       conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
       conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+      conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    } else {
+      conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "false");
     }
   }
 

@@ -44,6 +44,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
+import org.apache.flink.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -100,7 +101,7 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * List state of the write metadata events.
    */
-  private transient ListState<WriteMetadataEvent> writeMetadataState;
+  protected transient ListState<WriteMetadataEvent> writeMetadataState;
 
   /**
    * List state of the JobID.
@@ -168,6 +169,8 @@ public abstract class AbstractStreamWriteFunction<I>
     reloadJobIdState();
     // Update checkpoint id
     this.checkpointId = functionSnapshotContext.getCheckpointId();
+    // reset current instant
+    this.currentInstant = null;
   }
 
   public abstract void snapshotState();
@@ -206,7 +209,7 @@ public abstract class AbstractStreamWriteFunction<I>
     this.checkpointId = restoredCheckpointId;
   }
 
-  private void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
+  protected void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
     if (attemptId <= 0) {
       if (isRestored) {
         HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
@@ -219,16 +222,23 @@ public abstract class AbstractStreamWriteFunction<I>
             event.setTaskID(taskID);
             // The checkpoint succeed but the meta does not commit,
             // re-commit the inflight instant
-            this.eventGateway.sendEventToCoordinator(event);
+            sendWriteMetadataEvent(event);
             log.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
           }
         }
       }
     } else {
       // otherwise sends an empty bootstrap event instead.
-      this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId));
+      sendWriteMetadataEvent(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId, isMetadataTable()));
       log.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
+  }
+
+  /**
+   * Send the write metadata event to the coordinator.
+   */
+  protected void sendWriteMetadataEvent(WriteMetadataEvent metadataEvent) {
+    this.eventGateway.sendEventToCoordinator(metadataEvent);
   }
 
   /**
@@ -242,9 +252,17 @@ public abstract class AbstractStreamWriteFunction<I>
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
         .bootstrap(true)
+        .metadataTable(isMetadataTable())
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
+  }
+
+  /**
+   * true if this is a write function that is used to streaming write index records to metadata table.
+   */
+  protected boolean isMetadataTable() {
+    return false;
   }
 
   /**
@@ -268,6 +286,15 @@ public abstract class AbstractStreamWriteFunction<I>
    * @return The instant time
    */
   protected String instantToWrite(boolean hasData) {
-    return this.correspondent.requestInstantTime(this.checkpointId);
+    return Preconditions.checkNotNull(this.correspondent.requestInstantTime(this.checkpointId),
+        "No in-flight instant for checkpoint id: " + checkpointId);
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (this.writeClient != null) {
+      this.writeClient.close();
+    }
+    super.close();
   }
 }

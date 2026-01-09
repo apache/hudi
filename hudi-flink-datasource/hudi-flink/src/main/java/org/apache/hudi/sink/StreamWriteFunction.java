@@ -21,7 +21,6 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
@@ -41,6 +41,7 @@ import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
+import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
 import org.apache.hudi.sink.transform.RecordConverter;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -52,12 +53,10 @@ import org.apache.hudi.util.StreamerUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
@@ -128,6 +127,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected final RowDataKeyGen keyGen;
 
+  private final boolean isStreamingIndexWriteEnabled;
+
   /**
    * Total size tracer.
    */
@@ -151,6 +152,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     super(config);
     this.rowType = rowType;
     this.keyGen = RowDataKeyGens.instance(config, rowType);
+    this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(config);
   }
 
   @Override
@@ -159,7 +161,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     initBuffer();
     initWriteFunction();
     initMergeClass();
-    initRecordConverter();
+    initConverter();
     registerMetrics();
   }
 
@@ -172,17 +174,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   @Override
-  public void processElement(HoodieFlinkInternalRow record,
-                             ProcessFunction<HoodieFlinkInternalRow, RowData>.Context ctx,
-                             Collector<RowData> out) throws Exception {
+  public void processElement(HoodieFlinkInternalRow record, Context ctx, Collector<RowData> out) throws Exception {
+    processIndexRow(record, out);
     bufferRecord(record);
-  }
-
-  @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.close();
-    }
   }
 
   /**
@@ -226,7 +220,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     }
   }
 
-  private void initRecordConverter() {
+  private void initConverter() {
     this.recordConverter = RecordConverter.getInstance(keyGen);
   }
 
@@ -252,6 +246,29 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    */
   private String getBucketID(String partitionPath, String fileId) {
     return StreamerUtil.generateBucketKey(partitionPath, fileId);
+  }
+
+  /**
+   * Process the record with index information and emit index rows to the downstream index write operator for index streaming write.
+   */
+  protected void processIndexRow(HoodieFlinkInternalRow record, Collector<RowData> out) {
+    if (!isStreamingIndexWriteEnabled) {
+      return;
+    }
+    switch (record.getOperationType()) {
+      case "I":
+      case "D":
+        if (this.currentInstant == null) {
+          this.currentInstant = instantToWrite(true);
+        }
+        out.collect(IndexRowUtils.createRecordIndexRow(record, currentInstant));
+        break;
+      case "U":
+        // for updates, we can skip updating RLI partition in MDT
+        break;
+      default:
+        throw new HoodieException("Unexpected bucket type: " + record.getInstantTime());
+    }
   }
 
   /**
@@ -289,9 +306,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    */
   protected void bufferRecord(HoodieFlinkInternalRow record) throws IOException {
     writeMetrics.markRecordIn();
-    // set operation type into rowkind of row.
-    record.getRowData().setRowKind(
-        RowKind.fromByteValue(HoodieOperation.fromName(record.getOperationType()).getValue()));
     final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
     // 1. try buffer the record into the memory pool
@@ -358,12 +372,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   private boolean flushBucket(RowDataBucket bucket) {
     String instant = instantToWrite(true);
 
-    if (instant == null) {
-      // in case there are empty checkpoints that has no input data
-      log.info("No inflight instant when flushing data, skip.");
-      return false;
-    }
-
     ValidationUtils.checkState(!bucket.isEmpty(), "Data bucket to flush has no buffering records");
     final List<WriteStatus> writeStatus = writeRecords(instant, bucket);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -383,10 +391,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   public void flushRemaining(boolean endInput) {
     writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
-    if (this.currentInstant == null) {
-      // in case there are empty checkpoints that has no input data
-      throw new HoodieException("No inflight instant when flushing data!");
-    }
     final List<WriteStatus> writeStatus;
     if (!buckets.isEmpty()) {
       writeStatus = new ArrayList<>();

@@ -293,6 +293,21 @@ public class FlinkOptions extends HoodieConfig {
           + "Default value is 1000, which is also the minimum value for the minibatch size, when the configured size\n"
           + "is less than 1000, the default value will be used.");
 
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_WRITE_BUFFER_SIZE = ConfigOptions
+      .key("index.rli.write.buffer.size")
+      .longType()
+      .defaultValue(100L) // default 100 MB
+      .withDescription("Maximum memory in MB for the buffer of index record writing operator, when the threshold hits, \n"
+          + "it flushes the index data to avoid OOM, default 100MB.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_WRITE_TASKS = ConfigOptions
+      .key("index.write.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do the index writing, default is the parallelism of the execution environment");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------

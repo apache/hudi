@@ -199,7 +199,7 @@ public class OptionsResolver {
   /**
    * Returns whether {@link org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction} should be used for bucket assigning.
    */
-  public static boolean isMiniBatchBucketAssign(Configuration conf) {
+  public static boolean isRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
@@ -430,6 +430,15 @@ public class OptionsResolver {
         conf.getString(
             HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()));
+  }
+
+  /**
+   * Returns whether to streaming write to metadata table is enabled.
+   */
+  public static boolean isStreamingIndexWriteEnabled(Configuration conf) {
+    return conf.get(FlinkOptions.METADATA_ENABLED)
+        && OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        && WriteOperationType.streamingWritesToMetadataSupported(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
   }
 
   /**

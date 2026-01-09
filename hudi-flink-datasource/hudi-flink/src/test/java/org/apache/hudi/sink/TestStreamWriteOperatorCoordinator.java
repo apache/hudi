@@ -168,26 +168,26 @@ public class TestStreamWriteOperatorCoordinator {
         .build();
     coordinator.handleEventFromOperator(0, event1);
     coordinator.subtaskFailed(0, null);
-    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+    assertNotNull(coordinator.getEventBuffer().getLeft()[0], "Events should not be cleared by subTask failure");
 
     OperatorEvent event2 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event2);
     coordinator.subtaskFailed(0, null);
-    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+    assertNotNull(coordinator.getEventBuffer().getLeft()[0], "Events should not be cleared by subTask failure");
 
     OperatorEvent event3 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event3);
     assertThat("Multiple events of same instant should be merged",
-        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer().getLeft()[0].getWriteStatuses().size(), is(1));
 
     long nextCkpId = 1;
     coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(nextCkpId));
     OperatorEvent event4 = createOperatorEvent(0, nextCkpId, "002", "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event4);
     assertThat("First instant is not committed yet, new event should not override the old event",
-        coordinator.getEventBuffer(0)[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer(0).getLeft()[0].getWriteStatuses().size(), is(1));
     assertThat("Second instant should have one newly added write status",
-        coordinator.getEventBuffer(1)[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer(1).getLeft()[0].getWriteStatuses().size(), is(1));
   }
 
   @Test

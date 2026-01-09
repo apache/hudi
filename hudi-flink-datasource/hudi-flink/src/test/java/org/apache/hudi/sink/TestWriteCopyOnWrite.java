@@ -50,6 +50,7 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -61,8 +62,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -116,9 +117,15 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
-  @Test
-  public void testSubtaskFails() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class,  names = {"FLINK_STATE", "GLOBAL_RECORD_LEVEL_INDEX"})
+  public void testSubtaskFails(HoodieIndex.IndexType indexType) throws Exception {
     conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.INDEX_TYPE, indexType.name());
+    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+      conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+      conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    }
     // open the function and ingest data
     preparePipeline()
         .checkpoint(1)
@@ -155,6 +162,26 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // another checkpoint ack event would trigger the recommit of restored instant.
         .checkLastPendingInstantCompleted()
         .end();
+
+    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+      HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+          HoodieFlinkEngineContext.DEFAULT,
+          metaClient.getStorage(),
+          StreamerUtil.metadataConfig(conf),
+          conf.get(FlinkOptions.PATH));
+
+      // validate the record level index data
+      Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(
+          metadataTable.readRecordIndexLocationsWithKeys(
+              HoodieListData.eager(Arrays.asList("id1", "id2", "id3", "id4"))));
+      assertEquals(4, result.size());
+      result.values().forEach(location -> {
+        assertNotNull(location.getInstantTime());
+        assertNotNull(location.getFileId());
+        assertNotNull(location.getPartitionPath());
+      });
+    }
   }
 
   @Test
@@ -831,8 +858,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testBucketAssignWithRLI() throws Exception {
     // use record level index
-    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
     TestHarness testHarness =
         preparePipeline(conf)
             .consume(TestData.DATA_SET_INSERT)
@@ -868,8 +896,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testCacheCleanOfRecordIndexBackend() throws Exception {
     // use record level index
-    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
     preparePipeline(conf)
         // should be initialized with 1 inflight caches
         .assertInflightCachesOfBucketAssigner(1)
@@ -882,5 +911,85 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // clean the first inflight cache, left the latest inflight cache.
         .assertInflightCachesOfBucketAssigner(1)
         .checkWrittenData(EXPECTED1);
+  }
+
+  @Test
+  public void testIndexWriteFunctionWithCheckpoint() throws Exception {
+    // Test IndexWriteFunction with checkpoint operations
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        // instant will be eagerly request when stream index write is enabled,
+        // so the event buffer will be eagerly initialized for the instant.
+        .initialEventBuffer()
+        // no checkpoint, so the coordinator does not accept any events
+        .checkpoint(1)
+        .allDataFlushed()
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        // should only contain write event for record index partition
+        .assertIndexEvent("record_index")
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED1)
+        .end();
+  }
+
+  @Test
+  public void testIndexWriteFunctionWithMultipleCheckpoints() throws Exception {
+    // Test IndexWriteFunction with multiple checkpoint operations
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+
+    TestHarness testHarness =
+        preparePipeline()
+            .consume(TestData.DATA_SET_INSERT)
+            .checkpoint(1)
+            .assertNextEvent(4, "par1,par2,par3,par4")
+            .checkpointComplete(1)
+            .checkWrittenData(EXPECTED1);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // validate the record level index data
+    String firstCommitTime = TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
+    Map<String, String> expectedKeyPartitionMap = new HashMap<>();
+    for (RowData rowData: TestData.DATA_SET_INSERT) {
+      expectedKeyPartitionMap.put(rowData.getString(0).toString(), rowData.getString(4).toString());
+    }
+    Map<String, HoodieRecordGlobalLocation> result =
+        getRecordKeyIndex(metaClient, Arrays.asList("id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8"));
+    assertEquals(8, result.size());
+    result.forEach((key, value) -> {
+      assertEquals(firstCommitTime, value.getInstantTime());
+      assertEquals(expectedKeyPartitionMap.get(key), value.getPartitionPath());
+    });
+
+    testHarness.consume(TestData.DATA_SET_GLOBAL_UPDATE_INSERT)
+        .checkpoint(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED6)
+        .end();
+
+    // update expected key partition map
+    for (RowData rowData: TestData.DATA_SET_GLOBAL_UPDATE_INSERT) {
+      expectedKeyPartitionMap.put(rowData.getString(0).toString(), rowData.getString(4).toString());
+    }
+    result =
+        getRecordKeyIndex(metaClient, Arrays.asList("id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "id9", "id10", "id11"));
+    assertEquals(11, result.size());
+    result.forEach((key, value) -> assertEquals(expectedKeyPartitionMap.get(key), value.getPartitionPath()));
+  }
+
+  private Map<String, HoodieRecordGlobalLocation> getRecordKeyIndex(HoodieTableMetaClient metaClient, List<String> keys) {
+    HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+    return HoodieDataUtils.dedupeAndCollectAsMap(
+        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keys)));
   }
 }

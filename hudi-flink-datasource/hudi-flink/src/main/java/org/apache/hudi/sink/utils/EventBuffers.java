@@ -41,11 +41,13 @@ import java.util.stream.Stream;
 public class EventBuffers implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  // {checkpointId -> (instant, events)}
-  private final Map<Long, Pair<String, WriteMetadataEvent[]>> eventBuffers;
+  // {checkpointId -> (instant, data write events, index write events)}
+  private final Map<Long, Pair<String, Pair<WriteMetadataEvent[], WriteMetadataEvent[]>>> eventBuffers;
   private final Option<CommitGuard> commitGuardOption;
 
-  private EventBuffers(Map<Long, Pair<String, WriteMetadataEvent[]>> eventBuffers, Option<CommitGuard> commitGuardOption) {
+  private EventBuffers(
+      Map<Long, Pair<String, Pair<WriteMetadataEvent[], WriteMetadataEvent[]>>> eventBuffers,
+      Option<CommitGuard> commitGuardOption) {
     this.eventBuffers = eventBuffers;
     this.commitGuardOption = commitGuardOption;
   }
@@ -57,37 +59,48 @@ public class EventBuffers implements Serializable {
   }
 
   /**
-   * Checks the buffer is ready to commit.
+   * Checks the buffer is ready to recommit on bootstrap.
    */
-  public static boolean allEventsReceived(WriteMetadataEvent[] eventBuffer) {
-    return Arrays.stream(eventBuffer)
-        // we do not use event.isReady to check the instant
-        // because the write task may send an event eagerly for empty
-        // data set, the even may have a timestamp of last committed instant.
-        .allMatch(event -> event != null && event.isLastBatch());
+  public static boolean allBootstrapEventsReceived(Pair<WriteMetadataEvent[], WriteMetadataEvent[]> eventBufferPair) {
+    return Arrays.stream(eventBufferPair.getLeft()).allMatch(event -> event != null && event.isBootstrap())
+        // all index write metadata events are received.
+        && Arrays.stream(eventBufferPair.getRight()).allMatch(event -> event != null && event.isBootstrap());
   }
 
-  public WriteMetadataEvent[] addEventToBuffer(WriteMetadataEvent event) {
-    WriteMetadataEvent[] eventBuffer = this.eventBuffers.get(event.getCheckpointId()).getRight();
+  /**
+   * Checks the buffer is ready to commit.
+   */
+  public static boolean allEventsReceived(Pair<WriteMetadataEvent[], WriteMetadataEvent[]> eventBufferPair) {
+    // we do not use event.isReady to check the instant
+    // because the write task may send an event eagerly for empty
+    // data set, the even may have a timestamp of last committed instant.
+    return Arrays.stream(eventBufferPair.getLeft()).allMatch(event -> event != null && event.isLastBatch())
+        // all index write metadata events are received.
+        && Arrays.stream(eventBufferPair.getRight()).allMatch(event -> event != null && event.isLastBatch());
+  }
+
+  public Pair<WriteMetadataEvent[], WriteMetadataEvent[]> addEventToBuffer(WriteMetadataEvent event) {
+    Pair<WriteMetadataEvent[], WriteMetadataEvent[]> eventBufferPair = this.eventBuffers.get(event.getCheckpointId()).getRight();
+    WriteMetadataEvent[] eventBuffer = event.isMetadataTable() ? eventBufferPair.getRight() : eventBufferPair.getLeft();
     if (eventBuffer[event.getTaskID()] != null
         && eventBuffer[event.getTaskID()].getInstantTime().equals(event.getInstantTime())) {
       eventBuffer[event.getTaskID()].mergeWith(event);
     } else {
       eventBuffer[event.getTaskID()] = event;
     }
-    return eventBuffer;
+    return eventBufferPair;
   }
 
-  public void addEventsToBuffer(Map<Long, Pair<String, WriteMetadataEvent[]>> events) {
+  public void addEventsToBuffer(Map<Long, Pair<String, Pair<WriteMetadataEvent[], WriteMetadataEvent[]>>> events) {
     this.eventBuffers.putAll(events);
   }
 
   /**
    * Returns existing bootstrap buffer or creates a new one.
    */
-  public WriteMetadataEvent[] getOrCreateBootstrapBuffer(WriteMetadataEvent event, int parallelism) {
+  public Pair<WriteMetadataEvent[], WriteMetadataEvent[]> getOrCreateBootstrapBuffer(WriteMetadataEvent event, int parallelism, int indexWriteParallelism) {
     return this.eventBuffers.computeIfAbsent(event.getCheckpointId(),
-        ckpId -> Pair.of(event.getInstantTime(), new WriteMetadataEvent[parallelism])).getRight();
+        ckpId -> Pair.of(event.getInstantTime(), Pair.of(new WriteMetadataEvent[parallelism], new WriteMetadataEvent[indexWriteParallelism]))).getRight();
   }
 
   /**
@@ -97,10 +110,11 @@ public class EventBuffers implements Serializable {
     this.eventBuffers.entrySet().stream()
         .filter(entry -> entry.getKey().compareTo(event.getCheckpointId()) >= 0)
         .map(entry -> entry.getValue().getRight())
-        .forEach(eventBuffer -> resetBufferAt(eventBuffer, event.getTaskID()));
+        .forEach(eventBuffer -> resetBufferAt(eventBuffer, event.getTaskID(), event.isMetadataTable()));
   }
 
-  private static void resetBufferAt(WriteMetadataEvent[] eventBuffer, int idx) {
+  private static void resetBufferAt(Pair<WriteMetadataEvent[], WriteMetadataEvent[]> eventBufferPair, int idx, boolean isMetadataTable) {
+    WriteMetadataEvent[] eventBuffer = isMetadataTable ? eventBufferPair.getRight() : eventBufferPair.getLeft();
     if (eventBuffer.length > idx) {
       eventBuffer[idx] = null;
     }
@@ -109,19 +123,19 @@ public class EventBuffers implements Serializable {
   /**
    * Returns the pair of instant time and event buffer.
    */
-  public Pair<String, WriteMetadataEvent[]> getInstantAndEventBuffer(long checkpointId) {
+  public Pair<String, Pair<WriteMetadataEvent[], WriteMetadataEvent[]>> getInstantAndEventBuffer(long checkpointId) {
     return this.eventBuffers.get(checkpointId);
   }
 
-  public WriteMetadataEvent[] getLatestEventBuffer(String instantTime) {
+  public Pair<WriteMetadataEvent[], WriteMetadataEvent[]> getLatestEventBuffer(String instantTime) {
     return eventBuffers.values().stream().filter(val -> val.getLeft().equals(instantTime)).findFirst().map(Pair::getRight).orElse(null);
   }
 
-  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+  public Pair<WriteMetadataEvent[], WriteMetadataEvent[]> getEventBuffer(long checkpointId) {
     return Option.ofNullable(this.eventBuffers.get(checkpointId)).map(Pair::getRight).orElse(null);
   }
 
-  public Stream<Map.Entry<Long, Pair<String, WriteMetadataEvent[]>>> getEventBufferStream() {
+  public Stream<Map.Entry<Long, Pair<String, Pair<WriteMetadataEvent[], WriteMetadataEvent[]>>>> getEventBufferStream() {
     return this.eventBuffers.entrySet().stream();
   }
 
@@ -131,8 +145,8 @@ public class EventBuffers implements Serializable {
     return result;
   }
 
-  public void initNewEventBuffer(long checkpointId, String instantTime, int parallelism) {
-    this.eventBuffers.put(checkpointId, Pair.of(instantTime, new WriteMetadataEvent[parallelism]));
+  public void initNewEventBuffer(long checkpointId, String instantTime, int parallelism, int indexWriteParallelism) {
+    this.eventBuffers.put(checkpointId, Pair.of(instantTime, Pair.of(new WriteMetadataEvent[parallelism], new WriteMetadataEvent[indexWriteParallelism])));
   }
 
   public void awaitAllInstantsToCompleteIfNecessary() {
@@ -149,7 +163,8 @@ public class EventBuffers implements Serializable {
   public boolean nonEmpty() {
     return this.eventBuffers.values().stream()
         .map(Pair::getValue)
-        .flatMap(Arrays::stream).anyMatch(Objects::nonNull);
+        .flatMap(pair -> Stream.concat(Arrays.stream(pair.getLeft()), Arrays.stream(pair.getRight())))
+        .anyMatch(Objects::nonNull);
   }
 
   public String getPendingInstants() {
@@ -159,9 +174,11 @@ public class EventBuffers implements Serializable {
   /**
    * Get write metadata events where there exists no event sent by eager flushing from writers.
    */
-  public Map<Long, Pair<String, WriteMetadataEvent[]>> getAllCompletedEvents() {
+  public Map<Long, Pair<String, Pair<WriteMetadataEvent[], WriteMetadataEvent[]>>> getAllCompletedEvents() {
     return this.eventBuffers.entrySet().stream()
-        .filter(entry -> Arrays.stream(entry.getValue().getRight()).allMatch(event -> event == null || event.isLastBatch()))
+        .filter(entry ->
+            Stream.concat(Arrays.stream(entry.getValue().getRight().getLeft()), Arrays.stream(entry.getValue().getRight().getRight()))
+                .allMatch(event -> event == null || event.isLastBatch()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 }

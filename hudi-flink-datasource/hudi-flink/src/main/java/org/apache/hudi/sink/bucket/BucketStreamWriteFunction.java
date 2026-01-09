@@ -128,6 +128,11 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     bufferRecord(record);
   }
 
+  @Override
+  protected void processIndexRow(HoodieFlinkInternalRow record, Collector<RowData> out) {
+    // do nothing
+  }
+
   private void defineRecordLocation(HoodieFlinkInternalRow record) {
     final String partition = record.getPartitionPath();
     // for insert overwrite operation skip `bucketIndex` loading
