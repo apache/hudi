@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Unit tests for {@link HoodieFlinkRecord}.
@@ -175,19 +176,27 @@ public class TestHoodieFlinkRecord {
     String[] orderingFields = new String[]{"timestamp", "sequence"};
 
     Comparable<?> orderingValue = record.getOrderingValue(schema, props, orderingFields);
-    assertEquals(false, orderingValue.equals(OrderingValues.getDefault()));
+    assertNotEquals(OrderingValues.getDefault(), orderingValue);
   }
 
   @Test
   public void testGetRecordKeyWithMetadataField() {
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("_hoodie_commit_time", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("_hoodie_commit_seqno", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
         HoodieSchemaField.of("_hoodie_record_key", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("_hoodie_partition_path", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("_hoodie_file_name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
     ));
 
     GenericRowData rowData = GenericRowData.of(
-        StringData.fromString("record-key-001"),
-        StringData.fromString("id-001")
+        StringData.fromString("20240101000000"),  // commit_time
+        StringData.fromString("seq-1"),             // commit_seqno
+        StringData.fromString("record-key-001"),    // record_key at position 2
+        StringData.fromString("partition-1"),       // partition_path
+        StringData.fromString("file-1"),            // file_name
+        StringData.fromString("id-001")             // id
     );
 
     HoodieFlinkRecord record = new HoodieFlinkRecord(rowData);
