@@ -23,12 +23,16 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Test cases for {@link MetadataBenchmarkingTool}.
@@ -78,7 +82,7 @@ public class TestMetadataBenchmarkingTool {
     // Run MetadataBenchmarkingTool
     assertDoesNotThrow(() -> {
       try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(sparkSession, config)) {
-        metadataBenchmarkingTool.run1();
+        metadataBenchmarkingTool.run();
       }
     }, "MetadataBenchmarkingTool.run1() should complete without throwing exceptions");
 
@@ -103,11 +107,58 @@ public class TestMetadataBenchmarkingTool {
     // Run MetadataBenchmarkingTool
     assertDoesNotThrow(() -> {
       try (MetadataBenchmarkingTool metadataBenchmarkingTool = new MetadataBenchmarkingTool(sparkSession, config)) {
-        metadataBenchmarkingTool.run1();
+        metadataBenchmarkingTool.run();
       }
     }, "MetadataBenchmarkingTool.run1() should complete without throwing exceptions");
 
     LOG.info("MetadataBenchmarkingTool test with 1 column completed successfully");
+  }
+
+  /**
+   * Test getPartitionFilter method with various numPartitions values.
+   * Validates that the filter correctly excludes ~25% of partitions.
+   */
+  @ParameterizedTest
+  @CsvSource({
+      "1, ''",                           // Single partition - no filtering possible
+      "2, dt > '2020-01-01'",            // 2 partitions: exclude 1 (50%), keeps 1
+      "3, dt > '2020-01-01'",            // 3 partitions: ceil(0.75)=1 excluded, keeps 2 (66%)
+      "4, dt > '2020-01-01'",            // 4 partitions: ceil(1)=1 excluded, keeps 3 (75%)
+      "10, dt > '2020-01-03'",           // 10 partitions: ceil(2.5)=3 excluded, keeps 7 (70%)
+      "100, dt > '2020-01-25'"           // 100 partitions: ceil(25)=25 excluded, keeps 75 (75%)
+  })
+  public void testGetPartitionFilter(int numPartitions, String expectedFilter) throws Exception {
+    LOG.info("Testing getPartitionFilter with numPartitions={}", numPartitions);
+
+    // Create config with specified numPartitions
+    MetadataBenchmarkingTool.Config config = new MetadataBenchmarkingTool.Config();
+    config.tableBasePath = "/tmp/test_partition_filter";
+    config.numPartitions = numPartitions;
+    config.numColumnsToIndex = 1;
+    config.colStatsFileGroupCount = 1;
+    config.numFiles = 10;
+
+    // Use reflection to call private getPartitionFilter method
+    MetadataBenchmarkingTool tool = new MetadataBenchmarkingTool(sparkSession, config);
+    Method method = MetadataBenchmarkingTool.class.getDeclaredMethod("getPartitionFilter");
+    method.setAccessible(true);
+    String actualFilter = (String) method.invoke(tool);
+
+    LOG.info("numPartitions={}, expectedFilter='{}', actualFilter='{}'", numPartitions, expectedFilter, actualFilter);
+
+    assertEquals(expectedFilter, actualFilter,
+        String.format("Partition filter mismatch for numPartitions=%d", numPartitions));
+
+    // Calculate and log the expected data retention percentage
+    if (numPartitions > 1) {
+      int numPartitionsToExclude = (int) Math.ceil(numPartitions * 0.25);
+      int partitionsKept = numPartitions - numPartitionsToExclude;
+      double retentionPercentage = (partitionsKept * 100.0) / numPartitions;
+      LOG.info("numPartitions={}: excluding {} partitions, keeping {} partitions ({}%)",
+          numPartitions, numPartitionsToExclude, partitionsKept, String.format("%.1f", retentionPercentage));
+    }
+
+    tool.close();
   }
 }
 
