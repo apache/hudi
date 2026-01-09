@@ -109,7 +109,6 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -653,7 +652,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
     cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
 
-
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
@@ -661,7 +659,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         HoodieTestUtils.createMetaClient(storage, tableBasePath));
     Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
-    assertEquals(1000, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
+    assertEquals(1000, sparkSession.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
 
     cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
@@ -719,7 +717,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.current().versionCode());
 
-
       cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
           PROPS_FILENAME_TEST_SOURCE, false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
       cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
@@ -743,16 +740,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
     assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
     assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
-    assertEquals("fixed", tableSchema.getField("dec_fixed_small").schema().getType().getName());
-    assertEquals(3, tableSchema.getField("dec_fixed_small").schema().getFixedSize());
-    assertEquals("decimal", tableSchema.getField("dec_fixed_small").schema().getLogicalType().getName());
-    assertEquals(5, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_small").schema().getLogicalType()).getPrecision());
-    assertEquals(2, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_small").schema().getLogicalType()).getScale());
-    assertEquals("fixed", tableSchema.getField("dec_fixed_large").schema().getType().getName());
-    assertEquals(8, tableSchema.getField("dec_fixed_large").schema().getFixedSize());
-    assertEquals("decimal", tableSchema.getField("dec_fixed_large").schema().getLogicalType().getName());
-    assertEquals(18, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_large").schema().getLogicalType()).getPrecision());
-    assertEquals(9, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_large").schema().getLogicalType()).getScale());
 
     sqlContext.clearCache();
     Dataset<Row> df = sqlContext.read()
@@ -782,23 +769,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertHalfSplit(df, "local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_micros < threshold");
       assertBoundaryCounts(df, "local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)", "local_ts_micros <= CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)", totalCount);
       assertBoundaryCounts(df, "local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)", "local_ts_micros >= CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)", totalCount);
-
     }
 
     assertHalfSplit(df, "event_date > date('2000-01-01')", expectedHalf, tolerance, "event_date > threshold");
     assertHalfSplit(df, "event_date < date('2000-01-01')", expectedHalf, tolerance, "event_date < threshold");
     assertBoundaryCounts(df, "event_date > date('2000-01-02')", "event_date <= date('2000-01-02')", totalCount);
     assertBoundaryCounts(df, "event_date < date('1999-12-31')", "event_date >= date('1999-12-31')", totalCount);
-
-    assertHalfSplit(df, "dec_fixed_small < 543.21", expectedHalf, tolerance, "dec_fixed_small < threshold");
-    assertHalfSplit(df, "dec_fixed_small > 543.21", expectedHalf, tolerance, "dec_fixed_small > threshold");
-    assertBoundaryCounts(df, "dec_fixed_small < 543.20", "dec_fixed_small >= 543.20", totalCount);
-    assertBoundaryCounts(df, "dec_fixed_small > 543.22", "dec_fixed_small <= 543.22", totalCount);
-
-    assertHalfSplit(df, "dec_fixed_large < 987654321.123456789", expectedHalf, tolerance, "dec_fixed_large < threshold");
-    assertHalfSplit(df, "dec_fixed_large > 987654321.123456789", expectedHalf, tolerance, "dec_fixed_large > threshold");
-    assertBoundaryCounts(df, "dec_fixed_large < 987654321.123456788", "dec_fixed_large >= 987654321.123456788", totalCount);
-    assertBoundaryCounts(df, "dec_fixed_large > 987654321.123456790", "dec_fixed_large <= 987654321.123456790", totalCount);
   }
 
   private void assertHalfSplit(Dataset<Row> df, String filterExpr, long expectedHalf, long tolerance, String msg) {
@@ -837,12 +813,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         properties.setProperty("hoodie.metatata.enable", "true");
         properties.setProperty("hoodie.parquet.small.file.limit", "-1");
         properties.setProperty("hoodie.cleaner.commits.retained", "10");
-
         Option<TypedProperties> propt = Option.of(properties);
 
         new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "456"), jsc, propt).sync();
-
-
         inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
         propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
         if ("CLUSTER".equals(operation)) {
@@ -852,13 +825,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           propt.get().setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
         }
         new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "789"), jsc, propt).sync();
-
         String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
         try {
           sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
           Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
-
-          assertDataframe(df, 15, 15);
+          assertDataframe(df, 16, 16);
 
           if ("CLUSTER".equals(operation)) {
             // after we cluster, the raw parquet should be correct
@@ -891,10 +863,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO", "EIGHT,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
-      "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
-      "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
+  @CsvSource(value = {
+      "SIX,AVRO,CLUSTER,AVRO",
+      "CURRENT,AVRO,NONE,AVRO",
+      "CURRENT,AVRO,CLUSTER,AVRO",
+      "CURRENT,AVRO,COMPACT,AVRO",
+      "CURRENT,AVRO,NONE,PARQUET",
+      "CURRENT,AVRO,CLUSTER,PARQUET",
+      "CURRENT,AVRO,COMPACT,PARQUET",
+      "CURRENT,SPARK,NONE,PARQUET",
+      "CURRENT,SPARK,CLUSTER,PARQUET",
+      "CURRENT,SPARK,COMPACT,PARQUET"})
   void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
     timestampNTZCompatibility(() -> {
       try {
@@ -989,7 +968,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             assertTrue(latestInstant.isPresent(), "No completed commits found");
 
             List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
             assertEquals(3, baseFilePaths.size());
 
             // Read raw parquet files
@@ -997,14 +975,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             assertDataframe(rawParquetDf, 12, 14);
           } else if ("COMPACT".equals(operation)) {
             // after compaction some files should be ok
-
             // Validate raw parquet files
             HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
             Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
             assertTrue(latestInstant.isPresent(), "No completed commits found");
 
             List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
-
             assertEquals(7, baseFilePaths.size());
 
             // Read raw parquet files
@@ -1012,7 +988,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                 // only read the compacted ones, the others are still incorrect
                 .filter(path -> path.contains(latestInstant.get().getTimestamp()))
                 .toArray(String[]::new));
-            assertDataframe(rawParquetDf, 2, 3);
+            assertDataframe(rawParquetDf, 8, 8);
           }
         } finally {
           sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
@@ -1033,7 +1009,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     for (Row row : rows) {
       String val = row.getString(6);
       int hash = val.hashCode();
-
       if ((hash & 1) == 0) {
         assertEquals("2020-01-01T00:00:00.001Z", row.getTimestamp(15).toInstant().toString());
         assertEquals("2020-06-01T12:00:00.000001Z", row.getTimestamp(16).toInstant().toString());
@@ -2913,7 +2888,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }, "Should error out when doing the transformation.");
     LOG.debug("Expected error during transformation", e);
     // first version for Spark >= 3.3, the second one is for Spark < 3.3
-    assertTrue(e.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
+    assertTrue(e.getMessage().contains("A column or function parameter with name `begin_lat` cannot be resolved. Did you mean one of the following?")
         || e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 

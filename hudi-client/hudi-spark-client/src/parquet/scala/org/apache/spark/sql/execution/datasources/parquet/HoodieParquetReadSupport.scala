@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
@@ -29,18 +30,17 @@ import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import java.time.ZoneId
 import scala.collection.JavaConverters._
 
-class HoodieParquetReadSupport(
-                                convertTz: Option[ZoneId],
-                                enableVectorizedReader: Boolean,
-                                val enableTimestampFieldRepair: Boolean,
-                                datetimeRebaseSpec: RebaseSpec,
-                                int96RebaseSpec: RebaseSpec,
-                                tableSchemaOpt: org.apache.hudi.common.util.Option[MessageType] = org.apache.hudi.common.util.Option.empty())
+class HoodieParquetReadSupport(convertTz: Option[ZoneId],
+                               enableVectorizedReader: Boolean,
+                               val enableTimestampFieldRepair: Boolean,
+                               datetimeRebaseSpec: RebaseSpec,
+                               int96RebaseSpec: RebaseSpec,
+                               tableSchemaOpt: HOption[MessageType] = HOption.empty())
   extends ParquetReadSupport(convertTz, enableVectorizedReader, datetimeRebaseSpec, int96RebaseSpec) with SparkAdapterSupport {
 
   override def init(context: InitContext): ReadContext = {
     val readContext = super.init(context)
-    // repair is needed here because this is the schema that is used by the reader to decide what
+    // Repairing is needed here because this is the schema that is used by the reader to decide what
     // conversions are necessary
     val requestedParquetSchema = if (enableTimestampFieldRepair) {
       HoodieParquetReadSupport.getRepairedSchema(readContext.getRequestedSchema, tableSchemaOpt)
@@ -101,7 +101,8 @@ object HoodieParquetReadSupport {
     }
   }
 
-  def getRepairedSchema(fileSchema: MessageType, tableSchema: org.apache.hudi.common.util.Option[MessageType]): MessageType = {
+  def getRepairedSchema(fileSchema: MessageType,
+                        tableSchema: org.apache.hudi.common.util.Option[MessageType]): MessageType = {
     try {
       val schemaRepairClass = Class.forName("org.apache.parquet.schema.SchemaRepair")
       val repairMethod = schemaRepairClass.getMethod(

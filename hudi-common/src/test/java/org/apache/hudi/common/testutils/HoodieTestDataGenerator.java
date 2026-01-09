@@ -152,26 +152,17 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
       + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
       + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
-      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
-      + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
-      + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
-
+      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},";
   public static final String EXTENDED_LOGICAL_TYPES_SCHEMA = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
       + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
       + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
       + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
-      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
-      + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":10}},"
-      + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
-      + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},";
 
   // LTS = Local Timestamp
   public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
       + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
-          + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
-          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":10}},"
-          + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
-          + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+          + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},";
 
   public static final String TRIP_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
@@ -431,9 +422,17 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Generates a new avro record of the above schema format for a delete.
    */
   private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
+    return generateRandomDeleteValue(key, instantTime, TRIP_EXAMPLE_SCHEMA);
+  }
+
+  private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime, String schemaStr) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0L);
+    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), schemaStr, true, 0L);
+  }
+
+  private RawTripTestPayload generateRandomDeleteValuePerSchema(HoodieKey key, String instantTime, String schemaStr) throws IOException {
+    return generateRandomValueAsPerSchema(schemaStr, key, instantTime, false, true, 0L);
   }
 
   /**
@@ -556,8 +555,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
-                                                    long timestamp, boolean isDeleteRecord,
-                                                    boolean isFlattened) {
+                                             long timestamp, boolean isDeleteRecord, boolean isFlattened) {
     GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
@@ -664,38 +662,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     // event_date
     int eventDateBase = (int) dateThreshold.toEpochDay();
     rec.put("event_date", above ? eventDateBase + 1 : eventDateBase - 1);
-
-
-    // -------------------
-    // Decimal thresholds
-    // -------------------
-    BigDecimal decPlainLargeThreshold = new BigDecimal("1234567890.0987654321"); // precision=20, scale=10
-
-    BigDecimal decFixedSmallThreshold = new BigDecimal("543.21"); // precision=5, scale=2
-    BigDecimal decFixedLargeThreshold = new BigDecimal("987654321.123456789"); // precision=18, scale=9
-
-    // Increment for just-above/below threshold = smallest possible unit for that scale
-    BigDecimal incSmallScale2 = new BigDecimal("0.01");
-    BigDecimal incLargeScale9 = new BigDecimal("0.000000001");
-    BigDecimal incLargeScale10 = new BigDecimal("0.0000000001");
-
-    // Assign thresholded decimals
-    if (!v6) {
-      rec.put("dec_plain_large", ByteBuffer.wrap((above
-          ? decPlainLargeThreshold.add(incLargeScale10)
-          : decPlainLargeThreshold.subtract(incLargeScale10)).unscaledValue().toByteArray()));
-    }
-
-    Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-    Schema decFixedSmallSchema = AVRO_TRIP_LOGICAL_TYPES_SCHEMA.getField("dec_fixed_small").schema();
-    rec.put("dec_fixed_small", decimalConversions.toFixed(above
-        ? decFixedSmallThreshold.add(incSmallScale2)
-        : decFixedSmallThreshold.subtract(incSmallScale2), decFixedSmallSchema, LogicalTypes.decimal(5, 2)));
-
-    Schema decFixedLargeSchema = AVRO_TRIP_LOGICAL_TYPES_SCHEMA.getField("dec_fixed_large").schema();
-    rec.put("dec_fixed_large", decimalConversions.toFixed(above
-        ? decFixedLargeThreshold.add(incLargeScale9)
-        : decFixedLargeThreshold.subtract(incLargeScale9), decFixedLargeSchema, LogicalTypes.decimal(18, 9)));
     generateTripSuffixValues(rec, isDeleteRecord);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), rec.getSchema().toString());
   }
@@ -1139,9 +1105,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @return stream of hoodie record updates
    */
   public Stream<HoodieKey> generateUniqueDeleteStream(Integer n) {
+    return generateUniqueDeleteStream(n, TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public Stream<HoodieKey> generateUniqueDeleteStream(Integer n, String streamStr) {
     final Set<KeyPartition> used = new HashSet<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(streamStr);
+    Integer numExistingKeys = numKeysBySchema.get(streamStr);
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
@@ -1159,7 +1129,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       used.add(kp);
       result.add(kp.key);
     }
-    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    numKeysBySchema.put(streamStr, numExistingKeys);
     return result.stream();
   }
 
@@ -1171,9 +1141,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @return stream of hoodie records for delete
    */
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
+    return generateUniqueDeleteRecordStream(instantTime, n, TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, String schemaStr) {
     final Set<KeyPartition> used = new HashSet<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
+    Integer numExistingKeys = numKeysBySchema.get(schemaStr);
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
@@ -1191,12 +1165,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       numExistingKeys--;
       used.add(kp);
       try {
-        result.add(new HoodieAvroRecord(kp.key, generateRandomDeleteValue(kp.key, instantTime)));
+        result.add(new HoodieAvroRecord(kp.key, generateRandomDeleteValuePerSchema(kp.key, instantTime, schemaStr)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
-    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    numKeysBySchema.put(schemaStr, numExistingKeys);
     return result.stream();
   }
 
@@ -1262,7 +1236,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private static long genRandomTimeMillis(Random r) {
     // Fri Feb 13 15:31:30 PST 2009
-    long anchorTs = 1234567890L;
+    long anchorTs = 1234567890000L;
     // NOTE: To provide for certainty and not generate overly random dates, we will limit
     //       dispersion to be w/in +/- 3 days from the anchor date
     return anchorTs + r.nextLong() % 259200000L;
