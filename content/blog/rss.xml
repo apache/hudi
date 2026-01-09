@@ -4,10 +4,127 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 29 Dec 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 09 Jan 2026 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Apache Hudi 1.1 Deep Dive: Async Instant Time Generation for Flink Writers]]></title>
+            <link>https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen</link>
+            <guid>https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen</guid>
+            <pubDate>Fri, 09 Jan 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[---]]></description>
+            <content:encoded><![CDATA[<hr>
+<p><em>This blog was translated from the <a href="https://mp.weixin.qq.com/s/3r06DFdkaiGkF1_7NiovZw" target="_blank" rel="noopener noreferrer" class="">original blog in Chinese</a>.</em></p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="background">Background<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#background" class="hash-link" aria-label="Direct link to Background" title="Direct link to Background" translate="no">​</a></h2>
+<p>Before the Hudi 1.1 release, in order to guarantee the exactly-once semantics of the Hudi Flink sink, a new instant could only be generated after the previous instant was successfully committed to Hudi. During this period, Flink writers had to block and wait. Starting from Hudi 1.1, we introduce a new asynchronous instant generation mechanism for Flink writers. This approach allows writers to request the next instant even before the previous one has been committed successfully. At the same time, it still ensures the ordering and consistency of multi-transaction commits. In the following sections, we will first briefly introduce some of Hudi's basic concepts, and then dive into the details of asynchronous instant time generation.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="instant-time">Instant Time<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#instant-time" class="hash-link" aria-label="Direct link to Instant Time" title="Direct link to Instant Time" translate="no">​</a></h2>
+<p>Timeline is a core component of Hudi's architecture. It serves as the single source of truth for the table's state, recording all operations performed on a table. Each operation is identified by a commit with a monotonically increasing instant time, which indicates the start time of each transaction.</p>
+<p><img decoding="async" loading="lazy" alt="Timeline" src="https://hudi.apache.org/assets/images/timeline-a2604a4e8aa82c2a568ffa9e01585c57.png" width="3049" height="1105" class="img_ev3q"></p>
+<p>Hudi provides the following capabilities based on instant time:</p>
+<ul>
+<li class=""><strong>More efficient write rollbacks</strong>: Each Hudi commit corresponds to an instant time. The instant timestamp can be used to quickly locate files affected by failed writes.</li>
+<li class=""><strong>File name-based file slicing</strong>: Since instant time is encoded into file names, Hudi can efficiently perform file slicing across different versions of files within a table.</li>
+<li class=""><strong>Incremental queries</strong>: Each row in a Hudi table carries a <code>_hoodie_commit_time</code> metadata field. This allows incremental queries at any point in the timeline, even when full compaction or cleaning services are running asynchronously.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="completion-time">Completion Time<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#completion-time" class="hash-link" aria-label="Direct link to Completion Time" title="Direct link to Completion Time" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="file-slicing-based-on-instant-time">File Slicing Based on Instant Time<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#file-slicing-based-on-instant-time" class="hash-link" aria-label="Direct link to File Slicing Based on Instant Time" title="Direct link to File Slicing Based on Instant Time" translate="no">​</a></h3>
+<p>Before release 1.0, Hudi organized data files in units called <code>FileGroup</code>. Each file group contains multiple <code>FileSlice</code>s. Each file slice contains one base file and multiple log files. Every compaction on a file group generates a new file slice. The timestamp in the base file name corresponds to the instant time of the compaction operation that wrote the file. The timestamp in the log file name is the same as the base instant time of the current file slice. Data files with the same instant time belong to the same file slice.</p>
+<p><img decoding="async" loading="lazy" alt="File Slicing based on Instant Time" src="https://hudi.apache.org/assets/images/file-slicing-instant-time-5359912c2aa068992e7ba303c533acf8.png" width="1130" height="572" class="img_ev3q"></p>
+<p>In concurrent write scenarios, the instant time naming convention of log files introduces certain limitations: as asynchronous compaction progresses, the base instant time can change. To ensure that writers can correctly determine the base instant time, the ordering between write commits and compaction scheduling must be enforced—meaning that compaction can only be scheduled when there are no ongoing write operations on the table. Otherwise, a log file might be written with an incorrect base instant time, potentially leading to data loss. As a result, compaction scheduling may block all writers in concurrency mode.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="file-slicing-based-on-completion-time">File Slicing Based on Completion Time<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#file-slicing-based-on-completion-time" class="hash-link" aria-label="Direct link to File Slicing Based on Completion Time" title="Direct link to File Slicing Based on Completion Time" translate="no">​</a></h3>
+<p>To address these issues, starting from version 1.0, Hudi introduced a new file slicing model based on a time interval defined by requested time and completion time. In release 1.x, each commit has two important time concepts: requested time and completion time. All generated timestamps are globally monotonically increasing. The timestamp in the log file name is no longer the base instant time, but rather the requested instant time of the write operation. During the file slicing process, Hudi looks up the completion time for each log file using its instant time and applies a new file slicing rule:</p>
+<blockquote>
+<p><em>A log file belongs to the file slice with the maximum base requested time that is less than or equal to the log file's completion time.</em> [5]</p>
+</blockquote>
+<p><img decoding="async" loading="lazy" alt="File Slicing based on Completion Time" src="https://hudi.apache.org/assets/images/file-slicing-completion-time-73f5ca1df8df5c17fccf51cf9c47056f.png" width="1142" height="580" class="img_ev3q"></p>
+<p>The new file slicing mechanism is more flexible, allowing compaction scheduling to be completely decoupled from the writer's ingestion process. Based on this mechanism, Hudi has also implemented powerful non-blocking concurrency control. For details, refer to RFC-66 [5].</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="lsm-timeline">LSM Timeline<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#lsm-timeline" class="hash-link" aria-label="Direct link to LSM Timeline" title="Direct link to LSM Timeline" translate="no">​</a></h3>
+<p>The new file slicing mechanism requires efficient querying of completion time based on instant time. Starting from version 1.x, Hudi re-implemented the archived timeline. The new archived timeline organizes its data files in an LSM-tree structure, enabling fast range-filtering queries based on instant time and supporting efficient data skipping. For more details, refer to [6].</p>
+<p><img decoding="async" loading="lazy" alt="LSM Timeline" src="https://hudi.apache.org/assets/images/lsm-timeline-93c42d7fa376fa8cc8c7030f3949559b.png" width="1308" height="658" class="img_ev3q"></p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="truetime">TrueTime<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#truetime" class="hash-link" aria-label="Direct link to TrueTime" title="Direct link to TrueTime" translate="no">​</a></h2>
+<p>A critical premise of Hudi's timeline is that the timestamp generated for instants must be globally monotonically increasing without any conflicts. However, maintaining time monotonicity in distributed transactions has long been a thorny problem due to:</p>
+<ul>
+<li class=""><strong>Clock skew</strong>: Physical clocks drift apart across machines.</li>
+<li class=""><strong>Network latency</strong>: Communication delays between data centers.</li>
+<li class=""><strong>Concurrent transactions</strong>: Difficulty in determining event ordering across regions.</li>
+</ul>
+<p>To solve this problem, Google Spanner's TrueTime [1] uses a globally synchronized clock with bounded uncertainty, allowing it to assign timestamps monotonically without conflicts. Similarly, Hudi introduced the TrueTime API [2] starting from the 1.0 release. There are generally two approaches to realize TrueTime semantics:</p>
+<ul>
+<li class="">A single shared time generator process or service, like Google Spanner's time service.</li>
+<li class="">Each process generates its own time and waits until time &gt;= maximum expected clock drift across all processes, coordinated within a distributed lock.</li>
+</ul>
+<p><img decoding="async" loading="lazy" alt="TrueTime" src="https://hudi.apache.org/assets/images/truetime-03ef10cc297714f597ec0f7b7eefa6dc.png" width="704" height="511" class="img_ev3q"></p>
+<p>Hudi's TrueTime API adopts the second approach: using a distributed lock to ensure only one process generates time at any given moment. The waiting mechanism ensures sufficient time passes so that the instant time is monotonically increasing globally.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="blocking-instant-time-generation-for-flink-writers">Blocking Instant Time Generation for Flink Writers<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#blocking-instant-time-generation-for-flink-writers" class="hash-link" aria-label="Direct link to Blocking Instant Time Generation for Flink Writers" title="Direct link to Blocking Instant Time Generation for Flink Writers" translate="no">​</a></h2>
+<p>For Flink streaming ingestion, each incremental transaction write can be roughly divided into the following stages:</p>
+<ol>
+<li class="">Writers write records into the in-memory buffer.</li>
+<li class="">When the buffer is full or a checkpoint is triggered, writers send a request to the coordinator for an instant time.</li>
+<li class="">Writers create data files based on the instant time and flush the data to storage.</li>
+<li class="">The coordinator commits the flushed files and metadata after receiving the ACK event for the successful checkpoint.</li>
+</ol>
+<p><img decoding="async" loading="lazy" alt="Blocking Instant Generation" src="https://hudi.apache.org/assets/images/blocking-instant-gen-a010e393cfb2af831dc9169150da90da.png" width="1280" height="425" class="img_ev3q"></p>
+<p>From Hudi's file slicing mechanism, we can see that the instant time is required before writers flush records into storage. Before 1.1, although the committing operation was performed asynchronously in the coordinator, the writer's request for a new instant would be blocked, because only after the previous instant is successfully committed can the coordinator create a new instant. Let's say a batch of records finished flushing with checkpoint <code>ckp_1</code> in the writer at <code>T1</code>, and <code>ckp_1</code> completed at time <code>T2</code>—the writer will be blocked in the time interval <code>[T1, T2]</code> (a new instant time is generated only after the <code>ckp_1</code> completion event is handled and committed to the Hudi timeline). This blocking behavior ensures strict transaction ordering across multiple instants; however, it can lead to significant throughput fluctuations under large-scale workloads.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="async-instant-time-generation">Async Instant Time Generation<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#async-instant-time-generation" class="hash-link" aria-label="Direct link to Async Instant Time Generation" title="Direct link to Async Instant Time Generation" translate="no">​</a></h2>
+<p>To address throughput fluctuation caused by blocking instant generation, Hudi 1.1 introduces asynchronous instant generation for Flink writers. Using the aforementioned example, "async" means that before the previous instant is successfully committed to the timeline (during the time range <code>[T1, T2]</code>), the coordinator can create a new instant and return it to the writer for flushing a new batch of data. Thus, writers are no longer blocked during checkpoints, and the ingestion throughput will be more stable and smoother.</p>
+<p><img decoding="async" loading="lazy" alt="Async Instant Generation" src="https://hudi.apache.org/assets/images/async-instant-gen-24927649541bf14d72074edee3f38ab9.png" width="1280" height="417" class="img_ev3q"></p>
+<p><strong>Overall write workflow:</strong></p>
+<ul>
+<li class=""><strong>Writer</strong>: Requests instant time from the coordinator before flushing data:<!-- -->
+<ul>
+<li class="">Data flushing may be triggered either by a checkpoint or by the buffer being full, so the request carries the last completed checkpoint ID, rather than the current checkpoint ID.</li>
+<li class="">For a request made at the initial startup of a task, if it's recovered from state, the checkpoint ID is fetched from the state; otherwise, it's set to -1.</li>
+</ul>
+</li>
+<li class=""><strong>Coordinator</strong>: Responsible for instant generation. Each checkpoint ID corresponds to an instant. The coordinator maintains the mapping in the WriteMeta buffer: <code>CheckpointID → { Instant → { Writer TaskID → Writer MetaEvent }}</code>, where <code>{Writer TaskID → Writer MetaEvent}</code> is the mapping between each writer's parallel task ID and the file metadata written during the current checkpoint interval. Upon receiving an instant request from a writer:<!-- -->
+<ul>
+<li class="">If an instant corresponding to the checkpoint ID already exists in the WriteMeta buffer, the cached instant is returned directly.</li>
+<li class="">Otherwise, a new instant is generated, added to the WriteMeta buffer, and then returned to the writer.</li>
+</ul>
+</li>
+<li class=""><strong>Writer</strong>: Completes data writing, generates data files, and sends the file metadata to the coordinator.</li>
+<li class=""><strong>Coordinator</strong>: Upon receiving the file metadata from a writer, updates the WriteMeta buffer:<!-- -->
+<ul>
+<li class="">If there is no existing metadata for the current writer task in the buffer, the metadata is written directly into the cache.</li>
+<li class="">If metadata for the current writer task already exists (i.e., the writer has flushed multiple times), the metadata is merged and then the cache is updated.</li>
+</ul>
+</li>
+<li class=""><strong>Coordinator</strong>: When the ACK event for a checkpoint (ID = n) is received, it starts serially and orderly committing the instants recorded in the WriteMeta buffer. The commit scope includes all instants corresponding to checkpoint IDs &lt; n. Once committed successfully, the instants are removed from the buffer.<!-- -->
+<ul>
+<li class="">Since Flink's checkpoint ACK mechanism does not guarantee that the coordinator will receive an ACK for every checkpoint, the commit logic follows Flink's Checkpoint Subsume Contract [4]: if the ACK for checkpoint <code>ckp_i</code> is not received, its written metadata is subsumed into the pending metadata for the next checkpoint <code>ckp_i+1</code>, and will be committed once the ACK for <code>ckp_i+1</code> is received.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="writemeta-failover">WriteMeta Failover<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#writemeta-failover" class="hash-link" aria-label="Direct link to WriteMeta Failover" title="Direct link to WriteMeta Failover" translate="no">​</a></h3>
+<p>Considering that the coordinator cannot guarantee receiving every checkpoint ACK event, the in-memory WriteMeta buffer needs to be persisted to Flink state to prevent data loss after a task failover.</p>
+<p>When designing the snapshot for the WriteMeta buffer, the following points need to be considered:</p>
+<ul>
+<li class="">WriteMeta is initially stored in the writer's buffer. Only when a checkpoint is triggered or an eager flush occurs does the writer send the current WriteMeta to the coordinator.</li>
+<li class="">During checkpointing, the coordinator takes a snapshot first, followed by the writers' snapshot. At this point, the coordinator's cache does not yet include the WriteMeta for the current checkpoint interval.</li>
+</ul>
+<p><img decoding="async" loading="lazy" alt="WriteMeta Failover" src="https://hudi.apache.org/assets/images/writemeta-failover-bbf45f83cbbad492e7aee22a38a13d6e.png" width="1280" height="446" class="img_ev3q"></p>
+<p>Based on the above considerations, the WriteMeta snapshot process for checkpoint i is as follows:</p>
+<ol>
+<li class="">The coordinator first persists the WriteMeta for all checkpoint IDs &lt; i to Flink state.</li>
+<li class="">The writer sends the WriteMeta generated during checkpoint i to the coordinator, awaiting commit.</li>
+<li class="">The writer cleans up the historical WriteMeta in state and persists the WriteMeta for checkpoint i to Flink state.</li>
+</ol>
+<p>This approach of persisting the WriteMeta buffer ensures that metadata is not lost, while also preventing state bloat in the WriteMeta state.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
+<p>The async instant time generation mechanism introduced in Hudi 1.1 is an important feature for improving the stability of Flink streaming ingestion. By eliminating the blocking dependency on the completion of the previous instant's commit, this mechanism solves the throughput fluctuation and backpressure problems under large-scale workloads. At the same time, it still maintains strong transactional guarantees and seamless integration with Flink's checkpoint semantics. This enhancement is fully backward-compatible and transparent to end users, enabling existing Flink streaming ingestion jobs to immediately benefit from smoother and more scalable ingestion with minimal changes. As the demands on real-time data lakes continue to grow, such innovations are key to building robust, high-performance lakehouse architectures.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="references">References<a href="https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen#references" class="hash-link" aria-label="Direct link to References" title="Direct link to References" translate="no">​</a></h2>
+<p>[1] <a href="https://research.google/pubs/spanner-truetime-and-the-cap-theorem/" target="_blank" rel="noopener noreferrer" class="">https://research.google/pubs/spanner-truetime-and-the-cap-theorem/</a></p>
+<p>[2] <a href="https://hudi.apache.org/docs/next/timeline/#timeline-components" target="_blank" rel="noopener noreferrer" class="">https://hudi.apache.org/docs/next/timeline/#timeline-components</a></p>
+<p>[3] <a href="https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md" target="_blank" rel="noopener noreferrer" class="">https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md</a></p>
+<p>[4] <a href="https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/api/common/state/CheckpointListener.java" target="_blank" rel="noopener noreferrer" class="">https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/api/common/state/CheckpointListener.java</a></p>
+<p>[5] <a href="https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md" target="_blank" rel="noopener noreferrer" class="">https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md</a></p>
+<p>[6] <a href="https://hudi.apache.org/docs/next/timeline/#lsm-timeline-history" target="_blank" rel="noopener noreferrer" class="">https://hudi.apache.org/docs/next/timeline/#lsm-timeline-history</a></p>]]></content:encoded>
+            <category>hudi</category>
+            <category>flink</category>
+            <category>streaming</category>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi 2025: A Year In Review]]></title>
             <link>https://hudi.apache.org/blog/2025/12/29/apache-hudi-2025-a-year-in-review</link>
@@ -1435,17 +1552,6 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <category>Apache Hudi</category>
             <category>Peloton</category>
             <category>Community</category>
-        </item>
-        <item>
-            <title><![CDATA[How PayU built a secure enterprise AI assistant using Amazon Bedrock]]></title>
-            <link>https://hudi.apache.org/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant</link>
-            <guid>https://hudi.apache.org/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant</guid>
-            <pubDate>Tue, 15 Jul 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/machine-learning/how-payu-built-a-secure-enterprise-ai-assistant-using-amazon-bedrock/">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>AWS</category>
         </item>
     </channel>
 </rss>
