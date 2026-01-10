@@ -94,7 +94,7 @@ Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 Prerequisites for building Apache Hudi:
 
 * Unix-like system (like Linux, Mac OS X)
-* Java 8, 11 or 17
+* Java 11 or 17
 * Git
 * Maven (>=3.6.0)
 
@@ -163,8 +163,7 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.1.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
-Refer to the table below for building with different Flink and Scala versions. Besides, Flink 2.x do not support Java 8 
-anymore, so it's not set as the default Flink version since Java 8 is the default Java version for Hudi now.
+Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
 |:--------------------|:-------------------------------|:---------------------------------|
