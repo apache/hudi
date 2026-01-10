@@ -11,7 +11,7 @@ last_modified_at: 2024-08-12T10:47:57-07:00
 To contribute code, you need
 
  - a GitHub account
- - a Linux (or) macOS development environment with Java JDK 8, Apache Maven (3.x+) installed
+ - a Linux (or) macOS development environment with Java JDK 11, Apache Maven (3.x+) installed
  - [Docker](https://www.docker.com/) installed for running demo, integ tests or building website
  - for large contributions, a signed [Individual Contributor License Agreement](https://www.apache.org/licenses/icla.pdf) (ICLA) to the Apache Software Foundation (ASF).
  - (Recommended) Join our dev mailing list & slack channel, listed on [community](/community/get-involved) page.
@@ -24,11 +24,12 @@ The following table summarizes the default build profiles and versions used by t
 |----------|--------------------------|-------|
 | Spark    | 3.5                      | Default Spark 3 build profile |
 | Scala    | 2.12                     | Default Scala version for Spark builds |
-| Java     | 11                       | Recommended and CI-aligned Java version |
+| Java     | 11                       | Required Java version for building the project |
 | Flink    | 1.20                     | Default Flink streaming profile |
 
 
-## Useful Maven commands for developers. 
+## Useful Maven commands for developers
+
 Listing out some of the maven commands that could be useful for developers. 
 
 - Compile/build entire project 
@@ -57,8 +58,8 @@ You can also confine the build to just one module if need be.
 ```shell
 mvn -T 2C package -DskipTests -pl hudi-spark-datasource/hudi-spark -am
 ```
-Note: "-am" will build all dependent modules as well. 
-In local laptop, entire project build can take somewhere close to 7 to 10 mins. While buildig just hudi-spark-datasource/hudi-spark
+Note: "-am" will build all dependent modules as well.
+In local laptop, entire project build can take somewhere close to 7 to 10 mins. While building just hudi-spark-datasource/hudi-spark
 with multi-threaded, could get your compilation in 1.5 to 2 mins. 
 
 If you wish to run any single test class in java. 
@@ -115,54 +116,75 @@ This Quick Video will give a code walkthrough to start with [watch](https://www.
 ## IntelliJ Setup
 
 IntelliJ is the recommended IDE for developing Hudi. To contribute, you would need to do the following
- 
+
 - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide).
 
 - In IntelliJ, select `File` > `New` > `Project from Existing Sources...` and select the `pom.xml` file under your local Hudi source folder.
 
-- In `Project Structure`, select Java 1.8 as the Project SDK.
+<details>
+<summary>Configure IDE Preferences and Settings</summary>
 
-  ![IDE setup java](/assets/images/contributing/IDE_setup_java.png)
+Make the following configuration in `Preferences` or `Settings` in newer IntelliJ so the Hudi code can compile in the IDE:
 
-- Make the following configuration in `Preferences` or `Settings` in newer IntelliJ so the Hudi code can compile in the IDE:
-  * Enable annotation processing in compiler.
+- Enable annotation processing in compiler.
 
-    ![IDE setup annotation processing](/assets/images/contributing/IDE_setup_annotation.png)
-  * Configure Maven *NOT* to delegate IDE build/run actions to Maven so you can run tests in IntelliJ directly.
+  ![IDE setup annotation processing](/assets/images/contributing/IDE_setup_annotation.png)
 
-    ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
-    ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
+- Configure Maven *NOT* to delegate IDE build/run actions to Maven so you can run tests in IntelliJ directly.
 
-- If you switch maven build profile, e.g., from Spark 3.4 to Spark 3.5, you need to first build Hudi in the command line first and `Reload All Maven Projects` in IntelliJ like below,
+  ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
+  ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
+
+</details>
+
+<details>
+<summary>Reload Maven Projects After Profile Changes</summary>
+
+If you switch maven build profile, e.g., from Spark 3.4 to Spark 3.5, you need to first build Hudi in the command line first and `Reload All Maven Projects` in IntelliJ like below,
 so that IntelliJ re-indexes the code.
 
-   ![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
+![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
 
-- \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
-    * Open `Settings` in IntelliJ
-    * Install and activate CheckStyle plugin
+</details>
 
-      ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
-    * In `Settings` > `Tools` > `Checkstyle`, use a recent version, e.g., 12.1.0
-    * Click on `+`, add the style/checkstyle.xml file, and name the configuration as "Hudi Checks"
+<details>
+<summary>[Recommended] Set Up Code Style and CheckStyle</summary>
 
-      ![IDE_setup_checkstyle_3](/assets/images/contributing/IDE_setup_checkstyle_3.png)
-    * Activate the checkstyle configuration by checking `Active`
-    * Open `Settings` > `Editor` > `Code Style` > `Java`
-    * Select "Project" as the "Scheme".  Then, go to the settings, open `Import Scheme` > `CheckStyle Configuration`, select `style/checkstyle.xml` to load
+We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
 
-      ![IDE_setup_code_style_java_before](/assets/images/contributing/IDE_setup_code_style_java_before.png)
-    * After loading the configuration, you should see that the `Indent` and `Continuation indent` become 2 and 4, from 4 and 8, respectively
-    * Apply/Save the changes
-- \[Recommended\] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
+- Open `Settings` in IntelliJ
+- Install and activate CheckStyle plugin
 
-- \[Recommended\] As it is required to add [Apache License header](https://www.apache.org/legal/src-headers#headers) to all source files, configuring "Copyright" settings as shown below will come in handy.
+  ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
+
+- In `Settings` > `Tools` > `Checkstyle`, use a recent version, e.g., 12.1.0
+- Click on `+`, add the style/checkstyle.xml file, and name the configuration as "Hudi Checks"
+
+  ![IDE_setup_checkstyle_3](/assets/images/contributing/IDE_setup_checkstyle_3.png)
+
+- Activate the checkstyle configuration by checking `Active`
+- Open `Settings` > `Editor` > `Code Style` > `Java`
+- Select "Project" as the "Scheme".  Then, go to the settings, open `Import Scheme` > `CheckStyle Configuration`, select `style/checkstyle.xml` to load
+
+  ![IDE_setup_code_style_java_before](/assets/images/contributing/IDE_setup_code_style_java_before.png)
+
+- After loading the configuration, you should see that the `Indent` and `Continuation indent` become 2 and 4, from 4 and 8, respectively
+- Apply/Save the changes
+
+</details>
+
+<details>
+<summary>[Recommended] Set Up Save Actions and Copyright</summary>
+
+- Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
+
+- As it is required to add [Apache License header](https://www.apache.org/legal/src-headers#headers) to all source files, configuring "Copyright" settings as shown below will come in handy.
 
 ![IDE setup copyright 1](/assets/images/contributing/IDE_setup_copyright_1.png)
 
-
-
 ![IDE setup copyright 2](/assets/images/contributing/IDE_setup_copyright_2.png)
+
+</details>
 
 
 ## Running unit tests and local debugger via Intellij IDE
@@ -174,7 +196,7 @@ When submitting a PR please make sure to NOT commit the changes mentioned in the
 0. Build the project with the intended profiles via the `mvn` cli, for example for spark 3.5 use `mvn clean package -Dspark3.5 -Dscala-2.12 -DskipTests`. 
 1. Install the "Maven Helper" plugin from the Intellij IDE.
 2. Make sure IDEA uses Maven to build/run tests:
-   * You need to select the intended Maven profiles (using Maven tool pane in IDEA): select profiles you are targeting for example `spark3.4` and `scala-2.2` or `spark3.5`, `scala-2.12` etc. 
+   * You need to select the intended Maven profiles (using Maven tool pane in IDEA): select profiles you are targeting for example `spark3.5`, `scala-2.12` etc.
    * Add `.mvn/maven.config` file at the root of the repo w/ the the profiles you selected in the pane: `-Dspark3.5` `-Dscala-2.12`
    * Add `.mvn/` to the `.gitignore` file located in the root of the project. 
 3. Make sure you change (temporarily) the `scala.binary.version` in the root `pom.xml` to the intended scala profile version. For example if running with spark3 `scala.binary.version` should be `2.12`
