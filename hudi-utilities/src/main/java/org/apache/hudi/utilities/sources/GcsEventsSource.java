@@ -53,6 +53,7 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.ACK_MESSAGES;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.BATCH_SIZE_CONF;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.MAX_FETCH_TIME_PER_SYNC_SECS;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.MAX_NUM_MESSAGES_PER_SYNC;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.META_EVENTS_PER_PARTITION;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
@@ -107,6 +108,7 @@ public class GcsEventsSource extends RowSource {
   private final PubsubMessagesFetcher pubsubMessagesFetcher;
   private final SchemaProvider schemaProvider;
   private final boolean ackMessages;
+  private final int recordsPerPartition;
 
   private final List<String> messagesToAck = new ArrayList<>();
 
@@ -134,6 +136,7 @@ public class GcsEventsSource extends RowSource {
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
     this.ackMessages = getBooleanWithAltKeys(props, ACK_MESSAGES);
     this.schemaProvider = schemaProvider;
+    this.recordsPerPartition = getIntWithAltKeys(props, META_EVENTS_PER_PARTITION);
 
     LOG.info("Created GcsEventsSource");
   }
@@ -155,7 +158,9 @@ public class GcsEventsSource extends RowSource {
       return Pair.of(Option.empty(), CHECKPOINT_VALUE_ZERO);
     }
 
-    Dataset<String> eventRecords = sparkSession.createDataset(messageBatch.getMessages(), Encoders.STRING());
+    int numPartitions = (int) Math.ceil(
+        (double) messageBatch.getMessages().size() / recordsPerPartition);
+    Dataset<String> eventRecords = sparkSession.createDataset(messageBatch.getMessages(), Encoders.STRING()).repartition(numPartitions);
 
     LOG.info("Returning checkpoint value: " + CHECKPOINT_VALUE_ZERO);
 
