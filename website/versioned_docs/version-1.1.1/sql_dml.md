@@ -51,7 +51,7 @@ INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000
 :::note Mapping to write operations
 Hudi offers flexibility in choosing the underlying [write operation](write_operations.md) of a `INSERT INTO` statement using 
 the `hoodie.spark.sql.insert.into.operation` configuration. Possible options include *"bulk_insert"* (large inserts), *"insert"* (with small file management), 
-and *"upsert"* (with deduplication/merging). If ordering fields are not set, *"insert"* is chosen as the default. For a table with ordering fields set (via `preCombineField`),
+and *"upsert"* (with deduplication/merging). If ordering fields are not set, *"insert"* is chosen as the default. For a table with ordering fields set (via `orderingFields`),
 *"upsert"* is chosen as the default operation.
 :::
 
@@ -101,7 +101,7 @@ update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 ```
 
 :::info
-The `UPDATE` operation requires the specification of ordering fields (via `preCombineField`).
+The `UPDATE` operation requires the specification of ordering fields (via `orderingFields`).
 :::
 
 ### Merge Into
@@ -138,7 +138,7 @@ For a Hudi table with user configured primary keys, the join condition and the `
 
 For a table where Hudi auto generates primary keys, the join condition in `MERGE INTO` can be on any arbitrary data columns. 
 
-if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, ordering fields (via `preCombineField`) are required to be set with value in the `UPDATE`/`INSERT` clause. 
+if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, ordering fields (via `orderingFields`) are required to be set with value in the `UPDATE`/`INSERT` clause. 
 
 It is enforced that if the target table has primary key and partition key column, the source table counterparts must enforce the same data type accordingly. Plus, if the target table is configured with `hoodie.record.merge.mode` = `EVENT_TIME_ORDERING` where target table is expected to have valid ordering fields configuration, the source table counterpart must also have the same data type.
 :::
@@ -148,7 +148,7 @@ Examples below
 ```sql
 -- source table using hudi for testing merging into non-partitioned table
 create table merge_source (id int, name string, price double, ts bigint) using hudi
-tblproperties (primaryKey = 'id', preCombineField = 'ts');
+tblproperties (primaryKey = 'id', orderingFields = 'ts');
 insert into merge_source values (1, "old_a1", 22.22, 900), (2, "new_a2", 33.33, 2000), (3, "new_a3", 44.44, 2000);
 
 merge into hudi_mor_tbl as target
@@ -199,7 +199,7 @@ CREATE TABLE tableName (
 TBLPROPERTIES (
   type = 'mor',
   primaryKey = 'id',
-  preCombineField = '_ts'
+  orderingFields = '_ts'
 )
 LOCATION '/location/to/basePath';
 
