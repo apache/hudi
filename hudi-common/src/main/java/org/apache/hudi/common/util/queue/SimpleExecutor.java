@@ -21,8 +21,7 @@ package org.apache.hudi.common.util.queue;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 import java.util.function.Function;
@@ -38,9 +37,8 @@ import java.util.function.Function;
  * limited parallelism and therefore throughput, which is not an issue for execution environments
  * such as Spark, where it's used primarily in a parallelism constraint environment (on executors)
  */
+@Slf4j
 public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SimpleExecutor.class);
 
   // Record iterator (producer)
   private final Iterator<I> itr;
@@ -63,7 +61,7 @@ public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
   @Override
   public E execute() {
     try {
-      LOG.info("Starting consumer, consuming records from the records iterator directly");
+      log.info("Starting consumer, consuming records from the records iterator directly");
       while (itr.hasNext()) {
         O payload = transformFunction.apply(itr.next());
         consumer.consume(payload);
@@ -71,7 +69,7 @@ public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
 
       return consumer.finish();
     } catch (Exception e) {
-      LOG.error("Failed consuming records", e);
+      log.error("Failed consuming records", e);
       throw new HoodieException(e);
     }
   }

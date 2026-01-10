@@ -23,16 +23,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
 /**
  * Common utils for Hudi heartbeat
  */
+@Slf4j
 public class HoodieHeartbeatUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieHeartbeatUtils.class);
 
   /**
    * Use modification time as last heart beat time.
@@ -72,7 +71,7 @@ public class HoodieHeartbeatUtils {
     Long currentTime = System.currentTimeMillis();
     Long lastHeartbeatTime = getLastHeartbeatTime(storage, basePath, instantTime);
     if (currentTime - lastHeartbeatTime > maxAllowableHeartbeatIntervalInMs) {
-      LOG.warn("Heartbeat expired, for instant: {}", instantTime);
+      log.warn("Heartbeat expired, for instant: {}", instantTime);
       return true;
     }
     return false;

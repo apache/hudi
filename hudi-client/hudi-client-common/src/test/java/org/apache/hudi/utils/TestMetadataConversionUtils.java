@@ -405,14 +405,12 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     HoodieCleanFileInfo fileInfo = new HoodieCleanFileInfo("file1", false);
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
         "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, Collections.singletonMap("key", Collections.singletonList(fileInfo)), new ArrayList<>(), Collections.EMPTY_MAP);
-    HoodieCleanStat cleanStats = new HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-        HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        instantTime,
-        "");
+    HoodieCleanStat cleanStats = HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        .withPartitionPath(HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)])
+        .withEarliestCommitToRetain(instantTime)
+        .withLastCompletedCommitTimestamp("")
+        .build();
     HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
     HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
   }

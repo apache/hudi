@@ -20,18 +20,16 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Size Estimator for Hoodie record payload.
  * 
  * @param <T>
  */
+@Slf4j
 public class HoodieRecordSizeEstimator<T> implements SizeEstimator<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordSizeEstimator.class);
 
   private final long sizeOfSchema;
 
@@ -46,7 +44,7 @@ public class HoodieRecordSizeEstimator<T> implements SizeEstimator<T> {
     // note the sizes and differences. A correct estimation in such cases is handled in
     /** {@link ExternalSpillableMap} **/
     long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
-    LOG.debug("SizeOfRecord => {} SizeOfSchema => {}", sizeOfRecord, sizeOfSchema);
+    log.debug("SizeOfRecord => {} SizeOfSchema => {}", sizeOfRecord, sizeOfSchema);
     return sizeOfRecord;
   }
 }

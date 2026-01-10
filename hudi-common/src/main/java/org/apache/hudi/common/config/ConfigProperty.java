@@ -22,6 +22,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.experimental.Accessors;
+
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -41,14 +47,21 @@ import java.util.stream.Collectors;
  *
  * @param <T> The type of the default value.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 public class ConfigProperty<T> implements Serializable {
 
+  @NonNull
+  @Accessors(fluent = true) // Required so that #key() is generated instead of #getKey() by Lombok
   private final String key;
 
+  @Getter(AccessLevel.NONE)
   private final T defaultValue;
 
+  @Getter(AccessLevel.NONE)
   private final String docOnDefaultValue;
 
+  @Getter(AccessLevel.NONE)
   private final String doc;
 
   private final Option<String> sinceVersion;
@@ -57,36 +70,15 @@ public class ConfigProperty<T> implements Serializable {
 
   private final List<String> supportedVersions;
 
+  // provide the ability to infer config value based on other configs
+  private final Option<Function<HoodieConfig, Option<T>>> inferFunction;
+
+  @Getter(AccessLevel.NONE)
   private final Set<String> validValues;
 
   private final boolean advanced;
 
   private final String[] alternatives;
-
-  // provide the ability to infer config value based on other configs
-  private final Option<Function<HoodieConfig, Option<T>>> inferFunction;
-
-  ConfigProperty(String key, T defaultValue, String docOnDefaultValue, String doc,
-                 Option<String> sinceVersion, Option<String> deprecatedVersion,
-                 List<String> supportedVersions,
-                 Option<Function<HoodieConfig, Option<T>>> inferFunc, Set<String> validValues,
-                 boolean advanced, String... alternatives) {
-    this.key = Objects.requireNonNull(key);
-    this.defaultValue = defaultValue;
-    this.docOnDefaultValue = docOnDefaultValue;
-    this.doc = doc;
-    this.sinceVersion = sinceVersion;
-    this.deprecatedVersion = deprecatedVersion;
-    this.supportedVersions = supportedVersions;
-    this.inferFunction = inferFunc;
-    this.validValues = validValues;
-    this.advanced = advanced;
-    this.alternatives = alternatives;
-  }
-
-  public String key() {
-    return key;
-  }
 
   public T defaultValue() {
     if (defaultValue == null) {
@@ -108,24 +100,8 @@ public class ConfigProperty<T> implements Serializable {
     return StringUtils.isNullOrEmpty(doc) ? StringUtils.EMPTY_STRING : doc;
   }
 
-  public Option<String> getSinceVersion() {
-    return sinceVersion;
-  }
-
-  public Option<String> getDeprecatedVersion() {
-    return deprecatedVersion;
-  }
-
-  public List<String> getSupportedVersions() {
-    return supportedVersions;
-  }
-
   public boolean hasInferFunction() {
     return getInferFunction().isPresent();
-  }
-
-  public Option<Function<HoodieConfig, Option<T>>> getInferFunction() {
-    return inferFunction;
   }
 
   public void checkValues(String value) {
@@ -142,10 +118,6 @@ public class ConfigProperty<T> implements Serializable {
 
   public List<String> getAlternatives() {
     return Arrays.asList(alternatives);
-  }
-
-  public boolean isAdvanced() {
-    return advanced;
   }
 
   public ConfigProperty<T> withDocumentation(String doc) {
@@ -271,7 +243,7 @@ public class ConfigProperty<T> implements Serializable {
     public <T> ConfigProperty<T> defaultValue(T value, String docOnDefaultValue) {
       Objects.requireNonNull(docOnDefaultValue);
       return new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(),
-          Option.empty(), Collections.emptyList(), Option.empty(), Collections.emptySet(), false);
+          Option.empty(), Collections.emptyList(), Option.empty(), Collections.emptySet(), false, new String[0]);
     }
 
     public ConfigProperty<String> noDefaultValue() {
@@ -280,7 +252,7 @@ public class ConfigProperty<T> implements Serializable {
 
     public ConfigProperty<String> noDefaultValue(String docOnDefaultValue) {
       return new ConfigProperty<>(key, null, docOnDefaultValue, "", Option.empty(),
-          Option.empty(), Collections.emptyList(), Option.empty(), Collections.emptySet(), false);
+          Option.empty(), Collections.emptyList(), Option.empty(), Collections.emptySet(), false, new String[0]);
     }
   }
 }

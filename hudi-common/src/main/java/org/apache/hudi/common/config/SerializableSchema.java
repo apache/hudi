@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -28,12 +30,11 @@ import java.io.Serializable;
 /**
  * A wrapped Schema which can be serialized.
  */
+@NoArgsConstructor
+@ToString
 public class SerializableSchema implements Serializable {
 
   private transient Schema schema;
-  
-  public SerializableSchema() {
-  }
 
   public SerializableSchema(String schemaStr) {
     this.schema = new Schema.Parser().parse(schemaStr);
@@ -77,10 +78,5 @@ public class SerializableSchema implements Serializable {
     } catch (ClassNotFoundException e) {
       throw new IOException("unable to parse schema", e);
     }
-  }
-
-  @Override
-  public String toString() {
-    return schema.toString();
   }
 }
