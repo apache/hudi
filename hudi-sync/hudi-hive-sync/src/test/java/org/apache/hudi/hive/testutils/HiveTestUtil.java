@@ -61,9 +61,11 @@ import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -77,8 +79,6 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.junit.platform.commons.JUnitException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -116,9 +116,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Slf4j
 @SuppressWarnings("SameParameterValue")
 public class HiveTestUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HiveTestUtil.class);
 
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
@@ -133,8 +133,10 @@ public class HiveTestUtil {
   private static HiveServer2 hiveServer;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
+  @Getter
   public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
+  @Getter
   private static Set<String> createdTablesSet = new HashSet<>();
 
   public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws Exception {
@@ -202,10 +204,6 @@ public class HiveTestUtil {
     return hiveServer.getHiveConf();
   }
 
-  public static HiveSyncConfig getHiveSyncConfig() {
-    return hiveSyncConfig;
-  }
-
   public static void shutdown() {
     List<String> failedReleases = new ArrayList<>();
     try {
@@ -271,7 +269,7 @@ public class HiveTestUtil {
     }
 
     if (!failedReleases.isEmpty()) {
-      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
+      log.error("Exception happened during releasing: {}", String.join(",", failedReleases));
     }
   }
 
@@ -330,7 +328,7 @@ public class HiveTestUtil {
           storage.deleteFile(path);
         }
       } catch (IOException e) {
-        LOG.warn("Error deleting file: ", e);
+        log.warn("Error deleting file: ", e);
       }
     });
   }
@@ -815,9 +813,5 @@ public class HiveTestUtil {
         writer.get().writeToStream(fsout);
       }
     }
-  }
-
-  public static Set<String> getCreatedTablesSet() {
-    return createdTablesSet;
   }
 }

@@ -38,10 +38,10 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
 import com.codahale.metrics.Timer;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -85,15 +85,17 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  * This utility will get the schema from the latest commit and will sync hive table schema Also this will sync the
  * partitions incrementally (all the partitions modified since the last commit)
  */
+@Slf4j
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   protected HiveSyncConfig config;
+  @Getter
   private String databaseName;
+  @Getter
   private String tableName;
 
   protected HoodieSyncClient syncClient;
@@ -136,7 +138,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       this.syncClient = new HoodieHiveSyncClient(config, metaClient);
     } catch (RuntimeException e) {
       if (config.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
-        LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
+        log.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
       } else {
         throw new HoodieHiveSyncException("Got runtime exception when hive syncing", e);
       }
@@ -158,29 +160,20 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
               : Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
           break;
         default:
-          LOG.error("Unknown table type " + syncClient.getTableType());
+          log.error("Unknown table type {}", syncClient.getTableType());
           throw new InvalidTableException(syncClient.getBasePath());
       }
     }
-  }
-
-  public String getTableName() {
-    return this.tableName;
-  }
-
-  public String getDatabaseName() {
-    return this.databaseName;
   }
 
   @Override
   public void syncHoodieTable() {
     try {
       if (syncClient != null) {
-        LOG.info("Syncing target hoodie table with hive table("
-            + tableId(databaseName, tableName) + "). Hive metastore URL from HiveConf:"
-            + config.getHiveConf().get(HiveConf.ConfVars.METASTOREURIS.varname) + "). Hive metastore URL from HiveSyncConfig:"
-            + config.getString(METASTORE_URIS) + ", basePath :"
-            + config.getString(META_SYNC_BASE_PATH));
+        log.info("Syncing target hoodie table with hive table({}). Hive metastore URL from HiveConf:{}). "
+                + "Hive metastore URL from HiveSyncConfig:{}, basePath :{}",
+            tableId(databaseName, tableName), config.getHiveConf().get(HiveConf.ConfVars.METASTOREURIS.varname),
+            config.getString(METASTORE_URIS), config.getString(META_SYNC_BASE_PATH));
 
         doSync();
       }
@@ -221,7 +214,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         }
         break;
       default:
-        LOG.error("Unknown table type " + syncClient.getTableType());
+        log.error("Unknown table type {}", syncClient.getTableType());
         throw new InvalidTableException(syncClient.getBasePath());
     }
   }
@@ -241,20 +234,19 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
-    LOG.info("Trying to sync hoodie table " + tableName + " with base path " + syncClient.getBasePath()
-        + " of type " + syncClient.getTableType());
+    log.info("Trying to sync hoodie table {} with base path {} of type {}", tableName, syncClient.getBasePath(), syncClient.getTableType());
 
     final boolean tableExists = syncClient.tableExists(tableName);
     // if table exists and location of the metastore table doesn't match the hoodie base path, recreate the table
     if (tableExists && !FSUtils.comparePathsWithoutScheme(syncClient.getBasePath(), syncClient.getTableLocation(tableName))) {
-      LOG.info("basepath is updated for the table {}", tableName);
+      log.info("basepath is updated for the table {}", tableName);
       recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
       return;
     }
 
     // Check if any sync is required
     if (tableExists && isIncrementalSync() && isAlreadySynced(tableName)) {
-      LOG.info("Table {} is already synced with the latest commit.", tableName);
+      log.info("Table {} is already synced with the latest commit.", tableName);
       return;
     }
     // Get the parquet schema for this table looking at the latest commit
@@ -277,10 +269,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
         syncClient.updateLastCommitTimeSynced(tableName);
       }
-      LOG.info("Sync complete for {}", tableName);
+      log.info("Sync complete for {}", tableName);
     } catch (HoodieHiveSyncException ex) {
       if (shouldRecreateAndSyncTable()) {
-        LOG.warn("Failed to sync the table {}. Attempting trying to recreate", tableName, ex);
+        log.warn("Failed to sync the table {}. Attempting trying to recreate", tableName, ex);
         recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
       } else {
         throw new HoodieHiveSyncException("failed to sync the table " + tableName, ex);
@@ -309,11 +301,11 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         }
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
-        LOG.warn("Unable to create database", e);
+        log.warn("Unable to create database", e);
       }
     } else {
       if (!syncClient.databaseExists(databaseName)) {
-        LOG.error("Hive database does not exist {}", databaseName);
+        log.error("Hive database does not exist {}", databaseName);
         throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
     }
@@ -326,10 +318,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     Option<String> lastCommitCompletionTimeSynced = (tableExists && syncIncremental)
         ? syncClient.getLastCommitCompletionTimeSynced(tableName) : Option.empty();
     if (syncIncremental) {
-      LOG.info(String.format("Last commit time synced was found to be %s, last commit completion time is found to be %s",
-          lastCommitTimeSynced.orElse("null"), lastCommitCompletionTimeSynced.orElse("null")));
+      log.info("Last commit time synced was found to be {}, last commit completion time is found to be {}",
+          lastCommitTimeSynced.orElse("null"), lastCommitCompletionTimeSynced.orElse("null"));
     } else {
-      LOG.info(
+      log.info(
           "Executing a full partition sync operation since {} is set to false.",
           META_SYNC_INCREMENTAL.key());
     }
@@ -340,19 +332,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       // If the last commit time synced is before the start of the active timeline,
       // the Hive sync falls back to list all partitions on storage, instead of
       // reading active and archived timelines for written partitions.
-      LOG.info("Sync all partitions given the last commit time synced is empty or "
-          + "before the start of the active timeline. Listing all partitions in "
-          + config.getString(META_SYNC_BASE_PATH)
-          + ", file system: " + config.getHadoopFileSystem());
+      log.info("Sync all partitions given the last commit time synced is empty or before the start of the active timeline. "
+              + "Listing all partitions in {}, file system: {}",
+          config.getString(META_SYNC_BASE_PATH), config.getHadoopFileSystem());
       partitionsChanged = syncAllPartitions(tableName);
     } else {
       List<String> writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
-      LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+      log.info("Storage partitions scan complete. Found {}", writtenPartitionsSince.size());
 
       // Sync the partitions if needed
       // find dropped partitions, if any, in the latest commit
       Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
-      LOG.info("Partitions dropped since last sync: {}", droppedPartitions.size());
+      log.info("Partitions dropped since last sync: {}", droppedPartitions.size());
       partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     }
     return partitionsChanged;
@@ -367,7 +358,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   private void recreateAndSyncHiveTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
-    LOG.info("recreating and syncing the table {}", tableName);
+    log.info("recreating and syncing the table {}", tableName);
     Timer.Context timerContext = metrics.getRecreateAndSyncTimer();
     HoodieSchema schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
     try {
@@ -415,7 +406,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   private void syncFirstTime(String tableName, boolean useRealTimeInputFormat, boolean readAsOptimized, HoodieSchema schema) {
-    LOG.info("Sync table {} for the first time.", tableName);
+    log.info("Sync table {} for the first time.", tableName);
     HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
     String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
@@ -439,9 +430,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
         config.getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE));
     if (schemaDiff.isEmpty()) {
-      LOG.info("No Schema difference for {}.", tableName);
+      log.info("No Schema difference for {}.", tableName);
     } else {
-      LOG.info("Schema difference found for {}. Updated schema: {}", tableName, schema);
+      log.info("Schema difference found for {}. Updated schema: {}", tableName, schema);
       syncClient.updateTableSchema(tableName, schema, schemaDiff);
       schemaChanged = true;
     }
@@ -543,19 +534,19 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private boolean syncPartitions(String tableName, List<PartitionEvent> partitionEventList) {
     List<String> newPartitions = filterPartitions(partitionEventList, PartitionEventType.ADD);
     if (!newPartitions.isEmpty()) {
-      LOG.info("New Partitions " + newPartitions);
+      log.info("New Partitions {}", newPartitions);
       syncClient.addPartitionsToTable(tableName, newPartitions);
     }
 
     List<String> updatePartitions = filterPartitions(partitionEventList, PartitionEventType.UPDATE);
     if (!updatePartitions.isEmpty()) {
-      LOG.info("Changed Partitions " + updatePartitions);
+      log.info("Changed Partitions {}", updatePartitions);
       syncClient.updatePartitionsToTable(tableName, updatePartitions);
     }
 
     List<String> dropPartitions = filterPartitions(partitionEventList, PartitionEventType.DROP);
     if (!dropPartitions.isEmpty()) {
-      LOG.info("Drop Partitions " + dropPartitions);
+      log.info("Drop Partitions {}", dropPartitions);
       syncClient.dropPartitions(tableName, dropPartitions);
     }
 
