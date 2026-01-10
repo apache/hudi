@@ -264,7 +264,7 @@ public class HoodieCatalog extends AbstractCatalog {
       List<String> pkColumns = TableOptionProperties.getPkColumns(options);
       // if the table is initialized from spark, the write schema is nullable for pk columns.
       DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
-          AvroSchemaConverter.convertToDataType(latestSchema), pkColumns);
+          HoodieSchemaConverter.convertToDataType(latestSchema), pkColumns);
       org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
           .fromRowDataType(tableDataType);
       final String pkConstraintName = TableOptionProperties.getPkConstraintName(options);

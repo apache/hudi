@@ -132,7 +132,7 @@ public class TableSchemaResolver {
    * Gets schema for a hoodie table, can choose if include metadata fields should be included.
    *
    * @param includeMetadataFields choice if include metadata fields
-   * @return Hoodie schema for this table
+   * @return schema for this table
    * @throws Exception
    */
   public HoodieSchema getTableSchema(boolean includeMetadataFields) throws Exception {
@@ -370,7 +370,7 @@ public class TableSchemaResolver {
       HoodieSchema tableSchema = getTableSchemaFromDataFile();
       return tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent();
     } catch (Exception e) {
-      LOG.info("Failed to read operation field from hoodie schema ({})", e.getMessage());
+      LOG.info("Failed to read operation field from schema ({})", e.getMessage());
       return false;
     }
   }

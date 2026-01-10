@@ -428,7 +428,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
               tableConfig.getRecordKeyFieldProp(),
               isNonPartitionedKeyGen ? Option.empty() : Option.of(partitionFieldProp),
               schema.getField(tableConfig.getRecordKeyFieldProp())
-                  .orElseThrow(() -> new HoodieSchemaException("Field: " + partitionFieldProp + " not found"))
+                  .orElseThrow(() -> new HoodieSchemaException("Field: " + tableConfig.getRecordKeyFieldProp() + " not found"))
                   .pos(),
               isNonPartitionedKeyGen ? Option.empty() : Option.of(schema.getField(partitionFieldProp)
                   .orElseThrow(() -> new HoodieSchemaException("Field: " + partitionFieldProp + " not found"))
