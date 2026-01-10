@@ -50,7 +50,7 @@ All fixture tables use a consistent simple schema:
 ## Generating Fixtures
 
 ### Prerequisites
-- Java 8+ installed
+- Java 11+ installed
 - Internet connection (for downloading Spark binaries and Hudi bundles via Maven)
 
 ### Generation Process

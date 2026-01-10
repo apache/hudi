@@ -140,8 +140,8 @@ Platforms: linux/amd64, linux/arm64, linux/arm/v7, linux/arm/v6
 ```
 
 Now goto `<HUDI_REPO_DIR>/docker/hoodie/hadoop` and change the `Dockerfile` to pull dependent images corresponding to
-arm64. For example, in [base/Dockerfile](./hoodie/hadoop/base/Dockerfile) (which pulls jdk8 image), change the
-line `FROM openjdk:8u212-jdk-slim-stretch` to `FROM arm64v8/openjdk:8u212-jdk-slim-stretch`.
+arm64. For example, in [base/Dockerfile](./hoodie/hadoop/base/Dockerfile) (which pulls jdk11 image), change the
+line `FROM openjdk:11-jdk-slim-bullseye` to `FROM arm64v8/openjdk:11-jdk-slim-bullseye`.
 
 Then, from under `<HUDI_REPO_DIR>/docker/hoodie/hadoop` directory, execute the following command to build as well as
 push the image to the dockerhub repo:
