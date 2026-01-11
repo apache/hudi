@@ -54,7 +54,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
@@ -76,7 +75,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
@@ -341,8 +339,7 @@ public class HoodieSnapshotExporter {
       System.exit(1);
     }
 
-    SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-exporter", "local[*]");
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-snapshot-exporter", "local[*]");
     LOG.info("Initializing spark job.");
 
     try {

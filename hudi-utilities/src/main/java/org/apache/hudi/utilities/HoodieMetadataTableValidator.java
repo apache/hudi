@@ -97,7 +97,6 @@ import org.apache.hudi.utilities.util.BloomFilterData;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -502,9 +501,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       System.exit(1);
     }
 
-    SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Metadata-Table-Validator", cfg.sparkMaster);
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Map<String, String> sparkConfigMap = new HashMap<>();
+    sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Metadata-Table-Validator", cfg.sparkMaster, sparkConfigMap);
 
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
