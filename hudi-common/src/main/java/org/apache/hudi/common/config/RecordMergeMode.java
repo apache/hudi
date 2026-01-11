@@ -29,7 +29,7 @@ public enum RecordMergeMode {
 
   @EnumFieldDescription("Using event time as the ordering to merge records, i.e., the record "
       + "with the larger event time overwrites the record with the smaller event time on the "
-      + "same key, regardless of transaction time. The event time or preCombine field needs "
+      + "same key, regardless of transaction time. The event time or ordering fields need "
       + "to be specified by the user.")
   EVENT_TIME_ORDERING,
 
