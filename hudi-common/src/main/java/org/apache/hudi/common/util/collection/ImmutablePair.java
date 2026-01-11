@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.collection;
 
+import lombok.Getter;
+
 /**
  * (NOTE: Adapted from Apache commons-lang3)
  * <p>
@@ -37,6 +39,7 @@ package org.apache.hudi.common.util.collection;
  * @param <L> the left element type
  * @param <R> the right element type
  */
+@Getter
 public final class ImmutablePair<L, R> extends Pair<L, R> {
 
   /**
@@ -85,24 +88,6 @@ public final class ImmutablePair<L, R> extends Pair<L, R> {
     this.right = right;
   }
 
-  // -----------------------------------------------------------------------
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public L getLeft() {
-    return left;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public R getRight() {
-    return right;
-  }
-
   /**
    * <p>
    * Throws {@code UnsupportedOperationException}.
@@ -120,5 +105,4 @@ public final class ImmutablePair<L, R> extends Pair<L, R> {
   public R setValue(final R value) {
     throw new UnsupportedOperationException();
   }
-
 }

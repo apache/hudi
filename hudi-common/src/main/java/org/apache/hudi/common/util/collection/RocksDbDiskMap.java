@@ -22,8 +22,7 @@ import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -43,15 +42,15 @@ import java.util.stream.StreamSupport;
  * This class provides a disk spillable only map implementation.
  * All of the data is stored using the RocksDB implementation.
  */
+@Slf4j
 public final class RocksDbDiskMap<T extends Serializable, R> extends DiskMap<T, R> {
+
   // ColumnFamily allows partitioning data within RockDB, which allows
   // independent configuration and faster deletes across partitions
   // https://github.com/facebook/rocksdb/wiki/Column-Families
   // For this use case, we use a single static column family/ partition
   //
   private static final String ROCKSDB_COL_FAMILY = "rocksdb-diskmap";
-
-  private static final Logger LOG = LoggerFactory.getLogger(RocksDbDiskMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Set<T> keySet;
   private final CustomSerializer<R> valueSerializer;
@@ -187,5 +186,4 @@ public final class RocksDbDiskMap<T extends Serializable, R> extends DiskMap<T, 
     }
     return rocksDb;
   }
-
 }

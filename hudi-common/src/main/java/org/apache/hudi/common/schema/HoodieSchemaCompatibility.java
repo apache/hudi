@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.avro.SchemaCompatibility;
 
 import java.util.Collections;
@@ -42,11 +44,8 @@ import java.util.Set;
  *   <li>Metadata field handling during schema checks</li>
  * </ul>
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HoodieSchemaCompatibility {
-
-  // Prevent instantiation
-  private HoodieSchemaCompatibility() {
-  }
 
   public static boolean areSchemasCompatible(HoodieSchema tableSchema, HoodieSchema writerSchema) {
     return SchemaCompatibility.checkReaderWriterCompatibility(tableSchema.toAvroSchema(), writerSchema.toAvroSchema()).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;

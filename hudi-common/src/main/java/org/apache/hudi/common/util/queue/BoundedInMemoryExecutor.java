@@ -23,8 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -36,9 +35,8 @@ import java.util.function.Function;
  * class takes as input the size limit, queue producer(s), consumer and transformer and exposes API to orchestrate
  * concurrent execution of these actors communicating through a central bounded queue
  */
+@Slf4j
 public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BoundedInMemoryExecutor.class);
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
                                  HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
@@ -68,15 +66,15 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
 
   @Override
   protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
-    LOG.info("Starting consumer, consuming records from the queue");
+    log.info("Starting consumer, consuming records from the queue");
     try {
       Iterator<O> it = ((BoundedInMemoryQueue<I, O>) queue).iterator();
       while (it.hasNext()) {
         consumer.consume(it.next());
       }
-      LOG.info("All records from the queue have been consumed");
+      log.info("All records from the queue have been consumed");
     } catch (Exception e) {
-      LOG.error("Failed consuming records", e);
+      log.error("Failed consuming records", e);
       queue.markAsFailed(e);
       throw new HoodieException(e);
     }

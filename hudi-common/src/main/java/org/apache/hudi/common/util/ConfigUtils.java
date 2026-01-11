@@ -36,8 +36,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -64,7 +63,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
+@Slf4j
 public class ConfigUtils {
+
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
   @Deprecated
   public static final String DELTA_STREAMER_CONFIG_PREFIX = "hoodie.deltastreamer.";
@@ -84,8 +85,6 @@ public class ConfigUtils {
   public static final String TABLE_SERDE_PATH = "path";
 
   public static final HoodieConfig DEFAULT_HUDI_CONFIG_FOR_READER = new HoodieConfig();
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
   /**
    * Get ordering field.
@@ -536,7 +535,7 @@ public class ConfigUtils {
   }
 
   private static void deprecationWarning(String alternative, ConfigProperty<?> configProperty) {
-    LOG.warn("The configuration key '{}' has been deprecated and may be removed in the future."
+    log.warn("The configuration key '{}' has been deprecated and may be removed in the future."
         + " Please use the new key '{}' instead.", alternative, configProperty.key());
   }
 
@@ -682,9 +681,9 @@ public class ConfigUtils {
           }
           return props;
         } catch (IOException e) {
-          LOG.warn("Could not read properties from {}: {}", path, e);
+          log.warn("Could not read properties from {}: {}", path, e);
         } catch (IllegalArgumentException e) {
-          LOG.warn("Invalid properties file {}: {}", path, props);
+          log.warn("Invalid properties file {}: {}", path, props);
         }
       }
 
@@ -692,7 +691,7 @@ public class ConfigUtils {
       try {
         Thread.sleep(maxReadRetryDelayInMs);
       } catch (InterruptedException e) {
-        LOG.warn("Interrupted while waiting");
+        log.warn("Interrupted while waiting");
       }
     }
 
@@ -743,7 +742,7 @@ public class ConfigUtils {
           // need to delete the backup as anyway reads will also fail
           // subsequent writes will recover and update
           storage.deleteFile(backupCfgPath);
-          LOG.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
+          log.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
           throw new IOException("Corrupted backup file");
         }
         // copy over from backup
