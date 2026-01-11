@@ -107,7 +107,7 @@ public class HFileReaderFactory {
         StoragePath path = fileSource.asLeft();
         byte[] buffer;
         try (SeekableDataInputStream stream = storage.openSeekable(path, false)) {
-          buffer = new byte[(int) storage.getPathInfo(path).getLength()];
+          buffer = new byte[(int) fileSize];
           stream.readFully(buffer);
         }
         return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buffer));
