@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema.VariantLogicalType;
+
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -115,6 +117,8 @@ public enum HoodieSchemaType {
 
   UUID(Schema.Type.STRING),
 
+  VARIANT(Schema.Type.RECORD),
+
   /**
    * Null type - represents the absence of a value
    */
@@ -150,6 +154,8 @@ public enum HoodieSchemaType {
         return DATE;
       } else if (logicalType == LogicalTypes.uuid()) {
         return UUID;
+      } else if (logicalType instanceof VariantLogicalType) {
+        return VARIANT;
       }
     }
     switch (avroSchema.getType()) {
@@ -216,6 +222,7 @@ public enum HoodieSchemaType {
       case ARRAY:
       case MAP:
       case UNION:
+      case VARIANT:
         return true;
       default:
         return false;
