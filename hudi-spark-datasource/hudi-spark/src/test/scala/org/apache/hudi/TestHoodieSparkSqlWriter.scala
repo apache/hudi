@@ -896,7 +896,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       spark,
       inputDf.schema,
       HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(inputDf.schema, "record", ""),
-      HoodieMetadataConfig.newBuilder().enable(true).build(),
+      HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "ts"), shouldReadInMemory = true).collectAsList()
     partitionStats.forEach(stat => {

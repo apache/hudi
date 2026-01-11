@@ -440,7 +440,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     while (iterator.hasNext()) {
       MetadataPartitionType partitionType = iterator.next();
       if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        // Partition stats index cannot be enabled for a non-partitioned table
+        LOG.debug("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
+            HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
         iterator.remove();
         this.enabledPartitionTypes.remove(partitionType);
       }
@@ -487,12 +488,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             initializeFilegroupsAndCommit(partitionType, relativePartitionPath, fileGroupCountAndRecordsPair, instantTimeForPartition);
             break;
           case PARTITION_STATS:
-            // For PARTITION_STATS, COLUMN_STATS should also be enabled
-            if (!dataWriteConfig.isMetadataColumnStatsIndexEnabled()) {
-              LOG.debug("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
-                  HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-              continue;
-            }
             fileGroupCountAndRecordsPair = initializePartitionStatsIndex(lazyLatestMergedPartitionFileSliceList, tableSchema);
             initializeFilegroupsAndCommit(partitionType, PARTITION_STATS.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForPartition);
             break;
@@ -697,19 +692,19 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     });
   }
 
-  void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
-                                     String relativePartitionPath,
-                                     Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
-                                     String instantTimeForPartition) throws IOException {
+  public void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
+                                            String relativePartitionPath,
+                                            Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
+                                            String instantTimeForPartition) throws IOException {
     initializeFilegroupsAndCommit(partitionType, relativePartitionPath, fileGroupCountAndRecordsPair,
         instantTimeForPartition, Collections.emptyList());
   }
 
-  void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
-                                     String relativePartitionPath,
-                                     Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
-                                     String instantTimeForPartition,
-                                     List<String> columnsToIndex) throws IOException {
+  public void initializeFilegroupsAndCommit(MetadataPartitionType partitionType,
+                                            String relativePartitionPath,
+                                            Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair,
+                                            String instantTimeForPartition,
+                                            List<String> columnsToIndex) throws IOException {
     String partitionTypeName = partitionType.name();
     LOG.info("Initializing {} index with {} mappings", partitionTypeName, fileGroupCountAndRecordsPair.getKey());
     HoodieTimer partitionInitTimer = HoodieTimer.start();
@@ -903,6 +898,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     final int totalDataFilesCount = partitionIdToAllFilesMap.values().stream().mapToInt(Map::size).sum();
     LOG.info("Committing total {} partitions and {} files to metadata", partitions.size(), totalDataFilesCount);
 
+    if (partitions.isEmpty()) {
+      return Pair.of(fileGroupCount, engineContext.emptyHoodieData());
+    }
     // Record which saves the list of all partitions
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
@@ -938,7 +936,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return TIMELINE_HISTORY_PATH.defaultValue();
   }
 
-  private HoodieTableMetaClient initializeMetaClient() throws IOException {
+  protected HoodieTableMetaClient initializeMetaClient() throws IOException {
     HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
@@ -1047,7 +1045,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * File groups will be named as :
    * record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
-  private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
+  public void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount, String relativePartitionPath, Option<String> dataPartitionName) throws IOException {
 
     // Archival of data table has a dependency on compaction(base files) in metadata table.
