@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataToAvroConverters;
 
 import org.apache.avro.generic.GenericRecord;
@@ -58,7 +58,7 @@ class TestRowDataToAvroConverters {
     RowDataToAvroConverters.RowDataToAvroConverter converter =
             RowDataToAvroConverters.createConverter(rowType, false);
     GenericRecord avroRecord =
-            (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
+            (GenericRecord) converter.convert(HoodieSchemaConverter.convertToSchema(rowType), rowData);
     Assertions.assertEquals(timestampFromLocal, formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.systemDefault())));
   }
 
@@ -76,7 +76,7 @@ class TestRowDataToAvroConverters {
     RowDataToAvroConverters.RowDataToAvroConverter converter =
             RowDataToAvroConverters.createConverter(rowType);
     GenericRecord avroRecord =
-            (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
+            (GenericRecord) converter.convert(HoodieSchemaConverter.convertToSchema(rowType), rowData);
     Assertions.assertEquals(timestampFromUtc0, formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.of("UTC"))));
     Assertions.assertEquals("2021-03-30 08:44:29", formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.of("UTC+1"))));
     Assertions.assertEquals("2021-03-30 15:44:29", formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) avroRecord.get(0)), ZoneId.of("Asia/Shanghai"))));

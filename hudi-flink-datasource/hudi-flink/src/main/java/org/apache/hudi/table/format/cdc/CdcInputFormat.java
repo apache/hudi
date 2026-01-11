@@ -141,7 +141,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     try {
       // get full schema iterator.
       final HoodieSchema schema = HoodieSchemaCache.intern(
-          HoodieSchema.parse(tableState.getAvroSchema()));
+          HoodieSchema.parse(tableState.getTableSchema()));
       // before/after images have assumption of snapshot scan, so `emitDelete` is set as false
       return getSplitRowIterator(split, schema, schema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, false);
     } catch (IOException e) {
@@ -181,7 +181,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadInputSplit inputSplit = fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
         return new RemoveBaseFileIterator(tableState, getFileSliceIterator(inputSplit));
       case AS_IS:
-        HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(HoodieSchema.parse(tableState.getAvroSchema()));
+        HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(HoodieSchema.parse(tableState.getTableSchema()));
         HoodieSchema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
         switch (mode) {
           case DATA_BEFORE_AFTER:
@@ -216,7 +216,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
    */
   private ClosableIterator<HoodieRecord<RowData>> getSplitRecordIterator(MergeOnReadInputSplit split) throws IOException {
     final HoodieSchema schema = HoodieSchemaCache.intern(
-        HoodieSchema.parse(tableState.getAvroSchema()));
+        HoodieSchema.parse(tableState.getTableSchema()));
     HoodieFileGroupReader<RowData> fileGroupReader =
         createFileGroupReader(split, schema, schema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, true);
     return fileGroupReader.getClosableHoodieRecordIterator();
@@ -363,7 +363,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadTableState tableState,
         ClosableIterator<HoodieRecord<RowData>> logRecordIterator,
         HoodieTableMetaClient metaClient) throws IOException {
-      this.tableSchema = HoodieSchema.parse(tableState.getAvroSchema());
+      this.tableSchema = HoodieSchema.parse(tableState.getTableSchema());
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.imageManager = imageManager;
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
@@ -495,8 +495,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         MergeOnReadTableState tableState,
         HoodieSchema cdcSchema,
         HoodieCDCFileSplit fileSplit) {
-      this.requiredSchema = HoodieSchema.parse(tableState.getRequiredAvroSchema());
-      this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
+      this.requiredSchema = HoodieSchema.parse(tableState.getRequiredSchema());
+      this.requiredPos = getRequiredPos(tableState.getTableSchema(), this.requiredSchema);
       this.recordBuilder = new GenericRecordBuilder(requiredSchema.getAvroSchema());
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
       StoragePath hadoopTablePath = new StoragePath(tablePath);

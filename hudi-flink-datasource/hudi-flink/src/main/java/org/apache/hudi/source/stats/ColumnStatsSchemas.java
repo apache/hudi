@@ -19,8 +19,9 @@
 package org.apache.hudi.source.stats;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -53,7 +54,7 @@ public class ColumnStatsSchemas {
   public static final int ORD_COL_NAME = 5;
 
   private static DataType getMetadataDataType() {
-    return AvroSchemaConverter.convertToDataType(HoodieMetadataRecord.SCHEMA$);
+    return HoodieSchemaConverter.convertToDataType(HoodieSchema.fromAvroSchema(HoodieMetadataRecord.SCHEMA$));
   }
 
   private static DataType getColStatsDataType() {

@@ -28,7 +28,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 import org.apache.hudi.utils.SchemaBuilder;
@@ -364,7 +364,7 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink3 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
     final Configuration conf3 = tableSink3.getConf();
-    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    final String expected = HoodieSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
     assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 
@@ -565,7 +565,7 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink3 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
     final Configuration conf3 = tableSink3.getConf();
-    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    final String expected = HoodieSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
     assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 

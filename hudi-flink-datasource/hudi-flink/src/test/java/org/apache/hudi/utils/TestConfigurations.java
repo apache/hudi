@@ -21,8 +21,8 @@ package org.apache.hudi.utils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
@@ -374,7 +374,7 @@ public class TestConfigurations {
   public static Configuration getDefaultConf(String tablePath, DataType dataType) {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, tablePath);
-    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, AvroSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, HoodieSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
