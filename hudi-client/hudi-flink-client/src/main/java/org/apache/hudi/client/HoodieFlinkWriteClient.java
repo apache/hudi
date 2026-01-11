@@ -427,7 +427,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    //no op. HUDI-8801 to fix.
+    new HoodieFlinkIndexClient().createOrUpdateColumnStatsIndexDefinition(metaClient, columnsToIndex);
   }
 
   /**
