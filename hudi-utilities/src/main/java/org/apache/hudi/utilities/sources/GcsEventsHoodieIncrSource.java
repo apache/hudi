@@ -37,12 +37,11 @@ import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -105,6 +104,7 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
  * --hoodie-conf hoodie.datasource.hive_sync.database=default \
  * --hoodie-conf hoodie.datasource.hive_sync.table=gcs_data
  */
+@Slf4j
 public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
   private final String srcPath;
@@ -116,7 +116,6 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   private final QueryRunner queryRunner;
   private final Option<SchemaProvider> schemaProvider;
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
-  private static final Logger LOG = LoggerFactory.getLogger(GcsEventsHoodieIncrSource.class);
 
   public GcsEventsHoodieIncrSource(
       TypedProperties props,
@@ -159,10 +158,10 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     this.schemaProvider = Option.ofNullable(streamContext.getSchemaProvider());
     this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
 
-    LOG.info("srcPath: " + srcPath);
-    LOG.info("missingCheckpointStrategy: " + missingCheckpointStrategy);
-    LOG.info("numInstantsPerFetch: " + numInstantsPerFetch);
-    LOG.info("checkIfFileExists: " + checkIfFileExists);
+    log.info("srcPath: {}", srcPath);
+    log.info("missingCheckpointStrategy: {}", missingCheckpointStrategy);
+    log.info("numInstantsPerFetch: {}", numInstantsPerFetch);
+    log.info("checkIfFileExists: {}", checkIfFileExists);
   }
 
   @Override
@@ -187,11 +186,10 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
         CloudObjectsSelectorCommon.GCS_OBJECT_KEY,
         CloudObjectsSelectorCommon.GCS_OBJECT_SIZE, true,
         Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
-    LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryInfo:" + queryInfo);
+    log.info("Querying GCS with:{} and queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.info("Source of file names is empty. Returning empty result and endInstant: "
-          + queryInfo.getStartInstant());
+      log.info("Source of file names is empty. Returning empty result and endInstant: {}", queryInfo.getStartInstant());
       return Pair.of(Option.empty(), new StreamerCheckpointV1(queryInfo.getStartInstant()));
     }
     return cloudDataFetcher.fetchPartitionedSource(GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);

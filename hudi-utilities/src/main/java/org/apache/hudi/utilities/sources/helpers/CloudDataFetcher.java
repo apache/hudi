@@ -28,12 +28,11 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
@@ -50,6 +49,7 @@ import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FIL
  * Connects to S3/GCS from Spark and downloads data from a given list of files.
  * Assumes SparkContext is already configured.
  */
+@Slf4j
 public class CloudDataFetcher implements Serializable {
 
   private static final String EMPTY_STRING = "";
@@ -58,8 +58,6 @@ public class CloudDataFetcher implements Serializable {
   private transient JavaSparkContext sparkContext;
   private transient SparkSession sparkSession;
   private transient CloudObjectsSelectorCommon cloudObjectsSelectorCommon;
-
-  private static final Logger LOG = LoggerFactory.getLogger(CloudDataFetcher.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -94,28 +92,28 @@ public class CloudDataFetcher implements Serializable {
       long sourceLimit) {
     boolean isSourceProfileSupplierAvailable = sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null;
     if (isSourceProfileSupplierAvailable) {
-      LOG.debug("Using source limit from source profile sourceLimitFromConfig {} sourceLimitFromProfile {}", sourceLimit, sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes());
+      log.debug("Using source limit from source profile sourceLimitFromConfig {} sourceLimitFromProfile {}", sourceLimit, sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes());
       sourceLimit = sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes();
     }
 
     QueryInfo queryInfo = queryInfoDatasetPair.getLeft();
     String filter = CloudObjectsSelectorCommon.generateFilter(cloudType, props);
-    LOG.info("Adding filter string to Dataset: " + filter);
+    log.info("Adding filter string to Dataset: {}", filter);
     Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
 
-    LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
+    log.info("Adjusting end checkpoint:{} based on sourceLimit :{}", queryInfo.getEndInstant(), sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
-      LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft());
+      log.info("Empty source, returning endpoint:{}", checkPointAndDataset.getLeft());
       return Pair.of(Option.empty(), new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
     }
-    LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
+    log.info("Adjusted end checkpoint :{}", checkPointAndDataset.getLeft());
 
     boolean checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
     List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, checkPointAndDataset.getRight().get(), checkIfFileExists, props);
-    LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
+    log.info("Total number of files to process :{}", cloudObjectMetadata.size());
 
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
         props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
@@ -123,7 +121,7 @@ public class CloudDataFetcher implements Serializable {
     if (isSourceProfileSupplierAvailable) {
       long bytesPerPartitionFromProfile = (long) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
       if (bytesPerPartitionFromProfile > 0) {
-        LOG.debug("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
+        log.debug("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
         bytesPerPartition = bytesPerPartitionFromProfile;
       }
       numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();

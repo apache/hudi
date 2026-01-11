@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.config.PulsarSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -45,8 +46,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.pulsar.JsonUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -68,9 +67,8 @@ import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_
 /**
  * Source fetching data from Pulsar topics
  */
+@Slf4j
 public class PulsarSource extends RowSource implements Closeable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(PulsarSource.class);
 
   private static final Duration GRACEFUL_SHUTDOWN_TIMEOUT = Duration.ofSeconds(20);
 
@@ -186,7 +184,7 @@ public class PulsarSource extends RowSource implements Closeable {
     try {
       pulsarConsumer.get().acknowledgeCumulative(latestConsumedOffset);
     } catch (PulsarClientException e) {
-      LOG.error(String.format("Failed to ack messageId (%s) for topic '%s'", latestConsumedOffset, topicName), e);
+      log.error("Failed to ack messageId ({}) for topic '{}'", latestConsumedOffset, topicName, e);
       throw new HoodieReadFromSourceException("Failed to ack message for topic", e);
     }
   }
@@ -195,7 +193,7 @@ public class PulsarSource extends RowSource implements Closeable {
     try {
       return pulsarConsumer.get().getLastMessageId();
     } catch (PulsarClientException e) {
-      LOG.error(String.format("Failed to fetch latest messageId for topic '%s'", topicName), e);
+      log.error("Failed to fetch latest messageId for topic '{}'", topicName, e);
       throw new HoodieReadFromSourceException("Failed to fetch latest messageId for topic", e);
     }
   }
@@ -213,7 +211,7 @@ public class PulsarSource extends RowSource implements Closeable {
           .subscriptionType(SubscriptionType.Exclusive)
           .subscribe();
     } catch (PulsarClientException e) {
-      LOG.error(String.format("Failed to subscribe to Pulsar topic '%s'", topicName), e);
+      log.error("Failed to subscribe to Pulsar topic '{}'", topicName, e);
       throw new HoodieIOException("Failed to subscribe to Pulsar topic", e);
     }
   }
@@ -224,7 +222,7 @@ public class PulsarSource extends RowSource implements Closeable {
           .serviceUrl(serviceEndpointURL)
           .build();
     } catch (PulsarClientException e) {
-      LOG.error(String.format("Failed to init Pulsar client connecting to '%s'", serviceEndpointURL), e);
+      log.error("Failed to init Pulsar client connecting to '{}'", serviceEndpointURL, e);
       throw new HoodieIOException("Failed to init Pulsar client", e);
     }
   }

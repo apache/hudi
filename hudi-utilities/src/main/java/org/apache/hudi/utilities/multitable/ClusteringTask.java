@@ -23,6 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -71,6 +73,7 @@ class ClusteringTask extends TableServiceTask {
   /**
    * Builder class for {@link ClusteringTask}.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static final class Builder {
 
     /**
@@ -109,9 +112,6 @@ class ClusteringTask extends TableServiceTask {
      * Meta Client.
      */
     private HoodieTableMetaClient metaClient;
-
-    private Builder() {
-    }
 
     public Builder withProps(TypedProperties props) {
       this.props = props;

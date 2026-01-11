@@ -76,6 +76,7 @@ import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -93,8 +94,6 @@ import org.apache.spark.sql.jdbc.JdbcDialect;
 import org.apache.spark.sql.jdbc.JdbcDialects;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.util.LongAccumulator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -124,14 +123,13 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 /**
  * Bunch of helper methods.
  */
+@Slf4j
 public class UtilHelpers {
 
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
   public static final String PURGE_PENDING_INSTANT = "purge_pending_instant";
-
-  private static final Logger LOG = LoggerFactory.getLogger(UtilHelpers.class);
 
   public static HoodieRecordMerger createRecordMerger(Properties props) {
     return HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
@@ -166,7 +164,7 @@ public class UtilHelpers {
         String constructorSignature = Arrays.stream(constructor.getLeft())
             .map(Class::getSimpleName)
             .collect(Collectors.joining(", ", "[", "]"));
-        LOG.error("Unexpected error while loading source class {} with constructor signature {}", sourceClass, constructorSignature, e);
+        log.error("Unexpected error while loading source class {} with constructor signature {}", sourceClass, constructorSignature, e);
       } catch (Throwable t) {
         throw new IOException("Could not load source class due to unexpected error " + sourceClass, t);
       }
@@ -259,7 +257,7 @@ public class UtilHelpers {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, storagePath);
     try {
       if (!overriddenProps.isEmpty()) {
-        LOG.info("Adding overridden properties to file properties.");
+        log.info("Adding overridden properties to file properties.");
         conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), storagePath);
       }
     } catch (IOException ioe) {
@@ -273,7 +271,7 @@ public class UtilHelpers {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration();
     try {
       if (!overriddenProps.isEmpty()) {
-        LOG.info("Adding overridden properties to file properties.");
+        log.info("Adding overridden properties to file properties.");
         conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), null);
       }
     } catch (IOException ioe) {
@@ -424,14 +422,14 @@ public class UtilHelpers {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat().toString());
+        log.error("Error processing records :writeStatus:{}", writeStatus.getStat().toString());
       }
     });
     if (errors.value() == 0) {
-      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
+      log.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error("Import failed with {} errors.", errors.value());
+    log.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 
@@ -439,11 +437,11 @@ public class UtilHelpers {
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount == 0) {
-      LOG.info("Finish job with {} instant time.", instantTime);
+      log.info("Finish job with {} instant time.", instantTime);
       return 0;
     }
 
-    LOG.error("Job failed with {} errors.", errorsCount);
+    log.error("Job failed with {} errors.", errorsCount);
     return -1;
   }
 
@@ -602,7 +600,7 @@ public class UtilHelpers {
         return tableSchemaResolver.getTableSchemaFromLatestCommit(false);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to fetch latest table's schema", e);
+      log.warn("Failed to fetch latest table's schema", e);
     }
 
     return Option.empty();
@@ -638,7 +636,7 @@ public class UtilHelpers {
         ret = supplier.get();
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
-      LOG.error(errorMessage, t);
+      log.error(errorMessage, t);
       throw new RuntimeException("Failed in retry", t);
     }
     return ret;

@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.client.api.MessageRoutingMode;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -32,8 +33,6 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.client.impl.conf.ClientConfigurationData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -56,9 +55,8 @@ import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarC
 /**
  * Pulsar implementation of {@link HoodieWriteCommitCallback}.
  */
+@Slf4j
 public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallback, Closeable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitPulsarCallback.class);
 
   private final String serviceUrl;
   private final String topic;
@@ -85,9 +83,9 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
     String callbackMsg = HoodieWriteCommitCallbackUtil.convertToJsonString(callbackMessage);
     try {
       producer.newMessage().key(callbackMessage.getTableName()).value(callbackMsg).send();
-      LOG.info("Send callback message succeed");
+      log.info("Send callback message succeed");
     } catch (Exception e) {
-      LOG.error("Send pulsar callback msg failed : ", e);
+      log.error("Send pulsar callback msg failed: ", e);
     }
   }
 
@@ -165,7 +163,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
       try {
         producer.close();
       } catch (Throwable t) {
-        LOG.warn("Could not properly close the producer.", t);
+        log.warn("Could not properly close the producer.", t);
       }
     }
 
@@ -173,7 +171,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
       try {
         client.close();
       } catch (Throwable t) {
-        LOG.warn("Could not properly close the client.", t);
+        log.warn("Could not properly close the client.", t);
       }
     }
   }

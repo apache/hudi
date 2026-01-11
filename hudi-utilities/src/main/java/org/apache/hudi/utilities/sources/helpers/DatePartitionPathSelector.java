@@ -30,13 +30,12 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -69,9 +68,8 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.P
  * <p>The date based partition format can be configured via this property
  * hoodie.streamer.source.dfs.datepartitioned.date.format
  */
+@Slf4j
 public class DatePartitionPathSelector extends DFSPathSelector {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
 
   private final String dateFormat;
   private final int datePartitionDepth;
@@ -121,17 +119,12 @@ public class DatePartitionPathSelector extends DFSPathSelector {
         getStringWithAltKeys(props, DatePartitionPathSelectorConfig.CURRENT_DATE, LocalDate.now().toString()));
 
     // obtain all eligible files under root folder.
-    LOG.info(
-        "Root path => "
-            + getStringWithAltKeys(props, ROOT_INPUT_PATH)
-            + " source limit => "
-            + sourceLimit
-            + " depth of day partition => "
-            + datePartitionDepth
-            + " num prev days to list => "
-            + numPrevDaysToList
-            + " from current date => "
-            + currentDate);
+    log.info("Root path => {} "
+            + "source limit => {} "
+            + "depth of day partition => {} "
+            + "num prev days to list => {} "
+            + "from current date => {}", getStringWithAltKeys(props, ROOT_INPUT_PATH), sourceLimit,
+        datePartitionDepth, numPrevDaysToList, currentDate);
     long lastCheckpointTime = lastCheckpoint.map(e -> Long.parseLong(e.getCheckpointKey())).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
