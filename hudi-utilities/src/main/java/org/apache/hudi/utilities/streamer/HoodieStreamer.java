@@ -122,6 +122,12 @@ public class HoodieStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = STREAMER_CHECKPOINT_RESET_KEY_V1;
 
+  // Ensure that all columns in the schema are nullable. This is required to keep the schema backwards compatible when
+  // new columns are added via SQL queries (e.g. When using SQLSource or SQLFileBasedSource as source of records
+  // written into a table.
+  public static final String ENSURE_ALL_COLUMNS_NULLABLE_KEY = "hoodie.streamer.transformed.row.nullable";
+  public static final boolean ENSURE_ALL_COLUMNS_NULLABLE_DEFAULT = false;
+
   protected transient Config cfg;
 
   /**
