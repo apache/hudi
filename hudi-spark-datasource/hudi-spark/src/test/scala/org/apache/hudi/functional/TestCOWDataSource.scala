@@ -2453,6 +2453,71 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       writeToHudi(opt, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
     })
   }
+
+  @Test
+  def testNestedFieldPartition(): Unit = {
+    // Define schema with nested_record containing level field
+    val nestedSchema = StructType(Seq(
+      StructField("nested_int", IntegerType, nullable = false),
+      StructField("level", StringType, nullable = false)
+    ))
+
+    val schema = StructType(Seq(
+      StructField("key", StringType, nullable = false),
+      StructField("ts", LongType, nullable = false),
+      StructField("level", StringType, nullable = false),
+      StructField("int_field", IntegerType, nullable = false),
+      StructField("string_field", StringType, nullable = true),
+      StructField("nested_record", nestedSchema, nullable = true)
+    ))
+
+    // Create test data where top-level 'level' and 'nested_record.level' have DIFFERENT values
+    // This helps verify we're correctly partitioning/filtering on the nested field
+    val records = Seq(
+      Row("key1", 1L, "L1", 1, "str1", Row(10, "INFO")),
+      Row("key2", 2L, "L2", 2, "str2", Row(20, "ERROR")),
+      Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
+      Row("key4", 4L, "L4", 4, "str4", Row(40, "DEBUG")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO"))
+    )
+
+    val inputDF = spark.createDataFrame(
+      spark.sparkContext.parallelize(records),
+      schema
+    )
+
+    // Write to Hudi partitioned by nested_record.level
+    inputDF.write.format("hudi")
+      .option("hoodie.insert.shuffle.parallelism", "4")
+      .option("hoodie.upsert.shuffle.parallelism", "4")
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "nested_record.level")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+      .option(HoodieWriteConfig.TBL_NAME.key, "test_nested_partition")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Read and filter on nested_record.level = 'INFO'
+    val results = spark.read.format("hudi")
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    // Expected results - 3 records with nested_record.level = 'INFO'
+    val expectedResults = Array(
+      Row("key1", 1L, "L1", 1, "str1", Row(10, "INFO")),
+      Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO"))
+    )
+
+    assertEquals(expectedResults.length, results.length)
+    expectedResults.zip(results).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+  }
 }
 
 object TestCOWDataSource {
