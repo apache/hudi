@@ -367,6 +367,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
+  public static final ConfigProperty<String> HIERARCHICAL_DATE_PARTITIONING = KeyGeneratorOptions.HIERARCHICAL_DATE_PARTITIONING;
 
   public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
       TIMESTAMP_TYPE_FIELD,
@@ -1209,6 +1210,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public HoodieTimelineTimeZone getTimelineTimezone() {
     return HoodieTimelineTimeZone.valueOf(getStringOrDefault(TIMELINE_TIMEZONE));
+  }
+
+  public String getHierarchicalDatePartitioning() {
+    return getStringOrDefault(KeyGeneratorOptions.HIERARCHICAL_DATE_PARTITIONING);
   }
 
   public String getHiveStylePartitioningEnable() {

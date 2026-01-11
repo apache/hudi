@@ -44,14 +44,17 @@ public abstract class PartitionPathFormatterBase<S> {
 
   private final boolean useHiveStylePartitioning;
   private final boolean useEncoding;
+  private final boolean hierarchicalDatePartitioning;
 
   PartitionPathFormatterBase(Supplier<StringBuilder<S>> stringBuilderFactory,
                              boolean useHiveStylePartitioning,
-                             boolean useEncoding) {
+                             boolean useEncoding,
+                             boolean hierarchicalDatePartitioning) {
     this.stringBuilderFactory = stringBuilderFactory;
 
     this.useHiveStylePartitioning = useHiveStylePartitioning;
     this.useEncoding = useEncoding;
+    this.hierarchicalDatePartitioning = hierarchicalDatePartitioning;
   }
 
   public final S combine(List<String> partitionPathFields, Object... partitionPathParts) {

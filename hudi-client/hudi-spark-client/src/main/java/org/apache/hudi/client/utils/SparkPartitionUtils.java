@@ -21,6 +21,7 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
@@ -29,20 +30,23 @@ import org.apache.spark.sql.internal.SQLConf;
 
 public class SparkPartitionUtils {
 
-  public static Object[] getPartitionFieldVals(Option<String[]> partitionFields,
+  public static Object[] getPartitionFieldVals(HoodieTableConfig tableConfig,
                                                String partitionPath,
                                                String basePath,
                                                HoodieSchema writerSchema,
                                                Configuration hadoopConf) {
+    Option<String[]> partitionFields = tableConfig.getPartitionFields();
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
+    boolean hierarchicalDatePartitioning = Boolean.parseBoolean(tableConfig.getHierarchicalDatePartitioning());
     return HoodieSparkUtils.doParsePartitionColumnValues(
         partitionFields.get(),
         partitionPath,
         new StoragePath(basePath),
         HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(writerSchema),
         hadoopConf.get("timeZone", SQLConf.get().sessionLocalTimeZone()),
-        hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true));
+        hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true),
+        hierarchicalDatePartitioning);
   }
 }

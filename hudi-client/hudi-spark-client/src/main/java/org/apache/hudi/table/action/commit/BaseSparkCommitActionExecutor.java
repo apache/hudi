@@ -397,8 +397,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
       Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
-      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
-          table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(table.getMetaClient().getTableConfig(),
+          mergeHandle.getPartitionPath(), table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
           mergeHandle.getWriterSchema(), (Configuration) table.getStorageConf().unwrap());
       mergeHandle.setPartitionFields(partitionFields);
       mergeHandle.setPartitionValues(partitionValues);

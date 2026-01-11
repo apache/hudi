@@ -273,7 +273,9 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-                                        boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                        boolean hiveStylePartitioning, boolean encodePartitionPath,
+                                        boolean consistentLogicalTimestampEnabled,
+                                        boolean hierarchicalDatePartitioning) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
@@ -283,6 +285,9 @@ public class KeyGenUtils {
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
+    }
+    if (hierarchicalDatePartitioning) {
+      partitionPath = partitionPath.replace('-', '/');
     }
     return partitionPath;
   }

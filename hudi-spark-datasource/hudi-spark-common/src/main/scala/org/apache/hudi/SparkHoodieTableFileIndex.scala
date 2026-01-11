@@ -410,11 +410,13 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val (staticPartitionColumnNames, staticPartitionColumnValues) = staticPartitionColumnNameValuePairs.unzip
 
     val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
+    val hierarchicalDatePartitioning = metaClient.getTableConfig.getHierarchicalDatePartitioning.toBoolean
 
     val partitionPathFormatter = new StringPartitionPathFormatter(
       JFunction.toJavaSupplier(() => new StringPartitionPathFormatter.JavaStringBuilder()),
       hiveStylePartitioning,
-      arePartitionPathsUrlEncoded
+      arePartitionPathsUrlEncoded,
+      hierarchicalDatePartitioning
     )
 
     partitionPathFormatter.combine(staticPartitionColumnNames.asJava,
