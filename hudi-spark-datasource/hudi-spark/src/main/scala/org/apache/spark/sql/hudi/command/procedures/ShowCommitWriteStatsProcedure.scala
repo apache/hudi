@@ -32,11 +32,16 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
+/**
+ * @deprecated Use [[ShowCommitsProcedure]] instead which provides a comprehensive view of commit operations
+ */
+@Deprecated
 class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
+    ProcedureParameter.required(2, "instant_time", DataTypes.StringType),
+    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -56,6 +61,9 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     val instantTime = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
@@ -78,7 +86,8 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     val rows = new util.ArrayList[Row]
     rows.add(Row(action, bytesWritten, recordsWritten, avgRecSize))
 
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowCommitWriteStatsProcedure()
