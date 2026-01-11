@@ -1916,6 +1916,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE);
   }
 
+  public boolean isTimelineCompactionForced() {
+    return getBoolean(HoodieArchivalConfig.TIMELINE_COMPACTION_FORCED);
+  }
+
   public Boolean shouldCleanBootstrapBaseFile() {
     return getBoolean(HoodieCleanConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLE);
   }

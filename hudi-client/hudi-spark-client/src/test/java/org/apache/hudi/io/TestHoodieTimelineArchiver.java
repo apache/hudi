@@ -726,6 +726,49 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   @Test
+  public void testCompactionForced() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, 3);
+
+    // do ingestion and trigger archive actions here.
+    for (int i = 1; i < 21; i++) {
+      testTable.doWriteOperation(
+          WriteClientTestUtils.createNewInstantTime(), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    // loading archived timeline and active timeline success
+    HoodieActiveTimeline rawActiveTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
+    assertEquals(4 * 3 + 16, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+
+    assertEquals(10, LSMTimeline.latestSnapshotVersion(metaClient, metaClient.getArchivePath()));
+    assertEquals(Arrays.asList(8, 9, 10), LSMTimeline.allSnapshotVersions(metaClient, metaClient.getArchivePath()).stream().sorted().collect(Collectors.toList()));
+
+    HoodieLSMTimelineManifest latestSnapshotManifest = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath());
+    Map<Integer, List<Pair<Integer, HoodieLSMTimelineManifest.LSMFileEntry>>> layeredFiles =
+        latestSnapshotManifest.getFiles().stream().map(file -> Pair.of(LSMTimeline.getFileLayer(file.getFileName()), file)).collect(Collectors.groupingBy(Pair::getKey));
+    assertEquals(2, layeredFiles.get(0).size());
+    assertEquals(2, layeredFiles.get(1).size());
+
+    // run archive again without new commits and force-compaction, there will be no new snapshot version created
+    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_FORCED.key(), "false");
+    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_BATCH_SIZE.key(), "2");
+    archiveAndGetCommitsList(writeConfig, true);
+    assertEquals(10, LSMTimeline.latestSnapshotVersion(metaClient, metaClient.getArchivePath()));
+
+    // run archive again without new commits but with force-compaction and there will be new snapshot version created
+    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_FORCED.key(), "true");
+    archiveAndGetCommitsList(writeConfig, true);
+    assertEquals(12, LSMTimeline.latestSnapshotVersion(metaClient, metaClient.getArchivePath()));
+    latestSnapshotManifest = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath());
+    layeredFiles = latestSnapshotManifest.getFiles().stream().map(file -> Pair.of(LSMTimeline.getFileLayer(file.getFileName()), file)).collect(Collectors.groupingBy(Pair::getKey));
+    assertFalse(layeredFiles.containsKey(0));
+    assertEquals(1, layeredFiles.get(1).size());
+    assertEquals(1, layeredFiles.get(2).size());
+
+  }
+
+  @Test
   public void testCompactionWithLargeL0File() throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, 3);
     writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES.key(), "3200");

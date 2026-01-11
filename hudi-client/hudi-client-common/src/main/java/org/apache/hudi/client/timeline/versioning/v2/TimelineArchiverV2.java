@@ -115,8 +115,6 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         log.debug("Deleting archived instants");
         deleteArchivedActions(instantsToArchive, context);
-        // triggers compaction and cleaning only after archiving action
-        this.timelineWriter.compactAndClean(context);
         Supplier<List<HoodieInstant>> archivedInstants = () -> instantsToArchive.stream()
             .flatMap(action -> Stream.concat(action.getCompletedInstants().stream(), action.getPendingInstants().stream()))
             .collect(Collectors.toList());
@@ -124,6 +122,10 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         table.getMetaClient().getTableFormat().archive(archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());
       } else {
         log.info("No Instants to archive");
+      }
+      // run compact and clean if needed even no instants were archived
+      if (!instantsToArchive.isEmpty() || config.isTimelineCompactionForced()) {
+        this.timelineWriter.compactAndClean(context);
       }
       return instantsToArchive.size();
     } finally {
