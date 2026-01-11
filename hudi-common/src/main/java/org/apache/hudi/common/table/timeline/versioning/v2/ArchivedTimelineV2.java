@@ -29,8 +29,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -56,8 +54,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   public static final String PLAN_ARCHIVED_META_FIELD = "plan";
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new ConcurrentHashMap<>();
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieArchivedTimeline.class);
 
   /**
    * Used for loading the archived timeline incrementally, the earliest loaded instant time get memorized
@@ -149,8 +145,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     // load compactionPlan
     List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
         record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
-            && record.get(PLAN_ARCHIVED_META_FIELD) != null
-    );
+            && record.get(PLAN_ARCHIVED_META_FIELD) != null, Option.empty());
     appendLoadedInstants(loadedInstants);
   }
 
@@ -256,7 +251,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, HoodieArchivedTimeline.LoadMode loadMode) {
-    return loadInstants(filter, loadMode, r -> true);
+    return loadInstants(filter, loadMode, r -> true, Option.empty());
   }
 
   /**
@@ -268,11 +263,16 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   private List<HoodieInstant> loadInstants(
       HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,
-      Function<GenericRecord, Boolean> commitsFilter) {
+      Function<GenericRecord, Boolean> commitsFilter,
+      Option<Integer> limit) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
     timelineLoader.loadInstants(metaClient, filter, loadMode, commitsFilter,
-        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), Option.empty());
+        (instantTime, avroRecord) -> {
+          if (filter == null || filter.isInRange(instantTime)) {
+            instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer));
+          }
+        }, limit);
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
@@ -284,12 +284,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    */
   private void loadAndCacheInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
-    Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
-    Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
-    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter,
-        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), Option.of(limit));
-    List<HoodieInstant> collectedInstants = new ArrayList<>(instantsInRange.values());
-    Collections.sort(collectedInstants);
+    List<HoodieInstant> collectedInstants = loadInstants(null, loadMode, commitsFilter, Option.of(limit));
     appendLoadedInstants(collectedInstants);
   }
 

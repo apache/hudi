@@ -286,7 +286,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   }
 
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
-    InstantsLoader loader = new InstantsLoader(loadInstantDetails);
+    InstantsLoader loader = new InstantsLoader(filter, loadInstantDetails);
     timelineLoader.loadInstants(
         metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader, Option.empty());
     return loader.getInstantsInRangeCollected().values()
@@ -294,7 +294,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   }
 
   private void loadAndCacheInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
-    InstantsLoader loader = new InstantsLoader(loadInstantDetails);
+    InstantsLoader loader = new InstantsLoader(null, loadInstantDetails);
     timelineLoader.loadInstants(
         metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, Option.of(limit));
     List<HoodieInstant> collectedInstants = loader.getInstantsInRangeCollected().values()
@@ -311,13 +311,18 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   public class InstantsLoader implements BiConsumer<String, GenericRecord> {
     private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
     private final boolean loadInstantDetails;
+    private final HoodieArchivedTimeline.TimeRangeFilter timeRangeFilter;
 
-    private InstantsLoader(boolean loadInstantDetails) {
+    private InstantsLoader(HoodieArchivedTimeline.TimeRangeFilter timeRangeFilter, boolean loadInstantDetails) {
       this.loadInstantDetails = loadInstantDetails;
+      this.timeRangeFilter = timeRangeFilter;
     }
 
     @Override
     public void accept(String instantTime, GenericRecord record) {
+      if (timeRangeFilter != null && !timeRangeFilter.isInRange(instantTime)) {
+        return;
+      }
       Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
       if (instant.isPresent()) {
         instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
