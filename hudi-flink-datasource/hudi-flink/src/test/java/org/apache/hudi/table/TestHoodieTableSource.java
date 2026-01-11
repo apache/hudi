@@ -179,6 +179,7 @@ public class TestHoodieTableSource {
   void testDataSkippingWithPartitionStatsPruning(List<ResolvedExpression> filters, List<String> expectedPartitions) throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);

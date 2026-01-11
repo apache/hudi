@@ -347,6 +347,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withProperties(cfg.getMetadataConfig().getProps())
             .withMetadataIndexColumnStats(false)
+            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 
@@ -1150,6 +1151,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             // Disable the other two default index for this test because the test orchestrates
             // the rollback with the assumption of init commits being in certain order
             .withMetadataIndexColumnStats(false)
+            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 

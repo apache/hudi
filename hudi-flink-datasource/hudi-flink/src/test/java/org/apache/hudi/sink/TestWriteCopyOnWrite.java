@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -753,6 +754,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testReuseEmbeddedServer() throws IOException {
     conf.setString("hoodie.filesystem.view.remote.timeout.secs", "500");
     conf.setString("hoodie.metadata.enable","true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
 
     HoodieFlinkWriteClient writeClient = null;
     HoodieFlinkWriteClient writeClient2 = null;
