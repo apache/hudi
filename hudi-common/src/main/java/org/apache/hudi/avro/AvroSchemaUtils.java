@@ -126,19 +126,6 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Generates fully-qualified name for the Avro's schema based on the Table's name
-   *
-   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
-   *       This method should not change for compatibility reasons as older versions
-   *       of Avro might be comparing fully-qualified names rather than just the record
-   *       names
-   */
-  public static String getAvroRecordQualifiedName(String tableName) {
-    String sanitizedTableName = HoodieAvroUtils.sanitizeName(tableName);
-    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
-  }
-
-  /**
    * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
    * Only difference of this method from {@link #isStrictProjectionOf(Schema, Schema)} is
    * the fact that it allows some legitimate type promotions (like {@code int -> long},

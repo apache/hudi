@@ -93,7 +93,7 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
     final int numRecords = 128;
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
     final BoundedInMemoryQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new BoundedInMemoryQueue(FileIOUtils.KB, getTransformerInternal(HOODIE_SCHEMA, writeConfig));
+        new BoundedInMemoryQueue(FileIOUtils.KB, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig));
     // Produce
     Future<Boolean> resFuture = executorService.submit(() -> {
       new IteratorBasedQueueProducer<>(hoodieRecords.iterator()).produce(queue);
@@ -131,7 +131,7 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
     final List<List<HoodieRecord>> recs = new ArrayList<>();
 
     final BoundedInMemoryQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new BoundedInMemoryQueue(FileIOUtils.KB, getTransformerInternal(HOODIE_SCHEMA, writeConfig));
+        new BoundedInMemoryQueue(FileIOUtils.KB, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig));
 
     // Record Key to <Producer Index, Rec Index within a producer>
     Map<String, Tuple2<Integer, Integer>> keyToProducerAndIndexMap = new HashMap<>();
@@ -226,11 +226,11 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
     final int recordLimit = 5;
     final SizeEstimator<HoodieLazyInsertIterable.HoodieInsertValueGenResult> sizeEstimator = new DefaultSizeEstimator<>();
     HoodieLazyInsertIterable.HoodieInsertValueGenResult genResult =
-        getTransformerInternal(HOODIE_SCHEMA, writeConfig).apply(hoodieRecords.get(0));
+        getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig).apply(hoodieRecords.get(0));
     final long objSize = sizeEstimator.sizeEstimate(genResult);
     final long memoryLimitInBytes = recordLimit * objSize;
     final BoundedInMemoryQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new BoundedInMemoryQueue(memoryLimitInBytes, getTransformerInternal(HOODIE_SCHEMA, writeConfig));
+        new BoundedInMemoryQueue(memoryLimitInBytes, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig));
 
     // Produce
     executorService.submit(() -> {
@@ -275,15 +275,15 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
     final SizeEstimator<Tuple2<HoodieRecord, Option<IndexedRecord>>> sizeEstimator = new DefaultSizeEstimator<>();
     // queue memory limit
     HoodieLazyInsertIterable.HoodieInsertValueGenResult genResult =
-        getTransformerInternal(HOODIE_SCHEMA, writeConfig).apply(hoodieRecords.get(0));
-    final long objSize = sizeEstimator.sizeEstimate(new Tuple2(genResult.getResult(), genResult.getResult().toIndexedRecord(HoodieTestDataGenerator.HOODIE_SCHEMA, new Properties())));
+        getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig).apply(hoodieRecords.get(0));
+    final long objSize = sizeEstimator.sizeEstimate(new Tuple2(genResult.getResult(), genResult.getResult().toIndexedRecord(HoodieTestDataGenerator.AVRO_SCHEMA, new Properties())));
     final long memoryLimitInBytes = 4 * objSize;
 
     // first let us throw exception from queueIterator reader and test that queueing thread
     // stops and throws
     // correct exception back.
     BoundedInMemoryQueue<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>> queue1 =
-        new BoundedInMemoryQueue(memoryLimitInBytes, getTransformerInternal(HOODIE_SCHEMA, writeConfig));
+        new BoundedInMemoryQueue(memoryLimitInBytes, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig));
 
     // Produce
     Future<Boolean> resFuture = executorService.submit(() -> {
@@ -311,7 +311,7 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
     when(mockHoodieRecordsIterator.hasNext()).thenReturn(true);
     when(mockHoodieRecordsIterator.next()).thenThrow(expectedException);
     BoundedInMemoryQueue<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>> queue2 =
-        new BoundedInMemoryQueue(memoryLimitInBytes, getTransformerInternal(HOODIE_SCHEMA, writeConfig));
+        new BoundedInMemoryQueue(memoryLimitInBytes, getTransformerInternal(HoodieTestDataGenerator.HOODIE_SCHEMA, writeConfig));
 
     // Produce
     Future<Boolean> res = executorService.submit(() -> {

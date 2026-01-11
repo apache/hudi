@@ -116,9 +116,9 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
 import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.sanitizeName;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -735,10 +735,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       .setConf(HoodieTestUtils.getDefaultStorageConf)
       .build()
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaResolver.getTableAvroSchema(false)
+    val tableSchema = schemaResolver.getTableSchema(false)
     val field = tableSchema.getField(fieldName)
-    assertNotNull(field, s"$fieldName field should exist in table schema")
-    val fieldType = field.schema()
+    assertTrue(field.isPresent, s"$fieldName field should exist in table schema")
+    val fieldType = field.get().schema()
     assertTrue(
       fieldType.toString.contains(expectedType),
       s"$fieldName field should be of type $expectedType, but got: ${fieldType.toString}"

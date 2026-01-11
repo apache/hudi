@@ -76,7 +76,6 @@ import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -646,7 +645,7 @@ public class UtilHelpers {
 
   public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    Schema schema = schemaResolver.getTableAvroSchema(false);
+    HoodieSchema schema = schemaResolver.getTableSchema(false);
     return schema.toString();
   }
 }

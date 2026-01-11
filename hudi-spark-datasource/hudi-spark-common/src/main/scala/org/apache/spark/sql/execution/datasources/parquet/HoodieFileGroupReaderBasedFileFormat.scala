@@ -104,7 +104,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
-  private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+  private val sanitizedTableName = HoodieSchemaUtils.getRecordQualifiedName(tableName)
 
   /**
    * Flag saying whether vectorized reading is supported.

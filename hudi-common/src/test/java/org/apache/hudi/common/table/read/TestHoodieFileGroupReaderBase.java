@@ -715,8 +715,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema();
     expectedHoodieRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieRecords, metaClient, schema);
     expectedHoodieUnmergedRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieUnmergedRecords, metaClient, schema);
-    List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, schema.toAvroSchema(), orderingFields);
-    List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, schema.toAvroSchema(), orderingFields);
+    List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, schema, orderingFields);
+    List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, schema, orderingFields);
     validateOutputFromFileGroupReaderWithExistingRecords(
         storageConf, tablePath, containsBaseFile, expectedLogFileNum, recordMergeMode,
         expectedRecords, expectedUnmergedRecords);
@@ -936,7 +936,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             .collect(Collectors.toList());
   }
 
-  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord> records, Schema schema, String[] orderingFields) {
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord> records, HoodieSchema schema, String[] orderingFields) {
     return records.stream().map(record -> HoodieTestDataGenerator.RecordIdentifier.fromTripTestPayload((HoodieAvroIndexedRecord) record, orderingFields)).collect(Collectors.toList());
   }
 

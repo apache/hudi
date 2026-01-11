@@ -86,7 +86,7 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndCustomColumnSort(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     final String[] sortColumns = sortColumnNames;
-    final HoodieSchema schema = HoodieSchemaUtils.addMetadataFields((HoodieSchema.parse(table.getConfig().getSchema())));
+    final HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(table.getConfig().getSchema()));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
       FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(utf8StringFactory.wrapArrayOfObjects(
           t1.getColumnValues(schema, sortColumns, consistentLogicalTimestampEnabled)));
