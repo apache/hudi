@@ -44,7 +44,8 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Clustering Strategy based on following.
  * 1) Creates clustering groups based on max size allowed per group.
- * 2) Excludes files that are greater than 'small.file.limit' from clustering plan.
+ * 2) Excludes files that are greater than 'small.file.limit' and smaller than 'floor.file.limit'
+ * from clustering plan.
  */
 @Slf4j
 public class SparkSizeBasedClusteringPlanStrategy<T>
@@ -73,7 +74,11 @@ public class SparkSizeBasedClusteringPlanStrategy<T>
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have base file size smaller than small file size are eligible.
-        .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
+        // Only files within [floor file limit, small file limit) are eligible.
+        .filter(slice -> {
+          long fileSize = slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L);
+          return fileSize >= getWriteConfig().getClusteringSmallFileFloorLimit()
+              && fileSize < getWriteConfig().getClusteringSmallFileLimit();
+        });
   }
 }
