@@ -85,6 +85,8 @@ public abstract class HoodieEngineContext {
     }
   }
 
+  public abstract <T> HoodieData<T> union(List<HoodieData<T>> dataList);
+
   public abstract <T> HoodieData<T> parallelize(List<T> data, int parallelism);
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
