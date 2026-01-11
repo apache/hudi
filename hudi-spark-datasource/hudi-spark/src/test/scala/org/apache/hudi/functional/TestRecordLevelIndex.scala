@@ -370,7 +370,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals(10, spark.read.format("hudi").load(basePath).count())
     metaClient.reloadActiveTimeline()
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val latestTableSchemaFromCommitMetadata = tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false)
+    val latestTableSchemaFromCommitMetadata = tableSchemaResolver.getTableSchemaFromLatestCommit(false)
 
     if (failAndDoRollback) {
       val updatesToFail =  dataGen.generateUniqueUpdates("003", 3)

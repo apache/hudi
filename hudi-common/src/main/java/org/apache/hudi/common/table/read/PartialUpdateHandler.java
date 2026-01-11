@@ -19,12 +19,12 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.PartialUpdateMode;
 
 import java.io.Serializable;
@@ -117,7 +117,7 @@ public class PartialUpdateHandler<T> implements Serializable {
       String fieldName = field.name();
       // The default value only from the top-level data type is validated. That means,
       // for nested columns, we do not check the leaf level data type defaults.
-      Object defaultValue = HoodieAvroUtils.toJavaDefaultValue(field.getAvroField());
+      Object defaultValue = HoodieSchemaUtils.toJavaDefaultValue(field);
       Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
       if (defaultValue == newValue) {
         fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);

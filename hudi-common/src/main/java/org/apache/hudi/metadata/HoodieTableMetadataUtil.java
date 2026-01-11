@@ -1607,7 +1607,7 @@ public class HoodieTableMetadataUtil {
 
     // NOTE: Writer schema added to commit metadata will not contain Hudi's metadata fields
     Option<HoodieSchema> tableSchema = writerSchema.isEmpty()
-        ? tableConfig.getTableCreateSchema().map(HoodieSchema::fromAvroSchema) // the write schema does not set up correctly
+        ? tableConfig.getTableCreateSchema() // the write schema does not set up correctly
         : writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema)
             .map(HoodieSchema::fromAvroSchema);
 
