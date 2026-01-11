@@ -29,5 +29,9 @@ public interface MetadataTableFileGroupIndexParser extends Serializable {
 
   int getFileGroupIndex(String fileID);
 
+  default int getFileGroupIndex(String partitionPath, int fileGroupIndexInPartition){
+    return fileGroupIndexInPartition;
+  }
+
   int getNumberOfFileGroups();
 }
