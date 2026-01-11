@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ActiveAction;
@@ -101,10 +102,13 @@ public class TestLegacyArchivedMetaEntryReader {
 
   private HoodieLogFormat.Writer openWriter(HoodieTableMetaClient metaClient) {
     try {
-      return HoodieLogFormat.newWriterBuilder()
-          .onParentPath(metaClient.getArchivePath())
-          .withFileId("commits").withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-          .withStorage(metaClient.getStorage()).withInstantTime("").build();
+      return HoodieLogFormatWriter.builder()
+          .withParentPath(metaClient.getArchivePath())
+          .withLogFileId("commits")
+          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+          .withStorage(metaClient.getStorage())
+          .withInstantTime("")
+          .build();
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }

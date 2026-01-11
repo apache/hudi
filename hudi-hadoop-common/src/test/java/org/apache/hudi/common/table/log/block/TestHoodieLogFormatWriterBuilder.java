@@ -23,6 +23,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -38,21 +39,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 /**
- * Test class for {@link HoodieLogFormat#newWriterBuilder()}.
+ * Test class for {@link HoodieLogFormatWriter#builder()}.
  */
-public class TestHoodieLogWriterBuilder {
+public class TestHoodieLogFormatWriterBuilder {
 
-  HoodieLogFormat.WriterBuilder builder;
+  HoodieLogFormatWriter.HoodieLogFormatWriterBuilder builder;
   HoodieLogFormat.Writer writer;
   HoodieStorage storage;
 
   @BeforeEach
   public void setup() {
     storage = mock(HoodieStorage.class);
-    builder = HoodieLogFormat.newWriterBuilder()
-        .withFileId("test-fileid1")
+    builder = HoodieLogFormatWriter.builder()
+        .withLogFileId("test-fileid1")
         .withInstantTime("100")
-        .onParentPath(new StoragePath("/tmp"))
+        .withParentPath(new StoragePath("/tmp"))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
         .withStorage(storage);
   }
