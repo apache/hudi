@@ -26,6 +26,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.util.StreamerUtil.EMPTY_PARTITION_PATH;
+
 /**
  * Result from continuous enumerator. It has the same semantic to the {@link org.apache.hudi.source.IncrementalInputSplits.Result}.
  */
@@ -58,7 +60,8 @@ public class HoodieContinuousSplitBatch {
             HoodieSourceSplit.SPLIT_COUNTER.incrementAndGet(),
             split.getBasePath().orElse(null),
             split.getLogPaths(), split.getTablePath(),
-            split.getMergeType(), split.getFileId()
+            EMPTY_PARTITION_PATH, split.getMergeType(),
+            split.getFileId()
         )
     ).collect(Collectors.toList());
 
