@@ -59,7 +59,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -1086,16 +1085,5 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
           throw new UnsupportedOperationException("Unsupported type: " + fieldSchema.getType() + " at " + path);
       }
     }
-  }
-
-  private static Schema getNonNullSchema(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      for (Schema s : schema.getTypes()) {
-        if (s.getType() != Schema.Type.NULL) {
-          return s;
-        }
-      }
-    }
-    return schema;
   }
 }

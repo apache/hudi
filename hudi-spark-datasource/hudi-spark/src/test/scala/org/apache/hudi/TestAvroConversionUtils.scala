@@ -21,12 +21,10 @@ package org.apache.hudi
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, DataTypes, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
-import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, DataTypes, MapType, StringType, StructField, StructType}
 import org.scalatest.{FunSuite, Matchers}
 
 import java.nio.ByteBuffer
@@ -403,14 +401,13 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
   test("test converter with binary") {
     val hoodieSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
       + ":[{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null}]}")
-    val avroSchema = hoodieSchema.toAvroSchema
     val sparkSchema = StructType(List(StructField("col9", BinaryType, nullable = true)))
     // create a test record with avroSchema
-    val avroRecord = new GenericData.Record(avroSchema)
+    val avroRecord = new GenericData.Record(hoodieSchema.toAvroSchema)
     val bb = ByteBuffer.wrap(Array[Byte](97, 48, 53))
     avroRecord.put("col9", bb)
-    val row1 = AvroConversionUtils.createAvroToInternalRowConverter(avroSchema, sparkSchema).apply(avroRecord).get
-    val row2 = AvroConversionUtils.createAvroToInternalRowConverter(avroSchema, sparkSchema).apply(avroRecord).get
+    val row1 = AvroConversionUtils.createAvroToInternalRowConverter(hoodieSchema, sparkSchema).apply(avroRecord).get
+    val row2 = AvroConversionUtils.createAvroToInternalRowConverter(hoodieSchema, sparkSchema).apply(avroRecord).get
     internalRowCompare(row1, row2, sparkSchema)
   }
 
