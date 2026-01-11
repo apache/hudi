@@ -1759,4 +1759,204 @@ public class TestHoodieSchemaUtils {
     HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
     assertEquals(HoodieSchemaType.STRING, result.getType());
   }
+
+  @Test
+  public void testGetNestedFieldWithArrayListElement() {
+    // Create schema with array field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("items", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)))
+        )
+    );
+
+    // Test: items.list.element should resolve to STRING
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "items.list.element");
+    assertTrue(result.isPresent());
+    assertEquals("items.list.element", result.get().getLeft());
+    assertEquals("element", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithArrayListElementAndNesting() {
+    // Create schema with array of records
+    HoodieSchema nestedSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nested_int", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("nested_string", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("items", HoodieSchema.createArray(nestedSchema))
+        )
+    );
+
+    // Test: items.list.element.nested_int should resolve to INT
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "items.list.element.nested_int");
+    assertTrue(result.isPresent());
+    assertEquals("items.list.element.nested_int", result.get().getLeft());
+    assertEquals("nested_int", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.INT, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithMapKeyValueKey() {
+    // Create schema with map field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("metadata", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+        )
+    );
+
+    // Test: metadata.key_value.key should resolve to STRING (MAP keys are always STRING)
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "metadata.key_value.key");
+    assertTrue(result.isPresent());
+    assertEquals("metadata.key_value.key", result.get().getLeft());
+    assertEquals("key", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithMapKeyValueValue() {
+    // Create schema with map field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("metadata", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+        )
+    );
+
+    // Test: metadata.key_value.value should resolve to INT
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "metadata.key_value.value");
+    assertTrue(result.isPresent());
+    assertEquals("metadata.key_value.value", result.get().getLeft());
+    assertEquals("value", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.INT, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithMapKeyValueValueAndNesting() {
+    // Create schema with map of records (like the original failing case)
+    HoodieSchema nestedSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nested_int", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("nested_string", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("nested_map", HoodieSchema.createMap(nestedSchema))
+        )
+    );
+
+    // Test: nested_map.key_value.value.nested_int should resolve to INT
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "nested_map.key_value.value.nested_int");
+    assertTrue(result.isPresent());
+    assertEquals("nested_map.key_value.value.nested_int", result.get().getLeft());
+    assertEquals("nested_int", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.INT, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithInvalidArrayPath() {
+    // Create schema with array field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("items", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)))
+        )
+    );
+
+    // Test: Invalid array path should return Option.empty()
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "items.wrong.path");
+    assertFalse(result.isPresent());
+
+    // Test: Missing "element" should return Option.empty()
+    result = HoodieSchemaUtils.getNestedField(schema, "items.list.missing");
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldWithInvalidMapPath() {
+    // Create schema with map field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("metadata", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+        )
+    );
+
+    // Test: Invalid map path should return Option.empty()
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "metadata.wrong.path");
+    assertFalse(result.isPresent());
+
+    // Test: Missing "key" or "value" should return Option.empty()
+    result = HoodieSchemaUtils.getNestedField(schema, "metadata.key_value.missing");
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldComplexNestedMapAndArray() {
+    // Create complex schema: record with map of arrays of records
+    HoodieSchema innerRecord = HoodieSchema.createRecord(
+        "InnerRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.LONG))
+        )
+    );
+
+    HoodieSchema arrayOfRecords = HoodieSchema.createArray(innerRecord);
+    HoodieSchema mapOfArrays = HoodieSchema.createMap(arrayOfRecords);
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("complex_field", mapOfArrays)
+        )
+    );
+
+    // Test: complex_field.key_value.value.list.element.value should resolve to LONG
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(
+        schema, "complex_field.key_value.value.list.element.value");
+    assertTrue(result.isPresent());
+    assertEquals("complex_field.key_value.value.list.element.value", result.get().getLeft());
+    assertEquals("value", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.LONG, result.get().getRight().schema().getType());
+  }
 }
