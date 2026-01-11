@@ -31,8 +31,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.io.hadoop.TestHoodieOrcReaderWriter;
+import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -44,6 +44,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -60,6 +62,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieNativeAvroHFileReaderCaching {
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieNativeAvroHFileReaderCaching.class);
 
   @TempDir
   public static Path tempDir;
@@ -79,7 +82,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     // Write records with for realistic testing
     final int numRecords = 50_000;
-    System.out.println("Creating HFile with " + numRecords + " records...");
+    LOG.debug("Creating HFile with {} records...", numRecords);
 
     for (int i = 0; i < numRecords; i++) {
       String key = String.format("key_%08d", i);
@@ -102,14 +105,14 @@ public class TestHoodieNativeAvroHFileReaderCaching {
       MISSING_KEYS.add(missingKey);
     }
 
-    System.out.println("HFile created with " + EXISTING_KEYS.size() + " existing keys");
-    System.out.println("Generated " + MISSING_KEYS.size() + " missing keys for testing");
+    LOG.debug("HFile created with {} existing keys", EXISTING_KEYS.size());
+    LOG.debug("Generated {} missing keys for testing", MISSING_KEYS.size());
   }
 
   @Test
   @Disabled("Enable this for local performance tests")
   public void testBlockCachePerformanceOnRecordLevelIndex() throws Exception {
-    System.out.println("\n=== HFile BlockCache Performance Test ===");
+    LOG.debug("\n=== HFile BlockCache Performance Test ===");
 
     // Test existing keys lookup performance
     testExistingKeysLookup();
@@ -117,11 +120,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     // Test missing keys lookup performance 
     testMissingKeysLookup();
 
-    System.out.println("================================================================\n");
+    LOG.debug("================================================================\n");
   }
 
   private void testExistingKeysLookup() throws Exception {
-    System.out.println("\n--- Testing " + KEYS_TO_LOOKUP + " Existing Key Lookups ---");
+    LOG.debug("\n--- Testing {} Existing Key Lookups ---", KEYS_TO_LOOKUP);
 
     // Select 10K random existing keys
     Collections.shuffle(EXISTING_KEYS, RANDOM);
@@ -137,17 +140,17 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     double speedup = (double) noCacheTime / cacheTime;
 
-    System.out.printf(KEYS_TO_LOOKUP + " Existing Key Lookups:\n");
-    System.out.printf("  - Without BlockCache: %d ms\n", noCacheTime);
-    System.out.printf("  - With BlockCache: %d ms\n", cacheTime);
-    System.out.printf("  - Speedup: %.2fx\n", speedup);
-    System.out.printf("  - Performance Improvement: %.1f%%\n", (speedup - 1) * 100);
+    LOG.debug("{} Existing Key Lookups:\n"
+        + "  - Without BlockCache: {} ms\n"
+        + "  - With BlockCache: {} ms\n"
+        + "  - Speedup: {}x\n"
+        + "  - Performance Improvement: {}%\n", KEYS_TO_LOOKUP, noCacheTime, cacheTime, speedup, (speedup - 1) * 100);
 
     assertTrue(speedup > 1.0, "BlockCache should provide speedup for existing key lookups");
   }
 
   private void testMissingKeysLookup() throws Exception {
-    System.out.println("\n--- Testing " + KEYS_TO_LOOKUP + " Missing Key Lookups ---");
+    LOG.debug("\n--- Testing {} Missing Key Lookups ---", KEYS_TO_LOOKUP);
 
     // Use all 1k missing keys
     List<String> testKeys = new ArrayList<>(MISSING_KEYS);
@@ -163,11 +166,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     double speedup = (double) noCacheTime / cacheTime;
 
-    System.out.printf(KEYS_TO_LOOKUP + " Missing Key Lookups:\n");
-    System.out.printf("  - Without BlockCache: %d ms\n", noCacheTime);
-    System.out.printf("  - With BlockCache: %d ms\n", cacheTime);
-    System.out.printf("  - Speedup: %.2fx\n", speedup);
-    System.out.printf("  - Performance Improvement: %.1f%%\n", (speedup - 1) * 100);
+    LOG.debug("{} Existing Key Lookups:\n"
+        + "  - Without BlockCache: {} ms\n"
+        + "  - With BlockCache: {} ms\n"
+        + "  - Speedup: {}x\n"
+        + "  - Performance Improvement: {}%\n", KEYS_TO_LOOKUP, noCacheTime, cacheTime, speedup, (speedup - 1) * 100);
 
     // Missing keys may not benefit as much from caching but should not be slower
     assertTrue(speedup >= 0.8, "BlockCache should not significantly slow down missing key lookups");

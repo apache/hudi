@@ -999,7 +999,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     allRecords.registerTempTable("tmpTable")
 
-    spark.sql(String.format("select count(*) from tmpTable")).show()
+    spark.sql(String.format("select count(*) from tmpTable")).collect()
 
     // step4: Query the rows count from hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
     val recordCountForPartition1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
@@ -1048,7 +1048,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     allRecords.registerTempTable("tmpTable")
 
-    spark.sql(String.format("select count(*) from tmpTable")).show()
+    spark.sql(String.format("select count(*) from tmpTable")).collect()
 
     // step3: Query the rows count from hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
     val recordCountForPartition1 = spark.sql(String.format("select count(*) from tmpTable where partition = '%s'", HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).collect()
@@ -1144,7 +1144,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
-    recordsReadDF.printSchema()
     recordsReadDF.schema.foreach(f => {
       f.name match {
         case "timeStampValue" =>

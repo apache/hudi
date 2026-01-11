@@ -121,10 +121,8 @@ class TestDecimalTypeDataWorkflow extends SparkClientFunctionalTestHarness{
       .toDF("id", "decimal_col").sort("id")
     val expectedMinusActual = expectedDf.except(actual)
     val actualMinusExpected = actual.except(expectedDf)
-    expectedDf.show(false)
-    actual.show(false)
-    expectedMinusActual.show(false)
-    actualMinusExpected.show(false)
+    expectedDf.collect()
+    actual.collect()
     assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
   }
 }

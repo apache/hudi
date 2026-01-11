@@ -271,7 +271,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       assertEquals(100, hudiIncDF1.count())
       assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
       assertEquals(commit1Time, hudiIncDF1.select("_hoodie_commit_time").head().get(0).toString)
-      hudiIncDF1.show(1)
+      hudiIncDF1.limit(1).collect
 
       // log file only
       val hudiIncDF2 = spark.read.format("org.apache.hudi")
@@ -283,7 +283,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       assertEquals(100, hudiIncDF2.count())
       assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
       assertEquals(commit2Time, hudiIncDF2.select("_hoodie_commit_time").head().get(0).toString)
-      hudiIncDF2.show(1)
+      hudiIncDF2.limit(1).collect
 
       // base file + log file
       val hudiIncDF3 = spark.read.format("org.apache.hudi")
@@ -730,8 +730,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(sampleRow.getBoolean(2), sampleRow.get(2))
 
     // test show()
-    hudiSnapshotDF1.show(1)
-    hudiSnapshotDF2.show(1)
+    hudiSnapshotDF1.limit(1).collect
+    hudiSnapshotDF2.limit(1).collect
   }
 
   @ParameterizedTest
@@ -810,8 +810,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   def verifyShow(df: DataFrame): Unit = {
-    df.show(1)
-    df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").show(1)
+    df.limit(1).collect()
+    df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").limit(1).collect()
   }
 
   @ParameterizedTest
