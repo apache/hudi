@@ -637,6 +637,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  public final List<String> getPartitionNames() {
+    try {
+      readLock.lock();
+      return fetchAllStoredFileGroups()
+          .filter(fg -> !isFileGroupReplaced(fg))
+          .map(HoodieFileGroup::getPartitionPath)
+          .distinct()
+          .collect(Collectors.toList());
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
     try {

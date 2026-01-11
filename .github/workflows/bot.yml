@@ -268,25 +268,33 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Verify Java 17 version
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          java -version
+          which java
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run:
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Java UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java17-scala-tests:
@@ -323,19 +331,26 @@ jobs:
           distribution: 'temurin'
           architecture: x64
           cache: maven
+      - name: Verify Java 17 version
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          java -version
+          which java
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        run:
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-java-tests:
