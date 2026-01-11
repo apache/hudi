@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 /**
@@ -78,7 +77,7 @@ public class HoodieBaseFile extends BaseFile {
 
   public HoodieBaseFile(StoragePathInfo pathInfo, String fileId, String commitTime,
                         BaseFile bootstrapBaseFile) {
-    super(maybeHandleExternallyGeneratedFileName(pathInfo, fileId));
+    super(ExternalFilePathUtil.maybeHandleExternallyGeneratedFileName(pathInfo, fileId));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
@@ -118,37 +117,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   private static String[] handleExternallyGeneratedFile(String fileName) {
-    String[] values = new String[2];
-    // file name has format <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
-    int lastUnderscore = fileName.lastIndexOf(UNDERSCORE);
-    int secondToLastUnderscore = fileName.lastIndexOf(UNDERSCORE, lastUnderscore - 1);
-    values[0] = fileName.substring(0, secondToLastUnderscore);
-    values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
-    return values;
-  }
-
-  /**
-   * If the file was created externally, the original file path will have a '_[commitTime]_hudiext' suffix when stored in the metadata table. That suffix needs to be removed from the FileStatus so
-   * that the actual file can be found and read.
-   *
-   * @param pathInfo an input path info that may require updating
-   * @param fileId   the fileId for the file
-   * @return the original file status if it was not externally created, or a new FileStatus with the original file name if it was externally created
-   */
-  private static StoragePathInfo maybeHandleExternallyGeneratedFileName(StoragePathInfo pathInfo,
-                                                                        String fileId) {
-    if (pathInfo == null) {
-      return null;
-    }
-    if (ExternalFilePathUtil.isExternallyCreatedFile(pathInfo.getPath().getName())) {
-      // fileId is the same as the original file name for externally created files
-      StoragePath parent = pathInfo.getPath().getParent();
-      return new StoragePathInfo(
-          new StoragePath(parent, fileId), pathInfo.getLength(), pathInfo.isDirectory(),
-          pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime(), pathInfo.getLocations());
-    } else {
-      return pathInfo;
-    }
+    return ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile(fileName);
   }
 
   public String getFileId() {
