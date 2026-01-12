@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -85,6 +86,7 @@ import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
+import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
@@ -1650,5 +1652,107 @@ public class TestHiveSyncTool {
 
   private int getPartitionFieldSize() {
     return hiveSyncProps.getString(META_SYNC_PARTITION_FIELDS.key()).split(",").length;
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncHoodieTableCatchRuntimeException(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    final String commitTime = "100";
+    HiveTestUtil.createCOWTable(commitTime, 1, true);
+
+    reInitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
+
+    // Create a tool instance to initialize the sync client
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf());
+    try {
+      // Corrupt the table by deleting the commit file to cause a RuntimeException during sync
+      // This will cause doSync() to fail when it tries to read the storage schema
+      Path metadataPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
+      Path instantPath = new Path(metadataPath, commitTime + ".commit");
+      if (HiveTestUtil.fileSystem.exists(instantPath)) {
+        HiveTestUtil.fileSystem.delete(instantPath, false);
+      }
+
+      // Verify that syncHoodieTable catches RuntimeException and wraps it in HoodieException
+      HoodieException exception = assertThrows(HoodieException.class, () -> {
+        tool.syncHoodieTable();
+      }, "syncHoodieTable should throw HoodieException when RuntimeException occurs");
+
+      // Verify the exception message contains the table name
+      assertTrue(exception.getMessage().contains(HiveTestUtil.TABLE_NAME),
+          "Exception message should contain table name: " + HiveTestUtil.TABLE_NAME);
+      assertTrue(exception.getMessage().contains("Got runtime exception when hive syncing"),
+          "Exception message should contain expected error message");
+
+      // Verify that the cause is a RuntimeException
+      assertTrue(exception.getCause() instanceof RuntimeException,
+          "The cause should be a RuntimeException");
+    } finally {
+      // Ensure tool is closed even if exception is thrown
+      tool.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testRecreateAndSyncHiveTableOnError(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(RECREATE_HIVE_TABLE_ON_ERROR.key(), "true");
+
+    final String commitTime = "100";
+    HiveTestUtil.createCOWTable(commitTime, 1, true);
+
+    reInitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
+
+    // First sync should succeed
+    reSyncHiveTable();
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table " + HiveTestUtil.TABLE_NAME + " should exist after first sync");
+    assertEquals(commitTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
+
+    // Verify the Hoodie table structure is intact
+    Path hoodieMetaPath = new Path(HiveTestUtil.basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    assertTrue(HiveTestUtil.fileSystem.exists(hoodieMetaPath),
+        "Hoodie metadata folder should exist at " + hoodieMetaPath);
+
+    // Corrupt the Hive table by dropping it and creating it with incompatible serde/input format
+    // This will cause syncProperties to potentially fail when trying to update to Parquet formats
+    ddlExecutor.runSQL("DROP TABLE IF EXISTS `" + HiveTestUtil.TABLE_NAME + "`");
+
+    // Create table with correct schema but wrong input/output format
+    // The location must point to the correct basePath to keep Hoodie metadata accessible
+    String createTableSql = String.format(
+        "CREATE TABLE `%s` (`name` STRING, `favorite_number` INT, `favorite_color` STRING) "
+        + "PARTITIONED BY (`datestr` STRING) "
+        + "STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat' "
+        + "OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat' "
+        + "LOCATION '%s'",
+        HiveTestUtil.TABLE_NAME, HiveTestUtil.basePath);
+    ddlExecutor.runSQL(createTableSql);
+
+    // Now sync should attempt to update the serde properties to use Parquet formats
+    // If this fails with HoodieHiveSyncException, recreateAndSyncHiveTable should be called
+    // which will drop and recreate the table with correct formats
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+
+    // Verify the table was recreated and synced successfully
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+        "Table " + HiveTestUtil.TABLE_NAME + " should exist after recreation");
+
+    // Verify the schema is correct
+    Map<String, String> schema = hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME);
+    assertTrue(schema.containsKey("name"), "Schema should contain 'name' field");
+    assertEquals("string", schema.get("name").toLowerCase(),
+        "Schema should have correct type for 'name' field after recreation");
+    // Verify the last commit time is synced, indicating successful recreation and sync
+    assertEquals(commitTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated after recreation");
   }
 }
