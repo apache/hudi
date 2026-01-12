@@ -20,6 +20,9 @@ package org.apache.hudi.utilities.benchmarking;
 
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.HoodieFileIndex;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -29,10 +32,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -44,8 +49,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataWriterTestUtils;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -217,16 +225,22 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Parameter(names = {"--col-stats-file-group-count", "-col-fg-count"}, description = "Number of file groups for column stats partition in metadata table", required = true)
     public Integer colStatsFileGroupCount = 10;
 
-    @Parameter(names = {"--num-files", "-nf"}, description = "Number of files to create in the table", required = true)
-    public Integer numFiles = 1000;
-
     @Parameter(names = {"--num-partitions", "-np"}, description = "Number of partitions to create in the table", required = true)
     public Integer numPartitions = 1;
+
+    @Parameter(names = {"--num-files-to-bootstrap", "-nfb"}, description = "Number of files to create during bootstrap", required = true)
+    public Integer numFilesToBootstrap = 1000;
+
+    @Parameter(names = {"--num-files-for-incremental", "-nfi"}, description = "Total number of files to create across incremental commits")
+    public Integer numFilesForIncrementalIngestion = 0;
+
+    @Parameter(names = {"--num-commits-for-incremental", "-nci"}, description = "Number of incremental commits to distribute files across")
+    public Integer numOfcommitForIncrementalIngestion = 0;
 
     @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2020-01-01'\")")
     public String partitionFilter = "dt = '2025-01-01'";
 
-    @Parameter(names = {"--data-filter", "-pf"}, description = "data filter predicate for querying (e.g., \"age > 70\")")
+    @Parameter(names = {"--data-filter", "-df"}, description = "data filter predicate for querying (e.g., \"age > 70\")")
     public String dataFilters = "";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
@@ -246,10 +260,12 @@ public class MetadataBenchmarkingTool implements Closeable {
       return "MetadataBenchmarkingTool {\n"
           + "   --mode " + mode + ",\n"
           + "   --table-base-path " + tableBasePath + ",\n"
-          + "   --num-files " + numFiles + ",\n"
           + "   --num-partitions " + numPartitions + ",\n"
           + "   --num-cols-to-index " + numColumnsToIndex + ",\n"
           + "   --col-stats-file-group-count " + colStatsFileGroupCount + ",\n"
+          + "   --num-files-to-bootstrap " + numFilesToBootstrap + ",\n"
+          + "   --num-files-for-incremental " + numFilesForIncrementalIngestion + ",\n"
+          + "   --num-commits-for-incremental " + numOfcommitForIncrementalIngestion + ",\n"
           + "   --partition-filter " + partitionFilter + "\n"
           + "}";
     }
@@ -284,7 +300,6 @@ public class MetadataBenchmarkingTool implements Closeable {
   }
 
   public void run() throws Exception {
-    int numFiles = cfg.numFiles;
     int numPartitions = cfg.numPartitions;
     List<String> colsToIndex = getColumnsToIndex(cfg.numColumnsToIndex);
     LOG.info("Data table base path: {}", cfg.tableBasePath);
@@ -292,23 +307,46 @@ public class MetadataBenchmarkingTool implements Closeable {
 
     HoodieWriteConfig dataWriteConfig = getWriteConfig(getAvroSchema(), cfg.tableBasePath, HoodieFailedWritesCleaningPolicy.EAGER);
 
-    int totalFilesCreated = cfg.numFiles;
+    int totalFilesCreated = 0;
     if (cfg.mode == Config.BenchmarkMode.BOOTSTRAP || cfg.mode == Config.BenchmarkMode.BOOTSTRAP_AND_QUERY) {
       HoodieTableMetaClient dataMetaClient = initializeDataTableMetaClient(TABLE_NAME, dataWriteConfig);
-      // totalFilesCreated during bootstrapping can be slightly lower than expected as we're ignoring the extra files after filling all
-      // partitions equally, Need to address them in next iterations
-      totalFilesCreated = bootstrapMetadataTable(numFiles, numPartitions, colsToIndex, dataWriteConfig, dataMetaClient);
-      LOG.info("Completed bootstrapping Metadata table");
+      
+      // Bootstrap phase
+      Pair<Integer, List<String>> bootstrapResult = bootstrapMetadataTable(
+          cfg.numFilesToBootstrap, numPartitions, colsToIndex, dataWriteConfig, dataMetaClient);
+      totalFilesCreated = bootstrapResult.getLeft();
+      List<String> partitions = bootstrapResult.getRight();
+      LOG.info("Completed bootstrapping Metadata table with {} files", totalFilesCreated);
+      
+      // Incremental ingestion phase
+      if (cfg.numFilesForIncrementalIngestion > 0 && cfg.numOfcommitForIncrementalIngestion > 0) {
+        int incrementalFiles = runIncrementalIngestion(
+            cfg.numFilesForIncrementalIngestion,
+            cfg.numOfcommitForIncrementalIngestion,
+            partitions,
+            colsToIndex,
+            dataWriteConfig,
+            dataMetaClient);
+        totalFilesCreated += incrementalFiles;
+        LOG.info("Completed incremental ingestion with {} additional files across {} commits", 
+            incrementalFiles, cfg.numOfcommitForIncrementalIngestion);
+      }
     }
 
     if (cfg.mode == Config.BenchmarkMode.QUERY || cfg.mode == Config.BenchmarkMode.BOOTSTRAP_AND_QUERY) {
       HoodieTableMetaClient dataMetaClient = loadExistingMetaClient(dataWriteConfig);
+      if (totalFilesCreated == 0) {
+        totalFilesCreated = cfg.numFilesToBootstrap + cfg.numFilesForIncrementalIngestion;
+        if (totalFilesCreated == 0) {
+          LOG.warn("Total files count is 0. Data skipping ratio calculation may be inaccurate.");
+        }
+      }
       benchmarkDataSkipping(dataWriteConfig, dataMetaClient, totalFilesCreated);
       LOG.info("Completed query benchmarking");
     }
   }
 
-  private int bootstrapMetadataTable(
+  private Pair<Integer, List<String>> bootstrapMetadataTable(
       int numFiles, int numPartitions, List<String> colsToIndex,
       HoodieWriteConfig dataWriteConfig, HoodieTableMetaClient dataTableMetaClient) throws Exception {
 
@@ -338,7 +376,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     }
     LOG.info("Time taken to perform bootstrapping metadata table is {}", timer.endTimer());
 
-    return filesPerPartition * numPartitions;
+    return Pair.of(filesPerPartition * numPartitions, partitions);
   }
 
   /**
@@ -395,6 +433,160 @@ public class MetadataBenchmarkingTool implements Closeable {
     metadataWriter.initializeFilegroupsAndCommit(
         COLUMN_STATS, COLUMN_STATS.getPartitionPath(), fileGroupCountAndRecords, instantTime, colsToIndex);
     LOG.info("Time taken to bootstrap column stats is {}", timer.endTimer());
+  }
+
+  /**
+   * Runs incremental ingestion rounds after bootstrap.
+   * Distributes files across multiple commits and uses upsertPreppedRecords for each commit.
+   * Reuses the partitions created during bootstrap.
+   */
+  private int runIncrementalIngestion(
+      int totalFiles,
+      int numCommits,
+      List<String> partitions,
+      List<String> colsToIndex,
+      HoodieWriteConfig dataWriteConfig,
+      HoodieTableMetaClient dataMetaClient) throws Exception {
+
+    LOG.info("Starting incremental ingestion: {} files across {} commits using {} existing partitions", 
+        totalFiles, numCommits, partitions.size());
+    
+    int filesPerCommit = totalFiles / numCommits;
+    int remainingFiles = totalFiles % numCommits;
+    
+    HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        dataWriteConfig,
+        HoodieFailedWritesCleaningPolicy.EAGER,
+        HoodieTableVersion.NINE);
+
+    HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
+    int totalFilesCreated = 0;
+
+    try (HoodieBackedTableMetadataWriter<?, ?> metadataWriter = 
+        (HoodieBackedTableMetadataWriter) org.apache.hudi.metadata.SparkMetadataWriterFactory.create(
+            engineContext.getStorageConf(),
+            dataWriteConfig,
+            engineContext,
+            Option.empty(),
+            dataMetaClient.getTableConfig())) {
+
+      // HoodieBackedTableMetadataWriter initializes metadata reader in constructor, no need to call initMetadataMetaClient()
+
+      for (int commitIdx = 0; commitIdx < numCommits; commitIdx++) {
+        int filesThisCommit = filesPerCommit + (commitIdx < remainingFiles ? 1 : 0);
+        if (filesThisCommit == 0) {
+          continue;
+        }
+
+        String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
+        HoodieCommitMetadata commitMetadata = createCommitMetadataAndAddToTimeline(
+            testTable, partitions, filesThisCommit, dataCommitTime);
+
+        // Partitions already exist from bootstrap, no need to create them again
+        // createFilesForCommit(dataMetaClient, commitMetadata);
+
+        // Generate records for both partitions
+        @SuppressWarnings("unchecked")
+        List<HoodieRecord<HoodieMetadataPayload>> filesRecords = 
+            (List<HoodieRecord<HoodieMetadataPayload>>) (List<?>)
+            HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, dataCommitTime);
+
+        HoodieData<HoodieRecord> columnStatsRecords = generateColumnStatsRecordsForCommitMetadata(commitMetadata);
+
+        // Use upsertPreppedRecords for incremental commits
+        performIncrementalCommit(
+            metadataWriter,
+            mdtWriteConfig,
+            dataCommitTime,
+            filesRecords,
+            columnStatsRecords,
+            colsToIndex);
+
+        totalFilesCreated += filesThisCommit;
+        LOG.info("Completed incremental commit {}: {} files (total: {})", 
+            commitIdx + 1, filesThisCommit, totalFilesCreated);
+      }
+    }
+
+    return totalFilesCreated;
+  }
+
+  /**
+   * Performs an incremental commit using upsertPreppedRecords.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private void performIncrementalCommit(
+      HoodieBackedTableMetadataWriter metadataWriter,
+      HoodieWriteConfig mdtWriteConfig,
+      String dataCommitTime,
+      List<HoodieRecord<HoodieMetadataPayload>> filesRecords,
+      HoodieData<HoodieRecord> columnStatsRecords,
+      List<String> colsToIndex) throws Exception {
+
+    String mdtCommitTime = dataCommitTime;
+    
+    try (SparkRDDWriteClient<HoodieMetadataPayload> mdtWriteClient = 
+        new SparkRDDWriteClient<>(engineContext, mdtWriteConfig)) {
+
+      WriteClientTestUtils.startCommitWithTime(mdtWriteClient, mdtCommitTime);
+      
+      JavaRDD<HoodieRecord<HoodieMetadataPayload>> filesRDD = jsc.parallelize(filesRecords, 1);
+
+      org.apache.hudi.metadata.HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>>
+          sparkMetadataWriter = (org.apache.hudi.metadata.HoodieBackedTableMetadataWriter) metadataWriter;
+
+      @SuppressWarnings({"rawtypes", "unchecked"})
+      Map<String, HoodieData<HoodieRecord>> partitionRecordsMap = new HashMap<>();
+      partitionRecordsMap.put(
+          HoodieTableMetadataUtil.PARTITION_NAME_FILES,
+          (HoodieData<HoodieRecord>) (HoodieData) HoodieJavaRDD.of(filesRDD));
+      partitionRecordsMap.put(
+          HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS,
+          columnStatsRecords);
+
+      // Tag records with location
+      Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedResult =
+          MetadataWriterTestUtils.tagRecordsWithLocation(
+              sparkMetadataWriter,
+              partitionRecordsMap,
+              false // isInitializing = false for incremental commits
+          );
+
+      // Convert back to JavaRDD
+      JavaRDD<HoodieRecord<HoodieMetadataPayload>> allTaggedRecords =
+          (JavaRDD<HoodieRecord<HoodieMetadataPayload>>) (JavaRDD) HoodieJavaRDD
+              .getJavaRDD(taggedResult.getKey());
+
+      // Use upsertPreppedRecords for incremental commits
+      JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.upsertPreppedRecords(allTaggedRecords, mdtCommitTime);
+      List<WriteStatus> statusList = writeStatuses.collect();
+      mdtWriteClient.commit(mdtCommitTime, jsc.parallelize(statusList, 1), 
+          Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
+    }
+  }
+
+  /**
+   * Creates files on filesystem for a commit.
+   */
+  private void createFilesForCommit(HoodieTableMetaClient metaClient, HoodieCommitMetadata commitMetadata) 
+      throws IOException {
+    StoragePath basePath = metaClient.getBasePath();
+    Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
+    
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      String partitionPath = entry.getKey();
+      StoragePath partitionDir = new StoragePath(basePath, partitionPath);
+      if (!metaClient.getStorage().exists(partitionDir)) {
+        metaClient.getStorage().createDirectory(partitionDir);
+      }
+      
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        StoragePath filePath = new StoragePath(basePath, writeStat.getPath());
+        if (!metaClient.getStorage().exists(filePath)) {
+          metaClient.getStorage().create(filePath).close();
+        }
+      }
+    }
   }
 
   String generateUniqueInstantTime(int offset) {
