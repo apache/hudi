@@ -179,4 +179,5 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
       readerStructType, readerStructType
     )
   }
+
 }
