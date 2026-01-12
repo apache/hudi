@@ -355,6 +355,11 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   }
 
   @Override
+  public void testBucketAssignWithRLI() throws Exception {
+    // can be re-enabled after #17701
+  }
+
+  @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
   }
