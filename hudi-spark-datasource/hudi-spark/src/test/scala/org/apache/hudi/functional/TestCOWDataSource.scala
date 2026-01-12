@@ -199,6 +199,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -219,6 +220,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -226,6 +228,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .option(KEYGENERATOR_CLASS_NAME.key(), classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -1782,7 +1785,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
+      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 
