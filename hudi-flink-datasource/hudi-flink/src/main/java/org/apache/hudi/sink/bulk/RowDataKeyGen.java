@@ -42,7 +42,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName;
-import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FILED_VALUE;
 
 /**
  * Key generator for {@link RowData}.
@@ -134,7 +134,7 @@ public class RowDataKeyGen implements Serializable {
         // single record key with multiple partition fields
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
-          return new StringBuilder(this.recordKeyFields[0]).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(oriKey).toString();
+          return new StringBuilder(this.recordKeyFields[0]).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(oriKey).toString();
         };
       } else {
         this.simpleRecordKeyFunc = rowData -> getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -79,7 +80,6 @@ public class TestRowDataKeyGen {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
-    conf.setString(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
     conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), String.valueOf(encodeSingleKeyFieldValueOnly));
     RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
