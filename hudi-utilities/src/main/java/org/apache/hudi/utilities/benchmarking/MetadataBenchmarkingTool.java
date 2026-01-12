@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.benchmarking;
 
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.HoodieFileIndex;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
@@ -33,14 +34,18 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -237,7 +242,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Parameter(names = {"--num-commits-for-incremental", "-nci"}, description = "Number of incremental commits to distribute files across")
     public Integer numOfcommitForIncrementalIngestion = 0;
 
-    @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2020-01-01'\")")
+    @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2025-01-01'\")")
     public String partitionFilter = "dt = '2025-01-01'";
 
     @Parameter(names = {"--data-filter", "-df"}, description = "data filter predicate for querying (e.g., \"age > 70\")")
@@ -356,13 +361,12 @@ public class MetadataBenchmarkingTool implements Closeable {
     List<String> partitions = generatePartitions(numPartitions);
     int filesPerPartition = numFiles / numPartitions;
 
-    // Create partition directories on the filesystem
-    createPartitionPaths(dataTableMetaClient, partitions);
-
-    HoodieTestTable testTable = HoodieTestTable.of(dataTableMetaClient);
     String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
-    HoodieCommitMetadata commitMetadata = createCommitMetadataAndAddToTimeline(
-        testTable, partitions, filesPerPartition, dataCommitTime);
+
+    // Create partition directories on the filesystem
+    createPartitionPaths(dataTableMetaClient, partitions, dataCommitTime);
+
+    HoodieCommitMetadata commitMetadata = createCommitMetadataAndAddToTimeline(partitions, filesPerPartition, dataCommitTime, dataTableMetaClient);
 
     HoodieTimer timer = HoodieTimer.start();
     try (SparkHoodieBackedTableMetadataBenchmarkWriter metadataWriter =
@@ -382,15 +386,26 @@ public class MetadataBenchmarkingTool implements Closeable {
   /**
    * Creates commit metadata for the test table and adds it to the timeline.
    */
-  private HoodieCommitMetadata createCommitMetadataAndAddToTimeline(
-      HoodieTestTable testTable, List<String> partitions,
-      int filesPerPartition, String dataCommitTime) throws Exception {
+  private HoodieCommitMetadata createCommitMetadataAndAddToTimeline(List<String> partitions,
+      int filesPerPartition, String dataCommitTime, HoodieTableMetaClient dataTableMetaClient) throws Exception {
+    HoodieTestTable testTable = HoodieTestTable.of(dataTableMetaClient);
+    HoodieSchema hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(getDataSchema(), "mdt_benchmarking_struct","mdt_benchmarking_namespace");
+        HoodieTestTable.TEST_TABLE_SCHEMA = hoodieSchema.toString();
 
     HoodieCommitMetadata commitMetadata = testTable.createCommitMetadata(
         dataCommitTime, WriteOperationType.INSERT, partitions, filesPerPartition, false);
-    testTable.addCommit(dataCommitTime, Option.of(commitMetadata));
-    LOG.info("Created commit metadata at instant {} with {} files per partition", dataCommitTime, filesPerPartition);
 
+            HoodieInstant requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, dataCommitTime,
+                InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    dataTableMetaClient.getActiveTimeline().createNewInstant(requestedInstant);
+    dataTableMetaClient.getActiveTimeline().transitionRequestedToInflight(requestedInstant, Option.empty());
+
+            Map<String, String> extraMetadata = new HashMap<>();
+        extraMetadata.put(HoodieCommitMetadata.SCHEMA_KEY, commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+
+    dataTableMetaClient.getActiveTimeline().saveAsComplete(false,
+        dataTableMetaClient.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, dataCommitTime), Option.of(commitMetadata));
+    LOG.info("Created commit metadata at instant {} with {} files per partition", dataCommitTime, filesPerPartition);
     return commitMetadata;
   }
 
@@ -459,7 +474,6 @@ public class MetadataBenchmarkingTool implements Closeable {
         HoodieFailedWritesCleaningPolicy.EAGER,
         HoodieTableVersion.NINE);
 
-    HoodieTestTable testTable = HoodieTestTable.of(dataMetaClient);
     int totalFilesCreated = 0;
 
     try (HoodieBackedTableMetadataWriter<?, ?> metadataWriter = 
@@ -480,7 +494,7 @@ public class MetadataBenchmarkingTool implements Closeable {
 
         String dataCommitTime = InProcessTimeGenerator.createNewInstantTime();
         HoodieCommitMetadata commitMetadata = createCommitMetadataAndAddToTimeline(
-            testTable, partitions, filesThisCommit, dataCommitTime);
+            partitions, filesThisCommit, dataCommitTime, dataMetaClient);
 
         // Partitions already exist from bootstrap, no need to create them again
         // createFilesForCommit(dataMetaClient, commitMetadata);
@@ -559,33 +573,7 @@ public class MetadataBenchmarkingTool implements Closeable {
 
       // Use upsertPreppedRecords for incremental commits
       JavaRDD<WriteStatus> writeStatuses = mdtWriteClient.upsertPreppedRecords(allTaggedRecords, mdtCommitTime);
-      List<WriteStatus> statusList = writeStatuses.collect();
-      mdtWriteClient.commit(mdtCommitTime, jsc.parallelize(statusList, 1), 
-          Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
-    }
-  }
-
-  /**
-   * Creates files on filesystem for a commit.
-   */
-  private void createFilesForCommit(HoodieTableMetaClient metaClient, HoodieCommitMetadata commitMetadata) 
-      throws IOException {
-    StoragePath basePath = metaClient.getBasePath();
-    Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitMetadata.getPartitionToWriteStats();
-    
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
-      String partitionPath = entry.getKey();
-      StoragePath partitionDir = new StoragePath(basePath, partitionPath);
-      if (!metaClient.getStorage().exists(partitionDir)) {
-        metaClient.getStorage().createDirectory(partitionDir);
-      }
-      
-      for (HoodieWriteStat writeStat : entry.getValue()) {
-        StoragePath filePath = new StoragePath(basePath, writeStat.getPath());
-        if (!metaClient.getStorage().exists(filePath)) {
-          metaClient.getStorage().create(filePath).close();
-        }
-      }
+      mdtWriteClient.commit(mdtCommitTime, writeStatuses, Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
     }
   }
 
@@ -623,11 +611,15 @@ public class MetadataBenchmarkingTool implements Closeable {
   /**
    * Creates partition directories on the filesystem.
    */
-  private void createPartitionPaths(HoodieTableMetaClient metaClient, List<String> partitions) throws IOException {
+  private void createPartitionPaths(HoodieTableMetaClient metaClient, List<String> partitions, String instantTime) throws IOException {
     StoragePath basePath = metaClient.getBasePath();
     for (String partition : partitions) {
       StoragePath fullPartitionPath = new StoragePath(basePath, partition);
       metaClient.getStorage().createDirectory(fullPartitionPath);
+
+      new HoodiePartitionMetadata(metaClient.getStorage(), instantTime,
+                    new StoragePath(metaClient.getBasePath().toString()), fullPartitionPath,
+                    metaClient.getTableConfig().getPartitionMetafileFormat()).trySave();
     }
     LOG.info("Created {} partition directories under {}", partitions.size(), basePath);
   }

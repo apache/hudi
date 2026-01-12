@@ -110,7 +110,7 @@ public class TestDiffCommand extends CLIFunctionalTestHarness {
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
 
       Map<String, String> extraCommitMetadata =
-          Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
+          Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.TEST_TABLE_SCHEMA);
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, conf, fileId1, fileId2,
           Option.empty(), Option.empty(), extraCommitMetadata, false);
     }

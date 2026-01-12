@@ -153,7 +153,7 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
   private static Pair<HoodieCommitMetadata, List<String>> generateCommitMetadata(String instantTime, Map<String, List<String>> partitionToFilePaths,
                                                                                  HoodieTableMetaClient metaClient, int... versions) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.TEST_TABLE_SCHEMA);
     List<String> allLogFiles = new ArrayList<>();
     partitionToFilePaths.forEach((partitionPath, fileList) -> fileList.forEach(f -> {
       HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();

@@ -61,7 +61,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
   protected static HoodieCommitMetadata generateCommitMetadata(
       String instantTime, Map<String, List<String>> partitionToFilePaths) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.TEST_TABLE_SCHEMA);
     partitionToFilePaths.forEach((partitionPath, fileList) -> fileList.forEach(f -> {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(partitionPath);
