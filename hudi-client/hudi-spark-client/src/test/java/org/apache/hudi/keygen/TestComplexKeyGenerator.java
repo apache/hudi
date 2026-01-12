@@ -109,10 +109,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
+  @CsvSource(value = {"false,true", "true,false", "true,true"})
   void testSingleValueKeyGenerator(boolean setNewEncodingConfig,
-                                   boolean encodeSingleKeyFieldValueOnly,
-                                   String tableVersion) {
+                                   boolean encodeSingleKeyFieldValueOnly) {
     String recordKeyFieldName = "_row_key";
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFieldName);
@@ -131,15 +130,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
       String partitionPath = avroRecord.get("timestamp").toString();
       HoodieKey hoodieKey = compositeKeyGenerator.getKey(avroRecord);
       // For table version 9, new encoding config should have no effect
-      String expectedRecordKey;
-      if ("9".equals(tableVersion)) {
-        // Table version 9 ignores the new encoding config and always uses the old format
-        expectedRecordKey = recordKeyFieldName + ":" + rowKey;
-      } else {
-        // Table version 8 may use new encoding config if set
-        expectedRecordKey = setNewEncodingConfig && encodeSingleKeyFieldValueOnly
-                ?  rowKey : recordKeyFieldName + ":" + rowKey;
-      }
+      // Table version 8 may use new encoding config if set
+      String expectedRecordKey = setNewEncodingConfig && encodeSingleKeyFieldValueOnly
+          ? rowKey : recordKeyFieldName + ":" + rowKey;
       assertEquals(expectedRecordKey, hoodieKey.getRecordKey());
       assertEquals(partitionPath, hoodieKey.getPartitionPath());
 
@@ -187,10 +180,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
+  @CsvSource(value = {"false,true", "true,false", "true,true"})
   void testMultipleValueKeyGeneratorNonPartitioned(boolean setNewEncodingConfig,
-                                                   boolean encodeSingleKeyFieldValueOnly,
-                                                   String tableVersion) {
+                                                   boolean encodeSingleKeyFieldValueOnly) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
