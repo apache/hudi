@@ -54,6 +54,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     implements HoodieSparkFileWriter, HoodieInternalRowFileWriter {
 
   private static final String DEFAULT_TIMEZONE = "UTC";
+  private static final long DEFAULT_MAX_FILE_SIZE = 120 * 1024 * 1024L;
 
   private final StructType sparkSchema;
   private final Schema arrowSchema;
@@ -61,6 +62,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
   private final UTF8String instantTime;
   private final boolean populateMetaFields;
   private final Function<Long, String> seqIdGenerator;
+  private final long maxFileSize;
   private LanceArrowWriter writer;
 
   /**
@@ -79,13 +81,14 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 String instantTime,
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
-                                boolean populateMetaFields) throws IOException {
+                                boolean populateMetaFields, long maxFileSize) throws IOException {
     super(storage, file, DEFAULT_BATCH_SIZE);
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
+    this.maxFileSize = maxFileSize;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -105,7 +108,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 StructType sparkSchema,
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage) throws IOException {
-    this(file, sparkSchema, null, taskContextSupplier, storage, false);
+    this(file, sparkSchema, null, taskContextSupplier, storage, false, DEFAULT_MAX_FILE_SIZE);
   }
 
   @Override
@@ -151,13 +154,20 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
 
   /**
    * Check if writer can accept more records based on file size.
-   * Uses filesystem-based size checking (similar to ORC/HFile approach).
+   * Checks the actual file size on storage and compares against the configured threshold.
    *
    * @return true if writer can accept more records, false if file size limit reached
    */
   public boolean canWrite() {
-    //TODO https://github.com/apache/hudi/issues/17684
-    return true;
+    try {
+      if (!storage.exists(path)) {
+        return true;
+      }
+      long fileSize = storage.getPathInfo(path).getLength();
+      return fileSize < maxFileSize;
+    } catch (IOException e) {
+      return true;
+    }
   }
 
   @Override
