@@ -564,5 +564,13 @@
         </exclusion>
       </exclusions>
     </dependency>
+
+    <!-- Thrift for HiveTestService -->
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${thrift.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>
