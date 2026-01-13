@@ -366,7 +366,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
   public void testTagLocationDuringUpdatesAndFailures(IndexType indexType, boolean populateMetaFields, boolean enableMetadataIndex) throws Exception {
     setUp(indexType, populateMetaFields, enableMetadataIndex);
     String newCommitTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
-    int initialRecords = 10;// + new Random().nextInt(20);
+    int initialRecords = 10;
     List<HoodieRecord> originalBatch = getRandomInserts(initialRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(originalBatch, 1);
 
@@ -384,7 +384,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // Now tagLocation for these records, index should not tag them since the commit is still in progress.
     javaRDD = tagLocation(hoodieTable.getIndex(), writeRecords, hoodieTable);
-    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    assertEquals(0, javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size());
 
     // Now commit this & update location of records inserted and validate no errors
     writeClient.commit(newCommitTime, writeStatues);
