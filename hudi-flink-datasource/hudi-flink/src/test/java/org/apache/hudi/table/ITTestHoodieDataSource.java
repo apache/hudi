@@ -1808,7 +1808,7 @@ public class ITTestHoodieDataSource {
         row(1, array("abc1", "def1"), map("abc1", 1, "def1", 3), row(1, "abc1")),
         row(2, array("abc2", "def2"), map("abc2", 1, "def2", 3), row(2, "abc2")),
         row(3, array("abc3", "def3"), map("abc3", 1, "def3", 3), row(3, "abc3")));
-    assertRowsEqualsUnordered(result, expected);
+    assertRowsEqualsUnordered(expected, result);
   }
 
   @ParameterizedTest
@@ -1837,7 +1837,7 @@ public class ITTestHoodieDataSource {
         row(1, array("abc1", "def1"), array(1, 1), map("abc1", 1, "def1", 3), row(array("abc1", "def1"), row(1, "abc1"))),
         row(2, array("abc2", "def2"), array(2, 2), map("abc2", 1, "def2", 3), row(array("abc2", "def2"), row(2, "abc2"))),
         row(3, array("abc3", "def3"), array(3, 3), map("abc3", 1, "def3", 3), row(array("abc3", "def3"), row(3, "abc3"))));
-    assertRowsEqualsUnordered(result, expected);
+    assertRowsEqualsUnordered(expected, result);
   }
 
   @ParameterizedTest
