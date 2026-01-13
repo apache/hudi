@@ -1815,6 +1815,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     config.runningMode = runningMode;
     if (retryLastFailedJob != null) {
       config.retryLastFailedJob = retryLastFailedJob;
+      if (retryLastFailedJob) {
+        // Set maxProcessingTimeMs to 1ms so any inflight instant is considered stale/failed
+        config.maxProcessingTimeMs = 1;
+      }
     }
     config.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
     return config;
