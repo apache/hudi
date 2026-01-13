@@ -299,7 +299,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         if (stringPartitionPathFormatter == null) {
           this.stringPartitionPathFormatter = new StringPartitionPathFormatter(
               StringPartitionPathFormatter.JavaStringBuilder::new, hiveStylePartitioning,
-              encodePartitionPath, hierarchicalDatePartitioning);
+              encodePartitionPath, slashSeparatedDatePartitioning);
         }
       }
     }
@@ -313,7 +313,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         if (utf8StringPartitionPathFormatter == null) {
           this.utf8StringPartitionPathFormatter = new UTF8StringPartitionPathFormatter(
               UTF8StringPartitionPathFormatter.UTF8StringBuilder::new, hiveStylePartitioning,
-              encodePartitionPath, hierarchicalDatePartitioning);
+              encodePartitionPath, slashSeparatedDatePartitioning);
         }
       }
     }

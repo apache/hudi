@@ -1071,7 +1071,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
     private String keyGeneratorType;
-    private Boolean hierarchicalDatePartitioning;
+    private Boolean slashSeparatedDatePartitioning;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
@@ -1238,8 +1238,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setHierarchicalDatePartitioning(Boolean hierarchicalDatePartitioning) {
-      this.hierarchicalDatePartitioning = hierarchicalDatePartitioning;
+    public TableBuilder setSlashSeparatedDatePartitioning(Boolean slashSeparatedDatePartitioning) {
+      this.slashSeparatedDatePartitioning = slashSeparatedDatePartitioning;
       return this;
     }
 
@@ -1442,8 +1442,8 @@ public class HoodieTableMetaClient implements Serializable {
       } else if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)) {
         setKeyGeneratorClassProp(KeyGeneratorType.valueOf(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_TYPE)).getClassName());
       }
-      if (hoodieConfig.contains(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING)) {
-        setHierarchicalDatePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING));
+      if (hoodieConfig.contains(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING)) {
+        setSlashSeparatedDatePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING));
       }
       if (hoodieConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)) {
         setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
@@ -1585,8 +1585,8 @@ public class HoodieTableMetaClient implements Serializable {
         KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
       }
-      if (null != hierarchicalDatePartitioning) {
-        tableConfig.setValue(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING, Boolean.toString(hierarchicalDatePartitioning));
+      if (null != slashSeparatedDatePartitioning) {
+        tableConfig.setValue(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING, Boolean.toString(slashSeparatedDatePartitioning));
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));

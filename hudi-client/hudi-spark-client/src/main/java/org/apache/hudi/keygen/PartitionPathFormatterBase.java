@@ -44,17 +44,17 @@ public abstract class PartitionPathFormatterBase<S> {
 
   private final boolean useHiveStylePartitioning;
   private final boolean useEncoding;
-  private final boolean hierarchicalDatePartitioning;
+  private final boolean slashSeparatedDatePartitioning;
 
   PartitionPathFormatterBase(Supplier<StringBuilder<S>> stringBuilderFactory,
                              boolean useHiveStylePartitioning,
                              boolean useEncoding,
-                             boolean hierarchicalDatePartitioning) {
+                             boolean slashSeparatedDatePartitioning) {
     this.stringBuilderFactory = stringBuilderFactory;
 
     this.useHiveStylePartitioning = useHiveStylePartitioning;
     this.useEncoding = useEncoding;
-    this.hierarchicalDatePartitioning = hierarchicalDatePartitioning;
+    this.slashSeparatedDatePartitioning = slashSeparatedDatePartitioning;
   }
 
   public final S combine(List<String> partitionPathFields, Object... partitionPathParts) {
@@ -62,7 +62,11 @@ public abstract class PartitionPathFormatterBase<S> {
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!useHiveStylePartitioning && partitionPathParts.length == 1) {
-      return tryEncode(handleEmpty(toString(partitionPathParts[0])));
+      if (slashSeparatedDatePartitioning) {
+        return ((S) ((String) toString(partitionPathParts[0])).replace('-', '/'));
+      } else {
+        return tryEncode(handleEmpty(toString(partitionPathParts[0])));
+      }
     }
 
     StringBuilder<S> sb = stringBuilderFactory.get();
@@ -73,6 +77,9 @@ public abstract class PartitionPathFormatterBase<S> {
         sb.appendJava(partitionPathFields.get(i))
             .appendJava("=")
             .append(partitionPathPartStr);
+      } else if (slashSeparatedDatePartitioning) {
+        String res = ((String) partitionPathPartStr).replace('-', '/');
+        sb.append(((S) res));
       } else {
         sb.append(partitionPathPartStr);
       }

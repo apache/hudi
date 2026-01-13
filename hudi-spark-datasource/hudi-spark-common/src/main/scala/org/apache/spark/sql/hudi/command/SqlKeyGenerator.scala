@@ -161,7 +161,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
             val _partitionValue = if (isHiveStyle) partitionValue.substring(hiveStylePrefix.length) else partitionValue
             if (_partitionValue == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
               partitionValue
-            } else if (hierarchicalDatePartitioning) {
+            } else if (slashSeparatedDatePartitioning) {
               partitionValue.replace('-', '/')
             } else {
               partitionField.dataType match {

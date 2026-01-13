@@ -240,8 +240,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
-        shouldValidatePartitionColumns, tableConfig.getOrDefault(HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.key,
-          HoodieTableConfig.HIERARCHICAL_DATE_PARTITIONING.defaultValue).toBoolean)
+        shouldValidatePartitionColumns, tableConfig.getOrDefault(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key,
+          HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.defaultValue).toBoolean)
     }
   }
 
@@ -251,7 +251,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                    schema: StructType,
                                    timeZoneId: String,
                                    shouldValidatePartitionCols: Boolean,
-                                   hierarchicalDatePartitioning: Boolean): Array[Object] = {
+                                   slashSeparatedDatePartitioning: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -266,7 +266,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           val partitionValue = if (partitionPath.startsWith(prefix)) {
             // support hive style partition path
             partitionPath.substring(prefix.length)
-          } else if (hierarchicalDatePartitioning && isValidDate(partitionPath)) {
+          } else if (slashSeparatedDatePartitioning && isValidDate(partitionPath)) {
             partitionPath.replace('/', '-')
           } else {
             partitionPath

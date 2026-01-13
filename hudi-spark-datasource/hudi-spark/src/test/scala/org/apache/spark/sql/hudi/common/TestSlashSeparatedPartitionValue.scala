@@ -36,7 +36,7 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
            |  'primaryKey' = 'id',
            |  'type' = 'COW',
            |  'preCombineField'='ts',
-           |  'hoodie.datasource.write.hierarchial.date.partitionpath'='true'
+           |  'hoodie.datasource.write.slash.separated.date.partitionpath'='true'
            | )
            | partitioned by (`datestr`)
            | location '$tablePath'

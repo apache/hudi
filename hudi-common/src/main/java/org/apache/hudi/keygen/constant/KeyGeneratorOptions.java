@@ -34,8 +34,8 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
     description = "")
 public class KeyGeneratorOptions extends HoodieConfig {
 
-  public static final ConfigProperty<String> HIERARCHICAL_DATE_PARTITIONING = ConfigProperty
-      .key("hoodie.datasource.write.hierarchial.date.partitionpath")
+  public static final ConfigProperty<String> SLASH_SEPARATED_DATE_PARTITIONING = ConfigProperty
+      .key("hoodie.datasource.write.slash.separated.date.partitionpath")
       .defaultValue("false")
       .markAdvanced()
       .withDocumentation("Should we url encode the partition path value, before creating the folder structure.");

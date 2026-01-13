@@ -31,8 +31,8 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
   public StringPartitionPathFormatter(Supplier<StringBuilder<String>> stringBuilderFactory,
                                       boolean useHiveStylePartitioning,
                                       boolean useEncoding,
-                                      boolean hierarchicalDatePartitioning) {
-    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding, hierarchicalDatePartitioning);
+                                      boolean slashSeparatedDatePartitioning) {
+    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding, slashSeparatedDatePartitioning);
   }
 
   @Override

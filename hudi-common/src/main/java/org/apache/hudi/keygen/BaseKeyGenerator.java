@@ -39,7 +39,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   protected List<String> recordKeyFields;
   @Getter
   protected List<String> partitionPathFields;
-  protected final boolean hierarchicalDatePartitioning;
+  protected final boolean slashSeparatedDatePartitioning;
   protected final boolean encodePartitionPath;
   protected final boolean hiveStylePartitioning;
   @Getter
@@ -47,8 +47,8 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
 
   protected BaseKeyGenerator(TypedProperties config) {
     super(config);
-    this.hierarchicalDatePartitioning = config.getBoolean(KeyGeneratorOptions.HIERARCHICAL_DATE_PARTITIONING.key(),
-        Boolean.parseBoolean(KeyGeneratorOptions.HIERARCHICAL_DATE_PARTITIONING.defaultValue()));
+    this.slashSeparatedDatePartitioning = config.getBoolean(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.defaultValue()));
     this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(),
         Boolean.parseBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.defaultValue()));
     this.hiveStylePartitioning = config.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(),

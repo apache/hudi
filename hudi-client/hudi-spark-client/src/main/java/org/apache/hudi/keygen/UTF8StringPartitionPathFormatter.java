@@ -36,8 +36,8 @@ public class UTF8StringPartitionPathFormatter extends PartitionPathFormatterBase
   public UTF8StringPartitionPathFormatter(Supplier<StringBuilder<UTF8String>> stringBuilderFactory,
                                           boolean useHiveStylePartitioning,
                                           boolean useEncoding,
-                                          boolean hierarchicalDatePartitioning) {
-    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding, hierarchicalDatePartitioning);
+                                          boolean slashSeparatedDatePartitioning) {
+    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding, slashSeparatedDatePartitioning);
   }
 
   @Override

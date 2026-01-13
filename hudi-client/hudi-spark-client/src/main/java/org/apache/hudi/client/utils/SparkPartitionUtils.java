@@ -39,7 +39,7 @@ public class SparkPartitionUtils {
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
-    boolean hierarchicalDatePartitioning = Boolean.parseBoolean(tableConfig.getHierarchicalDatePartitioning());
+    boolean slashSeparatedDatePartitioning = Boolean.parseBoolean(tableConfig.getSlashSeparatedDatePartitioning());
     return HoodieSparkUtils.doParsePartitionColumnValues(
         partitionFields.get(),
         partitionPath,
@@ -47,6 +47,6 @@ public class SparkPartitionUtils {
         HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(writerSchema),
         hadoopConf.get("timeZone", SQLConf.get().sessionLocalTimeZone()),
         hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true),
-        hierarchicalDatePartitioning);
+        slashSeparatedDatePartitioning);
   }
 }
