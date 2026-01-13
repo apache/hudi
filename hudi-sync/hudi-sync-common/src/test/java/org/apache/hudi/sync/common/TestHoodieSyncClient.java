@@ -19,7 +19,7 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+import org.apache.hudi.hive.sync.PartitionValueExtractor;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;

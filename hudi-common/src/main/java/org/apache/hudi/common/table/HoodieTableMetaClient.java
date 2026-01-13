@@ -1070,6 +1070,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
+    private String partitionValueExtractorClass;
     private String keyGeneratorType;
     private Boolean slashSeparatedDatePartitioning;
     private Boolean hiveStylePartitioningEnable;
@@ -1240,6 +1241,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public TableBuilder setSlashSeparatedDatePartitioning(Boolean slashSeparatedDatePartitioning) {
       this.slashSeparatedDatePartitioning = slashSeparatedDatePartitioning;
+      return this;
+    }
+
+    public TableBuilder setPartitionValueExtractorClass(String partitionValueExtractorClass) {
+      this.partitionValueExtractorClass = partitionValueExtractorClass;
       return this;
     }
 
@@ -1445,6 +1451,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING)) {
         setSlashSeparatedDatePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS)) {
+        setPartitionValueExtractorClass(hoodieConfig.getString(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)) {
         setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
       }
@@ -1587,6 +1596,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != slashSeparatedDatePartitioning) {
         tableConfig.setValue(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING, Boolean.toString(slashSeparatedDatePartitioning));
+      }
+      if (null != partitionValueExtractorClass) {
+        tableConfig.setValue(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS, partitionValueExtractorClass);
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));
