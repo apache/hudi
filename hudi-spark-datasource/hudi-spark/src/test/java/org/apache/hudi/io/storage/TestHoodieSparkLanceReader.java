@@ -295,7 +295,7 @@ public class TestHoodieSparkLanceReader {
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_large.lance");
     int recordCount = 2500;
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, 120 * 1024 * 1024L)) {
       for (int i = 0; i < recordCount; i++) {
         GenericInternalRow row = new GenericInternalRow(new Object[]{i, (long) i * 2});
         writer.writeRow("key" + i, row);
@@ -563,7 +563,7 @@ public class TestHoodieSparkLanceReader {
     
   private HoodieSparkLanceReader writeAndCreateReader(StoragePath path, StructType schema, List<InternalRow> rows, boolean populateMetaFields) throws IOException {
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields)) {
+        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields, 120 * 1024 * 1024L)) {
       for (int i = 0; i < rows.size(); i++) {
         HoodieKey key = new HoodieKey("key" + i, "default_partition");
         // Note writeRowWithMetadata implicitly handles case where populateMetaFields=false
@@ -589,7 +589,7 @@ public class TestHoodieSparkLanceReader {
     // Write Lance file with full schema
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_projection.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, fullSchema, instantTime, taskContextSupplier, storage, false)) {
+        path, fullSchema, instantTime, taskContextSupplier, storage, false, 120 * 1024 * 1024L)) {
       for (int i = 0; i < rows.size(); i++) {
         writer.writeRow("key" + i, rows.get(i));
       }
