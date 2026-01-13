@@ -297,16 +297,21 @@ public class HoodieFlinkClusteringJob {
       // fetch the instant based on the configured execution sequence
       List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
 
-      // If retry-last-failed is enabled, there might be only an inflight clustering instant (no REQUESTED pending instant).
-      // In that case, fall back to scanning the inflight timeline and rolling it back.
-      if (instants.isEmpty() && cfg.retryLastFailedJob && cfg.maxProcessingTimeMs > 0) {
-        Option<HoodieInstant> staleInflightInstant = TableServiceUtils.findStaleInflightInstant(
+      // Check for stale inflight instant once if retry is enabled
+      Option<HoodieInstant> staleInflightInstant = Option.empty();
+      if (cfg.retryLastFailedJob && cfg.maxProcessingTimeMs > 0) {
+        staleInflightInstant = TableServiceUtils.findStaleInflightInstant(
             table.getMetaClient(), HoodieTimeline.CLUSTERING_ACTION, cfg.maxProcessingTimeMs);
         if (staleInflightInstant.isPresent()) {
           LOG.info("Found stale inflight clustering instant [{}] exceeding max processing time {}ms. Will rollback and retry.",
               staleInflightInstant.get(), cfg.maxProcessingTimeMs);
-          instants = java.util.Collections.singletonList(staleInflightInstant.get());
         }
+      }
+
+      // If retry-last-failed is enabled, there might be only an inflight clustering instant (no REQUESTED pending instant).
+      // In that case, fall back to scanning the inflight timeline and rolling it back.
+      if (instants.isEmpty() && staleInflightInstant.isPresent()) {
+        instants = java.util.Collections.singletonList(staleInflightInstant.get());
       }
 
       if (instants.isEmpty()) {
@@ -321,19 +326,9 @@ public class HoodieFlinkClusteringJob {
             .filter(i -> i.requestedTime().equals(cfg.clusteringInstantTime))
             .findFirst()
             .orElseThrow(() -> new HoodieException("Clustering instant [" + cfg.clusteringInstantTime + "] not found"));
-      } else if (cfg.retryLastFailedJob && cfg.maxProcessingTimeMs > 0) {
-        // Check for stale inflight clustering instant that may have failed
-        Option<HoodieInstant> staleInflightInstant = TableServiceUtils.findStaleInflightInstant(
-            table.getMetaClient(), HoodieTimeline.CLUSTERING_ACTION, cfg.maxProcessingTimeMs);
-        if (staleInflightInstant.isPresent()) {
-          LOG.info("Found stale inflight clustering instant [{}] exceeding max processing time {}ms. Will rollback and retry.",
-              staleInflightInstant.get(), cfg.maxProcessingTimeMs);
-          clusteringInstant = staleInflightInstant.get();
-        } else {
-          // No stale instant found, follow normal sequence
-          clusteringInstant =
-              CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
-        }
+      } else if (staleInflightInstant.isPresent()) {
+        // Prioritize stale inflight clustering instant that may have failed
+        clusteringInstant = staleInflightInstant.get();
       } else {
         // check for inflight clustering plans and roll them back if required
         clusteringInstant =
