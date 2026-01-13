@@ -2144,7 +2144,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
-    return isMetadataColumnStatsIndexEnabled();
+    if (isMetadataColumnStatsIndexEnabled()) {
+      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
+    }
+    return false;
   }
 
   /**

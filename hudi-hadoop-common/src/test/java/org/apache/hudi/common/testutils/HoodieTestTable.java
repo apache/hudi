@@ -149,7 +149,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 @Slf4j
 public class HoodieTestTable implements AutoCloseable {
 
-  public static final String PHONY_TABLE_SCHEMA =
+  public static String TEST_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
   private static final Random RANDOM = new Random();
 
@@ -286,7 +286,7 @@ public class HoodieTestTable implements AutoCloseable {
       writeStats.addAll(generateHoodieWriteStatForPartitionLogFiles(testTableState.getPartitionToLogFileInfoMap(commitTime), commitTime, bootstrap));
     }
     Map<String, String> extraMetadata = singletonMap("test", "test");
-    return buildMetadata(writeStats, partitionToReplaceFileIds, Option.of(extraMetadata), operationType, PHONY_TABLE_SCHEMA, action);
+    return buildMetadata(writeStats, partitionToReplaceFileIds, Option.of(extraMetadata), operationType, TEST_TABLE_SCHEMA, action);
   }
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
@@ -657,7 +657,7 @@ public class HoodieTestTable implements AutoCloseable {
         .setInputGroups(clusteringGroups).build());
 
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-    replaceMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
+    replaceMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.TEST_TABLE_SCHEMA);
     replacedFileIds.forEach(replacedFileId -> replaceMetadata.addReplaceFileId(partition, replacedFileId));
     replaceMetadata.setOperationType(operationType);
     if (newFileId.isPresent() && !StringUtils.isNullOrEmpty(newFileId.get())) {
@@ -1141,7 +1141,7 @@ public class HoodieTestTable implements AutoCloseable {
       this.withBaseFilesInPartition(partition, testTableState.getPartitionToBaseFileInfoMap(commitTime).get(partition));
     }
     HoodieReplaceCommitMetadata replaceMetadata =
-        (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
+        (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, TEST_TABLE_SCHEMA,
             REPLACE_COMMIT_ACTION);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setOperationType(WriteOperationType.CLUSTER.name())
