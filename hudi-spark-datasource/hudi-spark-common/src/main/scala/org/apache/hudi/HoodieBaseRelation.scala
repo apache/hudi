@@ -477,6 +477,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     getPartitionColumnsAsInternalRowInternal(file,
       metaClient.getBasePath, extractPartitionValuesFromPartitionPath = true)
 
+  protected def usePartitionValueExtractorOnRead(optParams: Map[String, String], sparkSession: SparkSession): Boolean = {
+    optParams.getOrElse(DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key,
+      DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue.toString).toBoolean ||
+      ProvidesHoodieConfig.isSchemaEvolutionEnabled(sparkSession)
+  }
+
   protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: StoragePath,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
@@ -489,9 +495,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         relativePath,
         basePath,
         tableStructSchema,
-        tableConfig.propsMap,
+        tableConfig,
         timeZoneId,
-        conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
+        conf.getBoolean("spark.sql.sources.validatePartitionColumns", true),
+        usePartitionValueExtractorOnRead(optParams, sparkSession))
       if(rowValues.length != partitionColumns.length) {
         throw new HoodieException("Failed to get partition column values from the partition-path:"
             + s"partition column size: ${partitionColumns.length}, parsed partition value size: ${rowValues.length}")

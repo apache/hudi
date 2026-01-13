@@ -527,9 +527,17 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
     }
 
+    val usePartitionValueExtractorForReaders = getConfigValue(options, sqlConf,
+      DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key, null)
+    if (usePartitionValueExtractorForReaders != null) {
+      properties.setProperty(DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key,
+        usePartitionValueExtractorForReaders)
+    }
+
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
+      properties.setProperty(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key(), tableConfig.getPartitionValueExtractorClass)
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
       val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)

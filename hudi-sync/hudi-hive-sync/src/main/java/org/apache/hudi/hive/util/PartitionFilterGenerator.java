@@ -30,7 +30,7 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
-import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+import org.apache.hudi.hive.sync.PartitionValueExtractor;
 
 import java.util.Arrays;
 import java.util.Comparator;

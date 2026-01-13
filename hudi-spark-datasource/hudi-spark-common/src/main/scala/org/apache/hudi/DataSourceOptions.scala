@@ -278,6 +278,15 @@ object DataSourceReadOptions {
     .sinceVersion("1.1.0")
     .withDocumentation("Fully qualified class name of the catalog that is used by the Polaris spark client.")
 
+  val USE_PARTITION_VALUE_EXTRACTOR_ON_READ: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.partition.value.using.partion-value-extractor-class")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("1.2.0")
+    .withDocumentation("This config helps whether PartitionValueExtractor interface can be used" +
+      " for parsing partition values from partition path. When this config is enabled, it uses" +
+      " PartitionValueExtractor class value stored in the hoodie.properties file.")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
