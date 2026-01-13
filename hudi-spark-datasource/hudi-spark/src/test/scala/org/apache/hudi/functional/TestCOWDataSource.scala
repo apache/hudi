@@ -27,7 +27,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
@@ -547,6 +547,102 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .options(readOpts)
       .load(basePath)
     assertEquals(snapshotDF2.count(), 8)
+  }
+
+  @Test
+  def testInsertOverwriteUnpartitionedTable(): Unit = {
+    // Test INSERT_OVERWRITE on unpartitioned table using bulk_insert + row writer
+    // This validates the optimization in DatasetBulkInsertOverwriteCommitActionExecutor
+    // that short-circuits the distinct() operation for unpartitioned tables
+
+    val writeOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
+      "hoodie.datasource.write.row.writer.enable" -> "true"
+    )
+
+    val readOpts = Map[String, String]()
+
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(10, snapshotDF1.count())
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(basePath)
+      .setLoadActiveTimelineOnLoad(true)
+      .build()
+
+    val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
+      .map(_.asInstanceOf[HoodieInstant]).head
+    assertEquals("commit", firstCommit.getAction)
+
+    val firstCommitFiles = fs.listStatus(new Path(basePath))
+      .filter(_.getPath.getName.endsWith(".parquet"))
+      .map(_.getPath.getName.split("_")(0))
+      .toSet
+    assertTrue(firstCommitFiles.nonEmpty, "Should have at least one file from first commit")
+
+    // Perform INSERT_OVERWRITE with new batch of 5 records
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 5)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Verify final data count
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(5, snapshotDF2.count(), "Should only have records from second batch after INSERT_OVERWRITE")
+
+    // Validate replacecommit metadata
+    metaClient.reloadActiveTimeline()
+    val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
+      .map(_.asInstanceOf[HoodieInstant])
+
+    assertEquals(2, commits.size)
+    assertEquals("commit", commits(0).getAction)
+    assertEquals("replacecommit", commits(1).getAction)
+
+    val replaceCommitInstant = commits(1)
+    val metadata = TimelineUtils.getCommitMetadata(replaceCommitInstant, metaClient.getActiveTimeline)
+    assertTrue(metadata.isInstanceOf[HoodieReplaceCommitMetadata],
+      "Metadata should be HoodieReplaceCommitMetadata for INSERT_OVERWRITE")
+
+    val replaceMetadata = metadata.asInstanceOf[HoodieReplaceCommitMetadata]
+    val partitionToReplaceFileIds = replaceMetadata.getPartitionToReplaceFileIds
+
+    // Validate the key optimization: unpartitioned tables should have exactly 1 entry with empty string key
+    assertEquals(1, partitionToReplaceFileIds.size(),
+      "Unpartitioned table should have exactly 1 partition entry")
+    assertTrue(partitionToReplaceFileIds.containsKey(""),
+      "Partition key should be empty string for unpartitioned table")
+
+    val replacedFileIds = partitionToReplaceFileIds.get("")
+    assertTrue(replacedFileIds.nonEmpty, "Should have file IDs to replace")
+
+    // Verify that all files from the first commit are replaced
+    val replacedFileIdsSet = replacedFileIds.toSet
+    assertEquals(replacedFileIdsSet, firstCommitFiles,
+      s"All files from first commit should be replaced. Replaced: $replacedFileIdsSet, First commit: $firstCommitFiles")
   }
 
   @Test
