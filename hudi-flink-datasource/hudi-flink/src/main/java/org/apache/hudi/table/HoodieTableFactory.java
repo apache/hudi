@@ -18,10 +18,12 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -181,9 +183,14 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * Validate the index type.
    */
   private void checkIndexType(Configuration conf) {
-    String indexType = conf.get(FlinkOptions.INDEX_TYPE);
-    if (!StringUtils.isNullOrEmpty(indexType)) {
-      HoodieIndexConfig.INDEX_TYPE.checkValues(indexType);
+    String indexTypeStr = conf.get(FlinkOptions.INDEX_TYPE);
+    if (!StringUtils.isNullOrEmpty(indexTypeStr)) {
+      HoodieIndexConfig.INDEX_TYPE.checkValues(indexTypeStr);
+    }
+    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+      ValidationUtils.checkArgument(conf.get(FlinkOptions.METADATA_ENABLED),
+          "Metadata table should be enabled when index.type is GLOBAL_RECORD_LEVEL_INDEX.");
     }
   }
 
@@ -400,6 +407,12 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
         && OptionsResolver.isCowTable(conf)) {
       conf.set(FlinkOptions.PRE_COMBINE, true);
+    }
+    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+    // enable hoodie record index if the index type is configured as GLOBAL_RECORD_LEVEL_INDEX.
+    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+      conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+      conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
     }
   }
 

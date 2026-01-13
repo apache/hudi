@@ -215,6 +215,12 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+
+    // Valid index type will be ok
+    this.conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
+    this.conf.set(FlinkOptions.METADATA_ENABLED, false);
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
   }
 
   @Test
