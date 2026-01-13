@@ -63,13 +63,14 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
 
+  private final HoodieTableConfig tableConfig;
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
                                        HoodieStorage storage, String datasetBasePath) {
     super(engineContext, storage, datasetBasePath);
-
+    this.tableConfig = tableConfig;
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
   }
@@ -82,6 +83,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath);
+    this.tableConfig = tableConfig;
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
@@ -159,7 +161,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(),
-          "Listing all partitions with prefix " + relativePathPrefix);
+          "Listing all partitions on " + this.tableConfig.getTableName() +
+              " with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
       List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
         try {
@@ -248,7 +251,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
     engineContext.setJobStatus(this.getClass().getSimpleName(),
-        "Listing all files in " + partitionPaths.size() + " partitions");
+        "Listing all files in " + partitionPaths.size() + " partitions from "
+            + this.tableConfig.getTableName());
     // Need to use serializable file status here, see HUDI-5936
     List<Pair<String, List<StoragePathInfo>>> partitionToFiles =
         engineContext.map(new ArrayList<>(partitionPaths),
