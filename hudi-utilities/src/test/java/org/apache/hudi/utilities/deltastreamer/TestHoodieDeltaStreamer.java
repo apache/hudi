@@ -253,9 +253,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   protected HoodieClusteringJob initialHoodieClusteringJob(String tableBasePath, String clusteringInstantTime, Boolean runSchedule, String scheduleAndExecute,
-                                                           Boolean retryLastFailedClusteringJob, HoodieRecordType recordType) {
+                                                           Boolean retryLastFailedJob, HoodieRecordType recordType) {
     HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-        clusteringInstantTime, runSchedule, scheduleAndExecute, retryLastFailedClusteringJob);
+        clusteringInstantTime, runSchedule, scheduleAndExecute, retryLastFailedJob);
     addRecordMerger(recordType, scheduleClusteringConfig.configs);
     scheduleClusteringConfig.configs.addAll(getAllMultiWriterConfigs());
     return new HoodieClusteringJob(jsc, scheduleClusteringConfig);
@@ -1806,15 +1806,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                                                                      String clusteringInstantTime,
                                                                      Boolean runSchedule,
                                                                      String runningMode,
-                                                                     Boolean retryLastFailedClusteringJob) {
+                                                                     Boolean retryLastFailedJob) {
     HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
     config.basePath = basePath;
     config.clusteringInstantTime = clusteringInstantTime;
     config.runSchedule = runSchedule;
     config.propsFilePath = UtilitiesTestBase.basePath + "/clusteringjob.properties";
     config.runningMode = runningMode;
-    if (retryLastFailedClusteringJob != null) {
-      config.retryLastFailedClusteringJob = retryLastFailedClusteringJob;
+    if (retryLastFailedJob != null) {
+      config.retryLastFailedJob = retryLastFailedJob;
     }
     config.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
     return config;
@@ -2132,7 +2132,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testAsyncClusteringJobWithRetry(boolean retryLastFailedClusteringJob) throws Exception {
+  public void testAsyncClusteringJobWithRetry(boolean retryLastFailedJob) throws Exception {
     String tableBasePath = basePath + "/asyncClustering3";
 
     // ingest data
@@ -2164,12 +2164,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // trigger a scheduleAndExecute clustering job
     // when retryFailedClustering true => will rollback and re-execute failed clustering plan with same instant timestamp.
     // when retryFailedClustering false => will make and execute a new clustering plan with new instant timestamp.
-    HoodieClusteringJob scheduleAndExecute = initialHoodieClusteringJob(tableBasePath, null, false, "scheduleAndExecute", retryLastFailedClusteringJob, HoodieRecordType.AVRO);
+    HoodieClusteringJob scheduleAndExecute = initialHoodieClusteringJob(tableBasePath, null, false, "scheduleAndExecute", retryLastFailedJob, HoodieRecordType.AVRO);
     scheduleAndExecute.cluster(0);
 
     String completeClusteringTimeStamp = meta.getActiveTimeline().reload().getCompletedReplaceTimeline().lastInstant().get().requestedTime();
 
-    if (retryLastFailedClusteringJob) {
+    if (retryLastFailedJob) {
       assertEquals(clusteringRequest.requestedTime(), completeClusteringTimeStamp);
     } else {
       assertFalse(clusteringRequest.requestedTime().equalsIgnoreCase(completeClusteringTimeStamp));

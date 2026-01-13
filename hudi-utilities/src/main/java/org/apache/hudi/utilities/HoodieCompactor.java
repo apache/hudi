@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -102,6 +104,12 @@ public class HoodieCompactor {
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately", required = false)
     public String runningMode = null;
+    @Parameter(names = {"--retry-last-failed-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+        + "check, rollback and execute last failed compaction plan instead of planning a new compaction job directly.")
+    public Boolean retryLastFailedJob = false;
+    @Parameter(names = {"--job-max-processing-time-ms", "-jt"}, description = "Take effect when using --mode/-m scheduleAndExecute and --retry-last-failed-job/-rc true. "
+        + "If maxProcessingTimeMs passed but compaction job is still unfinished, hoodie would consider this job as failed and relaunch.")
+    public long maxProcessingTimeMs = 0;
     @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
     @Parameter(names = {"--help", "-h"}, help = true)
@@ -130,6 +138,8 @@ public class HoodieCompactor {
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --mode " + runningMode + ", \n"
+          + "   --retry-last-failed-job " + retryLastFailedJob + ", \n"
+          + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --strategy " + strategyClassName + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs
@@ -156,6 +166,8 @@ public class HoodieCompactor {
           && Objects.equals(skipClean, config.skipClean)
           && Objects.equals(runSchedule, config.runSchedule)
           && Objects.equals(runningMode, config.runningMode)
+          && Objects.equals(retryLastFailedJob, config.retryLastFailedJob)
+          && Objects.equals(maxProcessingTimeMs, config.maxProcessingTimeMs)
           && Objects.equals(strategyClassName, config.strategyClassName)
           && Objects.equals(propsFilePath, config.propsFilePath)
           && Objects.equals(configs, config.configs);
@@ -164,7 +176,8 @@ public class HoodieCompactor {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, tableName, compactionInstantTime, schemaFile,
-          sparkMaster, parallelism, sparkMemory, retry, skipClean, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
+          sparkMaster, parallelism, sparkMemory, retry, skipClean, runSchedule, runningMode,
+          retryLastFailedJob, maxProcessingTimeMs, strategyClassName, propsFilePath, configs, help);
     }
   }
 
@@ -220,13 +233,24 @@ public class HoodieCompactor {
 
   private Integer doScheduleAndCompact(JavaSparkContext jsc) throws Exception {
     LOG.info("Step 1: Do schedule");
-    Option<String> instantTime = doSchedule(jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<String> instantTime = Option.empty();
+
+    if (cfg.retryLastFailedJob) {
+      Option<HoodieInstant> staleInstant = TableServiceUtils.findStaleInflightInstant(
+          metaClient, HoodieTimeline.COMPACTION_ACTION, cfg.maxProcessingTimeMs);
+      if (staleInstant.isPresent()) {
+        LOG.info("Found failed compaction instant at : " + staleInstant.get() + "; Will rollback the failed compaction and re-trigger again.");
+        instantTime = Option.of(staleInstant.get().requestedTime());
+      }
+    }
+
+    instantTime = instantTime.isPresent() ? instantTime : doSchedule(jsc);
     if (!instantTime.isPresent()) {
       LOG.error("Couldn't do schedule");
       return -1;
-    } else {
-      cfg.compactionInstantTime = instantTime.get();
     }
+    cfg.compactionInstantTime = instantTime.get();
 
     LOG.info("The schedule instant time is {}", instantTime.get());
     LOG.info("Step 2: Do compaction");
