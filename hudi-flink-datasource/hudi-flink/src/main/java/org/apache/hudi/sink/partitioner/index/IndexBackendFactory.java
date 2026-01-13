@@ -41,7 +41,7 @@ import java.util.stream.StreamSupport;
 /**
  * Factory to create an {@link IndexBackend} based on the configured index type.
  */
-public class IndexDelegatorFactory {
+public class IndexBackendFactory {
   public static IndexBackend create(Configuration conf, FunctionInitializationContext context, RuntimeContext runtimeContext) throws Exception {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     switch (indexType) {

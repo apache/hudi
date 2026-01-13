@@ -31,7 +31,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.partitioner.index.IndexBackend;
-import org.apache.hudi.sink.partitioner.index.IndexDelegatorFactory;
+import org.apache.hudi.sink.partitioner.index.IndexBackendFactory;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.FlinkTaskContextSupplier;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -124,7 +124,7 @@ public class BucketAssignFunction
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
-    this.indexBackend = IndexDelegatorFactory.create(conf, context, getRuntimeContext());
+    this.indexBackend = IndexBackendFactory.create(conf, context, getRuntimeContext());
   }
 
   @Override

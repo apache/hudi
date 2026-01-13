@@ -62,48 +62,48 @@ public class TestRecordLevelIndexBackend {
   }
 
   @Test
-  void testRecordLevelIndexDelegator() throws Exception {
+  void testRecordLevelIndexBackend() throws Exception {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
 
-    try (RecordLevelIndexBackend recordLevelIndexDelegator = new RecordLevelIndexBackend(conf, -1)) {
+    try (RecordLevelIndexBackend recordLevelIndexBackend = new RecordLevelIndexBackend(conf, -1)) {
       // get record location
-      HoodieRecordGlobalLocation location = recordLevelIndexDelegator.get("id1");
+      HoodieRecordGlobalLocation location = recordLevelIndexBackend.get("id1");
       assertNotNull(location);
       assertEquals("par1", location.getPartitionPath());
       assertEquals(firstCommitTime, location.getInstantTime());
 
       // get record location with non existed key
-      location = recordLevelIndexDelegator.get("new_key");
+      location = recordLevelIndexBackend.get("new_key");
       assertNull(location);
 
       // get records locations for multiple record keys
-      Map<String, HoodieRecordGlobalLocation> locations = recordLevelIndexDelegator.get(Arrays.asList("id1", "id2", "id3"));
+      Map<String, HoodieRecordGlobalLocation> locations = recordLevelIndexBackend.get(Arrays.asList("id1", "id2", "id3"));
       assertEquals(3, locations.size());
       locations.values().forEach(Assertions::assertNotNull);
 
       // get records locations for multiple record keys with unexisted key
-      locations = recordLevelIndexDelegator.get(Arrays.asList("id1", "id2", "new_key"));
+      locations = recordLevelIndexBackend.get(Arrays.asList("id1", "id2", "new_key"));
       assertEquals(3, locations.size());
       assertNull(locations.get("new_key"));
 
       // new checkpoint
-      recordLevelIndexDelegator.onCheckpoint(1);
+      recordLevelIndexBackend.onCheckpoint(1);
 
       // update record location
       HoodieRecordGlobalLocation newLocation = new HoodieRecordGlobalLocation("par5", "1003", "file_id_4");
-      recordLevelIndexDelegator.update("new_key", newLocation);
-      location = recordLevelIndexDelegator.get("new_key");
+      recordLevelIndexBackend.update("new_key", newLocation);
+      location = recordLevelIndexBackend.get("new_key");
       assertEquals(newLocation, location);
 
       // previous instant commit success, clean
-      recordLevelIndexDelegator.onCommitSuccess(1);
-      assertEquals(1, recordLevelIndexDelegator.getRecordIndexCache().getCaches().size());
+      recordLevelIndexBackend.onCommitSuccess(1);
+      assertEquals(1, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
       // the cache will only contain 'new_key', others are cleaned.
-      location = recordLevelIndexDelegator.getRecordIndexCache().get("new_key");
+      location = recordLevelIndexBackend.getRecordIndexCache().get("new_key");
       assertEquals(newLocation, location);
-      location = recordLevelIndexDelegator.getRecordIndexCache().get("id1");
+      location = recordLevelIndexBackend.getRecordIndexCache().get("id1");
       assertNull(location);
     }
   }
