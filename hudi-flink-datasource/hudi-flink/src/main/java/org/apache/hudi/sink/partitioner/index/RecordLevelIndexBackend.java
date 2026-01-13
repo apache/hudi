@@ -42,9 +42,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An implementation of {@link IndexDelegator} based on the record level index in metadata table.
+ * An implementation of {@link IndexBackend} based on the record level index in metadata table.
  */
-public class RecordLevelIndexDelegator implements MinibatchIndexDelegator {
+public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   @VisibleForTesting
   @Getter
   private final RecordIndexCache recordIndexCache;
@@ -52,7 +52,7 @@ public class RecordLevelIndexDelegator implements MinibatchIndexDelegator {
   private final HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
 
-  public RecordLevelIndexDelegator(Configuration conf, long initCheckpointId) {
+  public RecordLevelIndexBackend(Configuration conf, long initCheckpointId) {
     this.metaClient = StreamerUtil.createMetaClient(conf);
     this.conf = conf;
     this.recordIndexCache = new RecordIndexCache(conf, initCheckpointId);

@@ -24,9 +24,10 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * Interface for delegating index operations in the bucket assigning operator for flink sink.
+ * An interface that provides an abstraction for managing record location mappings in the index system.
+ * It serves as the backend for storing and retrieving the location of records identified by their unique keys.
  */
-public interface IndexDelegator extends Closeable {
+public interface IndexBackend extends Closeable {
 
   /**
    * Retrieves the global location of a record based on its key.

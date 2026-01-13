@@ -30,7 +30,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.sink.partitioner.index.IndexDelegator;
+import org.apache.hudi.sink.partitioner.index.IndexBackend;
 import org.apache.hudi.sink.partitioner.index.IndexDelegatorFactory;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.FlinkTaskContextSupplier;
@@ -78,7 +78,7 @@ public class BucketAssignFunction
    *   <li>If it does not, use the {@link BucketAssigner} to generate a new bucket ID</li>
    * </ul>
    */
-  private transient IndexDelegator indexDelegator;
+  private transient IndexBackend indexBackend;
 
   /**
    * Bucket assigner to assign new bucket IDs or reuse existing ones.
@@ -124,19 +124,19 @@ public class BucketAssignFunction
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
-    this.indexDelegator = IndexDelegatorFactory.create(conf, context, getRuntimeContext());
+    this.indexBackend = IndexDelegatorFactory.create(conf, context, getRuntimeContext());
   }
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
     this.bucketAssigner.reset();
-    this.indexDelegator.onCheckpoint(context.getCheckpointId());
+    this.indexBackend.onCheckpoint(context.getCheckpointId());
   }
 
   @Override
   public void processElement(HoodieFlinkInternalRow value, Context ctx, Collector<HoodieFlinkInternalRow> out) throws Exception {
     if (value.isIndexRecord()) {
-      indexDelegator.update(
+      indexBackend.update(
           ctx.getCurrentKey(), new HoodieRecordGlobalLocation(value.getPartitionPath(), value.getInstantTime(), value.getFileId()));
     } else {
       processRecord(value, ctx, out);
@@ -153,7 +153,7 @@ public class BucketAssignFunction
       // Only changing records need looking up the index for the location,
       // append only records are always recognized as INSERT.
       // Structured as Tuple(partition, fileId, instantTime).
-      HoodieRecordGlobalLocation oldLoc = indexDelegator.get(ctx.getCurrentKey());
+      HoodieRecordGlobalLocation oldLoc = indexBackend.get(ctx.getCurrentKey());
       if (oldLoc != null) {
         // Set up the instant time as "U" to mark the bucket as an update bucket.
         String partitionFromState = oldLoc.getPartitionPath();
@@ -177,7 +177,7 @@ public class BucketAssignFunction
         location = getNewRecordLocation(partitionPath);
       }
       // always refresh the index
-      this.indexDelegator.update(ctx.getCurrentKey(), HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
+      this.indexBackend.update(ctx.getCurrentKey(), HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
     } else {
       location = getNewRecordLocation(partitionPath);
     }
@@ -211,7 +211,7 @@ public class BucketAssignFunction
     // Refresh the table state when there are new commits.
     this.bucketAssigner.reload(checkpointId);
     // todo #17700: check the file based mapping between checkpoint id and instant to get the latest successful instant.
-    this.indexDelegator.onCommitSuccess(checkpointId - 1);
+    this.indexBackend.onCommitSuccess(checkpointId - 1);
   }
 
   @Override

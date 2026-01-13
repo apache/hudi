@@ -39,10 +39,10 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import java.util.stream.StreamSupport;
 
 /**
- * Factory to create an {@link IndexDelegator} based on the configured index type.
+ * Factory to create an {@link IndexBackend} based on the configured index type.
  */
 public class IndexDelegatorFactory {
-  public static IndexDelegator create(Configuration conf, FunctionInitializationContext context, RuntimeContext runtimeContext) throws Exception {
+  public static IndexBackend create(Configuration conf, FunctionInitializationContext context, RuntimeContext runtimeContext) throws Exception {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     switch (indexType) {
       case FLINK_STATE:
@@ -56,7 +56,7 @@ public class IndexDelegatorFactory {
         }
         ValueState<HoodieRecordGlobalLocation> indexState = context.getKeyedStateStore().getState(indexStateDesc);
         ValidationUtils.checkArgument(indexState != null, "indexState should not be null when using FLINK_STATE index!");
-        return new FlinkStateIndexDelegator(indexState);
+        return new FlinkStateIndexBackend(indexState);
       case GLOBAL_RECORD_LEVEL_INDEX:
         ListState<JobID> jobIdState = context.getOperatorStateStore().getListState(
             new ListStateDescriptor<>(
@@ -71,7 +71,7 @@ public class IndexDelegatorFactory {
         // set the jobId state with current job id.
         jobIdState.clear();
         jobIdState.add(RuntimeContextUtils.getJobId(runtimeContext));
-        return new RecordLevelIndexDelegator(conf, initCheckpointId);
+        return new RecordLevelIndexBackend(conf, initCheckpointId);
       default:
         throw new UnsupportedOperationException("Index type " + indexType + " is not supported for bucket assigning yet.");
     }

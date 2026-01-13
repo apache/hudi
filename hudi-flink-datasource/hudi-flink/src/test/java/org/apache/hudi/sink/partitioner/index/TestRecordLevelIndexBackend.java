@@ -44,9 +44,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 
 /**
- * Test cases for {@link RecordLevelIndexDelegator}.
+ * Test cases for {@link RecordLevelIndexBackend}.
  */
-public class TestRecordLevelIndexDelegator {
+public class TestRecordLevelIndexBackend {
 
   private Configuration conf;
 
@@ -67,7 +67,7 @@ public class TestRecordLevelIndexDelegator {
 
     String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
 
-    try (RecordLevelIndexDelegator recordLevelIndexDelegator = new RecordLevelIndexDelegator(conf, -1)) {
+    try (RecordLevelIndexBackend recordLevelIndexDelegator = new RecordLevelIndexBackend(conf, -1)) {
       // get record location
       HoodieRecordGlobalLocation location = recordLevelIndexDelegator.get("id1");
       assertNotNull(location);

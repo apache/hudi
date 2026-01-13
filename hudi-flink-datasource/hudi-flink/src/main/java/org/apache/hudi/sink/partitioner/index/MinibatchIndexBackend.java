@@ -19,34 +19,18 @@
 package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-
-import org.apache.flink.api.common.state.ValueState;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
- * An implementation of {@link IndexDelegator} based on flink keyed value state.
+ * Index delegator which supports mini-batch index operations.
  */
-public class FlinkStateIndexDelegator implements IndexDelegator {
+public interface MinibatchIndexBackend extends IndexBackend {
 
-  private final ValueState<HoodieRecordGlobalLocation> indexState;
+  Map<String, HoodieRecordGlobalLocation> get(List<String> recordKey) throws IOException;
 
-  public FlinkStateIndexDelegator(ValueState<HoodieRecordGlobalLocation> indexState) {
-    this.indexState = indexState;
-  }
-
-  @Override
-  public HoodieRecordGlobalLocation get(String recordKey) throws IOException {
-    return indexState.value();
-  }
-
-  @Override
-  public void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) throws IOException {
-    this.indexState.update(recordGlobalLocation);
-  }
-
-  @Override
-  public void close() throws IOException {
-    // do nothing.
-  }
+  void update(List<Pair<String, HoodieRecordGlobalLocation>> recordKeysAndLocations) throws IOException;
 }
