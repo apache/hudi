@@ -20,7 +20,7 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+import org.apache.hudi.hive.sync.PartitionValueExtractor;
 
 import java.util.Arrays;
 import java.util.Collections;
