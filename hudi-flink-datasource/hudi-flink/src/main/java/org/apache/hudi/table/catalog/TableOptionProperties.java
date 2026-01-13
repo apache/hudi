@@ -27,8 +27,8 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -203,7 +203,7 @@ public class TableOptionProperties {
       List<String> partitionKeys,
       boolean withOperationField) {
     RowType rowType = supplementMetaFields(DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()), withOperationField);
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(rowType));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
         partitionKeys,
