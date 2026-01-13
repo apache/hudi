@@ -53,8 +53,8 @@ public enum StorageSchemes {
   // Azure ADLS
   ADL("adl", null, null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", null, null, null),
-  ABFSS("abfss", null, null, null),
+  ABFS("abfs", true, null, "org.apache.hudi.azure.transaction.lock.ADLSGen2StorageLockClient"),
+  ABFSS("abfss", true, null, "org.apache.hudi.azure.transaction.lock.ADLSGen2StorageLockClient"),
   // Aliyun OSS
   OSS("oss", null, null, null),
   // View FS for federated setups. If federating across cloud stores, then append
