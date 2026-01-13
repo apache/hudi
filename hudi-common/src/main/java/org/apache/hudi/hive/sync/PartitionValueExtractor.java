@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.sync.common.model;
+package org.apache.hudi.hive.sync;
 
 import java.io.Serializable;
 import java.util.List;
