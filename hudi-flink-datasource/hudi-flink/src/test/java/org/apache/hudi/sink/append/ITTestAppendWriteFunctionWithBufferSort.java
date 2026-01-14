@@ -21,7 +21,6 @@ package org.apache.hudi.sink.append;
 import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.TestWriteBase;
-import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.avro.generic.GenericRecord;
@@ -34,9 +33,7 @@ import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.VarCharType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -59,16 +56,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
 
-  private Configuration conf;
   private RowType rowType;
 
-  @BeforeEach
-  public void before(@TempDir File tempDir) throws Exception {
-    super.before();
-    this.conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    this.conf.set(FlinkOptions.OPERATION, "insert");
-    this.conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "name,age");
-    this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 100L);
+  @Override
+  protected void setUp(Configuration conf) {
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "name,age");
+    conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 100L);
 
     List<RowType.RowField> fields = new ArrayList<>();
     fields.add(new RowType.RowField("uuid", VarCharType.STRING_TYPE));
@@ -100,8 +94,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     }
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .endInput();
 
@@ -122,8 +115,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     );
 
     // Write the data and flush on checkpoint
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .checkpoint(1)
         .endInput();
@@ -152,8 +144,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
         "uuid1,Bob,30,1970-01-01 00:00:01.123,p1");
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .checkpoint(1)
         .endInput();
@@ -187,8 +178,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     );
 
     // Write batches with checkpoints between them
-    TestHarness testHarness = TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf);
+    TestHarness testHarness = preparePipeline(conf);
 
     testHarness.consume(batch1).checkpoint(1);
     testHarness.consume(batch2).checkpoint(2);
@@ -213,8 +203,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     }
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .endInput();
 
@@ -237,8 +226,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     );
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .endInput();
 
@@ -270,8 +258,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     );
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .endInput();
 
@@ -298,8 +285,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     );
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .endInput();
 
@@ -333,8 +319,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
 
     // Write the data and flush either on checkpoint or endInput
     TestHarness testHarness =
-        TestWriteBase.TestHarness.instance()
-            .preparePipeline(tempFile, conf)
+        preparePipeline(conf)
             .consume(inputData);
     if (flushOnCheckpoint) {
       testHarness.checkpoint(1);
@@ -361,8 +346,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     }
 
     // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
+    preparePipeline(conf)
         .consume(inputData)
         .endInput();
 
@@ -384,8 +368,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     }
 
     // Write data in small batches with periodic checkpoints
-    TestHarness testHarness = TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf);
+    TestHarness testHarness = preparePipeline(conf);
 
     for (int i = 0; i < inputData.size(); i += 10) {
       List<RowData> batch = inputData.subList(i, Math.min(i + 10, inputData.size()));
