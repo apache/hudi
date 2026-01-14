@@ -123,7 +123,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     // Setup: Create commits with inflight scenario
     String commit001 = "20230101120000001";
     testTable.addCommit(commit001)
-        .withPartitionMetaFiles(partition1, partition2)
+        .withPartitionMetaFilesWithDepth(partition1, partition2)
         .withBaseFilesInPartition(partition1, "file1").getLeft()
         .withBaseFilesInPartition(partition2, "file2").getLeft();
 
@@ -190,7 +190,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     // Setup: Create commits with inflight scenario
     String commit001 = "20230101120000001";
     testTable.addCommit(commit001)
-        .withPartitionMetaFiles(partition)
+        .withPartitionMetaFilesWithDepth(partition)
         .withBaseFilesInPartition(partition, "file1").getLeft();
 
     String commit002 = "20230101130000002"; // This will be inflight
@@ -260,7 +260,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     // Setup the problematic scenario
     String commit001 = "20230101120000001";
     testTable.addCommit(commit001)
-        .withPartitionMetaFiles(partition)
+        .withPartitionMetaFilesWithDepth(partition)
         .withBaseFilesInPartition(partition, "file1").getLeft();
 
     String commit002 = "20230101130000002";

@@ -723,6 +723,16 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable withPartitionMetaFilesWithDepth(String... partitionPaths) throws IOException {
+    for (String partitionPath : partitionPaths) {
+      StoragePath partitionPathObj = FSUtils.getPartitionPath(new StoragePath(basePath), partitionPath);
+      HoodiePartitionMetadata partitionMetadata1 = new HoodiePartitionMetadata(storage,
+          currentInstantTime, new StoragePath(basePath), partitionPathObj, Option.of(HoodieFileFormat.PARQUET));
+      partitionMetadata1.trySave();
+    }
+    return this;
+  }
+
   public HoodieTestTable withMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
     createMarkerFile(metaClient, partitionPath, currentInstantTime, fileId, ioType);
     return this;
