@@ -25,12 +25,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -41,11 +41,10 @@ import org.apache.hudi.table.repair.RepairUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -139,9 +138,9 @@ import java.util.stream.Collectors;
  * --backup-path backup_path
  * ```
  */
+@Slf4j
 public class HoodieRepairTool {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRepairTool.class);
   private static final String BACKUP_DIR_PREFIX = "hoodie_repair_backup_";
   // Repair config
   private final Config cfg;
@@ -175,41 +174,39 @@ public class HoodieRepairTool {
     Option<String> endingInstantOption = Option.ofNullable(cfg.endingInstantTime);
 
     if (startingInstantOption.isPresent() && endingInstantOption.isPresent()) {
-      LOG.info(String.format("Start repairing completed instants between %s and %s (inclusive)",
-          startingInstantOption.get(), endingInstantOption.get()));
+      log.info("Start repairing completed instants between {} and {} (inclusive)",
+          startingInstantOption.get(), endingInstantOption.get());
     } else if (startingInstantOption.isPresent()) {
-      LOG.info(String.format("Start repairing completed instants from %s (inclusive)",
-          startingInstantOption.get()));
+      log.info("Start repairing completed instants from {} (inclusive)", startingInstantOption.get());
     } else if (endingInstantOption.isPresent()) {
-      LOG.info(String.format("Start repairing completed instants till %s (inclusive)",
-          endingInstantOption.get()));
+      log.info("Start repairing completed instants till {} (inclusive)", endingInstantOption.get());
     } else {
-      LOG.info("Start repairing all completed instants");
+      log.info("Start repairing all completed instants");
     }
 
     try {
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
       switch (mode) {
         case REPAIR:
-          LOG.info(" ****** The repair tool is in REPAIR mode, dangling data and logs files "
+          log.info(" ****** The repair tool is in REPAIR mode, dangling data and logs files "
               + "not belonging to any commit are going to be DELETED from the table ******");
           if (checkBackupPathForRepair() < 0) {
-            LOG.error("Backup path check failed.");
+            log.error("Backup path check failed.");
             return false;
           }
           return doRepair(startingInstantOption, endingInstantOption, false);
         case DRY_RUN:
-          LOG.info(" ****** The repair tool is in DRY_RUN mode, "
+          log.info(" ****** The repair tool is in DRY_RUN mode, "
               + "only LOOKING FOR dangling data and log files from the table ******");
           return doRepair(startingInstantOption, endingInstantOption, true);
         case UNDO:
           if (checkBackupPathAgainstBasePath() < 0) {
-            LOG.error("Backup path check failed.");
+            log.error("Backup path check failed.");
             return false;
           }
           return undoRepair();
         default:
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return false;
       }
     } catch (IOException e) {
@@ -229,7 +226,7 @@ public class HoodieRepairTool {
     try {
       new HoodieRepairTool(jsc, cfg).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run table repair for " + cfg.basePath, throwable);
+      log.error("Fail to run table repair for {}", cfg.basePath, throwable);
     } finally {
       jsc.stop();
     }
@@ -264,8 +261,7 @@ public class HoodieRepairTool {
               }
             } catch (IOException e) {
               // Copy Fail
-              LOG.error(String.format("Copying file fails: source [%s], destination [%s]",
-                  sourcePath, destPath));
+              log.error("Copying file fails: source [{}], destination [{}]", sourcePath, destPath);
             } finally {
               results.add(success);
             }
@@ -321,7 +317,7 @@ public class HoodieRepairTool {
             try {
               success = fs.delete(new Path(basePath, relativeFilePath), false);
             } catch (IOException e) {
-              LOG.error("Failed to delete file {}", relativeFilePath);
+              log.error("Failed to delete file {}", relativeFilePath);
             } finally {
               results.add(success);
             }
@@ -378,12 +374,12 @@ public class HoodieRepairTool {
           .collect(Collectors.toList());
       if (relativeFilePathsToDelete.size() > 0) {
         if (!backupFiles(relativeFilePathsToDelete)) {
-          LOG.error("Error backing up dangling files. Exiting...");
+          log.error("Error backing up dangling files. Exiting...");
           return false;
         }
         return deleteFiles(context, cfg.basePath, relativeFilePathsToDelete);
       }
-      LOG.info(String.format("Table repair on %s is successful", cfg.basePath));
+      log.info("Table repair on {} is successful", cfg.basePath);
     }
     return true;
   }
@@ -398,14 +394,14 @@ public class HoodieRepairTool {
     String backupPathStr = cfg.backupPath;
     StoragePath backupPath = new StoragePath(backupPathStr);
     if (!storage.exists(backupPath)) {
-      LOG.error("Cannot find backup path: " + backupPath);
+      log.error("Cannot find backup path: {}", backupPath);
       return false;
     }
 
     List<String> allPartitionPaths = tableMetadata.getAllPartitionPaths();
 
     if (allPartitionPaths.isEmpty()) {
-      LOG.error("Cannot get one partition path since there is no partition available");
+      log.error("Cannot get one partition path since there is no partition available");
       return false;
     }
 
@@ -446,7 +442,7 @@ public class HoodieRepairTool {
     StoragePath backupPath = new StoragePath(cfg.backupPath);
     if (metaClient.getStorage().exists(backupPath)
         && metaClient.getStorage().listDirectEntries(backupPath).size() > 0) {
-      LOG.error(String.format("Cannot use backup path %s: it is not empty", cfg.backupPath));
+      log.error("Cannot use backup path {}: it is not empty", cfg.backupPath);
       return -1;
     }
 
@@ -461,13 +457,12 @@ public class HoodieRepairTool {
    */
   int checkBackupPathAgainstBasePath() {
     if (cfg.backupPath == null) {
-      LOG.error("Backup path is not configured");
+      log.error("Backup path is not configured");
       return -1;
     }
 
     if (cfg.backupPath.contains(cfg.basePath)) {
-      LOG.error(String.format("Cannot use backup path %s: it resides in the base path %s",
-          cfg.backupPath, cfg.basePath));
+      log.error("Cannot use backup path {}: it resides in the base path {}", cfg.backupPath, cfg.basePath);
       return -1;
     }
     return 0;
@@ -502,11 +497,11 @@ public class HoodieRepairTool {
   private void printRepairInfo(
       List<String> instantTimesToRepair, List<ImmutablePair<String, List<String>>> instantsWithDanglingFiles) {
     int numInstantsToRepair = instantsWithDanglingFiles.size();
-    LOG.info("Number of instants verified based on the base and log files: {}", instantTimesToRepair.size());
-    LOG.info("Instant timestamps: {}", instantTimesToRepair);
-    LOG.info("Number of instants to repair: {}", numInstantsToRepair);
+    log.info("Number of instants verified based on the base and log files: {}", instantTimesToRepair.size());
+    log.info("Instant timestamps: {}", instantTimesToRepair);
+    log.info("Number of instants to repair: {}", numInstantsToRepair);
     if (numInstantsToRepair > 0) {
-      instantsWithDanglingFiles.forEach(e -> LOG.info("   ** Removing files: {}", e.getValue()));
+      instantsWithDanglingFiles.forEach(e -> log.info("   ** Removing files: {}", e.getValue()));
     }
   }
 
