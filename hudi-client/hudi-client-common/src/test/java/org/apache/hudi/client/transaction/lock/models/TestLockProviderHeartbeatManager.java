@@ -207,6 +207,7 @@ public class TestLockProviderHeartbeatManager {
         threadStartedLatch.countDown();
         new CountDownLatch(1).await();
       } catch (InterruptedException e) {
+        // Expected
       }
     });
     monitoredThread.start();
