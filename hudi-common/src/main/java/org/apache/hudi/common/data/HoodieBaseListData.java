@@ -21,8 +21,9 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.util.Either;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 import java.util.List;
@@ -34,6 +35,7 @@ import java.util.stream.Stream;
  *
  * @param <T> Object value type.
  */
+@Slf4j
 public abstract class HoodieBaseListData<T> {
 
   protected final Either<Stream<T>, List<T>> data;
@@ -86,13 +88,11 @@ public abstract class HoodieBaseListData<T> {
     }
   }
 
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
+  @Slf4j
   static class IteratorCloser implements Runnable {
-    private static final Logger LOG = LoggerFactory.getLogger(IteratorCloser.class);
-    private final Iterator<?> iterator;
 
-    IteratorCloser(Iterator<?> iterator) {
-      this.iterator = iterator;
-    }
+    private final Iterator<?> iterator;
 
     @Override
     public void run() {
@@ -100,7 +100,7 @@ public abstract class HoodieBaseListData<T> {
         try {
           ((AutoCloseable) iterator).close();
         } catch (Exception ex) {
-          LOG.warn("Failed to properly close iterator", ex);
+          log.warn("Failed to properly close iterator", ex);
         }
       }
     }
