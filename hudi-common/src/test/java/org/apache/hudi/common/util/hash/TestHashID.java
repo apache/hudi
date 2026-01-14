@@ -39,7 +39,6 @@ import java.util.Objects;
 import java.util.Random;
 
 import static java.util.Arrays.asList;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
