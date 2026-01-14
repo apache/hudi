@@ -1222,6 +1222,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Option<String> clusteringInstant = clusteringWriter.scheduleClustering(Option.empty());
     assertTrue(clusteringInstant.isPresent());
     clusteringWriter.cluster(clusteringInstant.get());
+    assertEquals(clusteringInstant.get(), metaClient.reloadActiveTimeline()
+        .filterCompletedInstants().lastInstant().get().requestedTime());
   }
 
   @Test
