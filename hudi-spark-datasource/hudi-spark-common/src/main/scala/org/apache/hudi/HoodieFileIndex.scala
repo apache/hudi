@@ -30,6 +30,7 @@ import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKey
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -37,15 +38,14 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.

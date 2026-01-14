@@ -18,12 +18,16 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -218,6 +222,25 @@ public class AvroSchemaUtils {
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
+  public static Option<Schema> findNestedFieldSchema(Schema schema, String fieldName) {
+    if (StringUtils.isNullOrEmpty(fieldName)) {
+      return Option.empty();
+    }
+    String[] parts = fieldName.split("\\.");
+    for (String part : parts) {
+      Schema.Field foundField = getNonNullTypeFromUnion(schema).getField(part);
+      if (foundField == null) {
+        throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
+      }
+      schema = foundField.schema();
+    }
+    return Option.of(getNonNullTypeFromUnion(schema));
+  }
+
+  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+    return findNestedFieldSchema(schema, fieldName).map(Schema::getType);
+  }
+
   /**
    * Appends provided new fields at the end of the given schema
    *
@@ -251,7 +274,7 @@ public class AvroSchemaUtils {
     List<Schema> innerTypes = schema.getTypes();
     if (innerTypes.size() == 2 && isNullable(schema)) {
       // this is a basic nullable field so handle it more efficiently
-      return resolveNullableSchema(schema);
+      return getNonNullTypeFromUnion(schema);
     }
 
     Schema nonNullType =
@@ -285,7 +308,7 @@ public class AvroSchemaUtils {
    * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
    * decomposing union and returning the target non-null type
    */
-  public static Schema resolveNullableSchema(Schema schema) {
+  public static Schema getNonNullTypeFromUnion(Schema schema) {
     if (schema.getType() != Schema.Type.UNION) {
       return schema;
     }
@@ -371,6 +394,17 @@ public class AvroSchemaUtils {
           writerSchema,
           tableSchema);
       throw new SchemaCompatibilityException(errorDetails);
+    }
+  }
+
+  public static Schema getRepairedSchema(Schema writerSchema, Schema readerSchema) {
+    try {
+      Class<?> avroSchemaRepairClass = Class.forName("org.apache.parquet.schema.AvroSchemaRepair");
+      Method repairMethod = avroSchemaRepairClass.getMethod("repairLogicalTypes", Schema.class, Schema.class);
+      return (Schema) repairMethod.invoke(null, writerSchema, readerSchema);
+    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      // Fallback if class/method not available
+      return writerSchema;
     }
   }
 }
