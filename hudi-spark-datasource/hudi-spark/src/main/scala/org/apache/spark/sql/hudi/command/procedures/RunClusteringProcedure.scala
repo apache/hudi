@@ -233,7 +233,7 @@ class RunClusteringProcedure extends BaseProcedure
     }
 
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val fields = tableSchemaResolver.getTableAvroSchema(false)
+    val fields = tableSchemaResolver.getTableSchema(false)
       .getFields.asScala.map(_.name().toLowerCase)
     orderColumns.split(",").foreach(col => {
       if (!fields.contains(col.toLowerCase)) {

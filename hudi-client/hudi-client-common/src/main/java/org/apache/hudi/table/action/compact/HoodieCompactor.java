@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -46,7 +47,6 @@ import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -110,7 +110,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // the same with the table schema.
     try {
       if (StringUtils.isNullOrEmpty(config.getInternalSchema())) {
-        Schema readerSchema = schemaResolver.getTableAvroSchema(false);
+        HoodieSchema readerSchema = schemaResolver.getTableSchema(false);
         config.setSchema(readerSchema.toString());
       }
     } catch (Exception e) {
