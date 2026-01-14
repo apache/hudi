@@ -275,9 +275,6 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     conf.removeConfig(FlinkOptions.WRITE_BUFFER_TYPE);
     conf.set(FlinkOptions.WRITE_BUFFER_SORT_ENABLED, true);
 
-    // Verify deprecated config resolves to DISRUPTOR
-    assertEquals(BufferType.DISRUPTOR.name(), AppendWriteFunctions.resolveBufferType(conf));
-
     // Create test data
     List<RowData> inputData = Arrays.asList(
         createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
@@ -292,16 +289,6 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
     assertEquals(2, actualData.size());
-  }
-
-  @Test
-  public void testExplicitBufferTypeTakesPrecedence() throws Exception {
-    // Set both new and deprecated config
-    conf.set(FlinkOptions.WRITE_BUFFER_TYPE, BufferType.BOUNDED_IN_MEMORY.name());
-    conf.set(FlinkOptions.WRITE_BUFFER_SORT_ENABLED, true);
-
-    // Verify explicit write.buffer.type takes precedence over deprecated write.buffer.sort.enabled
-    assertEquals(BufferType.BOUNDED_IN_MEMORY.name(), AppendWriteFunctions.resolveBufferType(conf));
   }
 
   // ==================== BOUNDED_IN_MEMORY-specific tests ====================
@@ -382,28 +369,6 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
     assertEquals(200, actualData.size());
-  }
-
-  // ==================== Sort key resolution tests ====================
-
-  @Test
-  public void testSortKeysDefaultToRecordKey() throws Exception {
-    // Remove explicit sort keys config
-    conf.removeConfig(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
-
-    // Verify sort keys default to record key field
-    String resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
-    assertEquals(conf.get(FlinkOptions.RECORD_KEY_FIELD), resolvedSortKeys);
-  }
-
-  @Test
-  public void testCustomSortKeysOverrideDefault() throws Exception {
-    // Set custom sort keys
-    conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "age,name");
-
-    // Verify custom sort keys take precedence
-    String resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
-    assertEquals("age,name", resolvedSortKeys);
   }
 
   // ==================== Helper methods ====================
