@@ -20,12 +20,19 @@ package org.apache.hudi.common.table.timeline.versioning;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Metadata Layout Version. Add new version when timeline format changes
  */
+@Getter
+@EqualsAndHashCode
+@ToString
 public class TimelineLayoutVersion implements Serializable, Comparable<TimelineLayoutVersion> {
 
   public static final Integer VERSION_0 = 0; // pre 0.5.1  version format
@@ -37,7 +44,6 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
   public static final TimelineLayoutVersion LAYOUT_VERSION_1 = new TimelineLayoutVersion(VERSION_1);
   public static final TimelineLayoutVersion LAYOUT_VERSION_2 = new TimelineLayoutVersion(VERSION_2);
   public static final TimelineLayoutVersion CURR_LAYOUT_VERSION = LAYOUT_VERSION_2;
-
 
   private final Integer version;
 
@@ -56,34 +62,8 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
     return Objects.equals(version, VERSION_0);
   }
 
-  public Integer getVersion() {
-    return version;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    TimelineLayoutVersion that = (TimelineLayoutVersion) o;
-    return Objects.equals(version, that.version);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(version);
-  }
-
   @Override
   public int compareTo(TimelineLayoutVersion o) {
     return Integer.compare(version, o.version);
-  }
-
-  @Override
-  public String toString() {
-    return String.valueOf(version);
   }
 }

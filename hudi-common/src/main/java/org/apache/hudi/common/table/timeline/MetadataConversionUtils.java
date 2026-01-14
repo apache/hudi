@@ -40,10 +40,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificRecordBase;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -52,8 +51,8 @@ import java.nio.ByteBuffer;
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
  */
+@Slf4j
 public class MetadataConversionUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(MetadataConversionUtils.class);
 
   public static HoodieArchivedMetaEntry createMetaWrapper(HoodieInstant hoodieInstant, HoodieTableMetaClient metaClient) {
     try {
@@ -387,17 +386,17 @@ public class MetadataConversionUtils {
     if (metadata instanceof HoodieReplaceCommitMetadata) {
       HoodieReplaceCommitMetadata hoodieCommitMetadata = (HoodieReplaceCommitMetadata) metadata;
       if (hoodieCommitMetadata.getPartitionToWriteStats().containsKey(null)) {
-        LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
+        log.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
         hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
       }
       if (hoodieCommitMetadata.getPartitionToReplaceFileIds().containsKey(null)) {
-        LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToReplaceFileIds().get(null));
+        log.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToReplaceFileIds().get(null));
         hoodieCommitMetadata.getPartitionToReplaceFileIds().remove(null);
       }
     } else if (metadata instanceof HoodieCommitMetadata) {
       HoodieCommitMetadata hoodieCommitMetadata = (HoodieCommitMetadata) metadata;
       if (hoodieCommitMetadata.getPartitionToWriteStats().containsKey(null)) {
-        LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
+        log.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
         hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
       }
     }

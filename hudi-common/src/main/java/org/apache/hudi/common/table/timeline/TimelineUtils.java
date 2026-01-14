@@ -40,8 +40,7 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
@@ -81,6 +80,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * 1) HiveSync - this can be used to query partitions that changed since previous sync.
  * 2) Incremental reads - InputFormats can use this API to query
  */
+@Slf4j
 public class TimelineUtils {
   public static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {
     {
@@ -89,7 +89,6 @@ public class TimelineUtils {
       add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
     }
   };
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineUtils.class);
 
   /**
    * Returns partitions that have new data strictly after commitTime.
@@ -137,7 +136,7 @@ public class TimelineUtils {
             });
           } catch (HoodieIOException e) {
             if (e.getCause() instanceof FileNotFoundException) {
-              LOG.warn("Instant {} not found in storage and has been archived", instant, e);
+              log.warn("Instant {} not found in storage and has been archived", instant, e);
             } else {
               throw e;
             }
@@ -264,7 +263,7 @@ public class TimelineUtils {
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
-      LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
+      log.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
       byte[] contents = metaClient.getCommitsTimeline().getInstantDetails(instant).get();
       if (instant.isCompleted()) {
         if (contents == null || contents.length == 0) {
@@ -476,7 +475,7 @@ public class TimelineUtils {
             "Found hollow commit: '%s'. Adjust config `%s` accordingly if to avoid throwing this exception.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
       case BLOCK:
-        LOG.warn("Found hollow commit '{}'. Config `{}` was set to `{}`: no data will be returned beyond '{}' until it's completed.",
+        log.warn("Found hollow commit '{}'. Config `{}` was set to `{}`: no data will be returned beyond '{}' until it's completed.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp);
         return completedCommitTimeline.findInstantsBefore(hollowCommitTimestamp);
       default:
@@ -518,7 +517,7 @@ public class TimelineUtils {
       if (NOT_PARSABLE_TIMESTAMPS.contains(timestamp)) {
         parsedDate = Option.of(new Date(Integer.parseInt(timestamp)));
       } else {
-        LOG.warn("Failed to parse timestamp {}: {}", timestamp, e.getMessage());
+        log.warn("Failed to parse timestamp {}: {}", timestamp, e.getMessage());
         parsedDate = Option.empty();
       }
     }

@@ -47,8 +47,8 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,6 +62,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
 
+@NoArgsConstructor
+@Slf4j
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
@@ -77,7 +79,6 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
 
-  private static final Logger LOG = LoggerFactory.getLogger(ActiveTimelineV1.class);
   protected HoodieTableMetaClient metaClient;
   private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV1();
 
@@ -89,7 +90,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    LOG.debug("Loaded instants upto : " + lastInstant());
+    log.debug("Loaded instants upto : {}", lastInstant());
   }
 
   public ActiveTimelineV1(HoodieTableMetaClient metaClient) {
@@ -98,15 +99,6 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   public ActiveTimelineV1(HoodieTableMetaClient metaClient, boolean applyLayoutFilter) {
     this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE), applyLayoutFilter);
-  }
-
-  /**
-   * For serialization and de-serialization only.
-   *
-   * @deprecated
-   */
-  @Deprecated
-  public ActiveTimelineV1() {
   }
 
   /**
@@ -126,13 +118,13 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public void createCompleteInstant(HoodieInstant instant) {
-    LOG.info("Creating a new complete instant {}", instant);
+    log.info("Creating a new complete instant {}", instant);
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.empty(), false);
   }
 
   @Override
   public void createNewInstant(HoodieInstant instant) {
-    LOG.info("Creating a new instant {}", instant);
+    log.info("Creating a new instant {}", instant);
     // Create the in-flight file
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.empty(), false);
   }
@@ -140,7 +132,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   @Override
   public HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
     HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
-    LOG.info("Creating a new instant {}", instant);
+    log.info("Creating a new instant {}", instant);
     // Create the request replace file
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
     return instant;
@@ -148,12 +140,12 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata) {
-    LOG.info("Marking instant complete " + instant);
+    log.info("Marking instant complete {}", instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant completedInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
     transitionState(instant, completedInstant, metadata);
-    LOG.info("Completed {}", instant);
+    log.info("Completed {}", instant);
     return completedInstant;
   }
 
@@ -176,10 +168,10 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public HoodieInstant revertToInflight(HoodieInstant instant) {
-    LOG.info("Reverting instant to inflight {}", instant);
+    log.info("Reverting instant to inflight {}", instant);
     HoodieInstant inflight = TimelineUtils.getInflightInstant(instant, metaClient);
     revertCompleteToInflight(instant, inflight);
-    LOG.info("Reverted {} to inflight {}", instant, inflight);
+    log.info("Reverted {} to inflight {}", instant, inflight);
     return inflight;
   }
 
@@ -216,18 +208,18 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public void deleteInstantFileIfExists(HoodieInstant instant) {
-    LOG.info("Deleting instant {}", instant);
+    log.info("Deleting instant {}", instant);
     StoragePath commitFilePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
     try {
       if (metaClient.getStorage().exists(commitFilePath)) {
         boolean result = metaClient.getStorage().deleteFile(commitFilePath);
         if (result) {
-          LOG.info("Removed instant {}", instant);
+          log.info("Removed instant {}", instant);
         } else {
           throw new HoodieIOException("Could not delete instant " + instant + " with path " + commitFilePath);
         }
       } else {
-        LOG.info("The commit {} to remove does not exist", commitFilePath);
+        log.info("The commit {} to remove does not exist", commitFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove commit " + commitFilePath, e);
@@ -235,12 +227,12 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   private void deleteInstantFile(HoodieInstant instant) {
-    LOG.info("Deleting instant {}", instant);
+    log.info("Deleting instant {}", instant);
     StoragePath inFlightCommitFilePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
     try {
       boolean result = metaClient.getStorage().deleteFile(inFlightCommitFilePath);
       if (result) {
-        LOG.info("Removed instant {}", instant);
+        log.info("Removed instant {}", instant);
       } else {
         throw new HoodieIOException("Could not delete instant " + instant + " with path " + inFlightCommitFilePath);
       }
@@ -541,7 +533,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
         } else {
           storage.createImmutableFileInPath(getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)), getHoodieInstantWriterOption(this, metadata));
         }
-        LOG.info("Create new file for toInstant ?{}", getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)));
+        log.info("Create new file for toInstant? {}", getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);

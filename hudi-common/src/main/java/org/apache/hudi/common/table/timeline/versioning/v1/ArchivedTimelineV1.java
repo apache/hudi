@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
@@ -53,6 +54,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
+@NoArgsConstructor
 public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
@@ -153,14 +155,6 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    */
   public ArchivedTimelineV1(HoodieTableMetaClient metaClient, Set<String> logFiles, Option<HoodieInstant.State> state) {
     this(metaClient, null, new LogFileFilter(logFiles), state);
-  }
-
-  /**
-   * For serialization and de-serialization only.
-   *
-   * @deprecated
-   */
-  public ArchivedTimelineV1() {
   }
 
   @Override

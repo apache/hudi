@@ -20,26 +20,38 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Comparator;
-import java.util.Objects;
 
 /**
  * A Hoodie Instant represents a action done on a hoodie table. All actions start with a inflight instant and then
  * create a completed instant after done.
  */
+@AllArgsConstructor
+@Getter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   public static final String FILE_NAME_FORMAT_ERROR = "The provided file name %s does not conform to the required format";
   public static final String UNDERSCORE = "_";
   public static final String EMPTY_FILE_EXTENSION = "";
 
+  @EqualsAndHashCode.Include
   private final State state;
+  @EqualsAndHashCode.Include
   private final String action;
+  @Getter(AccessLevel.NONE)
+  @EqualsAndHashCode.Include
   private final String requestedTime;
   private final String completionTime;
   // Marker for older formats, we need the state transition time (pre table version 7)
   private boolean isLegacy = false;
+  @Getter(AccessLevel.NONE)
   private final Comparator<HoodieInstant> comparator;
 
   public HoodieInstant(State state, String action, String requestTime, Comparator<HoodieInstant> comparator) {
@@ -48,15 +60,6 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   public HoodieInstant(State state, String action, String requestTime, String completionTime, Comparator<HoodieInstant> comparator) {
     this(state, action, requestTime, completionTime, false, comparator);
-  }
-
-  public HoodieInstant(State state, String action, String requestedTime, String completionTime, boolean isLegacy, Comparator<HoodieInstant> comparator) {
-    this.state = state;
-    this.action = action;
-    this.requestedTime = requestedTime;
-    this.completionTime = completionTime;
-    this.isLegacy = isLegacy;
-    this.comparator = comparator;
   }
 
   public boolean isCompleted() {
@@ -71,41 +74,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return state == State.REQUESTED;
   }
 
-  public String getAction() {
-    return action;
-  }
-
   public String requestedTime() {
     return requestedTime;
-  }
-
-  public boolean isLegacy() {
-    return isLegacy;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieInstant that = (HoodieInstant) o;
-    return state == that.state && Objects.equals(action, that.action) && Objects.equals(requestedTime, that.requestedTime);
-  }
-
-  public State getState() {
-    return state;
-  }
-
-  public String getCompletionTime() {
-    return completionTime;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(state, action, requestedTime);
   }
 
   @Override
