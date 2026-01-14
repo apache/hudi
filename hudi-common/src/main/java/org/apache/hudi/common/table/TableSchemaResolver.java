@@ -82,7 +82,7 @@ public class TableSchemaResolver {
 
   private static final Logger LOG = LoggerFactory.getLogger(TableSchemaResolver.class);
 
-  private final HoodieTableMetaClient metaClient;
+  protected final HoodieTableMetaClient metaClient;
 
   /**
    * Signals whether suite of the meta-fields should have additional field designating

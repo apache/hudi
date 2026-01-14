@@ -36,11 +36,11 @@ public class ParquetTableSchemaResolver extends TableSchemaResolver {
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    return getAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class)).convert(parquetSchema);
+    return getAvroSchemaConverter(metaClient.getHadoopConf()).convert(parquetSchema);
   }
 
   private MessageType convertAvroSchemaToParquet(Schema schema) {
-    return getAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class)).convert(schema);
+    return getAvroSchemaConverter(metaClient.getHadoopConf()).convert(schema);
   }
 
   /**

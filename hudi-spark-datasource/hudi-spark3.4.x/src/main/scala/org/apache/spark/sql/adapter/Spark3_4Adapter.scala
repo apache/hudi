@@ -20,7 +20,6 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.{Spark34HoodieFileScanRDD, SparkAdapterSupport$}
 import org.apache.hudi.io.storage.HoodieSparkParquetReader
-import org.apache.hudi.storage.HoodieStorage
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration

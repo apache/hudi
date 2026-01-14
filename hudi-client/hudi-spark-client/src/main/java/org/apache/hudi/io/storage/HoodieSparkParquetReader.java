@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -146,8 +145,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   private MessageType getFileSchema() {
-    if (fileSchemaOption.isEmpty()) {
-      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+    if (fileSchemaOption.isPresent()) {
+      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(conf, path);
       fileSchemaOption = Option.of(messageType);
     }
     return fileSchemaOption.get();
@@ -177,8 +176,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   private StructType convertToStruct(MessageType messageType) {
-    return new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
->>>>>>> 086b6aad2e27 (Fix timestamp_millis issue)
+    return new ParquetToSparkSchemaConverter(conf).convert(messageType);
   }
 
   @Override

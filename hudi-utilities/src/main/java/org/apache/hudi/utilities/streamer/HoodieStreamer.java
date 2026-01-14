@@ -19,8 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieWriterUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.SparkAsyncClusteringService;
@@ -51,6 +50,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
@@ -176,7 +176,7 @@ public class HoodieStreamer implements Serializable {
     }
 
     // set any configs that Deltastreamer has to override explicitly
-    hoodieConfig.setDefaultValue(DataSourceWriteOptions.RECONCILE_SCHEMA());
+    hoodieConfig.setDefaultValue(HoodieCommonConfig.RECONCILE_SCHEMA);
     // we need auto adjustment enabled for deltastreamer since async table services are feasible within the same JVM.
     hoodieConfig.setValue(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
     if (cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
@@ -419,6 +419,13 @@ public class HoodieStreamer implements Serializable {
 
     @Parameter(names = {"--config-hot-update-strategy-class"}, description = "Configuration hot update in continuous mode")
     public String configHotUpdateStrategyClass = "";
+
+    @Parameter(names = {"--ignore-checkpoint"}, description = "Set this config with a unique value, recommend using a timestamp value or UUID."
+        + " Setting this config indicates that the subsequent sync should ignore the last committed checkpoint for the source. The config value is stored"
+        + " in the commit history, so setting the config with same values would not have any affect. This config can be used in scenarios like kafka topic change,"
+        + " where we would want to start ingesting from the latest or earliest offset after switching the topic (in this case we would want to ignore the previously"
+        + " committed checkpoint, and rely on other configs to pick the starting offsets).")
+    public String ignoreCheckpoint = null;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction

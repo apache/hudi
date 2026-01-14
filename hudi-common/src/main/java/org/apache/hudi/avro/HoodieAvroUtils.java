@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -1305,7 +1306,7 @@ public class HoodieAvroUtils {
   }
 
   public static boolean gteqAvro1_12() {
-    return StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.12") >= 0;
   }
 
   /**

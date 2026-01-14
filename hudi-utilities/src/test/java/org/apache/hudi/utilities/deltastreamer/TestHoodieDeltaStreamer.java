@@ -661,9 +661,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1000, tableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.createMetaClient(storage, tableBasePath));
+        HoodieTestUtils.init(hadoopConf, tableBasePath));
     Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
     assertEquals(1000, sparkSession.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
@@ -678,9 +678,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1450, tableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
     tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.createMetaClient(storage, tableBasePath));
+        HoodieTestUtils.init(hadoopConf, tableBasePath));
     tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
     sqlContext.clearCache();
@@ -716,9 +716,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       new HoodieDeltaStreamer(cfg, jsc).sync();
       assertRecordCount(1000, tableBasePath, sqlContext);
-      TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+      TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+          HoodieTestUtils.init(hadoopConf, tableBasePath));
       Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
@@ -732,9 +732,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
       new HoodieDeltaStreamer(cfg, jsc).sync();
       assertRecordCount(1450, tableBasePath, sqlContext);
-      TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+      TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
       tableSchemaResolver = new TableSchemaResolver(
-          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+          HoodieTestUtils.init(hadoopConf, tableBasePath));
       tableSchema = tableSchemaResolver.getTableAvroSchema(false);
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.current().versionCode());
     } finally {
@@ -796,7 +796,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @CsvSource(value = {"SIX,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
+  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Throwable {
     timestampNTZCompatibility(() -> {
       try {
         String dirName = "trips_logical_types_json_cow_write";
@@ -844,7 +844,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
             // Validate raw parquet files
             HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-                .setConf(storage.getConf())
+                .setConf(hadoopConf)
                 .setBasePath(tableBasePath)
                 .build();
 
@@ -881,7 +881,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "CURRENT,SPARK,NONE,PARQUET",
       "CURRENT,SPARK,CLUSTER,PARQUET",
       "CURRENT,SPARK,COMPACT,PARQUET"})
-  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Throwable {
     timestampNTZCompatibility(() -> {
       try {
         String tableSuffix;
@@ -901,7 +901,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         String tableBasePath = zipOutput.toString();
 
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-            .setConf(storage.getConf())
+            .setConf(hadoopConf)
             .setBasePath(tableBasePath)
             .build();
 
@@ -953,16 +953,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
         String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
         try {
-          if (!HoodieSparkUtils.gteqSpark3_5()) {
-            sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
-          }
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
           sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
           Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
 
           assertDataframe(df, 12, 14);
 
           metaClient = HoodieTableMetaClient.builder()
-              .setConf(storage.getConf())
+              .setConf(hadoopConf)
               .setBasePath(tableBasePath)
               .build();
 
@@ -999,9 +997,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           }
         } finally {
           sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
-          if (!HoodieSparkUtils.gteqSpark3_5()) {
-            sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
-          }
+          sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
         }
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -1055,7 +1051,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableFileSystemView fsView = null;
     try {
       fsView = FileSystemViewManager.createInMemoryFileSystemView(
-          new HoodieLocalEngineContext(metaClient.getStorageConf()),
+          new HoodieLocalEngineContext(metaClient.getHadoopConf()),
           metaClient, HoodieMetadataConfig.newBuilder().enable(false).build());
       fsView.loadAllPartitions();
       final HoodieTableFileSystemView fileSystemView = fsView;
@@ -3439,5 +3435,27 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         arguments(false, null),
         arguments(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()))
     );
+  }
+
+  public static void timestampNTZCompatibility(Runnable r) throws Throwable {
+    // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
+    //  to be set to true to work.
+    boolean isSpark33 = HoodieSparkUtils.isSpark3_3();
+    String propertyValue = null;
+    if (isSpark33) {
+      propertyValue = System.getProperty("spark.testing");
+      System.setProperty("spark.testing", "true");
+    }
+    try {
+      r.run();
+    } finally {
+      if (isSpark33) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing");
+        } else {
+          System.setProperty("spark.testing", propertyValue);
+        }
+      }
+    }
   }
 }

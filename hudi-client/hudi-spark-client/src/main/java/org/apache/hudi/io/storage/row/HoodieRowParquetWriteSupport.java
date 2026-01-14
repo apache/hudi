@@ -20,10 +20,8 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
@@ -90,15 +88,5 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
       //       and simply do a pass over when it holds a (immutable) buffer holding just the string
       return key.clone();
     }
-  }
-
-  public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf,
-                                                                             StructType structType,
-                                                                             Option<BloomFilter> bloomFilterOpt,
-                                                                             HoodieConfig config) {
-    return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
-        config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieConfig.class},
-        conf, structType, bloomFilterOpt, config);
   }
 }
