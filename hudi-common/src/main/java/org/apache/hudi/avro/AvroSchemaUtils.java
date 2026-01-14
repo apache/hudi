@@ -453,7 +453,8 @@ public class AvroSchemaUtils {
             }
           }
         }
-        Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), false);
+        Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
+        copyProperties(dataSchema, newRecord);
         newRecord.setFields(newFields);
         return newRecord;
 
@@ -693,5 +694,18 @@ public class AvroSchemaUtils {
     schemaChange = reduce(filterCols, schemaChange,
             (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName()).toAvroSchema();
+  }
+
+  /**
+   * Helper to copy properties and logical types from source schema to target schema.
+   */
+  private static Schema copyProperties(Schema source, Schema target) {
+    for (Map.Entry<String, Object> prop : source.getObjectProps().entrySet()) {
+      target.addProp(prop.getKey(), prop.getValue());
+    }
+    if (source.getLogicalType() != null) {
+      source.getLogicalType().addToSchema(target);
+    }
+    return target;
   }
 }

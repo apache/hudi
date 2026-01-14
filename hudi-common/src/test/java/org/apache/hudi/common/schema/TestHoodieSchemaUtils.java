@@ -1759,4 +1759,49 @@ public class TestHoodieSchemaUtils {
     HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
     assertEquals(HoodieSchemaType.STRING, result.getType());
   }
+
+  @Test
+  void testLogicalTypesRetainedAfterPruneWithNestedRecords() {
+    final String logicalTypeKey = "logicalType";
+    final String customLogicalTypeRoot = "CustomLogicalTypeRoot";
+    final String customLogicalTypeNested = "CustomLogicalTypeNested";
+
+    // Create a nested record with logical type
+    HoodieSchema nestedRecord = HoodieSchema.createRecord("nested_record", "nested doc", null,
+        Arrays.asList(HoodieSchemaField.of("nested_col_0", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("nested_col_1", HoodieSchema.create(HoodieSchemaType.STRING))));
+    nestedRecord.addProp(logicalTypeKey, customLogicalTypeNested);
+
+    // Create root record with timestamp-micros, uuid and nested record containing the nested record all with its own logical type
+    HoodieSchema dataSchema = HoodieSchema.createRecord("test", "test", null,
+        Arrays.asList(HoodieSchemaField.of("col_0", HoodieSchema.createTimestampMicros()),
+        HoodieSchemaField.of("nested", nestedRecord),
+        HoodieSchemaField.of("col_1", HoodieSchema.createUUID())));
+    dataSchema.addProp(logicalTypeKey, customLogicalTypeRoot);
+
+    Set<String> mandatoryFields = new HashSet<>(Collections.singleton("op"));
+
+    // Verify logical types are set on both root and nested records
+    assertEquals(customLogicalTypeRoot, dataSchema.getProp(logicalTypeKey));
+    Option<HoodieSchemaField> nestedFieldSchemaOpt = dataSchema.getField("nested");
+    assertTrue(nestedFieldSchemaOpt.isPresent());
+    assertEquals(customLogicalTypeNested, nestedFieldSchemaOpt.get().schema().getProp(logicalTypeKey));
+
+    // Prune the schema
+    HoodieSchema prunedSchema = HoodieSchemaUtils.pruneDataSchema(dataSchema, dataSchema, mandatoryFields);
+
+    // Verify logical types are retained on both root and nested records after pruning
+    assertEquals(customLogicalTypeRoot, prunedSchema.getProp(logicalTypeKey));
+    Option<HoodieSchemaField> prunedNestedFieldOpt = prunedSchema.getField("nested");
+    assertTrue(prunedNestedFieldOpt.isPresent());
+    assertEquals(customLogicalTypeNested, prunedNestedFieldOpt.get().schema().getProp(logicalTypeKey));
+
+    // Check that the fields that are not nested retain their logical types
+    Option<HoodieSchemaField> prunedCol0FieldOpt = prunedSchema.getField("col_0");
+    Option<HoodieSchemaField> prunedCol1FieldOpt = prunedSchema.getField("col_1");
+    assertTrue(prunedCol0FieldOpt.isPresent());
+    assertTrue(prunedCol1FieldOpt.isPresent());
+    assertEquals("timestamp-micros", prunedCol0FieldOpt.get().schema().getProp(logicalTypeKey));
+    assertEquals("uuid", prunedCol1FieldOpt.get().schema().getProp(logicalTypeKey));
+  }
 }
