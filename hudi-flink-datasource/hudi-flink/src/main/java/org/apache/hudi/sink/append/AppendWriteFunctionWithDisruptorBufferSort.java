@@ -117,10 +117,12 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
   }
 
   private void initDisruptorBuffer() throws Exception {
-    this.sortBuffer = BufferUtils.createBuffer(rowType,
-        memorySegmentPool,
-        keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
-        recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
+    if (sortBuffer == null) {
+      this.sortBuffer = BufferUtils.createBuffer(rowType,
+          memorySegmentPool,
+          keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
+          recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
+    }
 
     this.sortingConsumer = new SortingConsumer();
 
@@ -137,7 +139,12 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
 
   @Override
   public void processElement(T value, Context ctx, Collector<RowData> out) throws Exception {
-    disruptorQueue.insertRecord((RowData) value);
+    try {
+      disruptorQueue.insertRecord((RowData) value);
+    } catch (Exception e) {
+      disruptorQueue.markAsFailed(e);
+      throw new HoodieException("Failed to insert record into disruptor queue", e);
+    }
   }
 
   @Override
@@ -172,22 +179,9 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
   }
 
   private void reinitDisruptorAfterCheckpoint() throws Exception {
-    this.sortBuffer = BufferUtils.createBuffer(rowType,
-        memorySegmentPool,
-        keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
-        recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
-
-    this.sortingConsumer = new SortingConsumer();
-
-    this.disruptorQueue = new DisruptorMessageQueue<>(
-        ringBufferSize,
-        Function.identity(),
-        waitStrategy,
-        1,
-        null
-    );
-    disruptorQueue.setHandlers(sortingConsumer);
-    disruptorQueue.start();
+    // sortBuffer is reused - it's already reset after flush via sortAndSend()
+    // disruptorQueue cannot be reused once closed, so we create a new one
+    initDisruptorBuffer();
   }
 
   private void sortAndSend(BinaryInMemorySortBuffer buffer) throws IOException {
@@ -228,7 +222,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     public void consume(RowData record) throws Exception {
       boolean success = sortBuffer.write(record);
       if (!success) {
-        flushSortBuffer();
+        sortAndSend(sortBuffer);
         success = sortBuffer.write(record);
         if (!success) {
           throw new HoodieException("Sort buffer is too small to hold a single record.");
@@ -236,18 +230,14 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
       }
 
       if (sortBuffer.size() >= writeBufferSize) {
-        flushSortBuffer();
+        sortAndSend(sortBuffer);
       }
-    }
-
-    private void flushSortBuffer() throws IOException {
-      sortAndSend(sortBuffer);
     }
 
     @Override
     public Void finish() {
       try {
-        flushSortBuffer();
+        sortAndSend(sortBuffer);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to flush sort buffer on finish.", e);
       }
