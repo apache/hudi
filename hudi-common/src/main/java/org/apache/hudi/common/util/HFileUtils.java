@@ -45,9 +45,8 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -65,8 +64,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * Utility functions for HFile files.
  */
+@Slf4j
 public class HFileUtils extends FileFormatUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HFileUtils.class);
+
   private static final int DEFAULT_BLOCK_SIZE_FOR_LOG_FILE = 1024 * 1024;
 
   /**
@@ -153,7 +153,7 @@ public class HFileUtils extends FileFormatUtils {
 
   @Override
   public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
-    LOG.info("Reading schema from {}", filePath);
+    log.info("Reading schema from {}", filePath);
 
     try (HoodieFileReader fileReader =
              HoodieIOFactory.getIOFactory(storage)
@@ -215,7 +215,7 @@ public class HFileUtils extends FileFormatUtils {
           final byte[] recordBytes = serializeRecord(record, writerSchema, keyField);
           // Since the list is sorted, duplicates will be adjacent.
           if (i > 0 && recordKey.equals(previousRecordKey)) {
-            LOG.error("Found duplicate record with recordKey: {}", recordKey);
+            log.error("Found duplicate record with recordKey: {}", recordKey);
             logRecordMetadata("Previous record",
                 serializeRecord(records.get(i - 1), writerSchema, keyField), writerSchema);
             logRecordMetadata("Current record",
@@ -246,7 +246,7 @@ public class HFileUtils extends FileFormatUtils {
   private void logRecordMetadata(String msg, byte[] bs, HoodieSchema schema) throws IOException {
     GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema.toAvroSchema());
     if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()) {
-      LOG.error("{}: Hudi meta field values -> Record key: {}, Partition Path: {}, FileName: {}, CommitTime: {}, CommitSeqNo: {}", msg,
+      log.error("{}: Hudi meta field values -> Record key: {}, Partition Path: {}, FileName: {}, CommitTime: {}, CommitSeqNo: {}", msg,
           record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
           record.get(HoodieRecord.FILENAME_METADATA_FIELD), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
           record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
