@@ -21,13 +21,13 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -36,8 +36,9 @@ import org.apache.hudi.storage.StoragePathInfo;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,12 +49,16 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Getter
+@ToString
+@Slf4j
 public class PartitionBucketIndexHashingConfig implements Serializable {
+
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexHashingConfig.class);
   public static final String INITIAL_HASHING_CONFIG_INSTANT = HoodieTimeline.INIT_INSTANT_TS;
   public static final String HASHING_CONFIG_FILE_SUFFIX = ".hashing_config";
   public static final Integer CURRENT_VERSION = 1;
+
   private final String expressions;
   private final int defaultBucketNumber;
   private final String rule;
@@ -81,10 +86,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
-  public String getInstant() {
-    return this.instant;
-  }
-
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
       // For empty commit file (no data or somethings bad happen).
@@ -99,22 +100,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     } catch (Exception e) {
       throw new IOException("unable to load hashing config", e);
     }
-  }
-
-  public int getVersion() {
-    return version;
-  }
-
-  public String getRule() {
-    return rule;
-  }
-
-  public int getDefaultBucketNumber() {
-    return defaultBucketNumber;
-  }
-
-  public String getExpressions() {
-    return expressions;
   }
 
   /**
@@ -189,7 +174,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
       byte[] content = FileIOUtils.readAsByteArray(is);
       return Option.of(PartitionBucketIndexHashingConfig.fromBytes(content));
     } catch (IOException e) {
-      LOG.error("Error when loading hashing config, for path: " + hashingConfig.getName(), e);
+      log.error("Error when loading hashing config, for path: {}", hashingConfig.getName(), e);
       throw new HoodieIOException("Error while loading hashing config", e);
     }
   }
@@ -269,11 +254,11 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
   public static boolean archiveHashingConfigIfNecessary(HoodieTableMetaClient metaClient) throws IOException {
     List<String> hashingConfigToArchive = getHashingConfigToArchive(metaClient);
     if (hashingConfigToArchive.size() == 0) {
-      LOG.info("Nothing to archive " + hashingConfigToArchive);
+      log.info("Nothing to archive {}", hashingConfigToArchive);
       return false;
     }
 
-    LOG.info("Start to archive hashing config " + hashingConfigToArchive);
+    log.info("Start to archive hashing config {}", hashingConfigToArchive);
     return archiveHashingConfig(hashingConfigToArchive, metaClient);
   }
 
@@ -356,10 +341,10 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
       if (storage.exists(path)) {
         boolean res = storage.deleteFile(path);
         ValidationUtils.checkArgument(res, "Failed to delete hashing_config " + path);
-        LOG.info("Deleted hashing config " + path);
+        log.info("Deleted hashing config {}", path);
         return true;
       }
-      LOG.info("Hashing config " + path + " doesn't exist.");
+      log.info("Hashing config {} doesn't exist.", path);
       return false;
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
@@ -378,14 +363,5 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     StoragePath path = getHashingConfigPath(metaClient.getBasePath().toString(), instant.requestedTime());
     HoodieStorage storage = metaClient.getStorage();
     return storage.exists(path);
-  }
-
-  public String toString() {
-    return "PartitionBucketIndexHashingConfig{" + "expressions='" + expressions + '\''
-        + ", defaultBucketNumber='" + defaultBucketNumber + '\''
-        + ", rule='" + rule + '\''
-        + ", version='" + version + '\''
-        + ", instant=" + instant
-        + '}';
   }
 }

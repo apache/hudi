@@ -74,8 +74,8 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
 
     BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.getWriteStatuses().get(0);
     BootstrapFileMapping bootstrapFileMapping = new BootstrapFileMapping(
-        config.getBootstrapSourceBasePath(), srcPartitionPath, partitionPath,
-        srcFileStatus, writeStatus.getFileId());
+        config.getBootstrapSourceBasePath(), srcPartitionPath, srcFileStatus,
+        partitionPath, writeStatus.getFileId());
     writeStatus.setBootstrapSourceFileMapping(bootstrapFileMapping);
     return writeStatus;
   }
