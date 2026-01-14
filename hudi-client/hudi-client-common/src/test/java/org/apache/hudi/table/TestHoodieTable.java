@@ -47,6 +47,7 @@ import java.util.function.Function;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -178,9 +179,8 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     validStatWithWrites.setNumDeletes(0);
     validStatWithWrites.setNumUpdateWrites(5);
     validStatsWithWrites.add(validStatWithWrites);
-
-    // This should not throw HoodieInconsistentMetadataException
-    // Note: may fail at reconcileAgainstMarkers if markers don't exist, but that's a different exception
+    assertDoesNotThrow(() ->
+        hoodieTable.validateWriteStats("002", validStatsWithWrites), "Should not throw exception for valid write stats with numWrites > 0");
 
     // Scenario 3: Valid stats with numWrites = 0 but numDeletes > 0 - should NOT throw exception
     List<HoodieWriteStat> validStatsWithDeletes = new ArrayList<>();
@@ -193,8 +193,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     validStatWithDeletes.setNumDeletes(5);
     validStatWithDeletes.setNumUpdateWrites(0);
     validStatsWithDeletes.add(validStatWithDeletes);
-
-    // This should not throw HoodieInconsistentMetadataException for delete-only operations
-    // Note: may fail at reconcileAgainstMarkers if markers don't exist, but that's a different exception
+    assertDoesNotThrow(() ->
+        hoodieTable.validateWriteStats("003", validStatsWithDeletes), "Should not throw exception for delete-only stats with numDeletes > 0");
   }
 }
