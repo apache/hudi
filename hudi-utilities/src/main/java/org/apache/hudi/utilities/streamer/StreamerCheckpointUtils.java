@@ -39,8 +39,7 @@ import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
@@ -53,8 +52,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgradeOrDowngrade;
 
+@Slf4j
 public class StreamerCheckpointUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(StreamerCheckpointUtils.class);
 
   /**
    * The first phase of checkpoint resolution - read the checkpoint configs from 2 sources and resolve
@@ -115,7 +114,7 @@ public class StreamerCheckpointUtils {
 
   private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
       HoodieStreamer.Config streamerConfig, TypedProperties props, Option<Checkpoint> checkpoint) {
-    LOG.debug("Checkpoint from config: {}", streamerConfig.checkpoint);
+    log.debug("Checkpoint from config: {}", streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
       checkpoint = Option.of(buildCheckpointFromConfigOverride(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
@@ -156,7 +155,7 @@ public class StreamerCheckpointUtils {
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
         Checkpoint checkpointFromCommit = CheckpointUtils.getCheckpoint(commitMetadata);
-        LOG.debug("Checkpoint reset from metadata: {}", checkpointFromCommit.getCheckpointResetKey());
+        log.debug("Checkpoint reset from metadata: {}", checkpointFromCommit.getCheckpointResetKey());
         if (ignoreCkpCfgPrevailsOverCkpFromPrevCommit(streamerConfig, checkpointFromCommit)) {
           // we ignore any existing checkpoint and start ingesting afresh
           resumeCheckpoint = Option.empty();
