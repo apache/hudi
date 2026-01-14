@@ -38,10 +38,9 @@ import org.apache.hudi.table.repair.RepairUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -98,10 +97,10 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * --min-validate-interval-seconds 60
  * ```
  */
+@Slf4j
 public class HoodieDataTableValidator implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDataTableValidator.class);
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -253,7 +252,7 @@ public class HoodieDataTableValidator implements Serializable {
     try {
       validator.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to do hoodie Data table validation for " + validator.cfg, throwable);
+      log.error("Fail to do hoodie Data table validation for " + validator.cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -261,12 +260,12 @@ public class HoodieDataTableValidator implements Serializable {
 
   public void run() {
     try {
-      LOG.info(cfg.toString());
+      log.info(cfg.toString());
       if (cfg.continuous) {
-        LOG.info(" ****** do hoodie data table validation in CONTINUOUS mode ******");
+        log.info(" ****** do hoodie data table validation in CONTINUOUS mode ******");
         doHoodieDataTableValidationContinuous();
       } else {
-        LOG.info(" ****** do hoodie data table validation once ******");
+        log.info(" ****** do hoodie data table validation once ******");
         doHoodieDataTableValidationOnce();
       }
     } catch (Exception e) {
@@ -283,7 +282,7 @@ public class HoodieDataTableValidator implements Serializable {
     try {
       doDataTableValidation();
     } catch (HoodieValidationException e) {
-      LOG.error("Metadata table validation failed to HoodieValidationException", e);
+      log.error("Metadata table validation failed to HoodieValidationException", e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
@@ -320,9 +319,8 @@ public class HoodieDataTableValidator implements Serializable {
         }).collect(Collectors.toList());
 
         if (!danglingFilePaths.isEmpty() && danglingFilePaths.size() > 0) {
-          LOG.error("Data table validation failed due to dangling files count "
-              + danglingFilePaths.size() + ", found before active timeline");
-          danglingFilePaths.forEach(entry -> LOG.error("Dangling file: " + entry.toString()));
+          log.error("Data table validation failed due to dangling files count {}, found before active timeline", danglingFilePaths.size());
+          danglingFilePaths.forEach(entry -> log.error("Dangling file: " + entry.toString()));
           finalResult = false;
           if (!cfg.ignoreFailed) {
             throw new HoodieValidationException(
@@ -354,8 +352,8 @@ public class HoodieDataTableValidator implements Serializable {
         }, hoodieInstants.size()).stream().collect(Collectors.toList());
 
         if (!danglingFiles.isEmpty()) {
-          LOG.error("Data table validation failed due to extra files found for completed commits {}", danglingFiles.size());
-          danglingFiles.forEach(entry -> LOG.error("Dangling file: {}", entry));
+          log.error("Data table validation failed due to extra files found for completed commits {}", danglingFiles.size());
+          danglingFiles.forEach(entry -> log.error("Dangling file: {}", entry));
           finalResult = false;
           if (!cfg.ignoreFailed) {
             throw new HoodieValidationException("Data table validation failed due to dangling files " + danglingFiles.size());
@@ -363,16 +361,16 @@ public class HoodieDataTableValidator implements Serializable {
         }
       }
     } catch (Exception e) {
-      LOG.error("Data table validation failed", e);
+      log.error("Data table validation failed", e);
       if (!cfg.ignoreFailed) {
         throw new HoodieValidationException("Data table validation failed due to " + e.getMessage(), e);
       }
     }
 
     if (finalResult) {
-      LOG.info("Data table validation succeeded.");
+      log.info("Data table validation succeeded.");
     } else {
-      LOG.error("Data table validation failed.");
+      log.error("Data table validation failed.");
     }
   }
 
@@ -389,12 +387,12 @@ public class HoodieDataTableValidator implements Serializable {
             long toSleepMs = cfg.minValidateIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
 
             if (toSleepMs > 0) {
-              LOG.info("Last validate ran less than min validate interval: " + cfg.minValidateIntervalSeconds + " s, sleep: "
-                  + toSleepMs + " ms.");
+              log.info("Last validate ran less than min validate interval: {} s, sleep: {} ms.",
+                  cfg.minValidateIntervalSeconds, toSleepMs);
               Thread.sleep(toSleepMs);
             }
           } catch (HoodieValidationException e) {
-            LOG.error("Shutting down AsyncDataTableValidateService due to HoodieValidationException", e);
+            log.error("Shutting down AsyncDataTableValidateService due to HoodieValidationException", e);
             if (!cfg.ignoreFailed) {
               throw e;
             }
