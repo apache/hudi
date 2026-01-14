@@ -65,8 +65,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -119,14 +118,13 @@ import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "Hudi Table Basic Configs",
     groupName = ConfigGroups.Names.TABLE_CONFIG,
     description = "Configurations of the Hudi Table like type of ingestion, storage formats, hive table name etc."
         + " Configurations are loaded from hoodie.properties, these properties are usually set during"
         + " initializing a path as hoodie base path and never changes during the lifetime of a hoodie table.")
 public class HoodieTableConfig extends HoodieConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
@@ -475,7 +473,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
-    LOG.info("Loading table properties from " + propertyPath);
+    log.info("Loading table properties from {}", propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
     } catch (IOException e) {
@@ -509,7 +507,7 @@ public class HoodieTableConfig extends HoodieConfig {
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }
-    LOG.info("Created properties file at " + propertyPath);
+    log.info("Created properties file at {}", propertyPath);
     return checksum;
   }
 
@@ -556,7 +554,7 @@ public class HoodieTableConfig extends HoodieConfig {
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
         checksum = storeProperties(props, out, cfgPath);
       }
-      LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
+      log.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
 
       // 5. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {
@@ -582,7 +580,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static void deleteFile(HoodieStorage storage, StoragePath cfgPath) throws IOException {
     storage.deleteFile(cfgPath);
-    LOG.info("Deleted properties file at " + cfgPath);
+    log.info("Deleted properties file at {}", cfgPath);
   }
 
   /**
@@ -685,7 +683,7 @@ public class HoodieTableConfig extends HoodieConfig {
     boolean valid = tableVersion.greaterThan(firstVersion) || tableVersion.equals(firstVersion);
     valid = valid || CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES.contains(configProperty.key());
     if (!valid) {
-      LOG.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
+      log.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
           tableVersion, firstVersion, configProperty.key());
     }
     return valid;
@@ -1009,12 +1007,12 @@ public class HoodieTableConfig extends HoodieConfig {
     // Check ordering field name based on record merge mode
     if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
       if (nonEmpty(orderingFieldNamesAsString)) {
-        LOG.warn("The ordering field ({}) is specified. COMMIT_TIME_ORDERING "
+        log.warn("The ordering field ({}) is specified. COMMIT_TIME_ORDERING "
             + "merge mode does not use ordering field anymore.", orderingFieldNamesAsString);
       }
     } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
       if (isNullOrEmpty(orderingFieldNamesAsString)) {
-        LOG.warn("The ordering field is not specified. EVENT_TIME_ORDERING "
+        log.warn("The ordering field is not specified. EVENT_TIME_ORDERING "
             + "merge mode requires ordering field to be set for getting the "
             + "event time. Using commit time-based ordering now.");
       }
@@ -1324,7 +1322,7 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info("MDT {} partition {} has been {}", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled");
+    log.info("MDT {} partition {} has been {}", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled");
   }
 
   /**
@@ -1342,7 +1340,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info("MDT {} partitions {} have been set to inflight", metaClient.getBasePath(), partitionPaths);
+    log.info("MDT {} partitions {} have been set to inflight", metaClient.getBasePath(), partitionPaths);
   }
 
   public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {

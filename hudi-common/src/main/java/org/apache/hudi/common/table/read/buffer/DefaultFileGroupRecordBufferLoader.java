@@ -33,6 +33,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.util.List;
 
 /**
@@ -40,14 +43,13 @@ import java.util.List;
  *
  * @param <T> the engine specific record type
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoader implements FileGroupRecordBufferLoader<T> {
+
   private static final DefaultFileGroupRecordBufferLoader INSTANCE = new DefaultFileGroupRecordBufferLoader<>();
 
   static <T> DefaultFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
-  }
-
-  private DefaultFileGroupRecordBufferLoader() {
   }
 
   @Override

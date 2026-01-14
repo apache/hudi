@@ -505,8 +505,8 @@ public class TestStreamReadMonitoringFunction {
 
   private static boolean isPointInstantRange(InstantRange instantRange, String timestamp) {
     return instantRange != null
-        && Objects.equals(timestamp, instantRange.getStartInstant().get())
-        && Objects.equals(timestamp, instantRange.getEndInstant().get());
+        && Objects.equals(timestamp, instantRange.getStartInstantOpt().get())
+        && Objects.equals(timestamp, instantRange.getEndInstantOpt().get());
   }
 
   private AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> createHarness(

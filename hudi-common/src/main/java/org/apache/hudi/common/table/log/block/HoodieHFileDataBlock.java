@@ -38,6 +38,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.ByteArrayOutputStream;
@@ -56,6 +57,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * HoodieHFileDataBlock contains a list of records stored inside an HFile format. It is used with the HFile
  * base file format.
  */
+@Slf4j
 public class HoodieHFileDataBlock extends HoodieDataBlock {
   private final Map<String, String> writerParams;
   // This path is used for constructing HFile reader context, which should not be

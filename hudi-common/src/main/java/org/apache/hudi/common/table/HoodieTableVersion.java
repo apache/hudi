@@ -22,6 +22,11 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.experimental.Accessors;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -29,7 +34,10 @@ import java.util.List;
  * Table's version that controls what version of writer/readers can actually read/write
  * to a given table.
  */
+@AllArgsConstructor
+@Getter
 public enum HoodieTableVersion {
+
   // < 0.6.0 versions
   ZERO(0, CollectionUtils.createImmutableList("0.3.0"), TimelineLayoutVersion.LAYOUT_VERSION_0),
   // 0.6.0 onwards
@@ -51,25 +59,13 @@ public enum HoodieTableVersion {
   // 1.1
   NINE(9, CollectionUtils.createImmutableList("1.1.0"), TimelineLayoutVersion.LAYOUT_VERSION_2);
 
+  @Accessors(fluent = true)
   private final int versionCode;
 
+  @Getter(AccessLevel.NONE)
   private final List<String> releaseVersions;
 
   private final TimelineLayoutVersion timelineLayoutVersion;
-
-  HoodieTableVersion(int versionCode, List<String> releaseVersions, TimelineLayoutVersion timelineLayoutVersion) {
-    this.versionCode = versionCode;
-    this.releaseVersions = releaseVersions;
-    this.timelineLayoutVersion = timelineLayoutVersion;
-  }
-
-  public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return timelineLayoutVersion;
-  }
-
-  public int versionCode() {
-    return versionCode;
-  }
 
   public static HoodieTableVersion current() {
     return NINE;
