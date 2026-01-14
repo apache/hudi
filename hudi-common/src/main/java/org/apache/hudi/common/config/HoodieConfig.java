@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
@@ -39,9 +39,8 @@ import static org.apache.hudi.common.util.ConfigUtils.loadGlobalProperties;
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
  */
+@Slf4j
 public class HoodieConfig implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
   // Number of retries while reading the properties file to deal with parallel updates
@@ -49,6 +48,7 @@ public class HoodieConfig implements Serializable {
   // Delay between retries while reading the properties file
   protected static final int READ_RETRY_DELAY_MSEC = 1000;
 
+  @Getter
   protected TypedProperties props;
 
   public HoodieConfig() {
@@ -244,10 +244,6 @@ public class HoodieConfig implements Serializable {
 
   public String getStringOrDefault(String key, String defaultVal) {
     return Option.ofNullable(props.getProperty(key)).orElse(defaultVal);
-  }
-
-  public TypedProperties getProps() {
-    return props;
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {
