@@ -161,8 +161,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(),
-          "Listing all partitions on " + this.tableConfig.getTableName() +
-              " with prefix " + relativePathPrefix);
+          "Listing all partitions on " + this.tableConfig.getTableName()
+              + " with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
       List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
         try {
