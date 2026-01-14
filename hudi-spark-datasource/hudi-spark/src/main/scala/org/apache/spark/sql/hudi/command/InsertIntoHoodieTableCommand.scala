@@ -161,7 +161,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       sparkAdapter.resolveOutputColumns(
         sparkSession,
         catalogTable.catalogTableName,
-        sparkAdapter.getSchemaUtils.toAttributes(expectedSchema),
+        expectedSchema.toAttributes,
         query,
         byName = true,
         conf)
@@ -173,7 +173,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
         sparkAdapter.resolveOutputColumns(
           sparkSession,
           catalogTable.catalogTableName,
-          sparkAdapter.getSchemaUtils.toAttributes(expectedSchema),
+          expectedSchema.toAttributes,
           query,
           byName = false,
           conf)

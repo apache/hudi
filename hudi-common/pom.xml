@@ -69,6 +69,7 @@
               <skipAddSource>${spark33orEarlier}</skipAddSource>
               <sources>
                 <source>src/avro/java</source>
+                <source>src/parquet/java</source>
               </sources>
             </configuration>
           </execution>
@@ -82,6 +83,7 @@
               <skipAddTestSource>${spark33orEarlier}</skipAddTestSource>
               <sources>
                 <source>src/avro/test/java</source>
+                <source>src/parquet/test/java</source>
               </sources>
             </configuration>
           </execution>

@@ -21,22 +21,17 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
-import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -144,8 +139,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
     when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
 
-    StoragePath baseStoragePath = new StoragePath(basePath);
-
     if (testFailureCase) {
       // 3rd partition which is additional in MDT should have creation time before last instant in timeline.
 
@@ -158,7 +151,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(partition3CreationTime));
       // validate that exception is thrown since MDT has one additional partition.
       assertThrows(HoodieValidationException.class, () -> {
-        validator.validatePartitions(engineContext, baseStoragePath, metaClient);
+        validator.validatePartitions(engineContext, basePath);
       });
     } else {
       // 3rd partition creation time is > last completed instant
@@ -168,7 +161,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(HoodieActiveTimeline.createNewInstantTime()));
 
       // validate that all 3 partitions are returned
-      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
+      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, basePath));
     }
   }
 
@@ -192,21 +185,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     void setPartitionCreationTime(Option<String> partitionCreationTime) {
       this.partitionCreationTime = partitionCreationTime;
-    }
-
-    @Override
-    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath, HoodieStorage storage, HoodieTimeline completedTimeline) {
-      return fsPartitionsToReturn;
-    }
-
-    @Override
-    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath, HoodieStorage storage) {
-      return metadataPartitionsToReturn;
-    }
-
-    @Override
-    Option<String> getPartitionCreationInstant(HoodieStorage storage, StoragePath basePath, String partition) {
-      return this.partitionCreationTime;
     }
   }
 
@@ -253,7 +231,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateAllFileGroups = true;
 
     // lets ensure we have a pending commit when FS based polling is done. and the commit completes when MDT is polled.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(
+        new Configuration(jsc.hadoopConfiguration())).build();
     // moving out the completed commit meta file to a temp location
     HoodieInstant lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get();
     String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + lastInstant.getFileName();
@@ -279,15 +258,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     public MockHoodieMetadataTableValidatorForRli(JavaSparkContext jsc, Config cfg) {
       super(jsc, cfg);
-    }
-
-    @Override
-    JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromRLI(HoodieSparkEngineContext sparkEngineContext,
-                                                                        String basePath,
-                                                                        String latestCompletedCommit) {
-      // move the completed file back to ".hoodie" to simuate the false positive case.
-      new File(destFilePath).renameTo(new File(originalFilePath));
-      return super.getRecordLocationsFromRLI(sparkEngineContext, basePath, latestCompletedCommit);
     }
 
     public void setDestFilePath(String destFilePath) {

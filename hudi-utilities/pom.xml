@@ -66,6 +66,28 @@
       <plugin>
         <groupId>com.github.os72</groupId>
         <artifactId>protoc-jar-maven-plugin</artifactId>
+        <version>3.11.4</version>
+        <executions>
+          <execution>
+            <id>proto-test-compile</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <addSources>test</addSources>
+              <outputDirectory>${project.build.directory}/generated-test-sources/protobuf</outputDirectory>
+              <inputDirectories>
+                <include>src/test/resources</include>
+              </inputDirectories>
+            </configuration>
+          </execution>
+        </executions>
+        <configuration>
+          <protocArtifact>com.google.protobuf:protoc:${proto.version}</protocArtifact>
+          <protocVersion>${protoc.version}</protocVersion>
+          <includeStdTypes>true</includeStdTypes>
+        </configuration>
       </plugin>
     </plugins>
 
@@ -130,6 +152,12 @@
           <artifactId>servlet-api</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
     <!-- Hoodie - cloud providers -->
@@ -514,5 +542,11 @@
       <version>${thrift.version}</version>
       <scope>test</scope>
     </dependency>
+      <dependency>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-spark-common_2.12</artifactId>
+          <version>0.14.2-SNAPSHOT</version>
+          <scope>test</scope>
+      </dependency>
   </dependencies>
 </project>

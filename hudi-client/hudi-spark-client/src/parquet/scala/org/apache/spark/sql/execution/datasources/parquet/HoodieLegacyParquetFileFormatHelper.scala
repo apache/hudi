@@ -107,7 +107,7 @@ object HoodieLegacyParquetFileFormatHelper {
           StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
         } else f
       })
-      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
+      val newFullSchema = newSchema.toAttributes ++ partitionSchema.toAttributes
       val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
         if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight

@@ -33,7 +33,8 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.common.table.ParquetTableSchemaResolver
+import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
+
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -53,6 +54,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructType}
 import org.apache.spark.util.SerializableConfiguration
+
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
  * that's not possible to customize in any other way
@@ -70,7 +72,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       HOption.empty()
     } else {
       HOption.ofNullable(
-        ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, new Configuration())
+        getAvroSchemaConverter(new Configuration()).convert(avroTableSchema)
       )
     }
   }
@@ -83,7 +85,10 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
 
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
-    conf.parquetVectorizedReaderEnabled && schema.forall(_.dataType.isInstanceOf[AtomicType])
+    conf.parquetVectorizedReaderEnabled &&
+      schema.forall(_.dataType.isInstanceOf[AtomicType]) &&
+      ParquetUtils.isBatchReadSupportedForSchema(conf, schema) &&
+      supportBatchWithTableSchema
   }
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
@@ -93,14 +98,6 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       conf.wholeStageEnabled && !WholeStageCodegenExec.isTooManyFields(conf, schema)
     requiredWholeStageCodegenSettings &&
       supportBatch(sparkSession, schema)
-  }
-
-  /**
-   * Returns whether the reader can return the rows as batch or not.
-   */
-  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    val conf = sparkSession.sessionState.conf
-    ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,

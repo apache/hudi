@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.HoodieAvroParquetReaderIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;

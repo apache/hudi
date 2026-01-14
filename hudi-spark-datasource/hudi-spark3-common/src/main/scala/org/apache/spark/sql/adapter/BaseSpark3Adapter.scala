@@ -17,13 +17,15 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
@@ -43,6 +45,7 @@ import org.apache.spark.storage.StorageLevel
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.convert.Wrappers.JConcurrentMapWrapper
 
 /**
@@ -62,10 +65,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     val encoder = RowEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
   }
-import java.time.ZoneId
-import org.apache.spark.api.java
 
-override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
+  override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
@@ -117,7 +118,7 @@ override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAv
     new ParquetReadSupport()
   }
 
-  override def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  override def getReaderSchemas(conf: Configuration, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
   org.apache.hudi.common.util.collection.Pair[StructType, StructType] = {
     org.apache.hudi.common.util.collection.Pair.of(
       HoodieInternalRowUtils.getCachedSchema(readerSchema),
