@@ -18,8 +18,9 @@
 
 package org.apache.hudi.sink.append;
 
-import org.apache.hudi.sink.buffer.BufferType;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.buffer.BufferType;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -29,7 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Utilities for {@link AppendWriteFunction} to handle rate limit if it was set.
+ * Factory utilities for creating {@link AppendWriteFunction} instances based on configuration.
+ * Handles buffer type selection, sort key resolution, and rate limiting.
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public abstract class AppendWriteFunctions {
@@ -77,7 +79,7 @@ public abstract class AppendWriteFunctions {
    */
   public static String resolveSortKeys(Configuration conf) {
     String sortKeys = conf.get(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
-    if (sortKeys == null || sortKeys.isEmpty()) {
+    if (StringUtils.isNullOrEmpty(sortKeys)) {
       // Default to record key field(s)
       return conf.get(FlinkOptions.RECORD_KEY_FIELD);
     }

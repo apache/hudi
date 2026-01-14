@@ -657,24 +657,27 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.buffer.sort.enabled")
       .booleanType()
       .defaultValue(false) // default no sort
-      .withDescription("Whether to enable buffer sort within append write function. Data is sorted within the buffer configured by number of records or buffer size."
-          + " The order of entire parquet file is not guaranteed.");
+      .withDescription("Deprecated: use write.buffer.type=DISRUPTOR instead. "
+          + "Whether to enable buffer sort within append write function. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<String> WRITE_BUFFER_SORT_KEYS = ConfigOptions
       .key("write.buffer.sort.keys")
       .stringType()
       .noDefaultValue() // default no sort key
-      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. Data is sorted within the buffer configured by number of records or buffer size."
-          + " The order of entire parquet file is not guaranteed.");
+      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. "
+          + "Data is sorted within the buffer configured by number of records or buffer size. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
       .key("write.buffer.size")
       .longType()
       .defaultValue(1000L) // 1000 records
-      .withDescription("Buffer size of each partition key for buffer sort in append write function. Data is sorted within the buffer configured by number of records."
-          +  " The order of entire parquet file is not guaranteed.");
+      .withDescription("Record count threshold for flushing the sort buffer in append write function. "
+          + "When buffer reaches this count, it is sorted and written. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<String> WRITE_BUFFER_TYPE = ConfigOptions
@@ -683,7 +686,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("NONE")
       .withDescription("Buffer type for append write function: "
           + "NONE (no buffer sort, default), "
-          + "BOUNDED_IN_MEMORY (double buffer with sync write), "
+          + "BOUNDED_IN_MEMORY (double buffer with async write), "
           + "DISRUPTOR (ring buffer with async write, recommended for better throughput)");
 
   @AdvancedConfig
