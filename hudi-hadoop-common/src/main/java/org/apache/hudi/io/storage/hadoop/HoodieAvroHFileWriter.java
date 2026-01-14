@@ -130,7 +130,7 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    if (!this.hfileConfig.isAllowDuplicatesOnHfileWritesEnabled()) {
+    if (!this.hfileConfig.isAllowDuplicatesOnHfileWrites()) {
       // When this config is enabled, do not allow duplicates to be written to hFile.
       if (prevRecordKey.equals(recordKey)) {
         LOG.info("Duplicate recordKey " + recordKey + " found while writing to HFile. Record payload " + record);
