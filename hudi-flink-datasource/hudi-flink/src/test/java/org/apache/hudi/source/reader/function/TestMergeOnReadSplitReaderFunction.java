@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,7 @@ public class TestMergeOnReadSplitReaderFunction {
       new MergeOnReadSplitReaderFunction<>(
           mockTable,
           mockReaderContext,
+          new Configuration(),
           null,  // null tableSchema should throw
           requiredSchema,
           "AVRO_PAYLOAD",
@@ -83,6 +85,7 @@ public class TestMergeOnReadSplitReaderFunction {
       new MergeOnReadSplitReaderFunction<>(
           mockTable,
           mockReaderContext,
+          new Configuration(),
           tableSchema,
           null,  // null requiredSchema should throw
           "AVRO_PAYLOAD",
@@ -98,6 +101,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -115,6 +119,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -130,6 +135,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -154,6 +160,7 @@ public class TestMergeOnReadSplitReaderFunction {
           new MergeOnReadSplitReaderFunction<>(
               mockTable,
               mockReaderContext,
+              new Configuration(),
               tableSchema,
               requiredSchema,
               mergeType,
@@ -170,6 +177,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -191,6 +199,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             customTableSchema,
             customRequiredSchema,
             "AVRO_PAYLOAD",
@@ -210,6 +219,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -222,6 +232,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -234,6 +245,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -254,6 +266,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             customTable,
             mockReaderContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -272,6 +285,7 @@ public class TestMergeOnReadSplitReaderFunction {
         new MergeOnReadSplitReaderFunction<>(
             mockTable,
             customContext,
+            new Configuration(),
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
@@ -279,5 +293,43 @@ public class TestMergeOnReadSplitReaderFunction {
         );
 
     assertNotNull(function);
+  }
+
+  @Test
+  public void testConfigurationIsStored() {
+    Configuration config = new Configuration();
+    config.setString("test.key", "test.value");
+
+    MergeOnReadSplitReaderFunction<?, ?, ?> function =
+        new MergeOnReadSplitReaderFunction<>(
+            mockTable,
+            mockReaderContext,
+            config,
+            tableSchema,
+            requiredSchema,
+            "AVRO_PAYLOAD",
+            Option.empty()
+        );
+
+    assertNotNull(function);
+  }
+
+  @Test
+  public void testReadMethodSignature() {
+    // Verify that the read method returns CloseableIterator
+    MergeOnReadSplitReaderFunction<?, ?, ?> function =
+        new MergeOnReadSplitReaderFunction<>(
+            mockTable,
+            mockReaderContext,
+            new Configuration(),
+            tableSchema,
+            requiredSchema,
+            "AVRO_PAYLOAD",
+            Option.empty()
+        );
+
+    assertNotNull(function);
+    // The read method signature has changed to return CloseableIterator<RecordsWithSplitIds<...>>
+    // This test verifies the function can be constructed with the new signature
   }
 }

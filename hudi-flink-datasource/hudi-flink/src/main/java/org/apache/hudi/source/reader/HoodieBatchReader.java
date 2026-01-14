@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.reader.function;
+package org.apache.hudi.source.reader;
 
-import org.apache.hudi.source.reader.HoodieRecordWithPosition;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
@@ -27,11 +27,18 @@ import org.apache.flink.util.CloseableIterator;
 import java.io.Serializable;
 
 /**
- * Interface for split read function.
+ * Interface for batch read.
+ *
+ * @param <T> record type
  */
-public interface SplitReaderFunction<T> extends Serializable {
+public interface HoodieBatchReader<T> extends Serializable {
 
-  CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> read(HoodieSourceSplit split);
-
-  void close() throws Exception;
+  /**
+   * Read data from input iterator batch by batch
+   * @param split Hoodie source split
+   * @param inputIterator iterator for hudi reader
+   * @return iterator for batches of records
+   */
+  CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> batch(
+      HoodieSourceSplit split, ClosableIterator<T> inputIterator);
 }
