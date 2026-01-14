@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import lombok.Getter;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -41,6 +43,7 @@ import java.util.List;
  *
  * Pending Compactions Key = "part=<PartitionPath>,id=<FileId>" Value = Pair<CompactionTime, CompactionOperation>
  */
+@Getter
 public class RocksDBSchemaHelper {
 
   private final String colFamilyForView;
@@ -49,6 +52,7 @@ public class RocksDBSchemaHelper {
   private final String colFamilyForBootstrapBaseFile;
   private final String colFamilyForStoredPartitions;
   private final String colFamilyForReplacedFileGroups;
+  @Getter
   private final String colFamilyForPendingClusteringFileGroups;
 
   public RocksDBSchemaHelper(HoodieTableMetaClient metaClient) {
@@ -132,30 +136,6 @@ public class RocksDBSchemaHelper {
 
   private String getPartitionFileIdBasedLookup(HoodieFileGroupId fgId) {
     return String.format("part=%s,id=%s", fgId.getPartitionPath(), fgId.getFileId());
-  }
-
-  public String getColFamilyForView() {
-    return colFamilyForView;
-  }
-
-  public String getColFamilyForPendingCompaction() {
-    return colFamilyForPendingCompaction;
-  }
-
-  public String getColFamilyForPendingLogCompaction() {
-    return colFamilyForPendingLogCompaction;
-  }
-
-  public String getColFamilyForBootstrapBaseFile() {
-    return colFamilyForBootstrapBaseFile;
-  }
-
-  public String getColFamilyForStoredPartitions() {
-    return colFamilyForStoredPartitions;
-  }
-
-  public String getColFamilyForReplacedFileGroups() {
-    return colFamilyForReplacedFileGroups;
   }
 
   public String getColFamilyForFileGroupsInPendingClustering() {

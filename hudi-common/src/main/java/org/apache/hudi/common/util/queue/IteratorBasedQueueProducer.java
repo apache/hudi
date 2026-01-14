@@ -20,8 +20,7 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 
@@ -30,9 +29,8 @@ import java.util.Iterator;
  *
  * @param <I> Item type produced for the buffer.
  */
+@Slf4j
 public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(IteratorBasedQueueProducer.class);
 
   private final Iterator<I> inputIterator;
 
@@ -42,11 +40,11 @@ public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
 
   @Override
   public void produce(HoodieMessageQueue<I, ?> queue) throws Exception {
-    LOG.info("starting to buffer records");
+    log.info("starting to buffer records");
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
-    LOG.info("finished buffering records");
+    log.info("finished buffering records");
   }
 
   @Override
