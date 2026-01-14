@@ -925,7 +925,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         // filter out the cdc logs
         .filter(path -> !path.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
         .collect(Collectors.toList()));
-    String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+    String basePath = fileSlice.getBaseFile().map(BaseFile::getFullPath).orElse(null);
     return new MergeOnReadInputSplit(0, basePath, logPaths,
         fileSlice.getLatestInstantTime(), tablePath, maxCompactionMemoryInBytes,
         FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId());

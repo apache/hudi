@@ -159,9 +159,9 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
       return HoodieSliceInfo.newBuilder()
           .setPartitionPath(slice.getPartitionPath())
           .setFileId(slice.getFileId())
-          .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
+          .setDataFilePath(slice.getBaseFile().map(BaseFile::getFullPath).orElse(StringUtils.EMPTY_STRING))
           .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
-          .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
+          .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getFullPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
           .build();
     }).collect(Collectors.toList());
   }

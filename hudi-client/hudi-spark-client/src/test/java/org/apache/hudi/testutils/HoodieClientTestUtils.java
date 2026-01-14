@@ -247,7 +247,7 @@ public class HoodieClientTestUtils {
     try {
       List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
       for (HoodieBaseFile file : latestFiles) {
-        filteredPaths.add(file.getPath());
+        filteredPaths.add(file.getFullPath());
       }
       if (filteredPaths.isEmpty()) {
         return sqlContext.emptyDataFrame();

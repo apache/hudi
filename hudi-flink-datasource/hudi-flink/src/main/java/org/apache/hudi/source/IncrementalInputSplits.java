@@ -403,7 +403,7 @@ public class IncrementalInputSplits implements Serializable {
           .map(logFile -> logFile.getPath().toString())
           .filter(logPath -> !logPath.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
           .collect(Collectors.toList()));
-      String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+      String basePath = fileSlice.getBaseFile().map(BaseFile::getFullPath).orElse(null);
       // the latest commit is used as the limit of the log reader instant upper threshold,
       // it must be at least the latest instant time of the file slice to avoid data loss.
       String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);

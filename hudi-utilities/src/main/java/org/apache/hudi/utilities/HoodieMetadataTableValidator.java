@@ -1781,7 +1781,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     @Override
     public int compare(HoodieBaseFile o1, HoodieBaseFile o2) {
-      return o1.getPath().compareTo(o2.getPath());
+      return o1.getFullPath().compareTo(o2.getFullPath());
     }
   }
 

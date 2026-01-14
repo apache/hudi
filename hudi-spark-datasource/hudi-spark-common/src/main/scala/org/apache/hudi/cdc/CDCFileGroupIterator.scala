@@ -494,7 +494,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    * Otherwise we need to re-load what we need.
    */
   private def loadBeforeFileSliceIfNeeded(fileSlice: FileSlice): Unit = {
-    val files = List(fileSlice.getBaseFile.get().getPath) ++
+    val files = List(fileSlice.getBaseFile.get().getFullPath) ++
       fileSlice.getLogFiles.collect(Collectors.toList[HoodieLogFile]).asScala
         .map(f => f.getPath.toUri.toString).toList
     val same = files.sorted == beforeImageFiles.sorted.toList

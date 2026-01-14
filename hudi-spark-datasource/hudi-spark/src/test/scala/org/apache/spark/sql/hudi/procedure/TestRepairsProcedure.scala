@@ -261,7 +261,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
         metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPath)))
-      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
+      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getFullPath).toList
       // there should be 3 files
       assertResult(3) {
         filteredStatuses.size
@@ -318,7 +318,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
         metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPathWithUpdates)))
-      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
+      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getFullPath).toList
       // there should be 2 files
       assertResult(2) {
         filteredStatuses.size
@@ -376,7 +376,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
         metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPathWithUpserts)))
-      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
+      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getFullPath).toList
       // there should be 3 files
       assertResult(3) {
         filteredStatuses.size
@@ -434,7 +434,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // get fs and check number of latest files
       val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
         metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPath)))
-      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
+      val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getFullPath).toList
       // there should be 3 files
       assertResult(3) {
         filteredStatuses.size

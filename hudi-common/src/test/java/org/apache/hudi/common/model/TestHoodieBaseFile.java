@@ -99,7 +99,7 @@ public class TestHoodieBaseFile {
     assertEquals(baseCommitTime, hoodieBaseFile.getCommitTime());
     assertEquals(bootstrapBaseFile, hoodieBaseFile.getBootstrapBaseFile());
     assertEquals(fileName, hoodieBaseFile.getFileName());
-    assertEquals(pathStr, hoodieBaseFile.getPath());
+    assertEquals(pathStr, hoodieBaseFile.getFullPath());
     assertEquals(new StoragePath(pathStr), hoodieBaseFile.getStoragePath());
     assertEquals(fileLength, hoodieBaseFile.getFileSize());
     assertEquals(pathInfo, hoodieBaseFile.getPathInfo());

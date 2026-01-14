@@ -92,7 +92,7 @@ public class FileSystemViewCommand {
       row[idx++] = fg.getPartitionPath();
       row[idx++] = fg.getFileGroupId().getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFullPath() : "";
       row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       if (!baseFileOnly) {
         row[idx++] = fs.getLogFiles().count();
@@ -163,7 +163,7 @@ public class FileSystemViewCommand {
       row[idx++] = partition;
       row[idx++] = fs.getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFullPath() : "";
 
       long dataFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       row[idx++] = dataFileSize;

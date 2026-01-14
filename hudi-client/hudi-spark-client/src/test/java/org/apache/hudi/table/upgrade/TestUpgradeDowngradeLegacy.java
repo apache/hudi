@@ -783,7 +783,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
         }
       }
       if (fileSlice.getBaseInstantTime().equals(commitInstant.requestedTime())) {
-        String path = fileSlice.getBaseFile().get().getPath();
+        String path = fileSlice.getBaseFile().get().getFullPath();
         // for base files, path can be asserted as is.
         expectedPaths.add(path.substring(path.indexOf(partitionPath)));
       }

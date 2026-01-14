@@ -602,7 +602,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         getHoodieSparkIOFactory(storage)
             .getReaderFactory(HoodieRecordType.AVRO)
-            .getFileReader(table.getConfig(), new StoragePath(baseFile.getPath()));
+            .getFileReader(table.getConfig(), new StoragePath(baseFile.getFullPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       assertNull(((GenericRecord) entry).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));

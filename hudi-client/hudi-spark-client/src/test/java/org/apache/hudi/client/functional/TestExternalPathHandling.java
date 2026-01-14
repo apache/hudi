@@ -232,7 +232,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     Assertions.assertEquals(partitionPath, fileGroup.getPartitionPath());
     HoodieBaseFile baseFile = fileGroup.getAllBaseFiles().findFirst().get();
     Assertions.assertEquals(instantTime, baseFile.getCommitTime());
-    Assertions.assertEquals(metaClient.getBasePath() + "/" + filePath, baseFile.getPath());
+    Assertions.assertEquals(metaClient.getBasePath() + "/" + filePath, baseFile.getFullPath());
   }
 
   private void assertEmptyColStats(HoodieBackedTableMetadata hoodieBackedTableMetadata, String partitionPath, String fileName) {

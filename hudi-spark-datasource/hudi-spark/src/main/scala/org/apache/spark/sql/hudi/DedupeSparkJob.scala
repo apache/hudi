@@ -84,7 +84,7 @@ class DedupeSparkJob(basePath: String,
     val allFiles = storage.listDirectEntries(new StoragePath(basePath, duplicatedPartitionPath))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
-    val filteredStatuses = latestFiles.asScala.map(f => f.getPath)
+    val filteredStatuses = latestFiles.asScala.map(f => f.getFullPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
 
     val df = sqlContext.parquetFile(filteredStatuses.toSeq: _*)
@@ -197,7 +197,7 @@ class DedupeSparkJob(basePath: String,
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 
-    val fileNameToPathMap = latestFiles.asScala.map(f => (f.getFileId, new Path(f.getPath))).toMap
+    val fileNameToPathMap = latestFiles.asScala.map(f => (f.getFileId, new Path(f.getFullPath))).toMap
     val dupeFixPlan = planDuplicateFix()
 
     // 1. Copy all latest files into the temp fix path

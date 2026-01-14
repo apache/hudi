@@ -244,10 +244,10 @@ public class TestCleanPlanner {
     // Four file slices in the group: only the latest two should be retained
     HoodieFileGroup fileGroup = buildFileGroup(Arrays.asList(instant4, instant3, instant2, instant1));
     String instant3Path = fileGroup.getAllBaseFiles()
-        .filter(baseFile -> baseFile.getCommitTime().equals(instant3)).findFirst().get().getPath();
+        .filter(baseFile -> baseFile.getCommitTime().equals(instant3)).findFirst().get().getFullPath();
     CleanFileInfo expectedCleanFileInfoForInstant3 = new CleanFileInfo(instant3Path, false);
     String instant4Path = fileGroup.getAllBaseFiles()
-        .filter(baseFile -> baseFile.getCommitTime().equals(instant4)).findFirst().get().getPath();
+        .filter(baseFile -> baseFile.getCommitTime().equals(instant4)).findFirst().get().getFullPath();
     CleanFileInfo expectedCleanFileInfoForInstant4 = new CleanFileInfo(instant4Path, false);
     arguments.add(Arguments.of(
         keepLatestVersionsConfig,
@@ -267,7 +267,7 @@ public class TestCleanPlanner {
         Pair.of(false, Arrays.asList(expectedCleanFileInfoForInstant3))));
     // Two file slices with a replaced file group: only replaced files cleaned up
     HoodieFileGroup replacedFileGroup = buildFileGroup(Collections.singletonList(instant4));
-    String replacedFilePath = replacedFileGroup.getAllBaseFiles().findFirst().get().getPath();
+    String replacedFilePath = replacedFileGroup.getAllBaseFiles().findFirst().get().getFullPath();
     CleanFileInfo expectedReplaceCleanFileInfo = new CleanFileInfo(replacedFilePath, false);
     arguments.add(Arguments.of(
         keepLatestVersionsConfig,
@@ -305,7 +305,7 @@ public class TestCleanPlanner {
     // File group with two slices, both are before the earliestInstant. Only the latest slice should be kept.
     HoodieFileGroup fileGroupsBeforeInstant = buildFileGroup(Arrays.asList(earliestInstantMinusOneMonth, earliestInstantMinusOneWeek));
     CleanFileInfo expectedCleanFileInfoForFirstFile = new CleanFileInfo(fileGroupsBeforeInstant.getAllBaseFiles()
-        .filter(baseFile -> baseFile.getCommitTime().equals(earliestInstantMinusOneMonth)).findFirst().get().getPath(), false);
+        .filter(baseFile -> baseFile.getCommitTime().equals(earliestInstantMinusOneMonth)).findFirst().get().getFullPath(), false);
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsCases(
         earliestInstant,
         Collections.singletonList(fileGroupsBeforeInstant),
@@ -324,7 +324,7 @@ public class TestCleanPlanner {
     // Oldest slice will be removed since it is not required for queries evaluating the table at time NOW - 24hrs
     String oldestFileInstant = earliestInstantMinusOneMonth;
     HoodieFileGroup fileGroup = buildFileGroup(Arrays.asList(oldestFileInstant, earliestInstantMinusThreeDays, earliestInstantPlusTwoDays));
-    String oldestFilePath = fileGroup.getAllBaseFiles().filter(baseFile -> baseFile.getCommitTime().equals(oldestFileInstant)).findFirst().get().getPath();
+    String oldestFilePath = fileGroup.getAllBaseFiles().filter(baseFile -> baseFile.getCommitTime().equals(oldestFileInstant)).findFirst().get().getFullPath();
     CleanFileInfo expectedCleanFileInfo = new CleanFileInfo(oldestFilePath, false);
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsCases(
         earliestInstant,
@@ -342,7 +342,7 @@ public class TestCleanPlanner {
         Pair.of(false, Collections.emptyList())));
     // File group is replaced before the earliestInstant. Should be removed.
     HoodieFileGroup replacedFileGroup = buildFileGroup(Collections.singletonList(earliestInstantMinusOneMonth));
-    String replacedFilePath = replacedFileGroup.getAllBaseFiles().findFirst().get().getPath();
+    String replacedFilePath = replacedFileGroup.getAllBaseFiles().findFirst().get().getFullPath();
     CleanFileInfo expectedReplaceCleanFileInfo = new CleanFileInfo(replacedFilePath, false);
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsCases(
         earliestInstant,

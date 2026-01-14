@@ -182,7 +182,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
       row[idx++] = fg.getPartitionPath();
       row[idx++] = fg.getFileGroupId().getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFullPath() : "";
       row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       row[idx++] = fs.getLogFiles().count();
       row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
@@ -230,7 +230,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
       row[idx++] = fg.getPartitionPath();
       row[idx++] = fg.getFileGroupId().getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFullPath() : "";
       row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       rows.add(row);
     }));
@@ -262,7 +262,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
       row[idx++] = partitionPath;
       row[idx++] = fs.getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFullPath() : "";
 
       long dataFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       row[idx++] = dataFileSize;

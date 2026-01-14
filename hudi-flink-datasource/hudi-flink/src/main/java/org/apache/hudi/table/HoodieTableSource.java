@@ -418,7 +418,7 @@ public class HoodieTableSource implements
       final AtomicInteger cnt = new AtomicInteger(0);
       // generates one input split for each file group
       return fileSlices.stream().map(fileSlice -> {
-        String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+        String basePath = fileSlice.getBaseFile().map(BaseFile::getFullPath).orElse(null);
         Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
             .map(logFile -> logFile.getPath().toString())

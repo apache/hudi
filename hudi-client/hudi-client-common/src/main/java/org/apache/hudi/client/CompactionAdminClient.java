@@ -241,8 +241,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
                 .getPath().toString();
             ValidationUtils.checkArgument(df.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
-            ValidationUtils.checkArgument(df.get().getPath().equals(expPath),
-                "Base Path in operation is specified as " + expPath + " but got path " + df.get().getPath());
+            ValidationUtils.checkArgument(df.get().getFullPath().equals(expPath),
+                "Base Path in operation is specified as " + expPath + " but got path " + df.get().getFullPath());
           }
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
           Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {

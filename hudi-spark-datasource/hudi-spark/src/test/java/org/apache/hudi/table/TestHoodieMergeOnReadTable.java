@@ -232,7 +232,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertTrue(fileIdToNewSize.entrySet().stream().anyMatch(entry -> fileIdToSize.get(entry.getKey()) < entry.getValue()));
 
       List<String> inputPaths = roView.getLatestBaseFiles()
-          .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+          .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
           .collect(Collectors.toList());
       List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
           basePath(), new JobConf(storageConf().unwrap()), true, populateMetaFields);

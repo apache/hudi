@@ -21,27 +21,41 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * Represents common metadata about base-file.
  * A base file can be Hudi base file or even an external (non-hudi) base file too.
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Getter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 public class BaseFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
+  @ToString.Exclude
   private transient StoragePathInfo pathInfo;
+  @EqualsAndHashCode.Include
   private final String fullPath;
+  @ToString.Exclude
   protected final String fileName;
-  private long fileLen;
+  @Setter
+  private long fileSize;
 
   public BaseFile(BaseFile dataFile) {
     this(dataFile.pathInfo,
         dataFile.fullPath,
         dataFile.getFileName(),
-        dataFile.getFileLen());
+        dataFile.getFileSize());
   }
 
   public BaseFile(StoragePathInfo pathInfo) {
@@ -55,64 +69,11 @@ public class BaseFile implements Serializable {
     this(null, filePath, getFileName(filePath), -1);
   }
 
-  private BaseFile(StoragePathInfo pathInfo, String fullPath, String fileName, long fileLen) {
-    this.pathInfo = pathInfo;
-    this.fullPath = fullPath;
-    this.fileLen = fileLen;
-    this.fileName = fileName;
-  }
-
-  public String getPath() {
-    return fullPath;
-  }
-
   public StoragePath getStoragePath() {
     if (pathInfo != null) {
       return pathInfo.getPath();
     }
     return new StoragePath(fullPath);
-  }
-
-  public String getFileName() {
-    return fileName;
-  }
-
-  public StoragePathInfo getPathInfo() {
-    return pathInfo;
-  }
-
-  public long getFileSize() {
-    return fileLen;
-  }
-
-  public void setFileLen(long fileLen) {
-    this.fileLen = fileLen;
-  }
-
-  public long getFileLen() {
-    return fileLen;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    BaseFile dataFile = (BaseFile) o;
-    return Objects.equals(fullPath, dataFile.fullPath);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(fullPath);
-  }
-
-  @Override
-  public String toString() {
-    return "BaseFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
   }
 
   private static String getFileName(String fullPath) {

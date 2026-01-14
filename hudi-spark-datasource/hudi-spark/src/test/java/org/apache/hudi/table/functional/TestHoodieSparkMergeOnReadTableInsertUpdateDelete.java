@@ -353,7 +353,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       assertTrue(dataFilesToRead.findAny().isPresent());
 
       List<String> inputPaths = tableView.getLatestBaseFiles()
-          .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
+          .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
           .collect(Collectors.toList());
       List<GenericRecord> recordsRead =
           HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths, basePath(), new JobConf(storageConf().unwrap()), true, populateMetaFields);

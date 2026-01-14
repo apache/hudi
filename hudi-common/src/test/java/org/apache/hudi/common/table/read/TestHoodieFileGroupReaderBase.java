@@ -789,7 +789,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         // bootstrap file points to an absolute path
         // Since the dataset is copied to a new tempDir for testing, we need to manipulate this path
         HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-        String bootstrapPath = baseFile.getBootstrapBaseFile().get().getPath();
+        String bootstrapPath = baseFile.getBootstrapBaseFile().get().getFullPath();
         String newBootstrapPath = tablePath + "/" + bootstrapPath.substring(bootstrapPath.indexOf("bootstrap_table"));
         baseFile.setBootstrapBaseFile(new BaseFile(newBootstrapPath));
       }

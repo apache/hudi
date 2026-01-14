@@ -524,10 +524,10 @@ public class TestHoodieCompactionStrategy {
       slice.setBaseFile(df);
       logFiles.stream().forEach(f -> slice.addLogFile(f));
       operations.add(new HoodieCompactionOperation(df.getCommitTime(),
-          logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
+          logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getFullPath(), df.getFileId(),
           partitionPath,
           config.getCompactionStrategy().captureMetrics(config, slice),
-          df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
+          df.getBootstrapBaseFile().map(BaseFile::getFullPath).orElse(null))
       );
     });
     return operations;
@@ -548,10 +548,10 @@ public class TestHoodieCompactionStrategy {
         logFiles.stream().forEach(f -> slice.addLogFile(f));
         operations.add(new HoodieCompactionOperation(df.getCommitTime(),
             logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()),
-            df.getPath(), df.getFileId(),
+            df.getFullPath(), df.getFileId(),
             partitionPath,
             config.getCompactionStrategy().captureMetrics(config, slice),
-            df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
+            df.getBootstrapBaseFile().map(BaseFile::getFullPath).orElse(null))
         );
       }
     });
@@ -572,7 +572,7 @@ public class TestHoodieCompactionStrategy {
     }
 
     @Override
-    public String getPath() {
+    public String getFullPath() {
       return "/tmp/test";
     }
 

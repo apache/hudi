@@ -331,7 +331,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     firstPartitionCommit2FileSlices.removeAll(firstPartitionRollBack1FileSlices);
     assertEquals(1, firstPartitionCommit2FileSlices.size());
-    assertEquals(firstPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
+    assertEquals(firstPartitionCommit2FileSlices.get(0).getBaseFile().get().getFullPath(),
         this.storage.getScheme() + ":"
             + rollbackMetadata.get(DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles().get(0));
 
@@ -345,7 +345,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // assert the second partition rollback file is equals rollBack1SecondPartitionStat
     secondPartitionCommit2FileSlices.removeAll(secondPartitionRollBack1FileSlices);
     assertEquals(1, secondPartitionCommit2FileSlices.size());
-    assertEquals(secondPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
+    assertEquals(secondPartitionCommit2FileSlices.get(0).getBaseFile().get().getFullPath(),
         this.storage.getScheme() + ":"
             + rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0));
 
