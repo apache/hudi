@@ -70,6 +70,14 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    *           and prevent further recurring executions</li>
    *     </ul>
    *   </li>
+   *   <li>Interrupts the monitored thread when:
+   *     <ul>
+   *       <li>heartBeatFuncToExec returns false (lock renewal failure)</li>
+   *       <li>heartBeatFuncToExec throws an exception</li>
+   *     </ul>
+   *     This allows the writer thread to detect heartbeat failures immediately and take
+   *     appropriate action (e.g., stop processing, throw exception, etc.)
+   *   </li>
    * </ul>
    *
    * <p>Requirements for heartBeatFuncToExec implementation:
@@ -92,9 +100,10 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    *   </li>
    * </ul>
    *
-   * <p>Warning: Returning false stops all future lock renewal attempts. If the writer thread
-   * is still running, it will execute with a lock that can expire at any time, potentially
-   * leading to corrupted data.
+   * <p>Warning: Returning false stops all future lock renewal attempts and interrupts the monitored thread.
+   * The writer thread should check for interrupts (via InterruptedException or Thread.interrupted()) to
+   * detect lock renewal failures. If the writer thread ignores interrupts, it will execute with a lock
+   * that can expire at any time, potentially leading to corrupted data.
    */
   private final Supplier<Boolean> heartbeatFuncToExec;
   private final long stopHeartbeatTimeoutMs;
@@ -213,6 +222,9 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
       logger.error("Owner {}: Heartbeat function did not succeed.", ownerId);
+      // Interrupt the monitored thread to notify it of heartbeat failure.
+      threadToMonitor.interrupt();
+      logger.info("Owner {}: Interrupted monitored thread due to heartbeat failure.", ownerId);
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }

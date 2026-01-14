@@ -201,9 +201,19 @@ public class TestLockProviderHeartbeatManager {
 
     when(mockFuture.cancel(true)).thenReturn(true);
 
-    // Initialize heartbeat manager with a function that always returns false (renewal failure)
+    CountDownLatch threadStartedLatch = new CountDownLatch(1);
+    Thread monitoredThread = new Thread(() -> {
+      try {
+        threadStartedLatch.countDown();
+        new CountDownLatch(1).await();
+      } catch (InterruptedException e) {
+      }
+    });
+    monitoredThread.start();
+    assertTrue(threadStartedLatch.await(1000, TimeUnit.MILLISECONDS), "Thread did not start");
+
     manager = createDefaultManagerWithMocks(() -> false);
-    assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
+    assertTrue(manager.startHeartbeatForThread(monitoredThread));
     t.get().start();
     t.get().interrupt();
 
@@ -220,6 +230,8 @@ public class TestLockProviderHeartbeatManager {
     );
     verify(mockLogger).info("Owner {}: Requested termination of heartbeat task. Cancellation returned {}.", LOGGER_ID, true);
     assertFalse(manager.hasActiveHeartbeat());
+
+    monitoredThread.join(1000);
   }
 
   @Test
@@ -276,7 +288,19 @@ public class TestLockProviderHeartbeatManager {
       throw new RuntimeException("Renewal error");
     });
 
-    assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
+    CountDownLatch threadStartedLatch = new CountDownLatch(1);
+    Thread monitoredThread = new Thread(() -> {
+      try {
+        threadStartedLatch.countDown();
+        new CountDownLatch(1).await();
+      } catch (InterruptedException e) {
+        // Expected
+      }
+    });
+    monitoredThread.start();
+    assertTrue(threadStartedLatch.await(1000, TimeUnit.MILLISECONDS), "Thread did not start");
+
+    assertTrue(manager.startHeartbeatForThread(monitoredThread));
     t.get().start();
     assertTrue(latch.await(500, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
     verify(mockLogger).error(
@@ -284,6 +308,8 @@ public class TestLockProviderHeartbeatManager {
             eq(LOGGER_ID),
             any(RuntimeException.class));
     assertFalse(manager.hasActiveHeartbeat());
+
+    monitoredThread.join(1000);
   }
 
   @Test
@@ -414,6 +440,68 @@ public class TestLockProviderHeartbeatManager {
       assertTrue(manager.stopHeartbeat(true));
       assertFalse(manager.hasActiveHeartbeat());
     }
+  }
+
+  @Test
+  void testHeartbeatFailureInterruptsMonitoredThread() throws InterruptedException {
+    CountDownLatch heartbeatExecutedLatch = new CountDownLatch(1);
+    CountDownLatch threadInterruptedLatch = new CountDownLatch(1);
+    CountDownLatch threadStartedLatch = new CountDownLatch(1);
+
+    Thread monitoredThread = new Thread(() -> {
+      try {
+        threadStartedLatch.countDown();
+        new CountDownLatch(1).await();
+      } catch (InterruptedException e) {
+        threadInterruptedLatch.countDown();
+      }
+    });
+    monitoredThread.start();
+    assertTrue(threadStartedLatch.await(1000, TimeUnit.MILLISECONDS), "Thread did not start");
+
+    manager = createDefaultManagerWithRealExecutor(() -> {
+      heartbeatExecutedLatch.countDown();
+      return false;
+    });
+
+    assertTrue(manager.startHeartbeatForThread(monitoredThread));
+    assertTrue(heartbeatExecutedLatch.await(1000, TimeUnit.MILLISECONDS), "Heartbeat task did not execute");
+    assertTrue(threadInterruptedLatch.await(1000, TimeUnit.MILLISECONDS), "Monitored thread was not interrupted");
+
+    assertFalse(manager.hasActiveHeartbeat());
+
+    monitoredThread.join(1000);
+  }
+
+  @Test
+  void testHeartbeatExceptionInterruptsMonitoredThread() throws InterruptedException {
+    CountDownLatch heartbeatExecutedLatch = new CountDownLatch(1);
+    CountDownLatch threadInterruptedLatch = new CountDownLatch(1);
+    CountDownLatch threadStartedLatch = new CountDownLatch(1);
+
+    Thread monitoredThread = new Thread(() -> {
+      try {
+        threadStartedLatch.countDown();
+        new CountDownLatch(1).await();
+      } catch (InterruptedException e) {
+        threadInterruptedLatch.countDown();
+      }
+    });
+    monitoredThread.start();
+    assertTrue(threadStartedLatch.await(1000, TimeUnit.MILLISECONDS), "Thread did not start");
+
+    manager = createDefaultManagerWithRealExecutor(() -> {
+      heartbeatExecutedLatch.countDown();
+      throw new RuntimeException("Simulated heartbeat error");
+    });
+
+    assertTrue(manager.startHeartbeatForThread(monitoredThread));
+    assertTrue(heartbeatExecutedLatch.await(1000, TimeUnit.MILLISECONDS), "Heartbeat task did not execute");
+    assertTrue(threadInterruptedLatch.await(1000, TimeUnit.MILLISECONDS), "Monitored thread was not interrupted");
+
+    assertFalse(manager.hasActiveHeartbeat());
+
+    monitoredThread.join(1000);
   }
 
   @Test
