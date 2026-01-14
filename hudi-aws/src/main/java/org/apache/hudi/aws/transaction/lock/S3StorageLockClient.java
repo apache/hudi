@@ -244,10 +244,11 @@ public class S3StorageLockClient implements StorageLockClient {
   }
 
   private static S3Client createS3Client(Region region, long timeoutSecs, Properties props) {
-    // Set the timeout, credentials, and region
+    // Set the timeout, credentials, and region with no retries
     return S3Client.builder()
         .overrideConfiguration(
-            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
+            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs))
+                  .retryStrategy(r -> r.maxAttempts(1)))
         .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
         .region(region).build();
   }
