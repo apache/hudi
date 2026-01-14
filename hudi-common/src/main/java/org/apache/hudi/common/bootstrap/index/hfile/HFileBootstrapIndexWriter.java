@@ -35,8 +35,7 @@ import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -53,8 +52,8 @@ import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.g
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getPartitionKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.partitionIndexPath;
 
+@Slf4j
 public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndexWriter.class);
 
   private final String bootstrapBasePath;
   private final StoragePath indexByPartitionPath;
@@ -80,7 +79,7 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
           || metaClient.getStorage().exists(indexByFileIdPath)) {
         String errMsg = "Previous version of bootstrap index exists. Partition Index Path :" + indexByPartitionPath
             + ", FileId index Path :" + indexByFileIdPath;
-        LOG.info(errMsg);
+        log.info(errMsg);
         throw new HoodieException(errMsg);
       }
     } catch (IOException ioe) {
@@ -97,9 +96,9 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   private void writeNextPartition(String partitionPath, String bootstrapPartitionPath,
                                   List<BootstrapFileMapping> bootstrapFileMappings) {
     try {
-      LOG.info("Adding bootstrap partition Index entry for partition :" + partitionPath
-          + ", bootstrap Partition :" + bootstrapPartitionPath + ", Num Entries :" + bootstrapFileMappings.size());
-      LOG.info("ADDING entries :" + bootstrapFileMappings);
+      log.info("Adding bootstrap partition Index entry for partition :{}, bootstrap Partition :{}, Num Entries :{}",
+          partitionPath, bootstrapPartitionPath, bootstrapFileMappings.size());
+      log.info("ADDING entries :{}", bootstrapFileMappings);
       HoodieBootstrapPartitionMetadata bootstrapPartitionMetadata = new HoodieBootstrapPartitionMetadata();
       bootstrapPartitionMetadata.setBootstrapPartitionPath(bootstrapPartitionPath);
       bootstrapPartitionMetadata.setPartitionPath(partitionPath);
@@ -148,14 +147,14 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
             .setNumKeys(numPartitionKeysAdded)
             .setBootstrapBasePath(bootstrapBasePath)
             .build();
-        LOG.info("Adding Partition FileInfo :" + partitionIndexInfo);
+        log.info("Adding Partition FileInfo :{}", partitionIndexInfo);
 
         HoodieBootstrapIndexInfo fileIdIndexInfo = HoodieBootstrapIndexInfo.newBuilder()
             .setCreatedTimestamp(new Date().getTime())
             .setNumKeys(numFileIdKeysAdded)
             .setBootstrapBasePath(bootstrapBasePath)
             .build();
-        LOG.info("Appending FileId FileInfo :" + fileIdIndexInfo);
+        log.info("Appending FileId FileInfo :{}", fileIdIndexInfo);
 
         indexByPartitionWriter.appendFileInfo(
             INDEX_INFO_KEY_STRING,
