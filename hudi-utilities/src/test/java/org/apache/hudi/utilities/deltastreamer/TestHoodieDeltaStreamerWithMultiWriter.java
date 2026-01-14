@@ -27,24 +27,23 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,9 +67,8 @@ import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.deltaStreamerTestRunner;
 
+@Slf4j
 public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieDeltaStreamerWithMultiWriter.class);
 
   String basePath;
   String propsFilePath;
@@ -413,7 +411,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
           deltaStreamerTestRunner(ingestionJob, cfgIngestionJob, conditionForRegularIngestion, jobId);
         } catch (Throwable ex) {
           continuousFailed.set(true);
-          LOG.error("Continuous job failed " + ex.getMessage());
+          log.error("Continuous job failed {}", ex.getMessage());
           throw new RuntimeException(ex);
         }
       });
@@ -424,7 +422,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
           awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit));
           backfillJob.sync();
         } catch (Throwable ex) {
-          LOG.error("Backfilling job failed " + ex.getMessage());
+          log.error("Backfilling job failed {}", ex.getMessage());
           backfillFailed.set(true);
           throw new RuntimeException(ex);
         }
@@ -443,7 +441,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
         // expected ConcurrentModificationException since ingestion & backfill will have overlapping writes
         if (!continuousFailed.get()) {
           // if backfill job failed, shutdown the continuous job.
-          LOG.warn("Calling shutdown on ingestion job since the backfill job has failed for " + jobId);
+          log.warn("Calling shutdown on ingestion job since the backfill job has failed for {}", jobId);
           ingestionJob.shutdownGracefully();
         } else {
           // both backfill and ingestion job cannot fail.
@@ -452,14 +450,14 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       } else if (expectConflict && continuousFailed.get() && e.getCause().getMessage().contains("Ingestion service was shut down with exception")) {
         // incase of regular ingestion job failing, ConcurrentModificationException is not throw all the way.
         if (!backfillFailed.get()) {
-          LOG.warn("Calling shutdown on backfill job since the ingstion/continuous job has failed for " + jobId);
+          log.warn("Calling shutdown on backfill job since the ingstion/continuous job has failed for {}", jobId);
           backfillJob.shutdownGracefully();
         } else {
           // both backfill and ingestion job cannot fail.
           throw new HoodieException("Both backfilling and ingestion job failed ", e);
         }
       } else {
-        LOG.error("Conflict happened, but not expected " + e.getCause().getMessage());
+        log.error("Conflict happened, but not expected {}", e.getCause().getMessage());
         throw e;
       }
     } finally {
@@ -495,7 +493,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
         soFar += 500;
       }
     }
-    LOG.warn("Awaiting completed in " + (System.currentTimeMillis() - startTime));
+    log.warn("Awaiting completed in {}", System.currentTimeMillis() - startTime);
   }
 
 }
