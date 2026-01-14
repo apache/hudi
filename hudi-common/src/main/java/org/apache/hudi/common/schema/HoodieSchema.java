@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import lombok.Getter;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -80,6 +81,7 @@ import java.util.stream.Collectors;
  *
  * @since 1.2.0
  */
+@Getter
 public class HoodieSchema implements Serializable {
 
   /**
@@ -1083,18 +1085,6 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the underlying Avro schema for compatibility purposes.
-   *
-   * <p>This method is provided for gradual migration and should be used
-   * sparingly. New code should prefer the HoodieSchema API.</p>
-   *
-   * @return the wrapped Avro Schema
-   */
-  public Schema getAvroSchema() {
-    return avroSchema;
-  }
-
-  /**
    * Converts this HoodieSchema to an Avro Schema.
    * This is an alias for getAvroSchema() provided for API consistency.
    *
@@ -1424,7 +1414,9 @@ public class HoodieSchema implements Serializable {
   }
 
   public static class Decimal extends HoodieSchema {
+    @Getter
     private final int precision;
+    @Getter
     private final int scale;
     private final Option<Integer> fixedSize;
 
@@ -1447,14 +1439,6 @@ public class HoodieSchema implements Serializable {
       } else {
         this.fixedSize = Option.empty();
       }
-    }
-
-    public int getPrecision() {
-      return precision;
-    }
-
-    public int getScale() {
-      return scale;
     }
 
     @Override
@@ -1494,7 +1478,9 @@ public class HoodieSchema implements Serializable {
   }
 
   public static class Timestamp extends HoodieSchema {
+    @Getter
     private final boolean isUtcAdjusted;
+    @Getter
     private final TimePrecision precision;
 
     /**
@@ -1523,14 +1509,6 @@ public class HoodieSchema implements Serializable {
       } else {
         throw new IllegalArgumentException("Unsupported timestamp logical type: " + logicalType);
       }
-    }
-
-    public TimePrecision getPrecision() {
-      return precision;
-    }
-
-    public boolean isUtcAdjusted() {
-      return isUtcAdjusted;
     }
 
     @Override
@@ -1569,6 +1547,7 @@ public class HoodieSchema implements Serializable {
   }
 
   public static class Time extends HoodieSchema {
+    @Getter
     private final TimePrecision precision;
 
     /**
@@ -1589,10 +1568,6 @@ public class HoodieSchema implements Serializable {
       } else {
         throw new IllegalArgumentException("Unsupported time logical type: " + logicalType);
       }
-    }
-
-    public TimePrecision getPrecision() {
-      return precision;
     }
 
     @Override

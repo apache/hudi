@@ -45,8 +45,7 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -72,9 +71,9 @@ import java.util.stream.Stream;
 /**
  * Utility functions related to accessing the file storage.
  */
+@Slf4j
 public class FSUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FSUtils.class);
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1_1-0-1
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final String PATH_SEPARATOR = "/";
@@ -616,7 +615,7 @@ public class FSUtils {
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
         boolean result = storage.deleteDirectory(dirPath);
-        LOG.info("Removed directory at {}", dirPath);
+        log.info("Removed directory at {}", dirPath);
         return result;
       }
     } catch (IOException ioe) {
@@ -795,7 +794,7 @@ public class FSUtils {
             if (!ignoreFailed) {
               throw new HoodieIOException("Failed to delete : " + file, e);
             } else {
-              LOG.info("Ignore failed deleting : {}", file);
+              log.info("Ignore failed deleting : {}", file);
               return true;
             }
           }
