@@ -638,6 +638,16 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Parallelism of tasks that do bucket assign, default same as the write task parallelism");
 
   @AdvancedConfig
+  public static final ConfigOption<Integer> BUCKET_ASSIGN_MINIBATCH_SIZE = ConfigOptions
+      .key("write.bucket_assign.minibatch.size")
+      .intType()
+      .defaultValue(1000) // default 1000
+      .withDescription("The maximum number of input records can be buffered for miniBatch during bucket assigning.\n"
+          + "MiniBatch is an optimization to buffer input records to reduce the number of individual index lookups,\n"
+          + "which can significantly improve performance compared to processing each record individually.\n"
+          + "Set to 0 to disable mini-batch processing.");
+
+  @AdvancedConfig
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
