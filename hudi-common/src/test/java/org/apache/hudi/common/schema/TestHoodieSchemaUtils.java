@@ -1761,21 +1761,6 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
-  void testLogicalTypesRetainedAfterPrune() {
-    final String logicalTypeKey = "logicalType";
-    final String customLogicalType = "CustomLogicalType";
-    // This is important for VARIANT types as variants rely on this, change this using HoodieSchema#createVariant API later
-    HoodieSchema dataSchema = HoodieSchema.createRecord("test", "test", null,
-        Arrays.asList(HoodieSchemaField.of("col_0", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("col_1", HoodieSchema.create(HoodieSchemaType.STRING))));
-    dataSchema.addProp(logicalTypeKey, customLogicalType);
-    Set<String> mandatoryFields = new HashSet<>(Collections.singleton("op"));
-    assertEquals(customLogicalType, dataSchema.getProp(logicalTypeKey));
-    HoodieSchema prunedSchema = HoodieSchemaUtils.pruneDataSchema(dataSchema, dataSchema, mandatoryFields);
-    assertEquals(customLogicalType, prunedSchema.getProp(logicalTypeKey));
-  }
-
-  @Test
   void testLogicalTypesRetainedAfterPruneWithNestedRecords() {
     final String logicalTypeKey = "logicalType";
     final String customLogicalTypeRoot = "CustomLogicalTypeRoot";
