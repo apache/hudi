@@ -35,14 +35,15 @@ import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -55,8 +56,8 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
+@Slf4j
 public abstract class Source<T> implements SourceCommitCallback, Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(Source.class);
 
   public enum SourceType {
     JSON, AVRO, ROW, PROTO
@@ -64,14 +65,17 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   protected transient TypedProperties props;
   protected transient JavaSparkContext sparkContext;
+  @Getter
   protected transient SparkSession sparkSession;
   protected transient Option<SourceProfileSupplier> sourceProfileSupplier;
   protected int writeTableVersion;
   private transient SchemaProvider overriddenSchemaProvider;
 
+  @Getter
   private final SourceType sourceType;
   private final StorageLevel storageLevel;
-  protected final boolean persistRdd;
+  @Getter(AccessLevel.PROTECTED)
+  protected final boolean allowSourcePersistRdd;
   private Either<Dataset<Row>, JavaRDD<?>> cachedSourceRdd = null;
 
   protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -92,7 +96,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     this.sourceType = sourceType;
     this.sourceProfileSupplier = streamContext.getSourceProfileSupplier();
     this.storageLevel = StorageLevel.fromString(ConfigUtils.getStringWithAltKeys(props, TAGGED_RECORD_STORAGE_LEVEL_VALUE, true));
-    this.persistRdd = ConfigUtils.getBooleanWithAltKeys(props, ERROR_TABLE_PERSIST_SOURCE_RDD);
+    this.allowSourcePersistRdd = ConfigUtils.getBooleanWithAltKeys(props, ERROR_TABLE_PERSIST_SOURCE_RDD);
     this.writeTableVersion = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
   }
 
@@ -102,7 +106,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   protected InputBatch<T> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    LOG.warn("In Hudi 1.0+, the checkpoint based on Hudi timeline is changed. "
+    log.warn("In Hudi 1.0+, the checkpoint based on Hudi timeline is changed. "
         + "If your Source implementation relies on request time as the checkpoint, "
         + "you may consider migrating to completion time-based checkpoint by overriding "
         + "Source#translateCheckpoint and Source#fetchNewDataFromCheckpoint");
@@ -186,17 +190,9 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
   }
 
-  public SourceType getSourceType() {
-    return sourceType;
-  }
-
-  public SparkSession getSparkSession() {
-    return sparkSession;
-  }
-
   private synchronized void persist(T data) {
     boolean isSparkRdd = data.getClass().isAssignableFrom(Dataset.class) || data.getClass().isAssignableFrom(JavaRDD.class);
-    if (allowSourcePersist() && isSparkRdd) {
+    if (isAllowSourcePersistRdd() && isSparkRdd) {
       if (data.getClass().isAssignableFrom(Dataset.class)) {
         Dataset<Row> df = (Dataset<Row>) data;
         cachedSourceRdd = Either.left(df);
@@ -207,10 +203,6 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
         javaRDD.persist(storageLevel);
       }
     }
-  }
-
-  protected boolean allowSourcePersist() {
-    return persistRdd;
   }
 
   @Override
