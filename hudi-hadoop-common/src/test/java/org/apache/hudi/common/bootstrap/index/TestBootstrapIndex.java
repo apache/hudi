@@ -202,7 +202,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
             .setPermission(HoodieFSPermission.newBuilder().setUserAction(FsAction.ALL.name())
                 .setGroupAction(FsAction.READ.name()).setOtherAction(FsAction.NONE.name()).setStickyBit(true).build())
             .build();
-        return new BootstrapFileMapping(sourceBasePath, partition, partition, sourceFileStatus, hudiFileId);
+        return new BootstrapFileMapping(sourceBasePath, partition, sourceFileStatus, partition, hudiFileId);
       }).collect(Collectors.toList()));
     }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }

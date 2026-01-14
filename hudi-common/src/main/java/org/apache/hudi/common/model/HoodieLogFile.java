@@ -24,9 +24,13 @@ import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
 import java.io.Serializable;
 import java.util.Comparator;
-import java.util.Objects;
 import java.util.regex.Matcher;
 
 import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
@@ -37,6 +41,8 @@ import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
  *
  * <p>Also contains logic to roll over the log file.
  */
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class HoodieLogFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
@@ -47,8 +53,12 @@ public class HoodieLogFile implements Serializable {
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
 
+  @Getter
+  @Setter
   private transient StoragePathInfo pathInfo;
   private transient StoragePath path;
+  @EqualsAndHashCode.Include
+  @ToString.Include
   private final String pathStr;
   private String fileId;
   private String deltaCommitTime;
@@ -56,7 +66,10 @@ public class HoodieLogFile implements Serializable {
   private String logWriteToken;
   private String fileExtension;
   private String suffix;
-  private long fileLen;
+  @Getter
+  @Setter
+  @ToString.Include
+  private long fileSize;
 
   public HoodieLogFile(HoodieLogFile logFile) {
     this.pathInfo = logFile.getPathInfo();
@@ -68,7 +81,7 @@ public class HoodieLogFile implements Serializable {
     this.logWriteToken = logFile.getLogWriteToken();
     this.fileExtension = logFile.getFileExtension();
     this.suffix = logFile.getSuffix();
-    this.fileLen = logFile.getFileSize();
+    this.fileSize = logFile.getFileSize();
   }
 
   public HoodieLogFile(StoragePathInfo pathInfo) {
@@ -79,18 +92,18 @@ public class HoodieLogFile implements Serializable {
     this(null, logPath, logPath.toString(), -1);
   }
 
-  public HoodieLogFile(StoragePath logPath, long fileLen) {
-    this(null, logPath, logPath.toString(), fileLen);
+  public HoodieLogFile(StoragePath logPath, long fileSize) {
+    this(null, logPath, logPath.toString(), fileSize);
   }
 
   public HoodieLogFile(String logPathStr) {
     this(null, null, logPathStr, -1);
   }
 
-  private HoodieLogFile(StoragePathInfo pathInfo, StoragePath logPath, String logPathStr, long fileLen) {
+  private HoodieLogFile(StoragePathInfo pathInfo, StoragePath logPath, String logPathStr, long fileSize) {
     this.pathInfo = pathInfo;
     this.pathStr = logPathStr;
-    this.fileLen = fileLen;
+    this.fileSize = fileSize;
     this.logVersion = -1; // mark version as uninitialized
     this.path = logPath;
   }
@@ -165,22 +178,6 @@ public class HoodieLogFile implements Serializable {
     return getPath().getName();
   }
 
-  public void setFileLen(long fileLen) {
-    this.fileLen = fileLen;
-  }
-
-  public long getFileSize() {
-    return fileLen;
-  }
-
-  public StoragePathInfo getPathInfo() {
-    return pathInfo;
-  }
-
-  public void setPathInfo(StoragePathInfo pathInfo) {
-    this.pathInfo = pathInfo;
-  }
-
   public HoodieLogFile rollOver(String logWriteToken) {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
@@ -241,27 +238,5 @@ public class HoodieLogFile implements Serializable {
       // compare by delta-commits
       return deltaCommitTime1.compareTo(deltaCommitTime2);
     }
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieLogFile that = (HoodieLogFile) o;
-    return Objects.equals(pathStr, that.pathStr);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(pathStr);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieLogFile{pathStr='" + pathStr + '\'' + ", fileLen=" + fileLen + '}';
   }
 }

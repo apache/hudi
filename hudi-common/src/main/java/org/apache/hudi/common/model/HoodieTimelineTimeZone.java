@@ -18,29 +18,22 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.time.ZoneId;
 import java.util.TimeZone;
 
 /**
  * Hoodie TimelineZone.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 public enum HoodieTimelineTimeZone {
   LOCAL("local", ZoneId.systemDefault()),
   UTC("utc", TimeZone.getTimeZone("UTC").toZoneId());
 
   private final String timeZone;
   private final ZoneId zoneId;
-
-  HoodieTimelineTimeZone(String timeZone, ZoneId zoneId) {
-    this.timeZone = timeZone;
-    this.zoneId = zoneId;
-  }
-
-  public String getTimeZone() {
-    return timeZone;
-  }
-
-  public ZoneId getZoneId() {
-    return zoneId;
-  }
 }

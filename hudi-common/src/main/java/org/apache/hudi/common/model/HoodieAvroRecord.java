@@ -34,6 +34,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -49,6 +50,7 @@ import static org.apache.hudi.common.model.HoodieAvroIndexedRecord.updateMetadat
  *
  * @param <T> payload implementation.
  */
+@NoArgsConstructor
 public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
 
   public HoodieAvroRecord(HoodieKey key, T data) {
@@ -75,9 +77,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       HoodieRecordLocation currentLocation,
       HoodieRecordLocation newLocation) {
     super(key, data, operation, currentLocation, newLocation);
-  }
-
-  public HoodieAvroRecord() {
   }
 
   @Override
