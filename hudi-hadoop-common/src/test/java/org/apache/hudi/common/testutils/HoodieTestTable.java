@@ -451,14 +451,12 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addClean(String instantTime) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(EMPTY_STRING, EMPTY_STRING, EMPTY_STRING),
         EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
-    HoodieCleanStat cleanStats = new HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-        HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        instantTime,
-        "");
+    HoodieCleanStat cleanStats = HoodieCleanStat.builder()
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        .withPartitionPath(HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)])
+        .withEarliestCommitToRetain(instantTime)
+        .withLastCompletedCommitTimestamp("")
+        .build();
     HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
     return HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
   }
@@ -468,8 +466,14 @@ public class HoodieTestTable implements AutoCloseable {
         EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
     List<HoodieCleanStat> cleanStats = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : testTableState.getPartitionToFileIdMapForCleaner(commitTime).entrySet()) {
-      cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-          entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime, ""));
+      cleanStats.add(HoodieCleanStat.builder()
+          .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+          .withPartitionPath(entry.getKey())
+          .withDeletePathPatterns(entry.getValue())
+          .withSuccessDeleteFiles(entry.getValue())
+          .withEarliestCommitToRetain(commitTime)
+          .withLastCompletedCommitTimestamp("")
+          .build());
     }
     return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats, Collections.EMPTY_MAP));
   }
