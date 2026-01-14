@@ -24,9 +24,8 @@ import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -42,9 +41,8 @@ import static org.apache.hudi.async.AsyncClusteringService.CLUSTERING_POOL_NAME;
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user sets
  * spark.scheduler.mode=FAIR at spark-submit time
  */
+@Slf4j
 public class SchedulerConfGenerator {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SchedulerConfGenerator.class);
 
   public static final String DELTASYNC_POOL_NAME = HoodieStreamer.STREAMSYNC_POOL_NAME;
   public static final String COMPACT_POOL_NAME = AsyncCompactService.COMPACT_POOL_NAME;
@@ -106,10 +104,10 @@ public class SchedulerConfGenerator {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare,
           cfg.clusterSchedulingWeight, cfg.clusterSchedulingMinShare);
-      LOG.info("Spark scheduling config file {}", sparkSchedulingConfFile);
+      log.info("Spark scheduling config file {}", sparkSchedulingConfFile);
       additionalSparkConfigs.put(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
     } else {
-      LOG.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
+      log.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
           + "is not set to FAIR at instantiation time. Continuing without scheduling configs");
     }
     return additionalSparkConfigs;
@@ -135,7 +133,7 @@ public class SchedulerConfGenerator {
     }
     // SPARK-35083 introduces remote scheduler pool files, so the file must include scheme since Spark 3.2
     String path = tempConfigFile.toURI().toString();
-    LOG.info("Configs written to file " + path);
+    log.info("Configs written to file {}", path);
     return path;
   }
 }
