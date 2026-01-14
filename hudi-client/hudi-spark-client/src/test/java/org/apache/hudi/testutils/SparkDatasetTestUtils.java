@@ -94,7 +94,7 @@ public class SparkDatasetTestUtils {
    * @param schema instance of {@link StructType} for which encoder is requested.
    * @return the encoder thus generated.
    */
-  private static ExpressionEncoder getEncoder(StructType schema) {
+  public static ExpressionEncoder getEncoder(StructType schema) {
     List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
     return RowEncoder.apply(schema)

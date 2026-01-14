@@ -31,6 +31,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
@@ -134,16 +135,16 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  void testSimpleKeyGeneratorWithKeyGeneratorClass() {
+  void testSimpleKeyGeneratorWithKeyGeneratorClass() throws IOException {
     testSimpleKeyGenerator(getPropertiesForSimpleKeyGen(true));
   }
 
   @Test
-  void testSimpleKeyGeneratorWithKeyGeneratorType() {
+  void testSimpleKeyGeneratorWithKeyGeneratorType() throws IOException {
     testSimpleKeyGenerator(getPropertiesForSimpleKeyGen(false));
   }
 
-  public void testSimpleKeyGenerator(TypedProperties props) {
+  public void testSimpleKeyGenerator(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     GenericRecord avroRecord = getRecord();
@@ -158,16 +159,16 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  void testTimestampBasedKeyGeneratorWithKeyGeneratorClass() {
+  void testTimestampBasedKeyGeneratorWithKeyGeneratorClass() throws IOException {
     testTimestampBasedKeyGenerator(getPropertiesForTimestampBasedKeyGen(true));
   }
 
   @Test
-  void testTimestampBasedKeyGeneratorWithKeyGeneratorType() {
+  void testTimestampBasedKeyGeneratorWithKeyGeneratorType() throws IOException {
     testTimestampBasedKeyGenerator(getPropertiesForTimestampBasedKeyGen(false));
   }
 
-  public void testTimestampBasedKeyGenerator(TypedProperties props) {
+  public void testTimestampBasedKeyGenerator(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
@@ -183,16 +184,16 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  void testNonPartitionedKeyGeneratorWithKeyGeneratorClass() {
+  void testNonPartitionedKeyGeneratorWithKeyGeneratorClass() throws IOException {
     testNonPartitionedKeyGenerator(getPropertiesForNonPartitionedKeyGen(true));
   }
 
   @Test
-  void testNonPartitionedKeyGeneratorWithKeyGeneratorType() {
+  void testNonPartitionedKeyGeneratorWithKeyGeneratorType() throws IOException {
     testNonPartitionedKeyGenerator(getPropertiesForNonPartitionedKeyGen(false));
   }
 
-  public void testNonPartitionedKeyGenerator(TypedProperties props) {
+  public void testNonPartitionedKeyGenerator(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
@@ -323,16 +324,16 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorClass() {
+  void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorClass() throws IOException {
     testComplexRecordKeyWithSimplePartitionPath(getComplexRecordKeyWithSimplePartitionProps(true));
   }
 
   @Test
-  void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorType() {
+  void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorType() throws IOException {
     testComplexRecordKeyWithSimplePartitionPath(getComplexRecordKeyWithSimplePartitionProps(false));
   }
 
-  public void testComplexRecordKeyWithSimplePartitionPath(TypedProperties props) {
+  public void testComplexRecordKeyWithSimplePartitionPath(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
@@ -350,16 +351,16 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorClass() {
+  void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorClass() throws IOException {
     testComplexRecordKeysWithComplexPartitionPath(getComplexRecordKeyAndPartitionPathProps(true));
   }
 
   @Test
-  void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorType() {
+  void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorType() throws IOException {
     testComplexRecordKeysWithComplexPartitionPath(getComplexRecordKeyAndPartitionPathProps(false));
   }
 
-  public void testComplexRecordKeysWithComplexPartitionPath(TypedProperties props) {
+  public void testComplexRecordKeysWithComplexPartitionPath(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 

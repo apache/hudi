@@ -41,6 +41,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.stream.Stream;
 
 class TestCreateKeyGeneratorByTypeWithFactory {
@@ -73,7 +74,7 @@ class TestCreateKeyGeneratorByTypeWithFactory {
 
   @ParameterizedTest
   @MethodSource("configParams")
-  void testKeyGeneratorTypes(String keyGenType) {
+  void testKeyGeneratorTypes(String keyGenType) throws IOException {
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
@@ -107,7 +108,7 @@ class TestCreateKeyGeneratorByTypeWithFactory {
   }
 
   @Test
-  void testAutoRecordKeyGenerator() {
+  void testAutoRecordKeyGenerator() throws IOException {
     props = new TypedProperties();
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
     props.put(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, "100");
