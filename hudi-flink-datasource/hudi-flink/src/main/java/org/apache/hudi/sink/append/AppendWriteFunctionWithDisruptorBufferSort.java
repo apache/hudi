@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
@@ -62,9 +63,10 @@ import java.util.stream.Collectors;
  *
  * @param <T> Type of the input record
  * @see StreamWriteOperatorCoordinator
+ * @see BufferType#DISRUPTOR
  */
 @Slf4j
-public class AppendWriteFunctionWithDisruptorSort<T> extends AppendWriteFunction<T> {
+public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFunction<T> {
 
   // writeBufferSize: record count threshold for flushing sort buffer to disk
   private final long writeBufferSize;
@@ -79,7 +81,7 @@ public class AppendWriteFunctionWithDisruptorSort<T> extends AppendWriteFunction
   private transient BinaryInMemorySortBuffer sortBuffer;
   private transient SortingConsumer sortingConsumer;
 
-  public AppendWriteFunctionWithDisruptorSort(Configuration config, RowType rowType) {
+  public AppendWriteFunctionWithDisruptorBufferSort(Configuration config, RowType rowType) {
     super(config, rowType);
     this.writeBufferSize = config.get(FlinkOptions.WRITE_BUFFER_SIZE);
     this.ringBufferSize = config.get(FlinkOptions.WRITE_BUFFER_DISRUPTOR_RING_SIZE);
@@ -161,6 +163,11 @@ public class AppendWriteFunctionWithDisruptorSort<T> extends AppendWriteFunction
 
   private void flushDisruptor() {
     disruptorQueue.close();
+    // Check if any errors occurred during event processing
+    Throwable error = disruptorQueue.getThrowable();
+    if (error != null) {
+      throw new HoodieException("Error processing records in disruptor buffer", error);
+    }
     sortingConsumer.finish();
   }
 

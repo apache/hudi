@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.append;
 
-import org.apache.hudi.common.util.queue.BufferType;
+import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import lombok.AccessLevel;
@@ -46,9 +46,9 @@ public abstract class AppendWriteFunctions {
 
     String bufferType = resolveBufferType(conf);
     if (BufferType.DISRUPTOR.name().equalsIgnoreCase(bufferType)) {
-      return new AppendWriteFunctionWithDisruptorSort<>(conf, rowType);
+      return new AppendWriteFunctionWithDisruptorBufferSort<>(conf, rowType);
     } else if (BufferType.BOUNDED_IN_MEMORY.name().equalsIgnoreCase(bufferType)) {
-      return new AppendWriteFunctionWithBufferSort<>(conf, rowType);
+      return new AppendWriteFunctionWithBIMBufferSort<>(conf, rowType);
     }
     return new AppendWriteFunction<>(conf, rowType);
   }

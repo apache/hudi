@@ -23,6 +23,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
@@ -64,9 +65,10 @@ import java.util.stream.Collectors;
  *
  * @param <T> Type of the input record
  * @see StreamWriteOperatorCoordinator
+ * @see BufferType#BOUNDED_IN_MEMORY
  */
 @Slf4j
-public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T> {
+public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction<T> {
 
   private final long writeBufferSize;
   private transient BinaryInMemorySortBuffer activeBuffer;
@@ -75,7 +77,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
   private transient AtomicReference<CompletableFuture<Void>> asyncWriteTask;
   private transient AtomicBoolean isBackgroundBufferBeingProcessed;
 
-  public AppendWriteFunctionWithBufferSort(Configuration config, RowType rowType) {
+  public AppendWriteFunctionWithBIMBufferSort(Configuration config, RowType rowType) {
     super(config, rowType);
     this.writeBufferSize = config.get(FlinkOptions.WRITE_BUFFER_SIZE);
   }
