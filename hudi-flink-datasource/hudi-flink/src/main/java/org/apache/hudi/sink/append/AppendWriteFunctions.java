@@ -18,12 +18,15 @@
 
 package org.apache.hudi.sink.append;
 
+import org.apache.hudi.common.util.queue.BufferType;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utilities for {@link AppendWriteFunction} to handle rate limit if it was set.
@@ -31,16 +34,53 @@ import org.apache.flink.table.types.logical.RowType;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public abstract class AppendWriteFunctions {
 
+  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunctions.class);
+
   /**
    * Creates a {@link AppendWriteFunction} instance based on the given configuration.
    */
   public static <I> AppendWriteFunction<I> create(Configuration conf, RowType rowType) {
     if (conf.get(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
       return new AppendWriteFunctionWithRateLimit<>(rowType, conf);
-    } else if (conf.get(FlinkOptions.WRITE_BUFFER_SORT_ENABLED)) {
-      return new AppendWriteFunctionWithBufferSort<>(conf, rowType);
-    } else {
-      return new AppendWriteFunction<>(conf, rowType);
     }
+
+    String bufferType = resolveBufferType(conf);
+    if (BufferType.DISRUPTOR.name().equalsIgnoreCase(bufferType)) {
+      return new AppendWriteFunctionWithDisruptorSort<>(conf, rowType);
+    } else if (BufferType.BOUNDED_IN_MEMORY.name().equalsIgnoreCase(bufferType)) {
+      return new AppendWriteFunctionWithBufferSort<>(conf, rowType);
+    }
+    return new AppendWriteFunction<>(conf, rowType);
+  }
+
+  /**
+   * Resolves the buffer type from configuration, handling backward compatibility.
+   */
+  public static String resolveBufferType(Configuration conf) {
+    // New config takes precedence
+    String bufferType = conf.get(FlinkOptions.WRITE_BUFFER_TYPE);
+    if (!BufferType.NONE.name().equalsIgnoreCase(bufferType)) {
+      return bufferType;
+    }
+
+    // Backward compatibility: write.buffer.sort.enabled=true → DISRUPTOR
+    if (conf.get(FlinkOptions.WRITE_BUFFER_SORT_ENABLED)) {
+      LOG.info("write.buffer.sort.enabled is deprecated. Use write.buffer.type=DISRUPTOR instead.");
+      return BufferType.DISRUPTOR.name();
+    }
+
+    return BufferType.NONE.name();
+  }
+
+  /**
+   * Resolves sort keys from configuration, defaulting to record key field(s) if not specified.
+   */
+  public static String resolveSortKeys(Configuration conf) {
+    String sortKeys = conf.get(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
+    if (sortKeys == null || sortKeys.isEmpty()) {
+      // Default to record key field(s)
+      return conf.get(FlinkOptions.RECORD_KEY_FIELD);
+    }
+    return sortKeys;
   }
 }

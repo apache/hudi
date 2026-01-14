@@ -132,7 +132,10 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     }
   }
 
-  protected void setHandlers(HoodieConsumer<O, ?> consumer) {
+  /**
+   * Sets the consumer handler for this queue.
+   */
+  public void setHandlers(HoodieConsumer<O, ?> consumer) {
     queue.handleEventsWith((event, sequence, endOfBatch) -> {
       try {
         consumer.consume(event.get());
@@ -142,7 +145,10 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
     });
   }
 
-  protected void start() {
+  /**
+   * Starts the disruptor queue.
+   */
+  public void start() {
     synchronized (this) {
       if (!isStarted) {
         queue.start();

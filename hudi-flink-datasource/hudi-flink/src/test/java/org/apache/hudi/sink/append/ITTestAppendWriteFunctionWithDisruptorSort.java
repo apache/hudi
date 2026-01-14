@@ -37,8 +37,6 @@ import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.sql.Timestamp;
@@ -52,9 +50,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test cases for {@link AppendWriteFunctionWithBufferSort} (BOUNDED_IN_MEMORY buffer type).
+ * Test cases for {@link AppendWriteFunctionWithDisruptorSort} (DISRUPTOR buffer type).
  */
-public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
+public class ITTestAppendWriteFunctionWithDisruptorSort extends TestWriteBase {
 
   private Configuration conf;
   private RowType rowType;
@@ -63,7 +61,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
   public void before(@TempDir File tempDir) throws Exception {
     super.before();
     this.conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    this.conf.set(FlinkOptions.WRITE_BUFFER_TYPE, BufferType.BOUNDED_IN_MEMORY.name());
+    this.conf.set(FlinkOptions.WRITE_BUFFER_TYPE, BufferType.DISRUPTOR.name());
     this.conf.set(FlinkOptions.OPERATION, "insert");
     this.conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "name,age");
     this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 100L);
@@ -79,6 +77,8 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
 
   @Test
   public void testBufferFlushOnRecordNumberLimit() throws Exception {
+    conf.set(FlinkOptions.WRITE_BUFFER_DISRUPTOR_RING_SIZE, 1024);
+
     // Create test data that exceeds buffer size (150 records > 100 buffer size)
     List<RowData> inputData = new ArrayList<>();
     for (int i = 0; i < 150; i++) {
@@ -96,25 +96,20 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     assertEquals(150, actualData.size());
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testBufferFlush(boolean flushOnCheckpoint) throws Exception {
+  @Test
+  public void testBufferFlushOnCheckpoint() throws Exception {
     // Create test data
     List<RowData> inputData = Arrays.asList(
         createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
-        createRowData("uuid1", "Alice", 25, "1970-01-01 00:00:01.124", "p1")
+        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1")
     );
 
-    // Write the data and flush either on checkpoint or endInput
-    TestHarness testHarness =
-        TestWriteBase.TestHarness.instance()
-            .preparePipeline(tempFile, conf)
-            .consume(inputData);
-    if (flushOnCheckpoint) {
-      testHarness.checkpoint(1);
-    } else {
-      testHarness.endInput();
-    }
+    // Write the data and flush on checkpoint
+    TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf)
+        .consume(inputData)
+        .checkpoint(1)
+        .endInput();
 
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
@@ -122,41 +117,18 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
   }
 
   @Test
-  public void testBufferFlushOnBufferSizeLimit() throws Exception {
-    // Configure large record count limit but small memory limit to trigger memory-based flush
-    this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 10000L);
-    this.conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 400.1D);
-
-    // Create large dataset
-    List<RowData> inputData = new ArrayList<>();
-    for (int i = 0; i < 2000; i++) {
-      inputData.add(createRowData("uuid" + i, "Name" + i, i, "1970-01-01 00:00:01.123", "p1"));
-    }
-
-    // Write the data
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
-        .consume(inputData)
-        .endInput();
-
-    // Verify all data was written
-    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
-    assertEquals(2000, actualData.size());
-  }
-
-  @Test
   public void testSortedResult() throws Exception {
     // Create test data with unsorted records (sort keys: name, age)
     List<RowData> inputData = Arrays.asList(
         createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
-        createRowData("uuid1", "Alice", 25, "1970-01-01 00:00:01.124", "p1"),
-        createRowData("uuid1", "Bob", 21, "1970-01-01 00:00:31.124", "p1")
+        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1"),
+        createRowData("uuid3", "Bob", 21, "1970-01-01 00:00:31.124", "p1")
     );
 
     // Expected order after sorting by name, then age
     List<String> expected = Arrays.asList(
-        "uuid1,Alice,25,1970-01-01 00:00:01.124,p1",
-        "uuid1,Bob,21,1970-01-01 00:00:31.124,p1",
+        "uuid2,Alice,25,1970-01-01 00:00:01.124,p1",
+        "uuid3,Bob,21,1970-01-01 00:00:31.124,p1",
         "uuid1,Bob,30,1970-01-01 00:00:01.123,p1");
 
     // Write the data
@@ -170,8 +142,9 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     List<GenericRecord> result = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
     assertEquals(3, result.size());
 
-    List<String> filteredResult =
-        result.stream().map(TestData::filterOutVariablesWithoutHudiMetadata).collect(Collectors.toList());
+    List<String> filteredResult = result.stream()
+        .map(TestData::filterOutVariablesWithoutHudiMetadata)
+        .collect(Collectors.toList());
 
     assertArrayEquals(expected.toArray(), filteredResult.toArray());
   }
@@ -206,7 +179,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
   @Test
   public void testLargeDatasetWithMultipleFlushes() throws Exception {
     // Configure small buffer to force multiple flushes
-    this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 50L);
+    conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 50L);
 
     // Create large dataset across multiple partitions
     List<RowData> inputData = new ArrayList<>();
@@ -277,52 +250,39 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
   }
 
   @Test
-  public void testConcurrentWriteScenario() throws Exception {
-    // Configure small buffer to trigger frequent async writes
-    this.conf.set(FlinkOptions.WRITE_BUFFER_SIZE, 20L);
+  public void testBackwardCompatibilityWithSortEnabled() throws Exception {
+    // Use deprecated write.buffer.sort.enabled=true (should resolve to DISRUPTOR)
+    conf.removeConfig(FlinkOptions.WRITE_BUFFER_TYPE);
+    conf.set(FlinkOptions.WRITE_BUFFER_SORT_ENABLED, true);
+
+    // Verify deprecated config resolves to DISRUPTOR
+    assertEquals(BufferType.DISRUPTOR.name(), AppendWriteFunctions.resolveBufferType(conf));
 
     // Create test data
-    List<RowData> inputData = new ArrayList<>();
-    for (int i = 0; i < 200; i++) {
-      inputData.add(createRowData("uuid" + i, "Name" + (i % 5), i % 50, "1970-01-01 00:00:01.123", "p1"));
-    }
+    List<RowData> inputData = Arrays.asList(
+        createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
+        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1")
+    );
 
-    // Write data in small batches with periodic checkpoints
-    TestHarness testHarness = TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf);
-
-    for (int i = 0; i < inputData.size(); i += 10) {
-      List<RowData> batch = inputData.subList(i, Math.min(i + 10, inputData.size()));
-      testHarness.consume(batch);
-      if (i % 50 == 0) {
-        testHarness.checkpoint(i / 50 + 1);
-      }
-    }
-    testHarness.endInput();
+    // Write the data
+    TestWriteBase.TestHarness.instance()
+        .preparePipeline(tempFile, conf)
+        .consume(inputData)
+        .endInput();
 
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
-    assertEquals(200, actualData.size());
+    assertEquals(2, actualData.size());
   }
 
   @Test
-  public void testSortKeysDefaultToRecordKey() throws Exception {
-    // Remove explicit sort keys config
-    conf.removeConfig(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
+  public void testExplicitBufferTypeTakesPrecedence() throws Exception {
+    // Set both new and deprecated config
+    conf.set(FlinkOptions.WRITE_BUFFER_TYPE, BufferType.BOUNDED_IN_MEMORY.name());
+    conf.set(FlinkOptions.WRITE_BUFFER_SORT_ENABLED, true);
 
-    // Verify sort keys default to record key field
-    String resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
-    assertEquals(conf.get(FlinkOptions.RECORD_KEY_FIELD), resolvedSortKeys);
-  }
-
-  @Test
-  public void testCustomSortKeysOverrideDefault() throws Exception {
-    // Set custom sort keys
-    conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "age,name");
-
-    // Verify custom sort keys take precedence
-    String resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
-    assertEquals("age,name", resolvedSortKeys);
+    // Verify explicit write.buffer.type takes precedence over deprecated write.buffer.sort.enabled
+    assertEquals(BufferType.BOUNDED_IN_MEMORY.name(), AppendWriteFunctions.resolveBufferType(conf));
   }
 
   private GenericRowData createRowData(String uuid, String name, int age, String timestamp, String partition) {

@@ -677,6 +677,30 @@ public class FlinkOptions extends HoodieConfig {
           +  " The order of entire parquet file is not guaranteed.");
 
   @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_TYPE = ConfigOptions
+      .key("write.buffer.type")
+      .stringType()
+      .defaultValue("NONE")
+      .withDescription("Buffer type for append write function: "
+          + "NONE (no buffer sort, default), "
+          + "BOUNDED_IN_MEMORY (double buffer with sync write), "
+          + "DISRUPTOR (ring buffer with async write, recommended for better throughput)");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_BUFFER_DISRUPTOR_RING_SIZE = ConfigOptions
+      .key("write.buffer.disruptor.ring.size")
+      .intType()
+      .defaultValue(16384)
+      .withDescription("Ring buffer size for Disruptor (must be power of 2), default 16384");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_DISRUPTOR_WAIT_STRATEGY = ConfigOptions
+      .key("write.buffer.disruptor.wait.strategy")
+      .stringType()
+      .defaultValue("BLOCKING_WAIT")
+      .withDescription("Wait strategy for Disruptor: BLOCKING_WAIT (default), SLEEPING_WAIT, YIELDING_WAIT, BUSY_SPIN_WAIT");
+
+  @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
       .key("write.rate.limit")
       .longType()
