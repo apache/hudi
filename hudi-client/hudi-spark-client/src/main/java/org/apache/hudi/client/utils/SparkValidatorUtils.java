@@ -29,6 +29,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -155,24 +156,19 @@ public class SparkValidatorUtils {
   /**
    * Get records from specified list of data files.
    */
-<<<<<<< HEAD
-  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
-=======
   public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths,
       HoodieTable table) {
-    final Schema readerSchema;
+    final HoodieSchema readerSchema;
     String schemaStr = table.getConfig().getWriteSchema();
     boolean isPopulateMetaFieldsEnabled = table.getConfig().populateMetaFields();
     if (!StringUtils.isNullOrEmpty(schemaStr)) {
-      Schema schema = new Schema.Parser().parse(table.getConfig().getWriteSchema())
-      readerSchema = isPopulateMetaFieldsEnabled
-          ? HoodieAvroUtils.addMetadataFields(schema)
-          : schema;
+      Schema schema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
+      readerSchema = HoodieSchema.fromAvroSchema(
+          isPopulateMetaFieldsEnabled ? HoodieAvroUtils.addMetadataFields(schema) : schema);
     } else {
       LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
       try {
-        readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema();
+        readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
       } catch (Exception e) {
         LOG.error(String.format("Failed parsing schema from latest commit with exception %s, "
             + "defaulting to inferring schema from data files", e));
@@ -183,9 +179,8 @@ public class SparkValidatorUtils {
     }
     return sqlContext
         .read()
-        .schema(AvroConversionUtils.convertAvroSchemaToStructType(readerSchema))
+        .schema(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(readerSchema))
         .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
->>>>>>> 03e634e21f (Include hoodie metafields when reading parquet files in Precommit validators)
   }
 
   /**
