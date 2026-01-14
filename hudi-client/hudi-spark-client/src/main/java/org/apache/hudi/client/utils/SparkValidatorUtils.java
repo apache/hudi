@@ -161,14 +161,18 @@ public class SparkValidatorUtils {
 =======
   public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths,
       HoodieTable table) {
-    final Schema schemaWithMetaFields;
+    final Schema readerSchema;
     String schemaStr = table.getConfig().getWriteSchema();
+    boolean isPopulateMetaFieldsEnabled = table.getConfig().populateMetaFields();
     if (!StringUtils.isNullOrEmpty(schemaStr)) {
-      schemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(table.getConfig().getWriteSchema()));
+      Schema schema = new Schema.Parser().parse(table.getConfig().getWriteSchema())
+      readerSchema = isPopulateMetaFieldsEnabled
+          ? HoodieAvroUtils.addMetadataFields(schema)
+          : schema;
     } else {
       LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
       try {
-        schemaWithMetaFields = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema();
+        readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema();
       } catch (Exception e) {
         LOG.error(String.format("Failed parsing schema from latest commit with exception %s, "
             + "defaulting to inferring schema from data files", e));
@@ -179,7 +183,7 @@ public class SparkValidatorUtils {
     }
     return sqlContext
         .read()
-        .schema(AvroConversionUtils.convertAvroSchemaToStructType(schemaWithMetaFields))
+        .schema(AvroConversionUtils.convertAvroSchemaToStructType(readerSchema))
         .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
 >>>>>>> 03e634e21f (Include hoodie metafields when reading parquet files in Precommit validators)
   }
