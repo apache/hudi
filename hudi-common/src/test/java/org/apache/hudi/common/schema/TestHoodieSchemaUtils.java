@@ -1774,4 +1774,47 @@ public class TestHoodieSchemaUtils {
     HoodieSchema prunedSchema = HoodieSchemaUtils.pruneDataSchema(dataSchema, dataSchema, mandatoryFields);
     assertEquals(customLogicalType, prunedSchema.getProp(logicalTypeKey));
   }
+
+  @Test
+  void testLogicalTypesRetainedAfterPruneWithNestedRecords() {
+    final String logicalTypeKey = "logicalType";
+    final String customLogicalTypeRoot = "CustomLogicalTypeRoot";
+    final String customLogicalTypeNested = "CustomLogicalTypeNested";
+
+    // Create a nested record with logical type
+    HoodieSchema nestedRecord = HoodieSchema.createRecord("nested_record", "nested doc", null,
+        Arrays.asList(HoodieSchemaField.of("nested_col_0", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("nested_col_1", HoodieSchema.create(HoodieSchemaType.STRING))));
+    nestedRecord.addProp(logicalTypeKey, customLogicalTypeNested);
+
+    // Create root record containing the nested record with its own logical type
+    HoodieSchema dataSchema = HoodieSchema.createRecord("test", "test", null,
+        Arrays.asList(HoodieSchemaField.of("col_0", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("nested", nestedRecord),
+        HoodieSchemaField.of("col_1", HoodieSchema.create(HoodieSchemaType.STRING))));
+    dataSchema.addProp(logicalTypeKey, customLogicalTypeRoot);
+
+    Set<String> mandatoryFields = new HashSet<>(Collections.singleton("op"));
+
+    // Verify logical types are set on both root and nested records
+    assertEquals(customLogicalTypeRoot, dataSchema.getProp(logicalTypeKey));
+    HoodieSchema nestedFieldSchema = dataSchema.getFields().stream()
+        .filter(f -> f.name().equals("nested"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("nested field not found"))
+        .schema();
+    assertEquals(customLogicalTypeNested, nestedFieldSchema.getProp(logicalTypeKey));
+
+    // Prune the schema
+    HoodieSchema prunedSchema = HoodieSchemaUtils.pruneDataSchema(dataSchema, dataSchema, mandatoryFields);
+
+    // Verify logical types are retained on both root and nested records after pruning
+    assertEquals(customLogicalTypeRoot, prunedSchema.getProp(logicalTypeKey));
+    HoodieSchema prunedNestedFieldSchema = prunedSchema.getFields().stream()
+        .filter(f -> f.name().equals("nested"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("nested field not found in pruned schema"))
+        .schema();
+    assertEquals(customLogicalTypeNested, prunedNestedFieldSchema.getProp(logicalTypeKey));
+  }
 }
