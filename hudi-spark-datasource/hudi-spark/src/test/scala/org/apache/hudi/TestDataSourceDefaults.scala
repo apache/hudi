@@ -21,18 +21,18 @@ import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.testutils.{SchemaTestUtil, PreCombineTestUtils}
+import org.apache.hudi.common.testutils.{PreCombineTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.SparkDatasetTestUtils
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
@@ -53,7 +53,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   var internalRow: InternalRow = _
   val testStructName = "testStructName"
   val testNamespace = "testNamespace"
-  val encoder = sparkAdapter.getCatalystExpressionUtils.getEncoder(structType)
+  val encoder: ExpressionEncoder[_] = SparkDatasetTestUtils.getEncoder(structType)
 
   @BeforeEach def initialize(): Unit = {
     baseRecord = SchemaTestUtil

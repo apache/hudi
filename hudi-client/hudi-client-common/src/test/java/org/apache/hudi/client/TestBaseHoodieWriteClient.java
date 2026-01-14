@@ -53,7 +53,7 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultHadoopConf;
 import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -172,7 +172,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
           HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), enableComplexKeyGeneratorValidation);
     }
     metaClient = HoodieTestUtils.init(
-        HoodieTestUtils.getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+        HoodieTestUtils.getDefaultHadoopConf(), basePath, getTableType(), tableProperties);
     HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withProperties(writeProperties);
@@ -201,7 +201,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     public TestWriteClient(HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table, Option<EmbeddedTimelineService> timelineService,
                            BaseHoodieTableServiceClient<String, String, String> tableServiceClient) {
-      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null);
+      super(new HoodieLocalEngineContext(getDefaultHadoopConf()), writeConfig, timelineService, null);
       this.table = table;
       this.tableServiceClient = tableServiceClient;
     }
@@ -233,10 +233,6 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
       // Ensure the returned table has the correct metaClient
       when(table.getMetaClient()).thenReturn(metaClient);
       return table;
-    }
-
-    @Override
-    protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
     }
 
     @Override
