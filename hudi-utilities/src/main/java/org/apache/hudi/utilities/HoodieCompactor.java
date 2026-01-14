@@ -38,20 +38,18 @@ import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionS
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+@Slf4j
 public class HoodieCompactor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
@@ -196,7 +194,7 @@ public class HoodieCompactor {
     if (ret != 0) {
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret);
     }
-    LOG.info("Success to run compaction for " + cfg.tableName);
+    log.info("Success to run compaction for {}", cfg.tableName);
     jsc.stop();
   }
 
@@ -204,29 +202,29 @@ public class HoodieCompactor {
     this.fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
-    LOG.info(cfg.toString());
+    log.info(cfg.toString());
 
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
-          LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          log.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
           Option<String> instantTime = doSchedule(jsc);
           int result = instantTime.isPresent() ? 0 : -1;
           if (result == 0) {
-            LOG.info("The schedule instant time is " + instantTime.get());
+            log.info("The schedule instant time is {}", instantTime.get());
           }
           return result;
         }
         case SCHEDULE_AND_EXECUTE: {
-          LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          log.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
           return doScheduleAndCompact(jsc);
         }
         case EXECUTE: {
-          LOG.info("Running Mode: [" + EXECUTE + "]; Do compaction");
+          log.info("Running Mode: [" + EXECUTE + "]; Do compaction");
           return doCompact(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
           return -1;
         }
       }
@@ -235,7 +233,7 @@ public class HoodieCompactor {
   }
 
   private Integer doScheduleAndCompact(JavaSparkContext jsc) throws Exception {
-    LOG.info("Step 1: Do schedule");
+    log.info("Step 1: Do schedule");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<String> instantTime = Option.empty();
 
@@ -243,20 +241,20 @@ public class HoodieCompactor {
       Option<HoodieInstant> staleInstant = TableServiceUtils.findStaleInflightInstant(
           metaClient, HoodieTimeline.COMPACTION_ACTION, cfg.maxProcessingTimeMs);
       if (staleInstant.isPresent()) {
-        LOG.info("Found failed compaction instant at : " + staleInstant.get() + "; Will rollback the failed compaction and re-trigger again.");
+        log.info("Found failed compaction instant at : {}; Will rollback the failed compaction and re-trigger again.", staleInstant.get());
         instantTime = Option.of(staleInstant.get().requestedTime());
       }
     }
 
     instantTime = instantTime.isPresent() ? instantTime : doSchedule(jsc);
     if (!instantTime.isPresent()) {
-      LOG.error("Couldn't do schedule");
+      log.error("Couldn't do schedule");
       return -1;
     }
     cfg.compactionInstantTime = instantTime.get();
 
-    LOG.info("The schedule instant time is {}", instantTime.get());
-    LOG.info("Step 2: Do compaction");
+    log.info("The schedule instant time is {}", instantTime.get());
+    log.info("Step 2: Do compaction");
 
     return doCompact(jsc);
   }
@@ -278,7 +276,7 @@ public class HoodieCompactor {
     } else {
       schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
     }
-    LOG.info("Schema --> : " + schemaStr);
+    log.info("Schema --> : {}", schemaStr);
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
              UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
@@ -289,10 +287,9 @@ public class HoodieCompactor {
         Option<HoodieInstant> firstCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
           cfg.compactionInstantTime = firstCompactionInstant.get().requestedTime();
-          LOG.info("Found the earliest scheduled compaction instant which will be executed: "
-              + cfg.compactionInstantTime);
+          log.info("Found the earliest scheduled compaction instant which will be executed: {}", cfg.compactionInstantTime);
         } else {
-          LOG.info("There is no scheduled compaction in the table.");
+          log.info("There is no scheduled compaction in the table.");
           return 0;
         }
       }

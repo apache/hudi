@@ -25,13 +25,12 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -45,9 +44,8 @@ import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCal
 /**
  * Kafka implementation of {@link HoodieWriteCommitCallback}.
  */
+@Slf4j
 public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitKafkaCallback.class);
 
   private final HoodieConfig hoodieConfig;
   private final String bootstrapServers;
@@ -66,9 +64,9 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     try (KafkaProducer<String, String> producer = createProducer(hoodieConfig)) {
       ProducerRecord<String, String> record = buildProducerRecord(hoodieConfig, callbackMsg);
       producer.send(record).get();
-      LOG.info("Send callback message succeed");
+      log.info("Send callback message succeed");
     } catch (Exception e) {
-      LOG.error("Send kafka callback msg failed : ", e);
+      log.error("Send kafka callback msg failed : ", e);
     }
   }
 
@@ -94,8 +92,8 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     kafkaProducerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
         "org.apache.kafka.common.serialization.StringSerializer");
 
-    LOG.debug("Callback kafka producer init with configs: "
-        + HoodieWriteCommitCallbackUtil.convertToJsonString(kafkaProducerProps));
+    log.debug("Callback kafka producer init with configs: {}",
+        HoodieWriteCommitCallbackUtil.convertToJsonString(kafkaProducerProps));
     return new KafkaProducer<String, String>(kafkaProducerProps);
   }
 
@@ -138,11 +136,11 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     @Override
     public void onCompletion(RecordMetadata metadata, Exception exception) {
       if (null != metadata) {
-        LOG.info("message offset={} partition={} timestamp={} topic={}",
+        log.info("message offset={} partition={} timestamp={} topic={}",
                 metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic());
       }
       if (null != exception) {
-        LOG.error("Send kafka callback msg failed : ", exception);
+        log.error("Send kafka callback msg failed: ", exception);
       }
     }
   }
