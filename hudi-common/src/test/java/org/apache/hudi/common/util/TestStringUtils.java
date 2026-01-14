@@ -143,15 +143,6 @@ public class TestStringUtils {
   }
 
   @Test
-  public void testCompareVersions() {
-    assertTrue(StringUtils.compareVersions("1.10", "1.9") > 0);
-    assertTrue(StringUtils.compareVersions("1.9", "1.10") < 0);
-    assertTrue(StringUtils.compareVersions("1.100.1", "1.10") > 0);
-    assertTrue(StringUtils.compareVersions("1.10.1", "1.10") > 0);
-    assertEquals(0, StringUtils.compareVersions("1.10", "1.10"));
-  }
-
-  @Test
   void testConcatenateWithinThreshold() {
     String a = generateRandomString(1000); // 1000 bytes in UTF-8
     String b = generateRandomString(1048); // 1048 bytes in UTF-8

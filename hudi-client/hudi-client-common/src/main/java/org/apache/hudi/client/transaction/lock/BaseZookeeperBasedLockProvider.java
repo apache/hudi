@@ -24,12 +24,12 @@ import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.retry.BoundedExponentialBackoffRetry;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +63,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   protected final String zkBasePath;
   protected final String lockKey;
 
-  public BaseZookeeperBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
+  public BaseZookeeperBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     zkBasePath = getZkBasePath(lockConfiguration);

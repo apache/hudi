@@ -26,12 +26,12 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
 import org.apache.curator.test.TestingServer;
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -57,6 +57,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIME
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.lock.LockProvider.BASE_PATH_CONFIG_KEY;
 
 public class TestZookeeperBasedLockProvider {
 
@@ -97,7 +98,7 @@ public class TestZookeeperBasedLockProvider {
 
     Properties propsWithTableInfo = (Properties) properties.clone();
     propsWithTableInfo.setProperty(
-        HoodieCommonConfig.BASE_PATH.key(), "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
+        BASE_PATH_CONFIG_KEY, "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
     propsWithTableInfo.setProperty(
         HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
     zkConfWithTableBasePathTableName = new LockConfiguration(propsWithTableInfo);
@@ -107,7 +108,7 @@ public class TestZookeeperBasedLockProvider {
     zkConfWithZkBasePathAndLockKeyLock = new LockConfiguration(properties);
 
     properties.setProperty(
-        HoodieCommonConfig.BASE_PATH.key(), "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
+        BASE_PATH_CONFIG_KEY, "s3://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
     properties.setProperty(
         HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
     zkConfWithZkBasePathLockKeyTableInfo = new LockConfiguration(properties);
@@ -137,7 +138,7 @@ public class TestZookeeperBasedLockProvider {
   void testAcquireLock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
     BaseZookeeperBasedLockProvider zookeeperLP = (BaseZookeeperBasedLockProvider) ReflectionUtils.loadClass(
         lockProviderClass.getName(),
-        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+        new Class<?>[] {LockConfiguration.class, Configuration.class},
         new Object[] {lockConfig, null});
     Assertions.assertTrue(zookeeperLP.tryLock(zkConfWithZkBasePathAndLockKeyLock.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
@@ -158,7 +159,7 @@ public class TestZookeeperBasedLockProvider {
     try {
       ReflectionUtils.loadClass(
           lockProviderClass.getName(),
-          new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+          new Class<?>[] {LockConfiguration.class, Configuration.class},
           new Object[] {lockConfig, null});
     } catch (Exception e) {
       ex = e;

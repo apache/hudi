@@ -26,13 +26,13 @@ import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.LockNotGrantedException;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
@@ -77,7 +77,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   protected final String dynamoDBPartitionKey;
   protected volatile LockItem lock;
 
-  protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
+  protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final Configuration conf, DynamoDbClient dynamoDB) {
     if (dynamoDB == null) {
       dynamoDB = getDynamoDBClient();
     }

@@ -21,8 +21,8 @@ package org.apache.hudi.aws.transaction.lock;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
-import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -40,7 +40,7 @@ public class DynamoDBBasedLockProvider extends DynamoDBBasedLockProviderBase {
     this(lockConfiguration, conf, null);
   }
 
-  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
+  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, DynamoDbClient dynamoDB) {
     super(lockConfiguration, conf, dynamoDB);
   }
 

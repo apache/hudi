@@ -21,18 +21,17 @@ package org.apache.hudi.aws.transaction.integ;
 import org.apache.hudi.aws.transaction.lock.DynamoDBBasedImplicitPartitionKeyLockProvider;
 import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider;
 import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProviderBase;
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
-import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -90,7 +89,7 @@ public class ITTestDynamoDBBasedLockProvider {
     // For the newly added implicit partition key DDB lock provider, it can derive the partition key from
     // hudi table base path and hudi table name. These properties are available in lockConfig as of today.
     implicitPartKeyLpProps.setProperty(
-        HoodieCommonConfig.BASE_PATH.key(),
+        LockProvider.BASE_PATH_CONFIG_KEY,
         "gs://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
     implicitPartKeyLpProps.setProperty(
         HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
@@ -102,7 +101,7 @@ public class ITTestDynamoDBBasedLockProvider {
 
     // Missing either base path or hoodie table name is a bad config for implicit partition key lock provider.
     TypedProperties missingBasePath = new TypedProperties(implicitPartKeyLpProps);
-    missingBasePath.remove(HoodieCommonConfig.BASE_PATH.key());
+    missingBasePath.remove(LockProvider.BASE_PATH_CONFIG_KEY);
     IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH = new LockConfiguration(missingBasePath);
 
     TypedProperties missingTableName = new TypedProperties(implicitPartKeyLpProps);
@@ -147,7 +146,7 @@ public class ITTestDynamoDBBasedLockProvider {
     try {
       ReflectionUtils.loadClass(
           lockProviderClass.getName(),
-          new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+          new Class<?>[] {LockConfiguration.class, Configuration.class, DynamoDbClient.class},
           lockConfig, null, dynamoDb);
     } catch (Exception ex) {
       e = ex;
@@ -173,7 +172,7 @@ public class ITTestDynamoDBBasedLockProvider {
     lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
     DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
         lockProviderClass.getName(),
-        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Class<?>[] {LockConfiguration.class, Configuration.class, DynamoDbClient.class},
         new Object[] {lockConfig, null, dynamoDb});
 
     // Also validate the partition key is properly constructed.
@@ -187,7 +186,7 @@ public class ITTestDynamoDBBasedLockProvider {
       }
     } else if (lockProviderClass.equals(DynamoDBBasedImplicitPartitionKeyLockProvider.class)) {
       String tableName = (String) lockConfig.getConfig().get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
-      String basePath = (String) lockConfig.getConfig().get(HoodieCommonConfig.BASE_PATH.key());
+      String basePath = (String) lockConfig.getConfig().get(LockProvider.BASE_PATH_CONFIG_KEY);
       // Base path is constructed with prefix s3a, verify that for partition key calculation, s3a is replaced with s3
       Assertions.assertTrue(basePath.startsWith(SCHEME_S3A));
       // Verify base path only scheme partition key
@@ -207,7 +206,7 @@ public class ITTestDynamoDBBasedLockProvider {
     lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
     DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
         lockProviderClass.getName(),
-        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Class<?>[] {LockConfiguration.class, Configuration.class, DynamoDbClient.class},
         new Object[] {lockConfig, null, dynamoDb});
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     dynamoDbBasedLockProvider.unlock();
@@ -220,7 +219,7 @@ public class ITTestDynamoDBBasedLockProvider {
     lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
     DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
         lockProviderClass.getName(),
-        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Class<?>[] {LockConfiguration.class, Configuration.class, DynamoDbClient.class},
         new Object[] {lockConfig, null, dynamoDb});
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     Assertions.assertFalse(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
@@ -233,7 +232,7 @@ public class ITTestDynamoDBBasedLockProvider {
     lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
     DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
         lockProviderClass.getName(),
-        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Class<?>[] {LockConfiguration.class, Configuration.class, DynamoDbClient.class},
         new Object[] {lockConfig, null, dynamoDb});
     dynamoDbBasedLockProvider.unlock();
   }
