@@ -65,6 +65,8 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
+
 /**
  * Utility functions involving with parquet.
  */
@@ -228,7 +230,7 @@ public class ParquetUtils extends BaseFileUtils {
   @Override
   public Schema readAvroSchema(Configuration conf, Path parquetFilePath) {
     MessageType parquetSchema = readSchema(conf, parquetFilePath);
-    return new AvroSchemaConverter(conf).convert(parquetSchema);
+    return getAvroSchemaConverter(conf).convert(parquetSchema);
   }
 
   @Override

@@ -60,6 +60,10 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
 
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
+
   def createCatalystMetadataForMetaField: Metadata =
     new MetadataBuilder()
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
@@ -84,7 +88,7 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_2ExtendedSqlParser(spark, delegate)
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema): Option[ParquetFileFormat] = {
     Some(new Spark32LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 

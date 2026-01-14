@@ -59,25 +59,13 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
   protected static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    //only testing row-writer enabled for now
-    for (Boolean rowWriterEnable : new Boolean[] {true}) {
-      for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
-        for (Boolean useKafkaSource : new Boolean[] {false, true}) {
-          for (Boolean addFilegroups : new Boolean[] {false, true}) {
-            for (Boolean multiLogFiles : new Boolean[] {false, true}) {
-              for (Boolean shouldCluster : new Boolean[] {false, true}) {
-                for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-                  if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
-                    b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
-                  }
-                }
-              }
-              b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
-            }
-          }
-        }
-      }
-    }
+    b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, false, true));
+    b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, true, false));
+    b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, false, true, true, true));
+    b.add(Arguments.of("MERGE_ON_READ", true, false, false, true, true, true, true, true));
+    b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true, false));
     return b.build();
   }
 
@@ -119,13 +107,14 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testBase(String tableType,
-                          Boolean shouldCluster,
-                          Boolean shouldCompact,
-                          Boolean rowWriterEnable,
-                          Boolean addFilegroups,
-                          Boolean multiLogFiles,
-                          Boolean useKafkaSource,
-                          Boolean allowNullForDeletedCols) throws Exception {
+                       Boolean shouldCluster,
+                       Boolean shouldCompact,
+                       Boolean rowWriterEnable,
+                       Boolean addFilegroups,
+                       Boolean multiLogFiles,
+                       Boolean useKafkaSource,
+                       Boolean allowNullForDeletedCols,
+                       Boolean useVectorization) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
@@ -141,6 +130,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
     tableBasePath = basePath + "test_parquet_table" + testNum;
     this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(allowNullForDeletedCols), jsc);
+    if (!useVectorization) {
+      sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+    }
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();

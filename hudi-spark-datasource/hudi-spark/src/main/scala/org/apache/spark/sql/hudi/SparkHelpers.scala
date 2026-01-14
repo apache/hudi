@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.util.BaseFileUtils
 import org.apache.hudi.io.storage.{HoodieAvroParquetWriter, HoodieParquetConfig}
 import org.apache.parquet.avro.AvroSchemaConverter
+
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}
 

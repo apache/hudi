@@ -53,6 +53,8 @@ public class ReflectionUtils {
         return Class.forName(c);
       } catch (ClassNotFoundException e) {
         throw new HoodieException("Unable to load class", e);
+      } catch (NoClassDefFoundError e) {
+        throw new HoodieException("Unable to load class due to missing dependency", e);
       }
     });
   }
@@ -106,6 +108,15 @@ public class ReflectionUtils {
       return true;
     } catch (NoSuchMethodException e) {
       String message = "Unable to instantiate class " + clazz;
+      if (silenceWarning) {
+        LOG.debug(message, e);
+      } else {
+        LOG.warn(message, e);
+      }
+      return false;
+    } catch (HoodieException e) {
+      // Class cannot be loaded (e.g., ClassNotFoundException or NoClassDefFoundError)
+      String message = "Unable to load class " + clazz;
       if (silenceWarning) {
         LOG.debug(message, e);
       } else {
