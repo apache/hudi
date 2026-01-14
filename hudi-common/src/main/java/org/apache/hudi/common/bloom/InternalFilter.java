@@ -20,6 +20,9 @@ package org.apache.hudi.common.bloom;
 
 import org.apache.hudi.common.util.hash.Hash;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -42,6 +45,7 @@ import java.util.List;
  * @see Key The general behavior of a key
  * @see HashFunction A hash function
  */
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 abstract class InternalFilter {
   private static final int VERSION = -1; // negative to accommodate for old format
   /**
@@ -63,9 +67,6 @@ abstract class InternalFilter {
    * Type of hashing function to use.
    */
   protected int hashType;
-
-  protected InternalFilter() {
-  }
 
   /**
    * Constructor.

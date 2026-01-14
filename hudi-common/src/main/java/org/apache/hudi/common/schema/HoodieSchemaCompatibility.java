@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.schema;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.MissingSchemaFieldException;
@@ -45,11 +47,8 @@ import java.util.stream.Collectors;
  *   <li>Metadata field handling during schema checks</li>
  * </ul>
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HoodieSchemaCompatibility {
-
-  // Prevent instantiation
-  private HoodieSchemaCompatibility() {
-  }
 
   public static boolean areSchemasCompatible(HoodieSchema tableSchema, HoodieSchema writerSchema) {
     return HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(tableSchema, writerSchema, false).getType() == HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE;
