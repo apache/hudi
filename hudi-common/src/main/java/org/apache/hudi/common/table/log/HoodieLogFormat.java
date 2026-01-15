@@ -87,7 +87,7 @@ public interface HoodieLogFormat {
     // computed by inspecting the file system
     protected Integer logVersion;
     // file len of this log file
-    protected Long fileLen = 0L;
+    protected Long fileSize = 0L;
     // Location of the directory containing the log
     protected StoragePath parentPath;
     // Log File Write Token
@@ -113,7 +113,7 @@ public interface HoodieLogFormat {
         Integer logVersion,
         String logWriteToken,
         String suffix,
-        Long fileLen,
+        Long fileSize,
         Long sizeThreshold,
         LogFileCreationCallback fileCreationCallback,
         HoodieTableVersion tableVersion) throws IOException {
@@ -137,7 +137,7 @@ public interface HoodieLogFormat {
       this.suffix = suffix;
 
       // Defaults and logic
-      this.fileLen = fileLen != null ? fileLen : 0L;
+      this.fileSize = fileSize != null ? fileSize : 0L;
       this.sizeThreshold = sizeThreshold != null ? sizeThreshold : DEFAULT_SIZE_THRESHOLD;
       // Does nothing by default
       this.fileCreationCallback = fileCreationCallback != null ? fileCreationCallback : new LogFileCreationCallback() {};
@@ -178,7 +178,7 @@ public interface HoodieLogFormat {
       StoragePath logPath = new StoragePath(parentPath,
           FSUtils.makeLogFileName(this.logFileId, this.fileExtension, this.instantTime, this.logVersion, this.logWriteToken));
       log.info("HoodieLogFile on path {}", logPath);
-      this.logFile = new HoodieLogFile(logPath, this.fileLen);
+      this.logFile = new HoodieLogFile(logPath, this.fileSize);
     }
 
     /**
