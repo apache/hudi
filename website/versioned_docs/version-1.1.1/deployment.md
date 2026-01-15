@@ -6,19 +6,19 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-This section provides all the help you need to deploy and operate Hudi tables at scale. 
+This section provides all the help you need to deploy and operate Hudi tables at scale.
 Specifically, we will cover the following aspects.
 
- - [Deployment Model](#deploying) : How various Hudi components are deployed and managed.
- - [Upgrading Versions](#upgrading) : Picking up new releases of Hudi, guidelines and general best-practices.
- - [Downgrading Versions](#downgrading) : Reverting back to an older version of Hudi
- - [Migrating to Hudi](#migrating) : How to migrate your existing tables to Apache Hudi.
- 
+- [Deployment Model](#deploying) : How various Hudi components are deployed and managed.
+- [Upgrading Versions](#upgrading) : Picking up new releases of Hudi, guidelines and general best-practices.
+- [Downgrading Versions](#downgrading) : Reverting back to an older version of Hudi
+- [Migrating to Hudi](#migrating) : How to migrate your existing tables to Apache Hudi.
+
 ## Deploying
 
 All in all, Hudi deploys with no long running servers or additional infrastructure cost to your data lake. In fact, Hudi pioneered this model of building a transactional distributed storage layer
 using existing infrastructure and its heartening to see other systems adopting similar approaches as well. Hudi writing is done via Spark jobs (Hudi Streamer or custom Spark datasource jobs), deployed per standard Apache Spark [recommendations](https://spark.apache.org/docs/latest/cluster-overview).
-Querying Hudi tables happens via libraries installed into Apache Hive, Apache Spark or PrestoDB and hence no additional infrastructure is necessary. 
+Querying Hudi tables happens via libraries installed into Apache Hive, Apache Spark or PrestoDB and hence no additional infrastructure is necessary.
 
 A typical Hudi data ingestion can be achieved in 2 modes. In a single run mode, Hudi ingestion reads next batch of data, ingest them to Hudi table and exits. In continuous mode, Hudi ingestion runs as a long-running service executing ingestion in a loop.
 
@@ -26,18 +26,18 @@ With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting d
 
 ### Hudi Streamer
 
-[Hudi Streamer](hoodie_streaming_ingestion.md#hudi-streamer) is the standalone utility to incrementally pull upstream changes 
+[Hudi Streamer](hoodie_streaming_ingestion.md#hudi-streamer) is the standalone utility to incrementally pull upstream changes
 from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables.  It runs as a spark application in two modes.
 
 To use Hudi Streamer in Spark, the `hudi-utilities-slim-bundle` and Hudi Spark bundle are required, by adding
 `--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1` to the `spark-submit` command.
 
- - **Run Once Mode** : In this mode, Hudi Streamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](hoodie_streaming_ingestion.md#hudi-streamer) for running the spark application.
+- **Run Once Mode** : In this mode, Hudi Streamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](hoodie_streaming_ingestion.md#hudi-streamer) for running the spark application.
 
 Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.
 
-```java
-[hoodie]$ spark-submit \
+```shell
+spark-submit \
  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
  --master yarn \
  --deploy-mode cluster \
@@ -81,12 +81,12 @@ Here is an example invocation for reading from kafka topic in a single-run mode 
  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 ```
 
- - **Continuous Mode** :  Here, Hudi Streamer runs an infinite loop with each round performing one ingestion round as described in **Run Once Mode**. The frequency of data ingestion can be controlled by the configuration "--min-sync-interval-seconds". For Merge-On-Read tables, Compaction is run in asynchronous fashion concurrently with ingestion unless disabled by passing the flag "--disable-compaction". Every ingestion run triggers a compaction request asynchronously and this frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". As both ingestion and compaction is running in the same spark context, you can use resource allocation configuration in Hudi Streamer CLI such as ("--delta-sync-scheduling-weight", "--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare") to control executor allocation between ingestion and compaction.
+- **Continuous Mode** :  Here, Hudi Streamer runs an infinite loop with each round performing one ingestion round as described in **Run Once Mode**. The frequency of data ingestion can be controlled by the configuration "--min-sync-interval-seconds". For Merge-On-Read tables, Compaction is run in asynchronous fashion concurrently with ingestion unless disabled by passing the flag "--disable-compaction". Every ingestion run triggers a compaction request asynchronously and this frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". As both ingestion and compaction is running in the same spark context, you can use resource allocation configuration in Hudi Streamer CLI such as ("--delta-sync-scheduling-weight", "--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare") to control executor allocation between ingestion and compaction.
 
 Here is an example invocation for reading from kafka topic in a continuous mode and writing to Merge On Read table type in a yarn cluster.
 
-```java
-[hoodie]$ spark-submit \
+```shell
+spark-submit \
  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
  --master yarn \
  --deploy-mode cluster \
@@ -133,7 +133,7 @@ Here is an example invocation for reading from kafka topic in a continuous mode 
 
 ### Spark Datasource Writer Jobs
 
-As described in [Batch Writes](writing_data.md#spark-datasource-api), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
+As described in [Batch Writes](writing_data.md#spark-datasource-api), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits".
 
 Here is an example invocation using spark datasource
 
@@ -148,13 +148,13 @@ inputDF.write()
        .mode(SaveMode.Append)
        .save(basePath);
 ```
- 
-## Upgrading 
 
-New Hudi releases are listed on the [releases page](/releases/download), with detailed notes which list all the changes, with highlights in each release. 
+## Upgrading
+
+New Hudi releases are listed on the [releases page](/releases/download), with detailed notes which list all the changes, with highlights in each release.
 At the end of the day, Hudi is a storage system and with that comes a lot of responsibilities, which we take seriously. 
 
-As general guidelines, 
+As general guidelines,
 
  - We strive to keep all changes backwards compatible (i.e new code can read old data/timeline files) and when we cannot, we will provide upgrade/downgrade tools via the CLI
  - We cannot always guarantee forward compatibility (i.e old code being able to read data/timeline files written by a greater version). This is generally the norm, since no new features can be built otherwise.
@@ -175,10 +175,14 @@ following steps:
    0.x readers will continue to work; writers can also be readers and will continue to read both tv=6.
    a. Set `hoodie.write.auto.upgrade` to false.
    b. Set `hoodie.metadata.enable` to false.
+![upgrade1.0-1](/assets/images/upgrade-to-1.0/upgrade1.0-1.png)
 3. Upgrade table services to 1.x with tv=6, and resume operations.
+![upgrade1.0-2](/assets/images/upgrade-to-1.0/upgrade1.0-2.png)
 4. Upgrade all remaining readers to 1.x, with tv=6.
+![upgrade1.0-3](/assets/images/upgrade-to-1.0/upgrade1.0-3.png)
 5. Redeploy writers with tv=8; table services and readers will adapt/pick up tv=8 on the fly.
 6. Once all readers and writers are in 1.x, we are good to enable any new features, including metadata, with 1.x tables.
+![upgrade1.0-4](/assets/images/upgrade-to-1.0/upgrade1.0-4.png)
 
 During the upgrade, metadata table will not be updated and it will be behind the data table. It is important to note
 that metadata table will be updated only when the writer is upgraded to tv=8. So, even the readers should keep metadata
@@ -198,6 +202,7 @@ CLI to downgrade a table from a higher version to lower version. Let's consider 
 0.12.0, upgrade it to 0.13.0 and then downgrade it via Hudi CLI.
 
 Launch spark shell with Hudi 0.11.0 version.
+
 ```shell
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
@@ -207,6 +212,7 @@ spark-shell \
 ```
 
 Create a hudi table by using the scala script below.
+
 ```scala
 import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._

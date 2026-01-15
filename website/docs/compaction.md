@@ -220,6 +220,19 @@ spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,or
 Note, the `instant-time` parameter is now optional for the Hudi Compactor Utility. If using the utility without `--instant time`,
 the spark-submit will execute the earliest scheduled compaction on the Hudi timeline.
 
+##### Available Options
+
+The HoodieCompactor utility supports the following retry and timeout options (effective in `scheduleAndExecute` mode):
+
+| Option Name                    | Short Flag | Default | Description                                                                                                                                                                                                                                                                                            |
+|--------------------------------|------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--retry-last-failed-job`      | `-rc`      | `false` | When set to true, checks, rolls back, and executes the last failed compaction plan instead of planning a new compaction job directly. This is useful for recovering from previous failures.                                                                                                            |
+| `--job-max-processing-time-ms` | `-jt`      | `0`     | Maximum processing time in milliseconds before considering a compaction job as failed. If this time is exceeded and the job is still unfinished, Hudi will consider the job as failed and relaunch it (when used with `--retry-last-failed-job`). A value of 0 or negative disables the timeout check. |
+
+:::note
+These retry options are only effective when using `--mode scheduleAndExecute`. The `--retry-last-failed-job` option requires `--job-max-processing-time-ms` to be set to a positive value to detect stale inflight instants.
+:::
+
 #### Hudi CLI
 
 Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](cli.md#compactions)
@@ -251,6 +264,13 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--seq`                             | `LIFO`  (Optional)   | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan.                                                                                                          |
 | `--service`                         | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new compaction task in configured interval.                                                                                                                                                                                      |
 | `--min-compaction-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes.                                                                                                                                                                                                                                   |
+| `--retry`                           | `0` (Optional)       | Number of retries for compaction operation. Only effective in single-run mode (not service mode). Default is 0 (no retry).                                                                                                                                                                       |
+| `--retry-last-failed-job`           | `false` (Optional)   | Check and retry last failed compaction job if the inflight instant exceeds max processing time. Only effective in single-run mode. Requires `--job-max-processing-time-ms` to be set to a positive value.                                                                                        |
+| `--job-max-processing-time-ms`      | `0` (Optional)       | Maximum processing time in milliseconds before considering a compaction job as failed. Used with `--retry-last-failed-job`. Default 0 means no timeout check.                                                                                                                                    |
+
+:::note
+The retry options (`--retry`, `--retry-last-failed-job`, `--job-max-processing-time-ms`) are only effective in single-run mode, not in service mode. Service mode has implicit retry semantics via its continuous monitoring loop. A warning will be logged if `--retry-last-failed-job` is enabled but `--job-max-processing-time-ms` is not set to a positive value.
+:::
 
 ## Related Resources
 
