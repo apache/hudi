@@ -28,8 +28,8 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -50,6 +50,7 @@ import java.util.Objects;
 
 @Slf4j
 public class HoodieCompactor {
+
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
@@ -73,11 +74,12 @@ public class HoodieCompactor {
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
-      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(),  this.props);
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(), this.props);
     }
   }
 
   public static class Config implements Serializable {
+
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
@@ -207,7 +209,7 @@ public class HoodieCompactor {
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
-          log.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          log.info("Running Mode: [{}] Do schedule", SCHEDULE);
           Option<String> instantTime = doSchedule(jsc);
           int result = instantTime.isPresent() ? 0 : -1;
           if (result == 0) {
@@ -216,11 +218,11 @@ public class HoodieCompactor {
           return result;
         }
         case SCHEDULE_AND_EXECUTE: {
-          log.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          log.info("Running Mode: [{}]", SCHEDULE_AND_EXECUTE);
           return doScheduleAndCompact(jsc);
         }
         case EXECUTE: {
-          log.info("Running Mode: [" + EXECUTE + "]; Do compaction");
+          log.info("Running Mode: [{}]; Do compaction", EXECUTE);
           return doCompact(jsc);
         }
         default: {
@@ -279,7 +281,7 @@ public class HoodieCompactor {
     log.info("Schema --> : {}", schemaStr);
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+        UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -302,7 +304,7 @@ public class HoodieCompactor {
 
   private Option<String> doSchedule(JavaSparkContext jsc) {
     try (SparkRDDWriteClient client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
+        UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
 
       return client.scheduleCompaction(Option.empty());
     }
