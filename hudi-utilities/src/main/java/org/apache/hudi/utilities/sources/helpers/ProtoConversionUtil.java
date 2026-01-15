@@ -107,6 +107,7 @@ public class ProtoConversionUtil {
     return AvroSupport.convert(schema, message);
   }
 
+  // Configuration used when generating a schema for a proto class.
   @AllArgsConstructor
   @Getter
   public static class SchemaConfig {
@@ -443,7 +444,7 @@ public class ProtoConversionUtil {
           }
           // unsigned ints need to be casted to long
           if (tmpValue instanceof Integer) {
-            tmpValue = new Long((Integer) tmpValue);
+            tmpValue = Integer.toUnsignedLong((Integer) tmpValue);
           }
           return tmpValue;
         case MAP:

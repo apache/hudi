@@ -20,8 +20,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairPredicate;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializablePairPredicate;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -159,13 +159,13 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   @Override
   public <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func) {
     Function<V, W> uncheckedMapper = throwingMapWrapper(func);
-    return new HoodieListPairData<>(asStream().map(p -> Pair.of(p.getKey(), uncheckedMapper.apply(p.getValue()))), lazy);
+    return new HoodieListPairData<K, W>(asStream().map(p -> Pair.of(p.getKey(), uncheckedMapper.apply(p.getValue()))), lazy);
   }
 
   @Override
   public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
     Function<V, Iterator<W>> uncheckedMapper = throwingMapWrapper(func);
-    return new HoodieListPairData<>(asStream().flatMap(p -> {
+    return new HoodieListPairData<K, W>(asStream().flatMap(p -> {
       Iterator<W> mappedValuesIterator = uncheckedMapper.apply(p.getValue());
       Iterator<Pair<K, W>> mappedPairsIterator =
           new MappingIterator<>(mappedValuesIterator, w -> Pair.of(p.getKey(), w));
