@@ -448,7 +448,7 @@ This will give all changes that happened after the `read.start-commit` commit. T
 feature is that it now lets you author streaming pipelines on streaming or batch data source.
 
 ## Where To Go From Here?
-- **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
+- **Quick Start** : Read [Quick Start](/docs/1.0.2/flink-quick-start-guide#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](flink_tuning.md#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_tuning.md#table-options).
 - **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](ingestion_flink.md#cdc-ingestion), [Bulk Insert](ingestion_flink.md#bulk-insert), [Index Bootstrap](ingestion_flink.md#index-bootstrap), [Changelog Mode](ingestion_flink.md#changelog-mode) and [Append Mode](ingestion_flink.md#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](sql_dml.md#non-blocking-concurrency-control-experimental).
 - **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries.md#streaming-query) and [Incremental Query](sql_queries.md#incremental-query).

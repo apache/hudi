@@ -37,7 +37,7 @@ Choose Copy-on-write storage if :
 
 *   You are looking for a simple alternative, that replaces your existing parquet tables without any need for real-time data.
 *   Your current job is rewriting entire table/partition to deal with updates, while only a few files actually change in each partition.
-*   You are happy keeping things operationally simpler (no compaction etc), with the ingestion/write performance bound by the [parquet file size](configurations.md#hoodieparquetmaxfilesize) and the number of such files affected/dirtied by updates
+*   You are happy keeping things operationally simpler (no compaction etc), with the ingestion/write performance bound by the [parquet file size](/docs/1.0.0/configurations#hoodieparquetmaxfilesize) and the number of such files affected/dirtied by updates
 *   Your workload is fairly well-understood and does not have sudden bursts of large amount of update or inserts to older partitions. COW absorbs all the merging cost on the writer side and thus these sudden changes can clog up your ingestion and interfere with meeting normal mode ingest latency targets.
 
 Choose merge-on-read storage if :

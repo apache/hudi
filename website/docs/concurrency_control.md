@@ -209,8 +209,8 @@ With this model users don't need to spin up different spark jobs and manage the 
 In this model, the following are the guarantees on [write operations](write_operations.md) to expect:
 
 * *UPSERT Guarantee*: The target table will NEVER show duplicates.
-* *INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](configurations.md#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations.md#hoodiecombinebeforeinsert), is enabled.
-* *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](configurations.md#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations.md#hoodiecombinebeforeinsert), is enabled.
+* *INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](/docs/configurations#hoodiecombinebeforeinsert), is enabled.
+* *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](/docs/configurations#hoodiecombinebeforeinsert), is enabled.
 * *INCREMENTAL QUERY Guarantee*: Data consumption and checkpoints are NEVER out of order.
 
 ## Full-on Multi-writer + Async table services
@@ -260,7 +260,7 @@ Multi writing using OCC allows multiple writers to concurrently write and atomic
 
 To improve the concurrency control, the [0.13.0 release](https://hudi.apache.org/releases/release-0.13.0#early-conflict-detection-for-multi-writer) introduced a new feature, early conflict detection in OCC, to detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using Hudi's marker mechanism. Hudi can now stop a conflicting writer much earlier because of the early conflict detection and release computing resources necessary to cluster, improving resource utilization.
 
-By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](configurations.md#Write-Configurations-advanced-configs) page for all relevant configs).
+By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](/docs/configurations#Write-Configurations-advanced-configs) page for all relevant configs).
 :::note
 Early conflict Detection in OCC is an **EXPERIMENTAL** feature
 :::

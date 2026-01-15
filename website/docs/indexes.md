@@ -212,7 +212,7 @@ for more details. All these, support the index types mentioned [above](#addition
 #### Flink based configs
 
 For Flink DataStream and Flink SQL, Bucket index and Flink state index are supported.
-Following are the basic configs that control the indexing behavior. Please refer [the Flink configurations](configurations.md#Flink-Options-advanced-configs) for advanced configs.
+Following are the basic configs that control the indexing behavior. Please refer [the Flink configurations](/docs/configurations#Flink-Options-advanced-configs) for advanced configs.
 
 | Config Name                | Default                | Description                                                                                                                                                                                                                             |
 |----------------------------|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

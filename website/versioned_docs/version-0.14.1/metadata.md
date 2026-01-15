@@ -7,7 +7,7 @@ keywords: [ hudi, metadata, S3 file listings]
 
 Database indices contain auxiliary data structures to quickly locate records needed, without reading unnecessary data 
 from storage. Given that Hudi’s design has been heavily optimized for handling mutable change streams, with different 
-write patterns, Hudi considers [indexing](#indexing) as an integral part of its design and has uniquely supported 
+write patterns, Hudi considers [indexing](/docs/0.14.1/metadata#indexing) as an integral part of its design and has uniquely supported 
 [indexing capabilities](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) from its inception, to speed 
 up upserts on the [Data Lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/). While Hudi's indices has benefited writers for fast upserts and deletes, Hudi's metadata table 
 aims to tap these benefits more generally for both the readers and writers. The metadata table implemented as a single 
@@ -106,7 +106,7 @@ Following are the Spark based basic configs that are needed to enable metadata a
 The metadata table with synchronous updates and metadata-table-based file listing are enabled by default.
 There are prerequisite configurations and steps in [Deployment considerations](#deployment-considerations-for-metadata-table) to
 safely use this feature.  The metadata table and related file listing functionality can still be turned off by setting
-[`hoodie.metadata.enable`](configurations.md#hoodiemetadataenable) to `false`. The 
+[`hoodie.metadata.enable`](/docs/0.14.1/configurations#hoodiemetadataenable) to `false`. The 
 [multi-modal index](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi) are 
 disabled by default and can be enabled in write side explicitly using the above configs.
 
@@ -156,7 +156,7 @@ for more details on each model. This section only highlights how to safely enabl
 
 ### Deployment Model A: Single writer with inline table services
 
-In [Model A](concurrency_control.md#model-a-single-writer-with-inline-table-services), after setting [`hoodie.metadata.enable`](configurations.md#hoodiemetadataenable) to `true`, restarting
+In [Model A](concurrency_control.md#model-a-single-writer-with-inline-table-services), after setting [`hoodie.metadata.enable`](/docs/0.14.1/configurations#hoodiemetadataenable) to `true`, restarting
 the single writer is sufficient to safely enable metadata table.
 
 ### Deployment Model B: Single writer with async table services

@@ -85,7 +85,7 @@ Here are the basic configs relevant to the write operations types mentioned abov
 ## Writing path
 The following is an inside look on the Hudi write path and the sequence of events that occur during a write.
 
-1. [Deduping](configurations.md#hoodiecombinebeforeinsert)
+1. [Deduping](/docs/0.15.0/configurations#hoodiecombinebeforeinsert)
    1. First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
 2. [Index Lookup](indexing.md)
    1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.

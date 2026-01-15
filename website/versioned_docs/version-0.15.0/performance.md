@@ -14,12 +14,12 @@ column statistics etc. Even on some cloud data stores, there is often cost to li
 
 Here are some ways to efficiently manage the storage of your Hudi tables.
 
-- The [small file handling feature](configurations/#hoodieparquetsmallfilelimit) in Hudi, profiles incoming workload
+- The [small file handling feature](/docs/0.15.0/configurations/#hoodieparquetsmallfilelimit) in Hudi, profiles incoming workload
   and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.
-- Cleaner can be [configured](configurations.md#hoodiecleanercommitsretained) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
-- User can also tune the size of the [base/parquet file](configurations.md#hoodieparquetmaxfilesize), [log files](configurations.md#hoodielogfilemaxsize) & expected [compression ratio](configurations.md#hoodieparquetcompressionratio),
+- Cleaner can be [configured](/docs/0.15.0/configurations#hoodiecleanercommitsretained) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
+- User can also tune the size of the [base/parquet file](/docs/0.15.0/configurations#hoodieparquetmaxfilesize), [log files](/docs/0.15.0/configurations#hoodielogfilemaxsize) & expected [compression ratio](/docs/0.15.0/configurations#hoodieparquetcompressionratio),
   such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.
-- Intelligently tuning the [bulk insert parallelism](configurations.md#hoodiebulkinsertshuffleparallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
+- Intelligently tuning the [bulk insert parallelism](/docs/0.15.0/configurations#hoodiebulkinsertshuffleparallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
   once created cannot be changed without re-clustering the table. Writes will simply expand given file groups with new updates/inserts as explained before.
 - For workloads with heavy updates, the [merge-on-read table](concepts.md#merge-on-read-table) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
 

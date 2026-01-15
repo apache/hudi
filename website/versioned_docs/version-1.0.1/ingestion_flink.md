@@ -37,7 +37,7 @@ frequent `file handle` switching.
 :::note  
 The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism will affect the number of small files.
 In theory, the parallelism of `bulk_insert` is the number of `bucket`s (In particular, when each bucket writes to maximum file size, it
-will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](configurations.md#writebucket_assigntasks).
+will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](/docs/1.0.1/configurations#writebucket_assigntasks).
 :::
 
 #### Options
@@ -45,7 +45,7 @@ will rollover to the new file handle. Finally, `the number of files` >= [`write.
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `write.operation` | `true` | `upsert` | Setting as `bulk_insert` to open this function  |
-| `write.tasks`  |  `false`  | `4` | The parallelism of `bulk_insert`, `the number of files` >= [`write.bucket_assign.tasks`](configurations.md#writebucket_assigntasks) |
+| `write.tasks`  |  `false`  | `4` | The parallelism of `bulk_insert`, `the number of files` >= [`write.bucket_assign.tasks`](/docs/1.0.1/configurations#writebucket_assigntasks) |
 | `write.bulk_insert.shuffle_input` | `false` | `true` | Whether to shuffle data according to the input field before writing. Enabling this option will reduce the number of small files, but there may be a risk of data skew |
 | `write.bulk_insert.sort_input` | `false`  | `true` | Whether to sort data according to the input field before writing. Enabling this option will reduce the number of small files when a write task writes multiple partitions |
 | `write.sort.memory` | `false` | `128` | Available managed memory of sort operator. default  `128` MB |
@@ -101,7 +101,7 @@ Batch (Snapshot) read still merge all the intermediate changes, regardless of wh
 :::note
 After setting `changelog.enable` as `true`, the retention of changelog records are only best effort: the asynchronous compaction task will merge the changelog records into one record, so if the
 stream source does not consume timely, only the merged record for each key can be read after compaction. The solution is to reserve some buffer time for the reader by adjusting the compaction strategy, such as
-the compaction options: [`compaction.delta_commits`](#compaction) and [`compaction.delta_seconds`](#compaction).
+the compaction options: [`compaction.delta_commits`](/docs/1.0.1/ingestion_flink#compaction) and [`compaction.delta_seconds`](/docs/1.0.1/ingestion_flink#compaction).
 :::
 
 

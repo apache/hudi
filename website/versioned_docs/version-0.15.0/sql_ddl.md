@@ -389,7 +389,7 @@ Users can set table properties while creating a table. The important table prope
 #### Passing Lock Providers for Concurrent Writers
 
 Hudi requires a lock provider to support concurrent writers or asynchronous table services when using OCC
-and [NBCC](concurrency_control.md#non-blocking-concurrency-control) (Non-Blocking Concurrency Control)
+and [NBCC](/docs/0.15.0/concurrency_control#non-blocking-concurrency-control) (Non-Blocking Concurrency Control)
 concurrency mode. For NBCC mode, locking is only used to write the commit metadata file in the timeline. Writes are
 serialized by completion time. Users can pass these table properties into *TBLPROPERTIES* as well. Below is an example
 for a Zookeeper based configuration.

@@ -32,7 +32,7 @@ In these scenarios, it might be tempting to think of data inconsistencies/data l
 (examples [1](https://github.com/apache/hudi/blob/aea5bb6f0ab824247f5e3498762ad94f643a2cb6/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/IncrSourceHelper.java#L76), 
 [2](https://github.com/apache/hudi/blame/7a6543958368540d221ddc18e0c12b8d526b6859/hudi-hadoop-mr/src/main/java/org/apache/hudi/hadoop/utils/HoodieInputFormatUtils.java#L173)) in incremental queries to ensure that no data 
 is served beyond the point there is an inflight instant in its timeline, so no data loss or drop happens. This detection is made possible because Hudi writes first request a transaction on the timeline, before planning/executing
-the write, as explained in the [timeline](timeline.md#states) section.
+the write, as explained in the [timeline](/docs/1.0.0/timeline#states) section.
 
 In this case, on seeing C1’s inflight commit (publish to timeline is atomic), C2 data (which is > C1 in the timeline) is not served until C1 inflight transitions to a terminal state such as completed or marked as failed. 
 This [test](https://github.com/apache/hudi/blob/master/hudi-utilities/src/test/java/org/apache/hudi/utilities/sources/TestHoodieIncrSource.java#L137) demonstrates how Hudi incremental source stops proceeding until C1 completes. 

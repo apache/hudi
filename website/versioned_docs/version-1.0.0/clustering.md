@@ -93,7 +93,7 @@ update strategy.
 
 This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered
 and how many output file groups should the clustering produce. Note that these strategies are easily pluggable using the
-config [hoodie.clustering.plan.strategy.class](configurations.md#hoodieclusteringplanstrategyclass).
+config [hoodie.clustering.plan.strategy.class](/docs/1.0.0/configurations#hoodieclusteringplanstrategyclass).
 
 Different plan strategies are as follows:
 
@@ -133,7 +133,7 @@ dynamically expanding the buckets for bucket index datasets.
 
 After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
 based on sort columns and size. The strategy can be specified using the
-config [hoodie.clustering.execution.strategy.class](configurations/#hoodieclusteringexecutionstrategyclass). By
+config [hoodie.clustering.execution.strategy.class](/docs/1.0.0/configurations/#hoodieclusteringexecutionstrategyclass). By
 default, Hudi sorts the file groups in the plan by the specified columns, while meeting the configured target file
 sizes.
 
@@ -159,7 +159,7 @@ The available strategies are as follows:
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the config for update strategy - [`hoodie.clustering.updates.strategy`](configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
+the config for update strategy - [`hoodie.clustering.updates.strategy`](/docs/1.0.0/configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
 exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
 simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 

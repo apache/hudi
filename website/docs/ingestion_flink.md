@@ -38,7 +38,7 @@ frequent file‑handle switching.
 :::note
 The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism affects the number of small files.
 In theory, the parallelism of `bulk_insert` equals the number of buckets. (In particular, when each bucket writes to the maximum file size, it
-rolls over to a new file handle.) The final number of files is greater than or equal to [`write.bucket_assign.tasks`](configurations.md#writebucket_assigntasks).
+rolls over to a new file handle.) The final number of files is greater than or equal to [`write.bucket_assign.tasks`](/docs/configurations#writebucket_assigntasks).
 :::
 
 ### Options
