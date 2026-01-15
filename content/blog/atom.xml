@@ -12,10 +12,11 @@
         <id>https://hudi.apache.org/blog/2026/01/15/funding-circle</id>
         <link href="https://hudi.apache.org/blog/2026/01/15/funding-circle"/>
         <updated>2026-01-15T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[og]]></summary>
-        <content type="html"><![CDATA[<p><img decoding="async" loading="lazy" alt="og" src="https://hudi.apache.org/assets/images/01-hudi-sync-funding-circle-5e541fbef46383b1af3482fce37acccb.png" width="1999" height="969" class="img_ev3q"></p>
+        <summary type="html"><![CDATA[---]]></summary>
+        <content type="html"><![CDATA[<hr>
 <p><em>This post summarizes Funding Circle's presentation at the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=P29dfaxUdTU" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
 <hr>
+<p><img decoding="async" loading="lazy" alt="og" src="https://hudi.apache.org/assets/images/01-hudi-sync-funding-circle-5e541fbef46383b1af3482fce37acccb.png" width="1999" height="969" class="img_ev3q"></p>
 <p><a href="https://www.fundingcircle.com/" target="_blank" rel="noopener noreferrer" class="">Funding Circle</a> is a lending company focused on helping small and medium-sized businesses access the funding they need to grow. Their instant decisioning engine allows customers to complete loan applications in minutes and receive decisions in seconds. To date, the company has supported more than 135,000 businesses with over £15 billion in loans.</p>
 <p>In this community sync, Daniel Ford, Data Platform Engineer at Funding Circle, shared how his team built a modern data ingestion framework using Apache Hudi and the significant improvements they achieved.</p>
 <p>Funding Circle's lending capability relies on a broad and complex data platform. The goal of the platform is to make data easy to work with, enabling users to drive business decisions without requiring specialized data engineering knowledge. Developers should be able to build quickly, while data consumers should be able to find and use information without constantly seeking support.</p>
