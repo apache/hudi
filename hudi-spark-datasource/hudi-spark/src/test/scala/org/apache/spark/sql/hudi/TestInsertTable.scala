@@ -193,7 +193,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  ht string,
            |  ts long
            |) using hudi
-           | tblproperties (primaryKey = 'id')
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           |)
            | partitioned by (dt, ht)
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
@@ -520,7 +523,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                |) using hudi
                | tblproperties (
                |  type = '$tableType',
-               |  primaryKey = 'id'
+               |  primaryKey = 'id',
+               |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                | )
                | partitioned by (dt, hh)
           """.stripMargin
@@ -818,7 +822,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  |) using hudi
                  | tblproperties (
                  |  type = '$tableType',
-                 |  primaryKey = 'id'
+                 |  primaryKey = 'id',
+                 |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                  | )
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
@@ -1193,6 +1198,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
