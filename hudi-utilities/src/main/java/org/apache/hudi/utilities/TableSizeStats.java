@@ -137,6 +137,7 @@ public class TableSizeStats implements Serializable {
   }
 
   public static class Config implements Serializable {
+
     @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = false)
     public String basePath = null;
 
@@ -377,7 +378,7 @@ public class TableSizeStats implements Serializable {
         line = reader.readLine();
       }
     } catch (IOException ioe) {
-      log.error("Error reading in properties from dfs from file.{}", propsPath);
+      log.error("Error reading in properties from dfs from file. {}", propsPath);
       throw new HoodieIOException("Cannot read properties from dfs from file " + propsPath, ioe);
     }
     return filePaths;
@@ -389,7 +390,7 @@ public class TableSizeStats implements Serializable {
     if (cfg.endDate != null) {
       try {
         endDate = LocalDate.parse(cfg.endDate, DATE_FORMATTER);
-        log.info("Setting ending date to {}. ", endDate);
+        log.info("Setting ending date to {}.", endDate);
       } catch (DateTimeParseException dtpe) {
         throw new HoodieException("Unable to parse --end-date. ", dtpe);
       }
@@ -421,7 +422,7 @@ public class TableSizeStats implements Serializable {
       throw new HoodieException("Starting date must be before ending date. Start Date: " + startDate + ", End Date: " + endDate);
     }
 
-    return startDate == null && endDate == null ? null : new LocalDate[]{startDate, endDate};
+    return startDate == null && endDate == null ? null : new LocalDate[] {startDate, endDate};
   }
 
   @Nullable

@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
@@ -132,15 +131,14 @@ public class HiveIncrementalPuller {
       incrementalSQL = scanner.useDelimiter("\\Z").next();
     }
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
-      LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
-          + ", which means its pulling from a different table. Fencing this from happening.");
+      log.error("Incremental SQL does not have {}.{}, which means its pulling from a different table. Fencing this from happening.",
+          config.sourceDb, config.sourceTable);
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
     }
     if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
-      LOG.error("Incremental SQL : " + incrementalSQL
-          + " does not contain `_hoodie_commit_time` > '%s'. Please add "
-          + "this clause for incremental to work properly.");
+      log.error("Incremental SQL : {} does not contain `_hoodie_commit_time` > '%s'. Please add this clause for incremental to work properly.",
+          incrementalSQL);
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which "
               + "means its not pulling incrementally");
@@ -198,7 +196,7 @@ public class HiveIncrementalPuller {
           this.connection.close();
         }
       } catch (SQLException e) {
-        LOG.error("Could not close the JDBC connection", e);
+        log.error("Could not close the JDBC connection", e);
       } finally {
         this.connection = null;
       }

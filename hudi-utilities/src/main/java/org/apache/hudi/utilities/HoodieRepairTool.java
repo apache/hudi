@@ -206,7 +206,7 @@ public class HoodieRepairTool {
           }
           return undoRepair();
         default:
-          log.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
           return false;
       }
     } catch (IOException e) {

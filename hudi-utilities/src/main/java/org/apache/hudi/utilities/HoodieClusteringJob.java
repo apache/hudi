@@ -343,7 +343,7 @@ public class HoodieClusteringJob {
       metaClient.reloadActiveTimeline();
       if (metaClient.getActiveTimeline().filterInflightsAndRequested()
           .containsInstant(instant.requestedTime())) {
-        LOG.info("Rolling back expired clustering instant {}", instant.requestedTime());
+        log.info("Rolling back expired clustering instant {}", instant.requestedTime());
         client.rollback(instant.requestedTime());
       }
     }
