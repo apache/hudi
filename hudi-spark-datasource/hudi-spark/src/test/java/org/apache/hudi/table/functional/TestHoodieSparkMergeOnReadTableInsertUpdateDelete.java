@@ -402,7 +402,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
           .withLogFileId(correctWriteStat.getFileId())
           .withInstantTime(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
-          .withFileLen(0L)
+          .withFileSize(0L)
           .withSizeThreshold(config.getLogFileMaxSize()).withStorage(hoodieStorage())
           .withLogWriteToken(fakeToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
