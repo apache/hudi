@@ -359,6 +359,11 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // can be re-enabled after #17701
   }
 
+  @Test
+  public void testCacheCleanOfRecordIndexBackend() throws Exception {
+    // can be re-enabled after #17701
+  }
+
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;

@@ -26,6 +26,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.StringData;
@@ -68,7 +69,7 @@ public class TestMinibatchBucketAssignFunction {
     // Create the MinibatchBucketAssignFunction
     MinibatchBucketAssignFunction function = new MinibatchBucketAssignFunction(conf);
     // Set up test harness
-    testHarness = new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(function), 1, 1, 0);
+    testHarness = new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(function, new OperatorID()), 1, 1, 0);
     testHarness.open();
   }
 

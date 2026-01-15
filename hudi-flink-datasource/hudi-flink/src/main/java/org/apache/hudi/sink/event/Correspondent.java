@@ -31,6 +31,9 @@ import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.util.SerializedValue;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Correspondent between a write task with the coordinator.
  */
@@ -73,6 +76,19 @@ public class Correspondent {
   }
 
   /**
+   * Sends a request to the coordinator to fetch the inFlight instants.
+   */
+  public Map<Long, String> requestInFlightInstants() {
+    try {
+      InFlightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+          new SerializedValue<>(InFlightInstantsRequest.getInstance())).get());
+      return response.getInFlightInstants();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
+  }
+
+  /**
    * A request for instant time with a given checkpoint id.
    */
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -97,6 +113,32 @@ public class Correspondent {
 
     public static InstantTimeResponse getInstance(String instant) {
       return new InstantTimeResponse(instant);
+    }
+  }
+
+  /**
+   * A request for the current in-flight instants in the coordinator.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class InFlightInstantsRequest implements CoordinationRequest {
+
+    public static InFlightInstantsRequest getInstance() {
+      return new InFlightInstantsRequest();
+    }
+  }
+
+  /**
+   * A response with instant time.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class InFlightInstantsResponse implements CoordinationResponse {
+
+    private final HashMap<Long, String> inFlightInstants;
+
+    public static InFlightInstantsResponse getInstance(HashMap<Long, String> inFlightInstants) {
+      return new InFlightInstantsResponse(inFlightInstants);
     }
   }
 }

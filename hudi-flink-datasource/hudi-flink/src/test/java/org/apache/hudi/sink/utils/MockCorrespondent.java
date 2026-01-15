@@ -22,6 +22,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.Correspondent;
 
+import java.util.Map;
+
 /**
  * A mock {@link Correspondent} that always return the latest instant.
  */
@@ -38,6 +40,16 @@ public class MockCorrespondent extends Correspondent {
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
+  }
+
+  @Override
+  public Map<Long, String> requestInFlightInstants() {
+    try {
+      InFlightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InFlightInstantsRequest.getInstance()).get());
+      return response.getInFlightInstants();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the inFlight instants from the coordinator", e);
     }
   }
 }

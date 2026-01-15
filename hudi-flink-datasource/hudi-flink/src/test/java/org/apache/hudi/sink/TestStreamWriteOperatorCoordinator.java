@@ -48,6 +48,7 @@ import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -64,6 +65,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -559,6 +561,45 @@ public class TestStreamWriteOperatorCoordinator {
       assertThat("Commits the instant with empty batch anyway", lastCompleted, is(instant));
       assertNull(coordinator.getEventBuffer());
     }
+  }
+
+  @Test
+  void testHandleInFlightInstantsRequest() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    coordinator = createCoordinator(conf, 2);
+
+    // Request an instant time to create an initial instant
+    String instant1 = requestInstantTime(1);
+    assertThat(instant1, not(is("")));
+
+    // Add some events to the buffer to simulate ongoing processing
+    OperatorEvent event1 = createOperatorEvent(0, 1, instant1, "par1", false, false, 0.1);
+    coordinator.handleEventFromOperator(0, event1);
+
+    // Request another instant time to create a second instant
+    String instant2 = requestInstantTime(2);
+    assertThat(instant2, not(is("")));
+
+    // Add more events for the second instant
+    OperatorEvent event2 = createOperatorEvent(1, 2, instant2, "par2", false, false, 0.2);
+    coordinator.handleEventFromOperator(1, event2);
+
+    // Call handleCoordinationRequest with InFlightInstantsRequest
+    CompletableFuture<CoordinationResponse> responseFuture =
+        coordinator.handleCoordinationRequest(Correspondent.InFlightInstantsRequest.getInstance());
+
+    // Unwrap and verify the response
+    Correspondent.InFlightInstantsResponse response =
+        CoordinationResponseSerDe.unwrap(responseFuture.get());
+
+    // Check that the response contains the expected checkpoint IDs and instant times
+    Map<Long, String> inFlightInstants = response.getInFlightInstants();
+    assertEquals(2, inFlightInstants.size());
+    assertTrue(inFlightInstants.containsKey(1L));
+    assertTrue(inFlightInstants.containsKey(2L));
+    assertEquals(instant1, inFlightInstants.get(1L));
+    assertEquals(instant2, inFlightInstants.get(2L));
   }
 
   // -------------------------------------------------------------------------

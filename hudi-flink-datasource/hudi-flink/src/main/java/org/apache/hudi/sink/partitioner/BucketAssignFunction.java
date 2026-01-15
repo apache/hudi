@@ -30,6 +30,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.IndexBackend;
 import org.apache.hudi.sink.partitioner.index.IndexBackendFactory;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -38,6 +39,7 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -90,6 +92,12 @@ public class BucketAssignFunction
   private final Configuration conf;
 
   private final boolean isChangingRecords;
+
+  /**
+   * Correspondent to fetch the infight instants from coordinator.
+   */
+  @Setter
+  protected transient Correspondent correspondent;
 
   /**
    * If the index is global, update the index for the old partition path
@@ -212,8 +220,7 @@ public class BucketAssignFunction
   public void notifyCheckpointComplete(long checkpointId) {
     // Refresh the table state when there are new commits.
     this.bucketAssigner.reload(checkpointId);
-    // todo #17700: check the file based mapping between checkpoint id and instant to get the latest successful instant.
-    this.indexBackend.onCommitSuccess(checkpointId - 1);
+    this.indexBackend.onCheckpointComplete(this.correspondent);
   }
 
   @Override

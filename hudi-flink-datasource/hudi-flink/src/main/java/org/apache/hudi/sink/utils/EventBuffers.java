@@ -28,6 +28,7 @@ import org.apache.flink.configuration.Configuration;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -122,6 +123,12 @@ public class EventBuffers implements Serializable {
 
   public Stream<Map.Entry<Long, Pair<String, WriteMetadataEvent[]>>> getEventBufferStream() {
     return this.eventBuffers.entrySet().stream();
+  }
+
+  public HashMap<Long, String> getAllCheckpointIdAndInstants() {
+    HashMap<Long, String> result = new HashMap<>(eventBuffers.size());
+    this.eventBuffers.forEach((k, v) -> result.put(k, v.getLeft()));
+    return result;
   }
 
   public void initNewEventBuffer(long checkpointId, String instantTime, int parallelism) {

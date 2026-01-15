@@ -21,6 +21,7 @@ package org.apache.hudi.sink.partitioner.index;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link RecordLevelIndexBackend}.
@@ -98,7 +102,11 @@ public class TestRecordLevelIndexBackend {
       assertEquals(newLocation, location);
 
       // previous instant commit success, clean
-      recordLevelIndexBackend.onCommitSuccess(1);
+      Correspondent correspondent = mock(Correspondent.class);
+      Map<Long, String> inFlightInstants = new HashMap<>();
+      inFlightInstants.put(1L, "0001");
+      when(correspondent.requestInFlightInstants()).thenReturn(inFlightInstants);
+      recordLevelIndexBackend.onCheckpointComplete(correspondent);
       assertEquals(1, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
       // the cache will only contain 'new_key', others are cleaned.
       location = recordLevelIndexBackend.getRecordIndexCache().get("new_key");

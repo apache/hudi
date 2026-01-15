@@ -171,7 +171,7 @@ public class StreamWriteOperatorCoordinator
   protected NonThrownExecutor executor;
 
   /**
-   * A single-thread executor to handle the instant time request.
+   * A single-thread executor to handle the coordination request from operators.
    */
   protected NonThrownExecutor instantRequestExecutor;
 
@@ -372,10 +372,19 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public CompletableFuture<CoordinationResponse> handleCoordinationRequest(CoordinationRequest request) {
+    if (request instanceof Correspondent.InstantTimeRequest) {
+      return handleInstantRequest((Correspondent.InstantTimeRequest) request);
+    }
+    if (request instanceof Correspondent.InFlightInstantsRequest) {
+      return handleInFlightInstantsRequest((Correspondent.InFlightInstantsRequest) request);
+    }
+    throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
+  }
+
+  private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
     CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
     instantRequestExecutor.execute(() -> {
-      Correspondent.InstantTimeRequest instantTimeRequest = (Correspondent.InstantTimeRequest) request;
-      long checkpointId = instantTimeRequest.getCheckpointId();
+      long checkpointId = request.getCheckpointId();
       Pair<String, WriteMetadataEvent[]> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
       final String instantTime;
       if (instantTimeAndEventBuffer == null) {
@@ -389,6 +398,11 @@ public class StreamWriteOperatorCoordinator
       response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
     }, "request instant time");
     return response;
+  }
+
+  private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InFlightInstantsRequest request) {
+    CoordinationResponse coordinationResponse = Correspondent.InFlightInstantsResponse.getInstance(eventBuffers.getAllCheckpointIdAndInstants());
+    return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(coordinationResponse));
   }
 
   // -------------------------------------------------------------------------

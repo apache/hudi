@@ -52,6 +52,7 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.partitioner.MiniBatchBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction;
@@ -65,7 +66,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -384,7 +384,8 @@ public class Pipelines {
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }
     } else {
-      DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType);
+      String writeOperatorUid = opUID("stream_write", conf);
+      DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType, writeOperatorUid);
       return bucketAssignStream
           // shuffle by fileId(bucket id)
           .keyBy(HoodieFlinkInternalRow::getFileId)
@@ -392,7 +393,7 @@ public class Pipelines {
               opName("stream_write", conf),
               TypeInformation.of(RowData.class),
               StreamWriteOperator.getFactory(conf, rowType))
-          .uid(opUID("stream_write", conf))
+          .uid(writeOperatorUid)
           .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
     }
   }
@@ -406,7 +407,7 @@ public class Pipelines {
    * @return A DataStream of HoodieFlinkInternalRow records with bucket assignments
    */
   private static DataStream<HoodieFlinkInternalRow> createBucketAssignStream(
-      DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType) {
+      DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType, String writeOperatorUid) {
     String assignerOperatorName = "bucket_assigner";
     if (OptionsResolver.isMiniBatchBucketAssign(conf)) {
       return inputStream
@@ -414,7 +415,7 @@ public class Pipelines {
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              new MiniBatchBucketAssignOperator(new MinibatchBucketAssignFunction(conf)))
+              new MiniBatchBucketAssignOperator(new MinibatchBucketAssignFunction(conf), OperatorIDGenerator.fromUid(writeOperatorUid)))
           .uid(opUID(assignerOperatorName, conf))
           .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     } else {
@@ -424,7 +425,7 @@ public class Pipelines {
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              new KeyedProcessOperator<>(new BucketAssignFunction(conf)))
+              new BucketAssignOperator(new BucketAssignFunction(conf), OperatorIDGenerator.fromUid(writeOperatorUid)))
           .uid(opUID(assignerOperatorName, conf))
           .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     }

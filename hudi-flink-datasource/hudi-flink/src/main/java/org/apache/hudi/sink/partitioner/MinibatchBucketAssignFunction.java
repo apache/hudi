@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.ProcessFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.MinibatchIndexBackend;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -145,6 +146,10 @@ public class MinibatchBucketAssignFunction
   public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
     // Process any remaining records in the buffer before checkpoint
     processBufferedRecords(outCollector);
+  }
+
+  public void setCorrespondent(Correspondent correspondent) {
+    this.delegateFunction.setCorrespondent(correspondent);
   }
 
   @Override

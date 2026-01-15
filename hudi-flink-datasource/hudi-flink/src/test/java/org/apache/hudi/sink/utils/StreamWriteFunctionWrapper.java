@@ -83,6 +83,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockOperatorCoordinatorContext coordinatorContext;
   @Getter
   private StreamWriteOperatorCoordinator coordinator;
+  private MockCorrespondent correspondent;
   private final MockStateInitializationContext stateInitializationContext;
   private final TreeMap<Long, byte[]> coordinatorStateStore;
   private final KeyedProcessFunction.Context context;
@@ -134,6 +135,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     // one function
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
+    this.correspondent = new MockCorrespondent(coordinator);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
     this.coordinatorStateStore = new TreeMap<>();
@@ -158,6 +160,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     bucketAssignerFunction = new BucketAssignFunction(conf);
     bucketAssignerFunction.setRuntimeContext(runtimeContext);
+    bucketAssignerFunction.setCorrespondent(correspondent);
     bucketAssignerFunction.open(conf);
     bucketAssignerFunction.initializeState(this.stateInitializationContext);
 
@@ -313,6 +316,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return this.writeFunction;
   }
 
+  @Override
+  public BucketAssignFunction getBucketAssignFunction() {
+    return this.bucketAssignerFunction;
+  }
+
   public boolean isKeyInState(HoodieKey hoodieKey) {
     return this.bucketAssignFunctionContext.isKeyInState(hoodieKey.getRecordKey());
   }
@@ -331,7 +339,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
+    writeFunction.setCorrespondent(correspondent);
   }
 
   // -------------------------------------------------------------------------
