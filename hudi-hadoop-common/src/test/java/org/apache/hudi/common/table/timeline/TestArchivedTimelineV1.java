@@ -846,10 +846,13 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   }
 
   private Writer buildWriter(StoragePath archiveFilePath, int logVersion) throws IOException {
-    return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
-        .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+    return HoodieLogFormatWriter.builder().withParentPath(archiveFilePath.getParent())
+        .withLogFileId(archiveFilePath.getName())
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
         .withLogVersion(logVersion)
-        .withStorage(metaClient.getStorage()).withInstantTime("").build();
+        .withStorage(metaClient.getStorage())
+        .withInstantTime("")
+        .build();
   }
 
   private void writeArchiveLog(Writer writer, List<IndexedRecord> records) throws Exception {

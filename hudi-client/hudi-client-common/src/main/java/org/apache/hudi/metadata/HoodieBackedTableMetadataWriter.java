@@ -1203,7 +1203,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             .withLogFileId(fileGroupFileId)
             .withInstantTime(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
-            .withFileLen(0L)
+            .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
             .withStorage(dataMetaClient.getStorage())
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)

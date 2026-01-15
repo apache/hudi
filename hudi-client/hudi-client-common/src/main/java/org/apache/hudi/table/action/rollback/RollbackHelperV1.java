@@ -312,7 +312,7 @@ public class RollbackHelperV1 extends RollbackHelper {
           // Let's emit markers for rollback as well. markers are emitted under rollback instant time.
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
 
-          HoodieLogFormat.WriterBuilder writerBuilder = HoodieLogFormat.newWriterBuilder()
+          HoodieLogFormatWriter.HoodieLogFormatWriterBuilder writerBuilder = HoodieLogFormatWriter.builder()
               .withParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
               .withLogFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
