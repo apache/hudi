@@ -205,7 +205,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           }
           LOG.info("Based on hoodie metadata from base path: {}, caching {} files under {}", baseDir, latestFiles.size(), folder);
           for (HoodieBaseFile lfile : latestFiles) {
-            hoodiePathCache.get(folder.toString()).add(new Path(lfile.getFullPath()));
+            hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }
 
           // accept the path, if its among the latest files.

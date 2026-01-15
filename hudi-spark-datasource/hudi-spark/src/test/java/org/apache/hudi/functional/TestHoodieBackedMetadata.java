@@ -860,7 +860,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         getHoodieSparkIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO).getFileReader(
-            table.getConfig(), new StoragePath(baseFile.getFullPath()));
+            table.getConfig(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (populateMetaFields) {
@@ -1497,7 +1497,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase) getHoodieSparkIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(table.getConfig(), new StoragePath(baseFile.getFullPath()));
+        .getFileReader(table.getConfig(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
       if (enableMetaFields) {

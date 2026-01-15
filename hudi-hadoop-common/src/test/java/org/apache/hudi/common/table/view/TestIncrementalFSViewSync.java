@@ -948,8 +948,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                   assertEquals(df1.getCommitTime(), df2.getCommitTime());
                   assertEquals(df1.getFileId(), df2.getFileId());
                   assertEquals(df1.getFileName(), df2.getFileName());
-                  assertEquals(Path.getPathWithoutSchemeAndAuthority(new Path(df1.getFullPath())),
-                      Path.getPathWithoutSchemeAndAuthority(new Path(df2.getFullPath())));
+                  assertEquals(Path.getPathWithoutSchemeAndAuthority(new Path(df1.getPath())),
+                      Path.getPathWithoutSchemeAndAuthority(new Path(df2.getPath())));
                 }
                 List<Path> logPaths1 = slice1.getLogFiles()
                     .map(lf -> Path.getPathWithoutSchemeAndAuthority(

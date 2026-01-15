@@ -249,7 +249,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         copyOfRecords.addAll(dataGen.generateInserts(commitTime1, 200));
 
         List<String> inputPaths = tableView.getLatestBaseFiles()
-            .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
@@ -270,7 +270,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
             + "when rolling back commit " + commitTime1 + " but are still remaining. Files: "
             + remainingFiles);
         inputPaths = tableView.getLatestBaseFiles()
-            .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         recordsRead =
             HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
@@ -290,7 +290,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         copyOfRecords.addAll(dataGen.generateInserts(commitTime2, 200));
 
         List<String> inputPaths = tableView.getLatestBaseFiles()
-            .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
@@ -320,7 +320,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
             getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
                 allFiles);
         inputPaths = tableView.getLatestBaseFiles()
-            .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         recordsRead =
             HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
@@ -446,7 +446,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
 
         List<String> inputPaths = tableView.getLatestBaseFiles()
-            .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
             basePath());
@@ -567,7 +567,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         copyOfRecords.addAll(dataGen.generateInserts(newCommitTime, 200));
 
         List<String> dataFiles = tableView.getLatestBaseFiles()
-            .map(baseFile -> new Path(baseFile.getFullPath()).getParent().toString())
+            .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
             .collect(Collectors.toList());
         List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), dataFiles,
             basePath());
@@ -849,7 +849,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
             allFiles);
     List<String> inputPaths = tableView.getLatestBaseFiles()
-        .map(hf -> new Path(hf.getFullPath()).getParent().toString())
+        .map(hf -> new Path(hf.getPath()).getParent().toString())
         .collect(Collectors.toList());
     List<GenericRecord> recordsRead =
         HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,

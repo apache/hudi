@@ -419,7 +419,7 @@ public class HoodieInputFormatUtils {
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
-      LOG.debug("Processing incremental hoodie file - {}", filteredFile.getFullPath());
+      LOG.debug("Processing incremental hoodie file - {}", filteredFile.getPath());
       filteredFile = refreshFileStatus(job.getConfiguration(), filteredFile);
       returns.add(getFileStatus(filteredFile));
     }
@@ -466,7 +466,7 @@ public class HoodieInputFormatUtils {
     try {
       if (dataFile.getFileSize() == 0) {
         HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
-        LOG.info("Refreshing file status {}", dataFile.getFullPath());
+        LOG.info("Refreshing file status {}", dataFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
             dataFile.getBootstrapBaseFile().orElse(null));
       }

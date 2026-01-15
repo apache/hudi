@@ -130,7 +130,7 @@ public class SparkValidatorUtils {
                                                           HoodieTable table,
                                                           StructType newStructTypeSchema) {
     List<String> committedFiles = partitionsAffected.stream()
-        .flatMap(partition -> table.getBaseFileOnlyView().getLatestBaseFiles(partition).map(BaseFile::getFullPath))
+        .flatMap(partition -> table.getBaseFileOnlyView().getLatestBaseFiles(partition).map(BaseFile::getPath))
         .collect(Collectors.toList());
 
     if (committedFiles.isEmpty()) {
@@ -174,7 +174,7 @@ public class SparkValidatorUtils {
         instantTime);
 
     List<String> newFiles = partitionsAffected.stream()
-        .flatMap(partition ->  fsView.getLatestBaseFiles(partition).map(BaseFile::getFullPath))
+        .flatMap(partition ->  fsView.getLatestBaseFiles(partition).map(BaseFile::getPath))
         .collect(Collectors.toList());
 
     if (newFiles.isEmpty()) {

@@ -298,7 +298,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     public Boolean call() throws Exception {
       Option<FileSlice> latestFileSlice = view.getLatestFileSlice(
           partitionFileIdPair.getLeft(), partitionFileIdPair.getRight());
-      String latestBaseFilePath = latestFileSlice.get().getBaseFile().get().getFullPath();
+      String latestBaseFilePath = latestFileSlice.get().getBaseFile().get().getPath();
       boolean result = latestFileSlice.isPresent() && latestBaseFilePath.startsWith(expectedBasePath)
           && expectedCommitTime.equals(FSUtils.getCommitTime(new Path(latestBaseFilePath).getName()));
       if (!result) {

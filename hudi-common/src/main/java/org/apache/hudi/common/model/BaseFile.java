@@ -45,7 +45,8 @@ public class BaseFile implements Serializable {
   @ToString.Exclude
   private transient StoragePathInfo pathInfo;
   @EqualsAndHashCode.Include
-  private final String fullPath;
+  // fullPath of baseFile
+  private final String path;
   @ToString.Exclude
   protected final String fileName;
   @Setter
@@ -53,7 +54,7 @@ public class BaseFile implements Serializable {
 
   public BaseFile(BaseFile dataFile) {
     this(dataFile.pathInfo,
-        dataFile.fullPath,
+        dataFile.path,
         dataFile.getFileName(),
         dataFile.getFileSize());
   }
@@ -73,7 +74,7 @@ public class BaseFile implements Serializable {
     if (pathInfo != null) {
       return pathInfo.getPath();
     }
-    return new StoragePath(fullPath);
+    return new StoragePath(path);
   }
 
   private static String getFileName(String fullPath) {

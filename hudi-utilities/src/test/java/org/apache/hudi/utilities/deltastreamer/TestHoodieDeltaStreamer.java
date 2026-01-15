@@ -1277,7 +1277,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             assertFalse(fileSlice.hasLogFiles(), "File slice should not have log files");
             Option<HoodieBaseFile> latestBaseFile = fileSlice.getBaseFile();
             assertTrue(latestBaseFile.isPresent(), "Base file should be present");
-            baseFilePaths.add(latestBaseFile.get().getFullPath());
+            baseFilePaths.add(latestBaseFile.get().getPath());
           }));
     }
     return baseFilePaths;
@@ -3972,7 +3972,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engContext, metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-    List<String> baseFiles = partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(HoodieBaseFile::getFullPath)).collect(Collectors.toList());
+    List<String> baseFiles = partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(HoodieBaseFile::getPath)).collect(Collectors.toList());
     // Verify each partition has one base file because parallelism is 1.
     assertEquals(baseFiles.size(), partitions.size());
     // Verify if each parquet file is actually sorted by sortColumn.
@@ -4025,7 +4025,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieTableFileSystemView fsView =
         FileSystemViewManager.createInMemoryFileSystemView(engContext, metaClient, HoodieMetadataConfig.newBuilder().enable(false).build());
-    List<String> baseFiles = fsView.getLatestBaseFiles("").map(HoodieBaseFile::getFullPath).collect(Collectors.toList());
+    List<String> baseFiles = fsView.getLatestBaseFiles("").map(HoodieBaseFile::getPath).collect(Collectors.toList());
     if (suffixRecordKey) {
       assertEquals(baseFiles.size(), outputParallelism);
     } else {

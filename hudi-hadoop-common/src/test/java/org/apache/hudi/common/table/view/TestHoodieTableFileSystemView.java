@@ -783,9 +783,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     if (testBootstrap) {
       assertTrue(bootstrapBaseFile.isPresent());
       assertEquals(HadoopFSUtils.toPath(srcFileStatus.getPath()),
-          new Path(bootstrapBaseFile.get().getFullPath()));
+          new Path(bootstrapBaseFile.get().getPath()));
       assertEquals(srcFileStatus.getPath(),
-          HadoopFSUtils.fromPath(new Path(bootstrapBaseFile.get().getFullPath())));
+          HadoopFSUtils.fromPath(new Path(bootstrapBaseFile.get().getPath())));
       assertEquals(srcFileStatus.getModificationTime(),
           new Long(bootstrapBaseFile.get().getPathInfo().getModificationTime()));
       assertEquals(srcFileStatus.getBlockSize(), new Long(bootstrapBaseFile.get().getPathInfo().getBlockSize()));
@@ -834,7 +834,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertTrue(fs.getBaseFile().isPresent());
       assertEquals(fs.getBaseFile().get().getCommitTime(), instantTime1);
       assertEquals(fs.getBaseFile().get().getFileId(), fileId);
-      assertEquals(fs.getBaseFile().get().getFullPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
+      assertEquals(fs.getBaseFile().get().getPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
       if (preTableVersion8) {
         // filtering is done using the log header.
         assertEquals(2, fs.getLogFiles().count());
@@ -850,7 +850,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertTrue(fs.getBaseFile().isPresent());
       assertEquals(fs.getBaseFile().get().getCommitTime(), instantTime1);
       assertEquals(fs.getBaseFile().get().getFileId(), fileId);
-      assertEquals(fs.getBaseFile().get().getFullPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
+      assertEquals(fs.getBaseFile().get().getPath(), "file:" + basePath + "/" + partitionPath + "/" + dataFileName);
       assertEquals(fs.getLogFiles().count(), 2);
     });
   }

@@ -162,7 +162,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     val filteredFileSlices = if (!StringUtils.isNullOrEmpty(pathGlobPattern)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
       fileSlices.filter(fileSlice => {
-        val path = toScalaOption(fileSlice.getBaseFile).map(_.getFullPath)
+        val path = toScalaOption(fileSlice.getBaseFile).map(_.getPath)
           .orElse(toScalaOption(fileSlice.getLatestLogFile).map(_.getPath.toString))
           .get
         globMatcher.matches(path)

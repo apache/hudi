@@ -169,7 +169,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
    */
   private Integer getFileSchemaHash(FileSlice fileSlice) {
     if (fileSlice.getBaseFile().isPresent()) {
-      String filePath = fileSlice.getBaseFile().get().getFullPath();
+      String filePath = fileSlice.getBaseFile().get().getPath();
       try {
         // Use centralized ParquetUtils method to read schema hash
         return ParquetUtils.readSchemaHash(

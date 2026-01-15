@@ -102,8 +102,8 @@ public class TestCleanActionExecutor {
     HoodieWriteConfig config = getCleanByCommitsConfig();
     String fileGroup = UUID.randomUUID() + "-0";
     HoodieBaseFile baseFile = new HoodieBaseFile(String.format("/tmp/base/%s_1-0-1_%s.parquet", fileGroup, "001"));
-    HoodieStorage localStorage = HoodieStorageUtils.getStorage(baseFile.getFullPath(), CONF);
-    StoragePath filePath = new StoragePath(baseFile.getFullPath());
+    HoodieStorage localStorage = HoodieStorageUtils.getStorage(baseFile.getPath(), CONF);
+    StoragePath filePath = new StoragePath(baseFile.getPath());
 
     if (failureType == CleanFailureType.TRUE_ON_DELETE) {
       when(storage.deleteFile(filePath)).thenReturn(true);
@@ -124,7 +124,7 @@ public class TestCleanActionExecutor {
     localStorage.create(filePath);
 
     Map<String, List<HoodieCleanFileInfo>> partitionCleanFileInfoMap = new HashMap<>();
-    List<HoodieCleanFileInfo> cleanFileInfos = Collections.singletonList(new HoodieCleanFileInfo(baseFile.getFullPath(), false));
+    List<HoodieCleanFileInfo> cleanFileInfos = Collections.singletonList(new HoodieCleanFileInfo(baseFile.getPath(), false));
     partitionCleanFileInfoMap.put(PARTITION1, cleanFileInfos);
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(earliestInstant, HoodieTimeline.COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), earliestInstantMinusThreeDays,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), Collections.emptyMap(), CleanPlanner.LATEST_CLEAN_PLAN_VERSION, partitionCleanFileInfoMap, Collections.emptyList(), Collections.emptyMap());

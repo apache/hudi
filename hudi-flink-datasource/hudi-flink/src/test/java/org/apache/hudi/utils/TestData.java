@@ -917,7 +917,7 @@ public class TestData {
 
       table.getBaseFileOnlyView().getLatestBaseFiles(partition)
           .forEach(baseFile -> {
-            String path = baseFile.getFullPath();
+            String path = baseFile.getPath();
             try {
               ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(new Path(path)).build();
               GenericRecord nextRecord = reader.read();

@@ -217,7 +217,7 @@ public class HoodieSnapshotExporter {
         .parallelize(partitions, partitions.size())
         .flatMap(partition -> fsView
             .getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp)
-            .map(HoodieBaseFile::getFullPath).iterator())
+            .map(HoodieBaseFile::getPath).iterator())
         .toLocalIterator();
 
     Dataset<Row> sourceDataset = SQLContext.getOrCreate(jsc.sc()).read().parquet(JavaScalaConverters.convertJavaIteratorToScalaIterator(exportingFilePaths).toSeq());
@@ -250,7 +250,7 @@ public class HoodieSnapshotExporter {
       // Only take latest version files <= latestCommit.
       List<Pair<String, String>> filePaths = fsView
           .getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp)
-          .map(f -> Pair.of(partition, f.getFullPath()))
+          .map(f -> Pair.of(partition, f.getPath()))
           .collect(Collectors.toList());
       // also need to copy over partition metadata
       HoodieStorage storage = HoodieStorageUtils.getStorage(cfg.sourceBasePath, storageConf);

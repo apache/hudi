@@ -411,9 +411,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
               && compareTimestamps(earliestInstant.requestedTime(), GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
-              deletePaths.add(new CleanFileInfo(hoodieDataFile.getFullPath(), false));
+              deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
               if (hoodieDataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
-                deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getFullPath(), true));
+                deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
             // clean the log files for the commits, which contain cdc log files in cdc scenario
@@ -506,9 +506,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     List<CleanFileInfo> cleanPaths = new ArrayList<>();
     if (nextSlice.getBaseFile().isPresent()) {
       HoodieBaseFile dataFile = nextSlice.getBaseFile().get();
-      cleanPaths.add(new CleanFileInfo(dataFile.getFullPath(), false));
+      cleanPaths.add(new CleanFileInfo(dataFile.getPath(), false));
       if (dataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
-        cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getFullPath(), true));
+        cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
 

@@ -842,7 +842,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     for (HoodieBaseFile file : files) {
       if (file.getFileName().contains(file1)) {
         assertEquals(commitTime3, file.getCommitTime(), "Existing file should be expanded");
-        records = fileUtils.readAvroRecords(storage, new StoragePath(file.getFullPath()));
+        records = fileUtils.readAvroRecords(storage, new StoragePath(file.getPath()));
         for (GenericRecord record : records) {
           String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           String recordCommitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
@@ -858,7 +858,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         assertEquals(0, keys2.size(), "All keys added in commit 2 must be updated in commit3 correctly");
       } else {
         assertEquals(commitTime3, file.getCommitTime(), "New file must be written for commit 3");
-        records = fileUtils.readAvroRecords(storage, new StoragePath(file.getFullPath()));
+        records = fileUtils.readAvroRecords(storage, new StoragePath(file.getPath()));
         for (GenericRecord record : records) {
           String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           assertEquals(commitTime3, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString(),
@@ -937,7 +937,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     int totalInserts = 0;
     for (HoodieBaseFile file : files) {
       assertEquals(commitTime3, file.getCommitTime(), "All files must be at commit 3");
-      totalInserts += fileUtils.readAvroRecords(storage, new StoragePath(file.getFullPath())).size();
+      totalInserts += fileUtils.readAvroRecords(storage, new StoragePath(file.getPath())).size();
     }
     assertEquals(340, totalInserts, "Total number of records must add up");
   }

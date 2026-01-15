@@ -130,7 +130,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         var baseFilePath = ""
         var baseFileSize = 0L
         if (fs.getBaseFile.isPresent) {
-          baseFilePath = fs.getBaseFile.get.getFullPath
+          baseFilePath = fs.getBaseFile.get.getPath
           baseFileSize = fs.getBaseFile.get.getFileSize
         }
         val numLogFiles = fs.getLogFiles.count()
@@ -164,7 +164,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         var baseFilePath = ""
         var baseFileSize = 0L
         if (fs.getBaseFile.isPresent) {
-          baseFilePath = fs.getBaseFile.get.getFullPath
+          baseFilePath = fs.getBaseFile.get.getPath
           baseFileSize = fs.getBaseFile.get.getFileSize
         }
         val numLogFiles = fs.getLogFiles.count()

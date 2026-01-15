@@ -84,7 +84,7 @@ public class BaseFileDTO {
 
     BaseFileDTO dto = new BaseFileDTO();
     dto.fileStatus = FileStatusDTO.fromStoragePathInfo(baseFile.getPathInfo());
-    dto.fullPath = baseFile.getFullPath();
+    dto.fullPath = baseFile.getPath();
     dto.fileLen = baseFile.getFileSize();
     if (baseFile instanceof HoodieBaseFile) {
       HoodieBaseFile hoodieBaseFile = (HoodieBaseFile) baseFile;
