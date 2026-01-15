@@ -59,7 +59,7 @@ public class TestMinibatchBucketAssignFunction {
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     // Set minibatch size to 3 for testing
-    conf.set(FlinkOptions.BUCKET_ASSIGN_MINIBATCH_SIZE, 3);
+    conf.set(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, 3);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
   }
 

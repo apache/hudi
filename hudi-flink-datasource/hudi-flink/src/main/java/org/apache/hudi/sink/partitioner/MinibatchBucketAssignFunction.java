@@ -75,7 +75,7 @@ public class MinibatchBucketAssignFunction
     this.delegateFunction = new BucketAssignFunction(conf);
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
-    this.miniBatchSize = conf.get(FlinkOptions.BUCKET_ASSIGN_MINIBATCH_SIZE);
+    this.miniBatchSize = conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE);
   }
 
   @Override

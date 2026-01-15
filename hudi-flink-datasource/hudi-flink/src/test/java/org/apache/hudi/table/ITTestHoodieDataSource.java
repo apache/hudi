@@ -2910,7 +2910,7 @@ public class ITTestHoodieDataSource {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name())
-        .option(FlinkOptions.BUCKET_ASSIGN_MINIBATCH_SIZE, bucketAssignMinibatchSize)
+        .option(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, bucketAssignMinibatchSize)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
         .end();
