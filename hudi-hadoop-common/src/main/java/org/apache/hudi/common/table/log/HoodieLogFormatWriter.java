@@ -67,12 +67,11 @@ public class HoodieLogFormatWriter extends HoodieLogFormat.Writer {
       Long sizeThreshold,
       LogFileCreationCallback fileCreationCallback,
       HoodieTableVersion tableVersion,
-      FSDataOutputStream outputStream,
       Short replication
   ) throws IOException {
     super(bufferSize, storage, parentPath, logFileId, fileExtension, instantTime, logVersion, logWriteToken,
         suffix, fileLen, sizeThreshold, fileCreationCallback, tableVersion);
-    this.outputStream = outputStream;
+    // outputStream is not initialized here, it will be lazily initialized in getOutputStream()
     this.replication = replication != null ? replication : storage.getDefaultReplication(logFile.getPath().getParent());
     addShutDownHook();
   }
