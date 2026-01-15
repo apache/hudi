@@ -93,7 +93,7 @@ update strategy.
 
 This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered
 and how many output file groups should the clustering produce. Note that these strategies are easily pluggable using the
-config [hoodie.clustering.plan.strategy.class](/docs/0.15.0/configurations#hoodieclusteringplanstrategyclass).
+config [hoodie.clustering.plan.strategy.class](configurations.md#hoodieclusteringplanstrategyclass).
 
 Different plan strategies are as follows:
 

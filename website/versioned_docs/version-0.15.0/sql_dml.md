@@ -25,7 +25,7 @@ SELECT <columns> FROM <source>;
 
 :::note Deprecations
 From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are deprecated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](/docs/0.15.0/configurations#hoodiedatasourceinsertduppolicy).
+To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](configurations.md#hoodiedatasourceinsertduppolicy).
 :::
 
 Examples: 
