@@ -281,6 +281,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10", "02"))
           .toDF("id", "name", "ts", "year", "month", "day")
 
+        // Need to set hoodie.write.complex.keygen.validation.enable to false since alter table command also writes to the table
+        spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=false")
+
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
@@ -288,6 +291,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -312,6 +316,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -345,6 +350,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
         }
+
+        spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=")
       }
     }
   }
@@ -358,6 +365,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         import spark.implicits._
         val df = Seq((1, "z3", "v1", "2021", "10", "01")).toDF("id", "name", "ts", "year", "month", "day")
 
+        // Need to set hoodie.write.complex.keygen.validation.enable to false since alter table command also writes to the table
+        spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=false")
+
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
@@ -365,6 +375,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -389,6 +400,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -429,6 +441,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         } else {
           checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
         }
+
+        spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=")
       }
     }
   }
