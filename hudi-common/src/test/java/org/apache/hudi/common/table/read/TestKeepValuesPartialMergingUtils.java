@@ -91,7 +91,7 @@ class TestKeepValuesPartialMergingUtils {
 
   @Test
   void testGetCachedFieldNameToIdMapping() {
-    Map<String, Integer> fieldNameToIdMapping = KeepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
+    Map<String, Integer> fieldNameToIdMapping = keepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
 
     assertNotNull(fieldNameToIdMapping);
     assertEquals(4, fieldNameToIdMapping.size());
@@ -101,13 +101,13 @@ class TestKeepValuesPartialMergingUtils {
     assertEquals(3, fieldNameToIdMapping.get("city"));
 
     // Test caching - should return the same map for the same schema
-    Map<String, Integer> cachedMapping = KeepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
+    Map<String, Integer> cachedMapping = keepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
     assertSame(fieldNameToIdMapping, cachedMapping);
   }
 
   @Test
   void testGetCachedMergedSchema() {
-    HoodieSchema mergedSchema = KeepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, fullSchema, readerSchema);
+    HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, fullSchema, readerSchema);
 
     assertNotNull(mergedSchema);
     assertEquals(4, mergedSchema.getFields().size());
@@ -117,7 +117,7 @@ class TestKeepValuesPartialMergingUtils {
     assertEquals("city", mergedSchema.getFields().get(3).name());
 
     // Test caching - should return the same schema for the same input
-    HoodieSchema cachedSchema = KeepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, fullSchema, readerSchema);
+    HoodieSchema cachedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, fullSchema, readerSchema);
     assertSame(mergedSchema, cachedSchema);
   }
 
@@ -133,7 +133,7 @@ class TestKeepValuesPartialMergingUtils {
     ));
     HoodieSchema reorderedSchema = HoodieSchema.fromAvroSchema(avroReorderedSchema);
 
-    HoodieSchema mergedSchema = KeepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, reorderedSchema, readerSchema);
+    HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, reorderedSchema, readerSchema);
 
     // Should follow the reader schema order
     assertEquals(4, mergedSchema.getFields().size());
@@ -316,7 +316,7 @@ class TestKeepValuesPartialMergingUtils {
     ));
     HoodieSchema schema2 = HoodieSchema.fromAvroSchema(avroSchema2);
 
-    HoodieSchema mergedSchema = KeepValuesPartialMergingUtils.getCachedMergedSchema(schema1, schema2, readerSchema);
+    HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(schema1, schema2, readerSchema);
 
     assertNotNull(mergedSchema);
     assertEquals(3, mergedSchema.getFields().size()); // id, name, age (city not in either schema)
@@ -342,7 +342,7 @@ class TestKeepValuesPartialMergingUtils {
     ));
     HoodieSchema schema2 = HoodieSchema.fromAvroSchema(avroSchema2);
 
-    HoodieSchema mergedSchema = KeepValuesPartialMergingUtils.getCachedMergedSchema(schema1, schema2, readerSchema);
+    HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(schema1, schema2, readerSchema);
     assertNotNull(mergedSchema);
     assertEquals(0, mergedSchema.getFields().size()); // No fields from reader schema are in either schema
   }

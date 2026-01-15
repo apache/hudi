@@ -26,7 +26,6 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
-import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,12 +39,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link org.apache.hudi.common.table.PartialUpdateMode#KEEP_VALUES} mode.
  */
 public class KeepValuesPartialMergingUtils<T> implements Serializable {
-  private static final long serialVersionUID = 1L;
-  static KeepValuesPartialMergingUtils INSTANCE = new KeepValuesPartialMergingUtils();
-  private static final Map<HoodieSchema, Map<String, Integer>>
-      FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
-  private static final Map<Pair<Pair<HoodieSchema, HoodieSchema>, HoodieSchema>, HoodieSchema>
-      MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
+  private final Map<HoodieSchema, Map<String, Integer>>
+      fieldNameToIdMappingCache = new ConcurrentHashMap<>();
+  private final Map<Pair<Pair<HoodieSchema, HoodieSchema>, HoodieSchema>, HoodieSchema>
+      mergedSchemaCache = new ConcurrentHashMap<>();
 
   /**
    * Merges records which can contain partial updates.
@@ -100,8 +97,8 @@ public class KeepValuesPartialMergingUtils<T> implements Serializable {
    * @param hoodieSchema Hoodie schema.
    * @return The field name to ID mapping.
    */
-  static Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema hoodieSchema) {
-    return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(hoodieSchema, schema -> {
+  Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema hoodieSchema) {
+    return fieldNameToIdMappingCache.computeIfAbsent(hoodieSchema, schema -> {
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
       for (HoodieSchemaField field : schema.getFields()) {
@@ -121,10 +118,10 @@ public class KeepValuesPartialMergingUtils<T> implements Serializable {
    * @param readerSchema Reader schema containing all the fields to read.
    * @return             The merged Avro schema.
    */
-  static HoodieSchema getCachedMergedSchema(HoodieSchema oldSchema,
-                                             HoodieSchema newSchema,
-                                             HoodieSchema readerSchema) {
-    return MERGED_SCHEMA_CACHE.computeIfAbsent(
+  HoodieSchema getCachedMergedSchema(HoodieSchema oldSchema,
+                                     HoodieSchema newSchema,
+                                     HoodieSchema readerSchema) {
+    return mergedSchemaCache.computeIfAbsent(
         Pair.of(Pair.of(oldSchema, newSchema), readerSchema), schemaPair -> {
           HoodieSchema schema1 = schemaPair.getLeft().getLeft();
           HoodieSchema schema2 = schemaPair.getLeft().getRight();
@@ -162,13 +159,5 @@ public class KeepValuesPartialMergingUtils<T> implements Serializable {
   @VisibleForTesting
   public static boolean isPartial(HoodieSchema schema, HoodieSchema mergedSchema) {
     return !schema.equals(mergedSchema);
-  }
-
-  /**
-   * Ensures that deserialization returns the singleton instance instead of creating a new object.
-   * This is important for maintaining the singleton pattern and ensuring that static caches are shared.
-   */
-  private Object readResolve() throws ObjectStreamException {
-    return INSTANCE;
   }
 }
