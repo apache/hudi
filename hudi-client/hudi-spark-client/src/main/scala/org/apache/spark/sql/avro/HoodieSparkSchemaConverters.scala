@@ -51,7 +51,10 @@ object HoodieSparkSchemaConverters {
     (result.dataType, result.nullable)
   }
 
-  def toHoodieType(catalystType: DataType, nullable: Boolean, recordName: String, nameSpace: String): HoodieSchema = {
+  def toHoodieType(catalystType: DataType,
+                   nullable: Boolean = false,
+                   recordName: String = "topLevelRecord",
+                   nameSpace: String = ""): HoodieSchema = {
     val schema = catalystType match {
       // Primitive types
       case BooleanType => HoodieSchema.create(HoodieSchemaType.BOOLEAN)
@@ -249,3 +252,5 @@ object HoodieSparkSchemaConverters {
       }
   }
 }
+
+private[avro] class IncompatibleSchemaException(msg: String, ex: Throwable = null) extends Exception(msg, ex)
