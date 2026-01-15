@@ -69,12 +69,12 @@ public class BufferedRecordMergerFactory {
         if (partialUpdateModeOpt.isEmpty()) {
           return new CommitTimeRecordMerger<>();
         }
-        return new CommitTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), props);
+        return new CommitTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), readerSchema, props);
       case EVENT_TIME_ORDERING:
         if (partialUpdateModeOpt.isEmpty()) {
           return new EventTimeRecordMerger<>(readerContext.getRecordContext());
         }
-        return new EventTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), props);
+        return new EventTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), readerSchema, props);
       default:
         if (payloadClasses.isPresent()) {
           if (payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
@@ -116,13 +116,16 @@ public class BufferedRecordMergerFactory {
   private static class CommitTimePartialRecordMerger<T> extends CommitTimeRecordMerger<T> {
     private final PartialUpdateHandler<T> partialUpdateHandler;
     private final RecordContext<T> recordContext;
+    private final HoodieSchema readerSchema;
 
     public CommitTimePartialRecordMerger(RecordContext<T> recordContext,
                                          PartialUpdateMode partialUpdateMode,
+                                         HoodieSchema readerSchema,
                                          TypedProperties props) {
       super();
       this.partialUpdateHandler = new PartialUpdateHandler<>(recordContext, partialUpdateMode, props);
       this.recordContext = recordContext;
+      this.readerSchema = readerSchema;
     }
 
     @Override
@@ -135,7 +138,7 @@ public class BufferedRecordMergerFactory {
             existingRecord,
             newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            newSchema);
+            readerSchema);
       }
       return Option.of(newRecord);
     }
@@ -149,7 +152,7 @@ public class BufferedRecordMergerFactory {
           olderRecord,
           newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          newSchema);
+          readerSchema);
       return newerRecord;
     }
   }
@@ -194,13 +197,16 @@ public class BufferedRecordMergerFactory {
   private static class EventTimePartialRecordMerger<T> extends EventTimeRecordMerger<T> {
     private final PartialUpdateHandler<T> partialUpdateHandler;
     private final RecordContext<T> recordContext;
+    private final HoodieSchema readerSchema;
 
     public EventTimePartialRecordMerger(RecordContext<T> recordContext,
                                         PartialUpdateMode partialUpdateMode,
+                                        HoodieSchema readerSchema,
                                         TypedProperties props) {
       super(recordContext);
       this.partialUpdateHandler = new PartialUpdateHandler<>(recordContext, partialUpdateMode, props);
       this.recordContext = recordContext;
+      this.readerSchema = readerSchema;
     }
 
     @Override
@@ -214,7 +220,7 @@ public class BufferedRecordMergerFactory {
             existingRecord,
             newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            newSchema);
+            readerSchema);
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
@@ -224,7 +230,7 @@ public class BufferedRecordMergerFactory {
             newRecord,
             recordContext.getSchemaFromBufferRecord(existingRecord),
             newSchema,
-            newSchema);
+            readerSchema);
         return Option.of(existingRecord);
       }
     }
@@ -246,7 +252,7 @@ public class BufferedRecordMergerFactory {
             newerRecord,
             recordContext.getSchemaFromBufferRecord(olderRecord),
             newSchema,
-            newSchema);
+            readerSchema);
         return olderRecord;
       }
 
@@ -255,7 +261,7 @@ public class BufferedRecordMergerFactory {
           olderRecord,
           newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          newSchema);
+          readerSchema);
       return newerRecord;
     }
   }

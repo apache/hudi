@@ -26,6 +26,8 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.io.ObjectStreamException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,7 +39,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Class to assist with merging two versions of the record that may contain partial updates using
  * {@link org.apache.hudi.common.table.PartialUpdateMode#KEEP_VALUES} mode.
  */
-public class KeepValuesPartialMergingUtils<T> {
+public class KeepValuesPartialMergingUtils<T> implements Serializable {
+  private static final long serialVersionUID = 1L;
   static KeepValuesPartialMergingUtils INSTANCE = new KeepValuesPartialMergingUtils();
   private static final Map<HoodieSchema, Map<String, Integer>>
       FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
@@ -159,5 +162,13 @@ public class KeepValuesPartialMergingUtils<T> {
   @VisibleForTesting
   public static boolean isPartial(HoodieSchema schema, HoodieSchema mergedSchema) {
     return !schema.equals(mergedSchema);
+  }
+
+  /**
+   * Ensures that deserialization returns the singleton instance instead of creating a new object.
+   * This is important for maintaining the singleton pattern and ensuring that static caches are shared.
+   */
+  private Object readResolve() throws ObjectStreamException {
+    return INSTANCE;
   }
 }
