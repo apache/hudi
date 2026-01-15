@@ -108,7 +108,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
         val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10","02"))
           .toDF("id", "name", "ts", "year", "month", "day")
 
-        // Need to set hoodie.write.complex.keygen.validation.enable to false since truncate command table fails
+        // Need to set hoodie.write.complex.keygen.validation.enable to false since truncate table command also writes to the table
         spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=false")
         df.write.format("hudi")
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
