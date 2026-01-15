@@ -137,7 +137,7 @@ public class DirectWriteMarkers extends WriteMarkers {
         List<String> result = new ArrayList<>();
         while (!candidatesDirs.isEmpty()) {
           Path path = candidatesDirs.remove();
-          FileSystem fileSystem = HadoopFSUtils.getFs(path, serializedConf.get());
+          FileSystem fileSystem = FSUtils.getFs(path, serializedConf.get());
           RemoteIterator<FileStatus> itr = fileSystem.listStatusIterator(path);
           while (itr.hasNext()) {
             FileStatus status = itr.next();
