@@ -864,6 +864,12 @@
         <version>${fasterxml.version}</version>
       </dependency>
 
+      <dependency>
+        <groupId>com.fasterxml.jackson.module</groupId>
+        <artifactId>jackson-module-afterburner</artifactId>
+        <version>${fasterxml.jackson.databind.version}</version>
+      </dependency>
+
       <!-- Glassfish -->
       <dependency>
         <groupId>org.glassfish.jersey.core</groupId>
@@ -959,6 +965,12 @@
         <groupId>com.lancedb</groupId>
         <artifactId>${lance.spark.artifact}</artifactId>
         <version>${lance.spark.connector.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.lancedb</groupId>
+            <artifactId>lance-core</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <!-- Apache Arrow -->
       <dependency>
