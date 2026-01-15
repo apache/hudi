@@ -27,7 +27,7 @@ const allPosts = ((ctx) => {
       },
       []
   );
-})(require.context('../../../blog', true));
+})(require.context('../../../blog', true, /\.mdx?$/));
 
 const sortedPosts = allPosts.sort((a,b) => new Date(a.metadata.date).getTime() - new Date(b.metadata.date).getTime()).reverse();
 const latestPosts = [...sortedPosts.slice(0, 10)];

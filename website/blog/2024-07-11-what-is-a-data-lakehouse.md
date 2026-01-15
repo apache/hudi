@@ -1,7 +1,7 @@
 ---
 title: "What is a Data Lakehouse & How does it Work?"
 excerpt: "Explains the concept of the lakehouse architecture"
-author: Dipankar Mazumdar
+authors: [dipankar-mazumdar]
 category: blog
 image: /assets/images/blog/dlh_1200.png
 tags:

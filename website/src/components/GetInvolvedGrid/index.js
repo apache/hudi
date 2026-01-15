@@ -46,10 +46,18 @@ const GetInvolvedGrid = () => {
       ),
     },
     {
-      title: 'For proposing large features, changes',
+      title: 'Engage on social platforms',
       content: (
         <>
-          Start a RFC. Instructions <a href="/contribute/rfc-process">here</a>.
+          Hudi community is on <a href='https://www.linkedin.com/company/apache-hudi/'>LinkedIn</a>, <a href='https://x.com/apachehudi'>X (Twitter)</a>, <a href='https://www.youtube.com/@apachehudi'>YouTube</a>. Follow us for latest updates!
+        </>
+      ),
+    },
+    {
+      title: 'Join office hours',
+      content: (
+        <>
+          Join office hours for live chat on Hudi questions. See <a href="/community/office_hours">the schedule and meeting links</a>.
         </>
       ),
     },
@@ -58,6 +66,14 @@ const GetInvolvedGrid = () => {
       content: (
         <>
           <a href="/community/syncs">Community sync</a> and <a href="/contribute/developer-sync-call">Dev Sync</a>.
+        </>
+      ),
+    },
+    {
+      title: 'For proposing large features, changes',
+      content: (
+        <>
+          Start a RFC. Instructions <a href="/contribute/rfc-process">here</a>.
         </>
       ),
     },
@@ -78,7 +94,7 @@ const GetInvolvedGrid = () => {
       <div className={styles.getInvloved}>
         <Title primaryText="Get Involved"/>
         <div className={styles.subTitle}>
-          There are several ways to get in touch with the Hudi community.
+          Join the Hudi community—here's how.
         </div>
       </div>
       <div className={styles.container}>

@@ -1,7 +1,7 @@
 ---
 title: "Introducing Secondary Index in Apache Hudi Lakehouse Platform"
 excerpt: "What's & How's of Secondary indexes in Hudi 1.0"
-author: Dipankar Mazumdar, Aditya Goenka
+authors: [dipankar-mazumdar, aditya-goenka]
 category: blog
 image: /assets/images/blog/sec-thumb.jpg
 tags:

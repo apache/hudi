@@ -1,7 +1,7 @@
 ---
 title: "Hudi’s Automatic File Sizing Delivers Unmatched Performance"
 excerpt: "Explains how Hudi handles small files during ingestion and its benefits"
-author: Aditya Goenka
+authors: [aditya-goenka]
 category: blog
 image: /assets/images/blog/2024-06-07-apache-hudi-a-deep-dive-with-python-code-examples.png
 tags:

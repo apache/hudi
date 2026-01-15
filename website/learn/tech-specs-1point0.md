@@ -320,13 +320,13 @@ Below is the list of properties that are stored in this file.
 | hoodie.table.version             | Table format version                                                                                                      |
 | hoodie.table.recordkey.fields    | Comma-separated list of fields used for record keys. This property is optional.                                           |
 | hoodie.table.partition.fields    | Comma-separated list of fields used for partitioning the table. This property is optional.                                |
-| hoodie.table.precombine.field    | Field used to break ties when two records have same value for the record key. This property is optional.                  |
+| hoodie.table.ordering.fields     | Fields used to break ties when two records have same value for the record key. This property is optional.                 |
 | hoodie.timeline.layout.version   | Version of timeline used by the table.                                                                                    |
 | hoodie.table.checksum            | Table checksum used to guard against partial writes on HDFS. The value is auto-generated.                                 |
 | hoodie.table.metadata.partitions | Comma-separated list of metadata partitions that can be used by reader, e.g. _files_, _column\_stats_                     |
 | hoodie.table.index.defs.path     | Absolute path where the index definitions are stored for various indexes created by the users. This property is optional. |
 
-The record key, precombine and partition fields are optional but play an important role in modeling data stored in Hudi
+The record key, ordering and partition fields are optional but play an important role in modeling data stored in Hudi
 table.
 
 | Field               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |

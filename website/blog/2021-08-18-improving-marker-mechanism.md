@@ -1,7 +1,7 @@
 ---
 title: "Improving Marker Mechanism in Apache Hudi"
 excerpt: "We introduce a new marker mechanism leveraging the timeline server to address performance bottlenecks due to rate-limiting on cloud storage like AWS S3."
-author: yihua
+authors: [ethan-guo]
 category: blog
 image: /assets/images/blog/marker-mechanism/timeline-server-based-marker-mechanism.png
 tags:

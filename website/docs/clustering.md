@@ -238,6 +238,19 @@ The appropriate mode can be specified using `-mode` or `-m` option. There are th
 2. `execute`: Execute a clustering plan at a particular instant. If no instant-time is specified, HoodieClusteringJob will execute for the earliest instant on the Hudi timeline.
 3. `scheduleAndExecute`: Make a clustering plan first and execute that plan immediately.
 
+#### Available Options
+
+In addition to the basic mode options, HoodieClusteringJob supports the following retry and timeout options (effective in `scheduleAndExecute` mode):
+
+| Option Name                    | Short Flag | Default | Description                                                                                                                                                                                                                                                                                            |
+|--------------------------------|------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--retry-last-failed-job`      | `-rc`      | `false` | When set to true, checks, rolls back, and executes the last failed clustering plan instead of planning a new clustering job directly. This is useful for recovering from previous failures.                                                                                                            |
+| `--job-max-processing-time-ms` | `-jt`      | `0`     | Maximum processing time in milliseconds before considering a clustering job as failed. If this time is exceeded and the job is still unfinished, Hudi will consider the job as failed and relaunch it (when used with `--retry-last-failed-job`). A value of 0 or negative disables the timeout check. |
+
+:::note
+These retry options are only effective when using `--mode scheduleAndExecute`. The `--retry-last-failed-job` option requires `--job-max-processing-time-ms` to be set to a positive value to detect stale inflight instants.
+:::
+
 Note that to run this job while the original writer is still running, please enable multi-writing:
 
 ```properties
@@ -341,6 +354,31 @@ def structuredStreamingWithClustering(): Unit = {
    Await.result(f1, Duration.Inf)
 }
 ```
+
+## Flink Offline Clustering
+
+Offline clustering for Flink needs to be submitted as a Flink job on the command line. The program entry is in `hudi-flink-bundle.jar`: `org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob`
+
+```bash
+# Command line
+./bin/flink run -c org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob lib/hudi-flink-bundle.jar --path hdfs://xxx:9000/table
+```
+
+### Options
+
+| Option Name                         | Default              | Description                                                                                                                                                                                                                                                                                     |
+|-------------------------------------|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--path`                            | `n/a **(Required)**` | The path where the target table is stored on Hudi                                                                                                                                                                                                                                               |
+| `--schedule`                        | `false` (Optional)   | Whether to execute the operation of scheduling clustering plan. When the write process is still writing, turning on this parameter has a risk of losing data. Therefore, it must be ensured that there are no write tasks currently writing data to this table when this parameter is turned on |
+| `--service`                         | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new clustering task in configured interval.                                                                                                                                                                                     |
+| `--min-clustering-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes.                                                                                                                                                                                                                                  |
+| `--retry`                           | `0` (Optional)       | Number of retries for clustering operation. Only effective in single-run mode (not service mode). Default is 0 (no retry).                                                                                                                                                                      |
+| `--retry-last-failed-job`           | `false` (Optional)   | Check and retry last failed clustering job if the inflight instant exceeds max processing time. Only effective in single-run mode. Requires `--job-max-processing-time-ms` to be set to a positive value.                                                                                       |
+| `--job-max-processing-time-ms`      | `0` (Optional)       | Maximum processing time in milliseconds before considering a clustering job as failed. Used with `--retry-last-failed-job`. Default 0 means no timeout check.                                                                                                                                   |
+
+:::note
+The retry options (`--retry`, `--retry-last-failed-job`, `--job-max-processing-time-ms`) are only effective in single-run mode, not in service mode. Service mode has implicit retry semantics via its continuous monitoring loop. A warning will be logged if `--retry-last-failed-job` is enabled but `--job-max-processing-time-ms` is not set to a positive value.
+:::
 
 ## Java Client
 

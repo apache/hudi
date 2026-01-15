@@ -1,7 +1,7 @@
 ---
 title: "Concurrency Control in Open Data Lakehouse"
 excerpt: "How various concurrency control techniques works in Apache Hudi, Apache Iceberg & Delta Lake"
-author: Dipankar Mazumdar
+authors: [dipankar-mazumdar]
 category: blog
 image: /assets/images/blog/concurrency_control/concurrency_blog_thumb.jpg
 tags:

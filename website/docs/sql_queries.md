@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
 TBLPROPERTIES (
   type = 'mor',
   primaryKey = 'id',
-  precombineField = 'ts',
+  orderingFields = 'ts',
   recordMergeMode = 'EVENT_TIME_ORDERING'
 )
 LOCATION 'file:///tmp/hudi_table_merge_mode/';
@@ -225,7 +225,7 @@ INSERT INTO hudi_table_merge_mode VALUES (1, 'a1', 900, 20.0);
 SELECT id, name, ts, price FROM hudi_table_merge_mode;
 ```
 
-With `EVENT_TIME_ORDERING`, the record with the larger event time (specified via `precombineField` ordering field) overwrites the record with the
+With `EVENT_TIME_ORDERING`, the record with the larger event time (specified via `orderingFields`) overwrites the record with the
 smaller event time on the same key, regardless of transaction time. 
 
 ### Snapshot Query with Custom Merge Mode
@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS hudi_table_merge_mode_custom (
 TBLPROPERTIES (
   type = 'mor',
   primaryKey = 'id',
-  precombineField = 'ts',
+  orderingFields = 'ts',
   recordMergeMode = 'CUSTOM',
   'hoodie.datasource.write.payload.class' = 'org.apache.hudi.common.model.PartialUpdateAvroPayload'
 )

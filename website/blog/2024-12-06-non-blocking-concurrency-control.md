@@ -1,7 +1,7 @@
 ---
 title: "Introducing Hudi's Non-blocking Concurrency Control for streaming, high-frequency writes"
 excerpt: "Announcing the Non-blocking Concurrency Control in Apache Hudi"
-author: Danny Chan
+authors: [danny-chan]
 category: blog
 image: /assets/images/blog/non-blocking-concurrency-control/lsm_archive_timeline.png
 tags:

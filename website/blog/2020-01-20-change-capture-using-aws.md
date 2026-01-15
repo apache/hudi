@@ -1,7 +1,7 @@
 ---
 title: "Change Capture Using AWS Database Migration Service and Hudi"
 excerpt: "In this blog, we will build an end-end solution for capturing changes from a MySQL instance running on AWS RDS to a Hudi table on S3, using capabilities in the Hudi 0.5.1 release."
-author: vinoth
+authors: [vinoth-chandar]
 category: blog
 image: /assets/images/blog/change-capture-architecture.png
 tags:

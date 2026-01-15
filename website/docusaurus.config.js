@@ -536,6 +536,7 @@ module.exports = {
           },
         },
         blog: {
+          authorsMapPath: "authors.yml",
           editUrl: "https://github.com/apache/hudi/edit/asf-site/website/blog/",
           blogTitle: "Blogs List Page",
           blogSidebarCount: 0,
@@ -545,7 +546,8 @@ module.exports = {
            * *DO NOT* include a trailing slash.
            */
           routeBasePath: "blog",
-          include: ["*.md", "*.mdx"],
+          include: ["**/*.md", "**/*.mdx"],
+          exclude: ["**/authors.yml"],
           postsPerPage: 12,
           /**
            * Theme components used by the blog pages.

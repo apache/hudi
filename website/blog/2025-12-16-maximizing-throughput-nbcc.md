@@ -1,7 +1,7 @@
 ---
 title: "Maximizing Throughput with Apache Hudi NBCC: Stop Retrying, Start Scaling"
 excerpt: "Learn how Hudi's Non-Blocking Concurrency Control eliminates retry storms for concurrent writers, maximizing throughput in streaming and mixed workloads."
-author: "Shiyan Xu"
+authors: [xushiyan]
 category: blog
 image: /assets/images/blog/2025-12-16-maximizing-throughput-nbcc/p6-nbcc-compaction.png
 tags:
