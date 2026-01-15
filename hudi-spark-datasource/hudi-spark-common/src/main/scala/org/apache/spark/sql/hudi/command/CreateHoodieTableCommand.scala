@@ -27,7 +27,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.hadoop.fs.Path
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.avro.SchemaConverters
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
@@ -105,8 +105,8 @@ object CreateHoodieTableCommand {
         case (hoodieTableColumn, userDefinedColumn) =>
           hoodieTableColumn.name.equals(userDefinedColumn.name) &&
             (Cast.canCast(hoodieTableColumn.dataType, userDefinedColumn.dataType) ||
-              SchemaConverters.toAvroType(hoodieTableColumn.dataType)
-                .equals(SchemaConverters.toAvroType(userDefinedColumn.dataType)))
+              HoodieSparkSchemaConverters.toHoodieType(hoodieTableColumn.dataType)
+                .equals(HoodieSparkSchemaConverters.toHoodieType(userDefinedColumn.dataType)))
       }
       if (!diffResult) {
         throw new HoodieValidationException(
