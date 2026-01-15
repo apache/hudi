@@ -33,8 +33,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -137,6 +137,7 @@ public class TableSizeStats implements Serializable {
   }
 
   public static class Config implements Serializable {
+
     @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = false)
     public String basePath = null;
 
@@ -377,7 +378,7 @@ public class TableSizeStats implements Serializable {
         line = reader.readLine();
       }
     } catch (IOException ioe) {
-      log.error("Error reading in properties from dfs from file.{}", propsPath);
+      log.error("Error reading in properties from dfs from file. {}", propsPath);
       throw new HoodieIOException("Cannot read properties from dfs from file " + propsPath, ioe);
     }
     return filePaths;
@@ -389,7 +390,7 @@ public class TableSizeStats implements Serializable {
     if (cfg.endDate != null) {
       try {
         endDate = LocalDate.parse(cfg.endDate, DATE_FORMATTER);
-        log.info("Setting ending date to {}. ", endDate);
+        log.info("Setting ending date to {}.", endDate);
       } catch (DateTimeParseException dtpe) {
         throw new HoodieException("Unable to parse --end-date. ", dtpe);
       }
@@ -421,7 +422,7 @@ public class TableSizeStats implements Serializable {
       throw new HoodieException("Starting date must be before ending date. Start Date: " + startDate + ", End Date: " + endDate);
     }
 
-    return startDate == null && endDate == null ? null : new LocalDate[]{startDate, endDate};
+    return startDate == null && endDate == null ? null : new LocalDate[] {startDate, endDate};
   }
 
   @Nullable
