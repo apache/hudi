@@ -801,9 +801,10 @@ public final class HoodieSchemaUtils {
    * This is equivalent to {@link org.apache.hudi.avro.HoodieAvroUtils#toJavaDefaultValue(org.apache.avro.Schema.Field)}
    * but operates on HoodieSchemaField.
    *
-   * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES),
-   * the default value is returned as-is. For complex types (ARRAY, MAP, RECORD),
-   * Avro's GenericData utility is used to properly construct the default value.</p>
+   * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES, FIXED, DECIMAL)
+   * and logical types (TIME, TIMESTAMP, DATE, UUID), the default value is returned as-is.
+   * For complex types (ARRAY, MAP, RECORD), Avro's GenericData utility is used
+   * to properly construct the default value.</p>
    *
    * @param field the HoodieSchemaField containing the default value
    * @return the Java representation of the default value, or null if no default value exists
@@ -830,6 +831,12 @@ public final class HoodieSchemaUtils {
       case BOOLEAN:
       case ENUM:
       case BYTES:
+      case FIXED:
+      case DECIMAL:
+      case TIME:
+      case TIMESTAMP:
+      case DATE:
+      case UUID:
         return defaultVal;
       case ARRAY:
       case MAP:
