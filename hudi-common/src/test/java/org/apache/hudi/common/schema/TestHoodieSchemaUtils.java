@@ -33,6 +33,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -43,7 +44,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1987,6 +1990,145 @@ public class TestHoodieSchemaUtils {
     Object avroIntResult = HoodieAvroUtils.toJavaDefaultValue(intField.getAvroField());
 
     assertEquals(avroIntResult, hoodieIntResult);
+  }
+
+  @Test
+  public void testToJavaDefaultValueFixed() {
+    // Create a fixed schema with size 4
+    HoodieSchema fixedSchema = HoodieSchema.createFixed("FixedType", null, null, 4);
+    byte[] defaultBytes = new byte[]{1, 2, 3, 4};
+    HoodieSchemaField field = HoodieSchemaField.of("fixedField",
+        fixedSchema,
+        null,
+        defaultBytes);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertArrayEquals(defaultBytes, (byte[]) result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueDecimal() {
+    // Create a decimal schema with precision 10 and scale 2
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+    byte[] decimalBytes = BigInteger.valueOf(12345).toByteArray();
+    HoodieSchemaField field = HoodieSchemaField.of("decimalField",
+        decimalSchema,
+        null,
+        decimalBytes);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertArrayEquals(decimalBytes, (byte[]) result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimeMillis() {
+    // Create time-millis schema
+    HoodieSchema timeSchema = HoodieSchema.createTimeMillis();
+    // Time is stored as milliseconds since midnight
+    int defaultTime = 43200000; // 12:00:00 in millis
+    HoodieSchemaField field = HoodieSchemaField.of("timeField",
+        timeSchema,
+        null,
+        defaultTime);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTime, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimeMicros() {
+    // Create time-micros schema
+    HoodieSchema timeSchema = HoodieSchema.createTimeMicros();
+    // Time is stored as microseconds since midnight
+    long defaultTime = 43200000000L; // 12:00:00 in micros
+    HoodieSchemaField field = HoodieSchemaField.of("timeField",
+        timeSchema,
+        null,
+        defaultTime);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTime, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimestampMillis() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMillis();
+    // Timestamp as milliseconds since epoch
+    long defaultTimestamp = 1609459200000L; // 2021-01-01 00:00:00 UTC
+    HoodieSchemaField field = HoodieSchemaField.of("timestampField",
+        timestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimestampMicros() {
+    // Create timestamp-micros schema
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMicros();
+    // Timestamp as microseconds since epoch
+    long defaultTimestamp = 1609459200000000L; // 2021-01-01 00:00:00 UTC in micros
+    HoodieSchemaField field = HoodieSchemaField.of("timestampField",
+        timestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueDate() {
+    // Create date schema
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+    // Date is stored as days since epoch
+    int defaultDate = 18628; // 2021-01-01
+    HoodieSchemaField field = HoodieSchemaField.of("dateField",
+        dateSchema,
+        null,
+        defaultDate);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultDate, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueUUID() {
+    // Create UUID schema
+    HoodieSchema uuidSchema = HoodieSchema.createUUID();
+    long seed = 123456L;
+    Random random = new Random(seed);
+    long mostSigBits = random.nextLong();
+    long leastSigBits = random.nextLong();
+    String defaultUuid = new UUID(mostSigBits, leastSigBits).toString();
+    HoodieSchemaField field = HoodieSchemaField.of("uuidField",
+        uuidSchema,
+        null,
+        defaultUuid);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultUuid, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueLocalTimestampMillis() {
+    // Create local-timestamp-millis schema
+    HoodieSchema localTimestampSchema = HoodieSchema.createLocalTimestampMillis();
+    long defaultTimestamp = 1609459200000L;
+    HoodieSchemaField field = HoodieSchemaField.of("localTimestampField",
+        localTimestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueLocalTimestampMicros() {
+    // Create local-timestamp-micros schema
+    HoodieSchema localTimestampSchema = HoodieSchema.createLocalTimestampMicros();
+    long defaultTimestamp = 1609459200000000L;
+    HoodieSchemaField field = HoodieSchemaField.of("localTimestampField",
+        localTimestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
   }
 
   @Test
