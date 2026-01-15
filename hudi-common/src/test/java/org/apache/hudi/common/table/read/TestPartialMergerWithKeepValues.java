@@ -45,8 +45,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class TestKeepValuesPartialMergingUtils {
-  private KeepValuesPartialMergingUtils<IndexedRecord> keepValuesPartialMergingUtils;
+class TestPartialMergerWithKeepValues {
+  private PartialMergerWithKeepValues<IndexedRecord> keepValuesPartialMergingUtils;
   private RecordContext<IndexedRecord> mockRecordContext;
   private HoodieSchema fullSchema;
   private HoodieSchema partialSchema;
@@ -57,7 +57,7 @@ class TestKeepValuesPartialMergingUtils {
 
   @BeforeEach
   void setUp() {
-    keepValuesPartialMergingUtils = new KeepValuesPartialMergingUtils<>();
+    keepValuesPartialMergingUtils = new PartialMergerWithKeepValues<>();
     mockRecordContext = mock(RecordContext.class);
 
     // Create Avro schemas first
@@ -146,10 +146,10 @@ class TestKeepValuesPartialMergingUtils {
   @Test
   void testIsPartial() {
     // Test when schema is partial compared to merged schema
-    assertTrue(KeepValuesPartialMergingUtils.isPartial(partialSchema, fullSchema));
+    assertTrue(PartialMergerWithKeepValues.isPartial(partialSchema, fullSchema));
 
     // Test when schema is not partial (same as merged schema)
-    assertFalse(KeepValuesPartialMergingUtils.isPartial(fullSchema, fullSchema));
+    assertFalse(PartialMergerWithKeepValues.isPartial(fullSchema, fullSchema));
 
     // Test when schema has more fields than merged schema
     Schema avroExtendedSchema = Schema.createRecord("TestRecord", "Test record", "test", false);
@@ -161,7 +161,7 @@ class TestKeepValuesPartialMergingUtils {
         new Schema.Field("extra", Schema.create(Schema.Type.STRING), "Extra field", null)
     ));
     HoodieSchema extendedSchema = HoodieSchema.fromAvroSchema(avroExtendedSchema);
-    assertTrue(KeepValuesPartialMergingUtils.isPartial(extendedSchema, fullSchema));
+    assertTrue(PartialMergerWithKeepValues.isPartial(extendedSchema, fullSchema));
   }
 
   @Test

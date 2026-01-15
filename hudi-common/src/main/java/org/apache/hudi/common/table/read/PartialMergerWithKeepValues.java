@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Class to assist with merging two versions of the record that may contain partial updates using
  * {@link org.apache.hudi.common.table.PartialUpdateMode#KEEP_VALUES} mode.
  */
-public class KeepValuesPartialMergingUtils<T> implements Serializable {
+public class PartialMergerWithKeepValues<T> implements Serializable {
   private final Map<HoodieSchema, Map<String, Integer>>
       fieldNameToIdMappingCache = new ConcurrentHashMap<>();
   private final Map<Pair<Pair<HoodieSchema, HoodieSchema>, HoodieSchema>, HoodieSchema>

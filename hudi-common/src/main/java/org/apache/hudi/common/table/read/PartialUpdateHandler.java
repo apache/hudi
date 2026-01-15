@@ -46,7 +46,7 @@ public class PartialUpdateHandler<T> implements Serializable {
   private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
-  private final KeepValuesPartialMergingUtils<T> keepValuesPartialMergingUtils;
+  private final PartialMergerWithKeepValues<T> keepValuesPartialMergingUtils;
 
   public PartialUpdateHandler(RecordContext<T> recordContext,
                               PartialUpdateMode partialUpdateMode,
@@ -54,7 +54,7 @@ public class PartialUpdateHandler<T> implements Serializable {
     this.recordContext = recordContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
-    this.keepValuesPartialMergingUtils = new KeepValuesPartialMergingUtils<>();
+    this.keepValuesPartialMergingUtils = new PartialMergerWithKeepValues<>();
   }
 
 
