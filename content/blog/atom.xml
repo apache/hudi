@@ -101,10 +101,8 @@
         <author>
             <name>The Hudi Community</name>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="lakehouse" term="lakehouse"/>
-        <category label="case-study" term="case-study"/>
-        <category label="funding-circle" term="funding-circle"/>
+        <category label="funding circle" term="funding circle"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 1.1 Deep Dive: Async Instant Time Generation for Flink Writers]]></title>
@@ -223,8 +221,7 @@
             <name>Shuo Cheng</name>
             <uri>https://www.linkedin.com/in/shuo-cheng-317b82aa/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
-        <category label="flink" term="flink"/>
+        <category label="apache flink" term="apache flink"/>
         <category label="streaming" term="streaming"/>
     </entry>
     <entry>
@@ -317,7 +314,6 @@
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="apache hudi" term="apache hudi"/>
         <category label="community" term="community"/>
     </entry>
     <entry>
@@ -442,9 +438,7 @@
         <author>
             <name>The Hudi Community</name>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="lakehouse" term="lakehouse"/>
-        <category label="case-study" term="case-study"/>
         <category label="zupee" term="zupee"/>
     </entry>
     <entry>
@@ -516,8 +510,7 @@
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
-        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
         <category label="concurrency control" term="concurrency control"/>
         <category label="streaming" term="streaming"/>
     </entry>
@@ -533,8 +526,7 @@
         </author>
         <category label="streaming" term="streaming"/>
         <category label="apache flink" term="apache flink"/>
-        <category label="datalake" term="datalake"/>
-        <category label="apache hudi" term="apache hudi"/>
+        <category label="data lake" term="data lake"/>
         <category label="uber" term="uber"/>
     </entry>
     <entry>
@@ -634,8 +626,7 @@
             <name>Shuo Cheng</name>
             <uri>https://www.linkedin.com/in/shuo-cheng-317b82aa/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
-        <category label="flink" term="flink"/>
+        <category label="apache flink" term="apache flink"/>
         <category label="performance" term="performance"/>
     </entry>
     <entry>
@@ -648,12 +639,9 @@
         <author>
             <name>Shaik Sameer</name>
         </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Schema Evolution" term="Schema Evolution"/>
-        <category label="Data Lakehouse" term="Data Lakehouse"/>
-        <category label="Lakehouse" term="Lakehouse"/>
-        <category label="Use-case" term="Use-case"/>
+        <category label="schema evolution" term="schema evolution"/>
+        <category label="medium" term="medium"/>
+        <category label="lakehouse" term="lakehouse"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Next Generation Lakehouse: New Engine for the Intelligent Future | Apache Hudi Meetup Asia Recap]]></title>
@@ -709,7 +697,6 @@
         <author>
             <name>Team at JD.com</name>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="meetup" term="meetup"/>
         <category label="lakehouse" term="lakehouse"/>
         <category label="community" term="community"/>
@@ -724,13 +711,9 @@
         <author>
             <name>Yongkyun Lee</name>
         </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="data lakehouse" term="data lakehouse"/>
-        <category label="Lakehouse" term="Lakehouse"/>
-        <category label="use-case" term="use-case"/>
-        <category label="Bloom Filter" term="Bloom Filter"/>
-        <category label="Indexing" term="Indexing"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="bloom index" term="bloom index"/>
+        <category label="indexing" term="indexing"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 1.1 is Here—Building the Foundation for the Next Generation of Lakehouse]]></title>
@@ -834,7 +817,6 @@
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="release" term="release"/>
         <category label="feature" term="feature"/>
         <category label="performance" term="performance"/>
@@ -912,9 +894,8 @@
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="indexing" term="indexing"/>
-        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
         <category label="data skipping" term="data skipping"/>
     </entry>
     <entry>
@@ -1017,9 +998,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <author>
             <name>The Hudi Community</name>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="lakehouse" term="lakehouse"/>
-        <category label="case-study" term="case-study"/>
         <category label="freewheel" term="freewheel"/>
     </entry>
     <entry>
@@ -1101,9 +1080,8 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="indexing" term="indexing"/>
-        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
         <category label="data skipping" term="data skipping"/>
     </entry>
     <entry>
@@ -1170,9 +1148,8 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="indexing" term="indexing"/>
-        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
         <category label="data skipping" term="data skipping"/>
     </entry>
     <entry>
@@ -1234,10 +1211,9 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <author>
             <name>The Hudi Community</name>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="upstox" term="upstox"/>
         <category label="dbt" term="dbt"/>
-        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Real-Time Cloud Security Graphs with Apache Hudi and PuppyGraph]]></title>
@@ -1354,8 +1330,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <author>
             <name>Jaz Samantha Ku, in collaboration with Shiyan Xu</name>
         </author>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="PuppyGraph" term="PuppyGraph"/>
+        <category label="puppygraph" term="puppygraph"/>
         <category label="security" term="security"/>
     </entry>
     <entry>
@@ -1416,10 +1391,9 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="hudi" term="hudi"/>
         <category label="record key generation" term="record key generation"/>
         <category label="database" term="database"/>
-        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Building a RAG-based AI Recommender (2/2)]]></title>
@@ -1432,14 +1406,9 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <name>Shiyan Xu</name>
             <uri>https://www.linkedin.com/in/xushiyan/</uri>
         </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="AI" term="AI"/>
-        <category label="RAG" term="RAG"/>
-        <category label="Artificial Intelligence" term="Artificial Intelligence"/>
-        <category label="data lakehouse" term="data lakehouse"/>
-        <category label="Lakehouse" term="Lakehouse"/>
-        <category label="use-case" term="use-case"/>
+        <category label="ai" term="ai"/>
+        <category label="rag" term="rag"/>
+        <category label="lakehouse" term="lakehouse"/>
         <category label="datumagic" term="datumagic"/>
     </entry>
     <entry>
@@ -1606,8 +1575,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <name>Dipankar Mazumdar</name>
             <uri>https://www.linkedin.com/in/dipankar-mazumdar/</uri>
         </author>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Merge-on-Read (MoR)" term="Merge-on-Read (MoR)"/>
-        <category label="Streaming" term="Streaming"/>
+        <category label="mor" term="mor"/>
+        <category label="streaming" term="streaming"/>
     </entry>
 </feed>

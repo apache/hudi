@@ -15,10 +15,8 @@
                 "name": "The Hudi Community"
             },
             "tags": [
-                "hudi",
                 "lakehouse",
-                "case-study",
-                "funding-circle"
+                "funding circle"
             ]
         },
         {
@@ -33,8 +31,7 @@
                 "url": "https://www.linkedin.com/in/shuo-cheng-317b82aa/"
             },
             "tags": [
-                "hudi",
-                "flink",
+                "apache flink",
                 "streaming"
             ]
         },
@@ -50,7 +47,6 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "apache hudi",
                 "community"
             ]
         },
@@ -65,9 +61,7 @@
                 "name": "The Hudi Community"
             },
             "tags": [
-                "hudi",
                 "lakehouse",
-                "case-study",
                 "zupee"
             ]
         },
@@ -83,8 +77,7 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "hudi",
-                "data lakehouse",
+                "lakehouse",
                 "concurrency control",
                 "streaming"
             ]
@@ -102,8 +95,7 @@
             "tags": [
                 "streaming",
                 "apache flink",
-                "datalake",
-                "apache hudi",
+                "data lake",
                 "uber"
             ]
         },
@@ -119,8 +111,7 @@
                 "url": "https://www.linkedin.com/in/shuo-cheng-317b82aa/"
             },
             "tags": [
-                "hudi",
-                "flink",
+                "apache flink",
                 "performance"
             ]
         },
@@ -135,12 +126,9 @@
                 "name": "Shaik Sameer"
             },
             "tags": [
-                "blog",
-                "Apache Hudi",
-                "Schema Evolution",
-                "Data Lakehouse",
-                "Lakehouse",
-                "Use-case"
+                "schema evolution",
+                "medium",
+                "lakehouse"
             ]
         },
         {
@@ -154,7 +142,6 @@
                 "name": "Team at JD.com"
             },
             "tags": [
-                "hudi",
                 "meetup",
                 "lakehouse",
                 "community"
@@ -171,13 +158,9 @@
                 "name": "Yongkyun Lee"
             },
             "tags": [
-                "blog",
-                "Apache Hudi",
-                "data lakehouse",
-                "Lakehouse",
-                "use-case",
-                "Bloom Filter",
-                "Indexing"
+                "lakehouse",
+                "bloom index",
+                "indexing"
             ]
         },
         {
@@ -192,7 +175,6 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "hudi",
                 "release",
                 "feature",
                 "performance"
@@ -210,9 +192,8 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "hudi",
                 "indexing",
-                "data lakehouse",
+                "lakehouse",
                 "data skipping"
             ]
         },
@@ -227,9 +208,7 @@
                 "name": "The Hudi Community"
             },
             "tags": [
-                "hudi",
                 "lakehouse",
-                "case-study",
                 "freewheel"
             ]
         },
@@ -245,9 +224,8 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "hudi",
                 "indexing",
-                "data lakehouse",
+                "lakehouse",
                 "data skipping"
             ]
         },
@@ -263,9 +241,8 @@
                 "url": "https://www.linkedin.com/in/aditya-goenka-66a7b448/"
             },
             "tags": [
-                "hudi",
                 "indexing",
-                "data lakehouse",
+                "lakehouse",
                 "data skipping"
             ]
         },
@@ -280,10 +257,9 @@
                 "name": "The Hudi Community"
             },
             "tags": [
-                "hudi",
                 "upstox",
                 "dbt",
-                "data lakehouse"
+                "lakehouse"
             ]
         },
         {
@@ -297,8 +273,7 @@
                 "name": "Jaz Samantha Ku, in collaboration with Shiyan Xu"
             },
             "tags": [
-                "Apache Hudi",
-                "PuppyGraph",
+                "puppygraph",
                 "security"
             ]
         },
@@ -314,10 +289,9 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "hudi",
                 "record key generation",
                 "database",
-                "data lakehouse"
+                "lakehouse"
             ]
         },
         {
@@ -332,14 +306,9 @@
                 "url": "https://www.linkedin.com/in/xushiyan/"
             },
             "tags": [
-                "blog",
-                "Apache Hudi",
-                "AI",
-                "RAG",
-                "Artificial Intelligence",
-                "data lakehouse",
-                "Lakehouse",
-                "use-case",
+                "ai",
+                "rag",
+                "lakehouse",
                 "datumagic"
             ]
         },
@@ -355,9 +324,8 @@
                 "url": "https://www.linkedin.com/in/dipankar-mazumdar/"
             },
             "tags": [
-                "Apache Hudi",
-                "Merge-on-Read (MoR)",
-                "Streaming"
+                "mor",
+                "streaming"
             ]
         }
     ]

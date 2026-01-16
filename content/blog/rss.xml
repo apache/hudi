@@ -99,10 +99,8 @@
 <p>Project Kirby and Apache Hudi are poised to become the foundation of Funding Circle's future ingestion platform, transforming a complex, legacy system into a scalable, high-performance, and decentralized engine for data-driven decisions.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
 <p>Funding Circle's presentation offered a clear and practical look at how adopting a modern data platform can solve significant real-world engineering challenges. By moving away from their legacy architecture and building Project Kirby around Apache Hudi, the team delivered a solution that is faster, more reliable, and far easier for teams across the organization to use. The core of their success was Hudi's ability to provide a unified data lake storage format, enabling crucial features like automatic schema evolution and near-real-time ingestion. Ultimately, Hudi catalyzed the maturation of the team's data platform and decentralized model, setting the stage for advanced use cases like Change Data Capture (CDC).</p>]]></content:encoded>
-            <category>hudi</category>
             <category>lakehouse</category>
-            <category>case-study</category>
-            <category>funding-circle</category>
+            <category>funding circle</category>
         </item>
         <item>
             <title><![CDATA[Apache Hudi 1.1 Deep Dive: Async Instant Time Generation for Flink Writers]]></title>
@@ -217,8 +215,7 @@
 <p>[4] <a href="https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/api/common/state/CheckpointListener.java" target="_blank" rel="noopener noreferrer" class="">https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/api/common/state/CheckpointListener.java</a></p>
 <p>[5] <a href="https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md" target="_blank" rel="noopener noreferrer" class="">https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md</a></p>
 <p>[6] <a href="https://hudi.apache.org/docs/next/timeline/#lsm-timeline-history" target="_blank" rel="noopener noreferrer" class="">https://hudi.apache.org/docs/next/timeline/#lsm-timeline-history</a></p>]]></content:encoded>
-            <category>hudi</category>
-            <category>flink</category>
+            <category>apache flink</category>
             <category>streaming</category>
         </item>
         <item>
@@ -307,7 +304,6 @@
 <li class="">Subscribe to the dev mailing list (by sending an empty email): <a href="mailto:dev-subscribe@hudi.apache.org" target="_blank" rel="noopener noreferrer" class="">dev-subscribe@hudi.apache.org</a></li>
 </ul>
 <p>A huge thank you to everyone who contributed to Hudi's growth this year. With such a strong foundation, 2026 promises to be our most exciting year yet.</p>]]></content:encoded>
-            <category>apache hudi</category>
             <category>community</category>
         </item>
         <item>
@@ -429,9 +425,7 @@
 <li class="">Centralizing configuration management for operational simplicity</li>
 </ul>
 <p>Watch the <a href="https://www.youtube.com/watch?v=Mpj8hnaZbe0" target="_blank" rel="noopener noreferrer" class="">full presentation on YouTube</a>. Ready to optimize your own data platform? Get started with <a href="https://hudi.apache.org/docs/quick-start-guide" target="_blank" rel="noopener noreferrer" class="">Hudi</a> and explore <a href="https://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer" target="_blank" rel="noopener noreferrer" class="">Hudi Streamer</a> for your ingestion needs.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>lakehouse</category>
-            <category>case-study</category>
             <category>zupee</category>
         </item>
         <item>
@@ -499,8 +493,7 @@
 <p>OCC assumes conflicts are rare. When you mix high-frequency streaming with long-running maintenance jobs, OCC's retry-on-conflict model breaks down—causing wasted compute, reduced throughput, and job starvation. Retries are the throughput killer.</p>
 <p>NBCC takes a different approach: let every writer succeed by appending to separate log files, then follow the write completion time for reads and compaction. Three design foundations make this possible—record keys and file groups that colocate records and their updates, completion time tracking that properly orders overlapping write transactions, and TrueTime-like timestamp generation that guarantees monotonically increasing timestamps across distributed writers.</p>
 <p>The result: maximum throughput for concurrent writes in Hudi pipelines. Long-running jobs complete without being starved, multiple ingestion pipelines coexist without contention, and your data platform scales without coordination overhead. Stop retrying, start scaling—see <a href="https://hudi.apache.org/docs/overview" target="_blank" rel="noopener noreferrer" class="">the docs</a> to get started.</p>]]></content:encoded>
-            <category>hudi</category>
-            <category>data lakehouse</category>
+            <category>lakehouse</category>
             <category>concurrency control</category>
             <category>streaming</category>
         </item>
@@ -513,8 +506,7 @@
             <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.uber.com/blog/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake/">here</a></span>]]></content:encoded>
             <category>streaming</category>
             <category>apache flink</category>
-            <category>datalake</category>
-            <category>apache hudi</category>
+            <category>data lake</category>
             <category>uber</category>
         </item>
         <item>
@@ -610,8 +602,7 @@
 <p><img decoding="async" loading="lazy" alt="Benchmark results for string-heavy schemas" src="https://hudi.apache.org/assets/images/benchmark-string-schemas-52fce427657dee18c89ea3bd4c54e9c6.png" width="1622" height="1081" class="img_ev3q"></p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="summary">Summary<a href="https://hudi.apache.org/blog/2025/12/10/apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink#summary" class="hash-link" aria-label="Direct link to Summary" title="Direct link to Summary" translate="no">​</a></h2>
 <p>The optimizations in Hudi 1.1 around writer performance for Flink have brought significant, multi-fold improvements to streaming ingestion throughput. These enhancements are transparent and backward-compatible, allowing users to seamlessly upgrade their jobs from earlier Hudi versions to the latest version and enjoy the substantial performance gains without any additional operational overhead.</p>]]></content:encoded>
-            <category>hudi</category>
-            <category>flink</category>
+            <category>apache flink</category>
             <category>performance</category>
         </item>
         <item>
@@ -621,12 +612,9 @@
             <pubDate>Wed, 03 Dec 2025 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@shaiksameer0045/the-chameleon-architecture-mastering-schema-evolution-with-apache-hudi-446da1a2f0c6">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>Schema Evolution</category>
-            <category>Data Lakehouse</category>
-            <category>Lakehouse</category>
-            <category>Use-case</category>
+            <category>schema evolution</category>
+            <category>medium</category>
+            <category>lakehouse</category>
         </item>
         <item>
             <title><![CDATA[Next Generation Lakehouse: New Engine for the Intelligent Future | Apache Hudi Meetup Asia Recap]]></title>
@@ -679,7 +667,6 @@
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/12/01/apache-hudi-JD-meetup-asia-2025-recap#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
 <p>This meetup made us believe that the vast ocean of data lakehouses could not be separated from the "collective effort" of the open-source community and enterprises. Those technologies tempered on the business battlefield ultimately gave back as nutrients nourishing the entire ecosystem. This may be the purest romance of technology: making complex things simple and making the impossible possible. The road ahead is full of imagination, and together, we are shaping a more elegant and powerful future for data processing.</p>
 <p><img decoding="async" loading="lazy" alt="image 7" src="https://hudi.apache.org/assets/images/jdpost-image7-361b48a09e72bed4c19f8be9bf616ed5.jpg" width="4032" height="3024" class="img_ev3q"></p>]]></content:encoded>
-            <category>hudi</category>
             <category>meetup</category>
             <category>lakehouse</category>
             <category>community</category>
@@ -691,13 +678,9 @@
             <pubDate>Fri, 28 Nov 2025 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://codepointer.substack.com/p/apache-hudi-dynamic-bloom-filter">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>data lakehouse</category>
-            <category>Lakehouse</category>
-            <category>use-case</category>
-            <category>Bloom Filter</category>
-            <category>Indexing</category>
+            <category>lakehouse</category>
+            <category>bloom index</category>
+            <category>indexing</category>
         </item>
         <item>
             <title><![CDATA[Apache Hudi 1.1 is Here—Building the Foundation for the Next Generation of Lakehouse]]></title>
@@ -797,7 +780,6 @@
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="whats-nextjoin-us-in-building-the-future">What’s Next—Join Us in Building the Future<a href="https://hudi.apache.org/blog/2025/11/25/apache-hudi-release-1-1-announcement#whats-nextjoin-us-in-building-the-future" class="hash-link" aria-label="Direct link to What’s Next—Join Us in Building the Future" title="Direct link to What’s Next—Join Us in Building the Future" translate="no">​</a></h2>
 <p>The future of Hudi is incredibly exciting, and we're building it together with a vibrant, global community of contributors. Building on the strong foundation of 1.1, we're actively developing transformative AI/ML-focused capabilities for Hudi 1.2 and beyond—unstructured data types and column groups for efficient storage of embeddings and documents, Lance, Vortex, blob-optimized Parquet support, and vector search capabilities for lakehouse tables. This is just the beginning—we're reimagining what's possible in the lakehouse, from multi-format interoperability to next-generation AI/ML workloads, and we need your ideas, code, and creativity to make it happen.</p>
 <p>Join us in building the future. Check out the <a href="https://hudi.apache.org/releases/release-1.1#release-111" target="_blank" rel="noopener noreferrer" class="">1.1 release notes</a> to get started, join our <a href="https://hudi.apache.org/slack/" target="_blank" rel="noopener noreferrer" class="">Slack space</a>, follow us on <a href="https://www.linkedin.com/company/apache-hudi" target="_blank" rel="noopener noreferrer" class="">LinkedIn</a> and <a href="http://x.com/apachehudi" target="_blank" rel="noopener noreferrer" class="">X (twitter)</a>, and subscribe (send an empty email) to the <a href="mailto:dev@hudi.apache.org" target="_blank" rel="noopener noreferrer" class="">mailing list</a>—let's build the next generation of Hudi together.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>release</category>
             <category>feature</category>
             <category>performance</category>
@@ -871,9 +853,8 @@
 </ul>
 <p>All indexes are maintained transactionally alongside data writes, ensuring consistency without sacrificing performance. The metadata table uses HFile format for fast point lookups and periodic compaction to keep reads efficient. This design makes Hudi's indexing subsystem both powerful and practical—ready to handle lakehouse-scale data while remaining simple to configure and operate.</p>
 <p>As Hudi continues to evolve, the indexing subsystem is designed for extensibility. Upcoming features like the bitmap index for low-cardinality columns and vector search index for AI workloads will further expand its capabilities. By understanding these indexing patterns and following the configuration guidelines in this series, you can build lakehouse tables that deliver the query performance your analytics and data pipelines demand.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>indexing</category>
-            <category>data lakehouse</category>
+            <category>lakehouse</category>
             <category>data skipping</category>
         </item>
         <item>
@@ -973,9 +954,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <blockquote>
 <p>“We’re lucky to choose Hudi as our Lakehouse. Thanks to the powerful Hudi community!” – Bing Jiang</p>
 </blockquote>]]></content:encoded>
-            <category>hudi</category>
             <category>lakehouse</category>
-            <category>case-study</category>
             <category>freewheel</category>
         </item>
         <item>
@@ -1053,9 +1032,8 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>Hudi’s metadata table is itself a Hudi Merge‑on‑Read (MOR) table that acts as a multimodal indexing subsystem. It is physically partitioned by index type (for example, <code>files/</code>, <code>column_stats/</code>, <code>partition_stats/</code>) and stores base files in the HFile (SSTable‑like) format. This layout provides fast point lookups and efficient batched scans by key prefix—exactly the access patterns indexing needs at lakehouse scale.</p>
 <p>Index maintenance happens transactionally alongside data writes, keeping index entries consistent with the data table. Periodic compaction merges log files into read‑optimized HFile base files to keep point lookups fast and predictable. On the read path, Hudi composes multiple indexes to minimize I/O: the files index enumerates candidates, partition stats prune irrelevant partitions, and column stats prune non‑matching files. In effect, the engine scans only the minimum set of files required to satisfy a query.</p>
 <p>In practice, the defaults are a strong starting point. Keep the metadata table enabled and explicitly list only the columns you frequently filter on via <code>hoodie.metadata.index.column.stats.column.list</code> to control metadata overhead. In <a href="https://hudi.apache.org/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2/" target="_blank" rel="noopener noreferrer" class="">part 2</a>, we’ll go deeper into accelerating equality‑matching and expression‑based predicates using the record, secondary, and expression indexes, and discuss how asynchronous index maintenance keeps writers unblocked while indexes build in the background.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>indexing</category>
-            <category>data lakehouse</category>
+            <category>lakehouse</category>
             <category>data skipping</category>
         </item>
         <item>
@@ -1114,9 +1092,8 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>Enabling data skipping with both the column stats and partition stats indexes for the Hudi table delivers approximately a 93% reduction in query runtime compared to the full scan (no data skipping).</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/10/22/Partition_Stats_Enhancing_Column_Stats_in_Hudi_1.0#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
 <p>The new partition stats index is a powerful addition to Hudi's multimodal indexing subsystem, directly addressing the challenge of query performance on large-scale partitioned tables. By working in concert with the existing column stats index, it provides a crucial layer of coarse-grained pruning, allowing the query engine to eliminate entire partitions from consideration <em>before</em> inspecting individual files. As our benchmark showed, this two-level pruning strategy—first by partition, then by file—is not just a minor tweak. It results in a dramatic reduction in I/O, slashing query runtimes by over 93% and enabling near-interactive query speeds. This feature solidifies Hudi's data-skipping capabilities, making it even more efficient to run demanding analytical queries directly on the data lakehouse, saving both time and computation costs.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>indexing</category>
-            <category>data lakehouse</category>
+            <category>lakehouse</category>
             <category>data skipping</category>
         </item>
         <item>
@@ -1175,10 +1152,9 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>The adoption of this modern data stack had a significant impact on Upstox's data platform. The company achieved extremely high data availability and consistency for critical datasets, reducing SLA breaches for complex joins by 70%. Furthermore, pipeline costs dropped by 40%, and query performance improved drastically thanks to Hudi's clustering and optimized joins.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
 <p>By leveraging Apache Hudi, dbt, and EMR Serverless, Upstox built a robust and cost-efficient data platform to serve its 12M+ customers, overcoming the significant challenges of data ingestion and analytics at scale. This transformation resolved critical issues like inconsistent data writes, small-file problems, and query timeouts, leading to tangible improvements in both performance and efficiency. With a 70% reduction in SLA breaches and a 40% drop in pipeline costs, the new architecture has empowered their BI and ML teams to move faster. Ultimately, this success story demonstrates how a modern data stack can not only solve immediate technical bottlenecks but also lay the groundwork for a scalable, self-service future that enables continued innovation.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>upstox</category>
             <category>dbt</category>
-            <category>data lakehouse</category>
+            <category>lakehouse</category>
         </item>
         <item>
             <title><![CDATA[Real-Time Cloud Security Graphs with Apache Hudi and PuppyGraph]]></title>
@@ -1292,8 +1268,7 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/10/02/Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
 <p>Real-time security work comes down to two needs: fresh tables and connected questions. Apache Hudi keeps lakehouse data current with streaming upserts, incremental reads, and a rewindable timeline. PuppyGraph reads those same tables in place and runs multi-hop graph queries with openCypher or Gremlin. One data copy. No ETL.</p>
 <p>The result is faster investigations and clearer decisions. You can trace attack paths, size blast radius, and correlate alerts to recent changes while keeping governance and access controls in a single lake. When you need to look back, time travel gives you point-in-time views without rebuilding pipelines.</p>]]></content:encoded>
-            <category>Apache Hudi</category>
-            <category>PuppyGraph</category>
+            <category>puppygraph</category>
             <category>security</category>
         </item>
         <item>
@@ -1350,10 +1325,9 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>Based on the micro-benchmarking results, UUID v6/7 resulted in a much larger and undesired compressed size compared to others. Base64 and ASCII encoding had a lower storage footprint compared to the original string, with around 17% and 28% reduction respectively. However, both Base64 and ASCII require 400x more CPU power for encoding than the original string format. Given that write performance is often more critical than marginal storage savings in high-throughput data systems, we opted for the original string format for auto-generating record keys.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="summary">Summary<a href="https://hudi.apache.org/blog/2025/09/17/hudi-auto-gen-keys#summary" class="hash-link" aria-label="Direct link to Summary" title="Direct link to Summary" translate="no">​</a></h2>
 <p>Hudi’s first-class support for record keys provides a database-like experience for lakehouses, enabling powerful features such as record-level indexing, merge modes, and CDC. The introduction of automatic record key generation thoughtfully extends the record key support, removing a barrier for teams performing append-only writes. By following the design principles of uniqueness, idempotency, and efficiency, the feature allows more users to easily adopt Hudi and benefit from its rich set of lakehouse capabilities without the initial overhead of manual key generation. This enhancement reinforces Hudi’s position as a versatile and user-friendly platform for building modern data lakehouses.</p>]]></content:encoded>
-            <category>hudi</category>
             <category>record key generation</category>
             <category>database</category>
-            <category>data lakehouse</category>
+            <category>lakehouse</category>
         </item>
         <item>
             <title><![CDATA[Building a RAG-based AI Recommender (2/2)]]></title>
@@ -1362,14 +1336,9 @@ The architecture efficiently handles high‑frequency updates across more than 6
             <pubDate>Fri, 29 Aug 2025 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/building-a-rag-based-ai-recommender-147">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>AI</category>
-            <category>RAG</category>
-            <category>Artificial Intelligence</category>
-            <category>data lakehouse</category>
-            <category>Lakehouse</category>
-            <category>use-case</category>
+            <category>ai</category>
+            <category>rag</category>
+            <category>lakehouse</category>
             <category>datumagic</category>
         </item>
         <item>
@@ -1532,9 +1501,8 @@ The architecture efficiently handles high‑frequency updates across more than 6
 <p>Merge-on-Read (MoR) table type provides an alternative approach to managing updates and deletes on immutable columnar files in a lakehouse. While multiple open table formats support MoR semantics, their design choices significantly affect suitability for real-time and change-data driven workloads.</p>
 <p>Apache Hudi’s MoR implementation specifically addresses the needs of high-ingestion, update-heavy pipelines. By appending changes to delta logs, preserving file-group-based data locality, supporting event-time ordering, and enabling asynchronous, non-blocking compaction, Hudi minimizes write amplification and supports low-latency data availability. These design primitives directly align with streaming and CDC patterns, where data arrives frequently and potentially out of order. Iceberg and Delta Lake also implement MoR semantics in their own ways to address transactional consistency and immutable storage goals.</p>
 <hr>]]></content:encoded>
-            <category>Apache Hudi</category>
-            <category>Merge-on-Read (MoR)</category>
-            <category>Streaming</category>
+            <category>mor</category>
+            <category>streaming</category>
         </item>
     </channel>
 </rss>
