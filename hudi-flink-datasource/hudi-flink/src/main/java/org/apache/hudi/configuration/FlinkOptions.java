@@ -282,6 +282,16 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
           + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
 
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_RLI_LOOKUP_MINIBATCH_SIZE = ConfigOptions
+      .key("index.rli.lookup.minibatch.size")
+      .intType()
+      .defaultValue(1000) // default 1000
+      .withDescription("The maximum number of input records can be buffered for miniBatch during record index lookup.\n"
+          + "MiniBatch is an optimization to buffer input records to reduce the number of individual index lookups,\n"
+          + "which can significantly improve performance compared to processing each record individually.\n"
+          + "Set to 0 to disable mini-batch processing.");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------

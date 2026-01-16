@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -2900,6 +2901,25 @@ public class ITTestHoodieDataSource {
         "[+I[id1, id1, Danny, 23, 1970-01-01T00:00:01, par1, par1], "
             + "+I[id2, id2, Stephen, 33, 1970-01-01T00:00:02, par1, par1], "
             + "+I[id3, id3, Julian, 43, 1970-01-01T00:00:03, par1, par1]]");
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {-1, 100})
+  void testMiniBatchBucketAssign(int bucketAssignMinibatchSize) throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name())
+        .option(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, bucketAssignMinibatchSize)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
   }
 
   // -------------------------------------------------------------------------
