@@ -6,7 +6,6 @@ import AuthorName from '@site/src/components/AuthorName';
 import styles from '../ContentList/styles.module.css';
 import {useHistory} from '@docusaurus/router';
 import SearchIcon from './Icon/search.svg';
-import Title from "@site/src/components/Title";
 import { useLocation } from 'react-router-dom';
 
 
@@ -35,7 +34,7 @@ const allBlogPosts = ((ctx) => {
   );
 })(require.context('../../../blog', true, /\.mdx?$/));
 
-const POSTS_PER_PAGE = 9;
+const POSTS_PER_PAGE = 12;
 
 export default function BlogList() {
   const history = useHistory();
@@ -135,19 +134,37 @@ export default function BlogList() {
   };
 
   const getPageNumbers = () => {
+    const maxVisible = 9;
     const pages = [];
-    const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
 
-    if (endPage - startPage < maxVisible - 1) {
-      startPage = Math.max(1, endPage - maxVisible + 1);
-    }
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisible - 1);
 
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
+      if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
     }
     return pages;
+  };
+
+  const getDropdownPages = () => {
+    const visiblePages = getPageNumbers();
+    const allPages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      if (!visiblePages.includes(i)) {
+        allPages.push(i);
+      }
+    }
+    return allPages;
   };
 
   // Derive categories dynamically from blog data
@@ -190,9 +207,6 @@ export default function BlogList() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.blogTitle}>
-        <Title primaryText="Blogs"/>
-      </div>
       <div className={styles.blogFilterSection}>
         <div className={styles.blogFilters}>
           <div className={styles.categoryBar}>
@@ -292,6 +306,25 @@ export default function BlogList() {
                 {pageNum}
               </button>
             ))}
+            {getDropdownPages().length > 0 && (
+              <select
+                className={styles.paginationDropdown}
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handlePageChange(parseInt(e.target.value, 10));
+                  }
+                }}
+                aria-label="More pages"
+              >
+                <option value="">...</option>
+                {getDropdownPages().map((pageNum) => (
+                  <option key={pageNum} value={pageNum}>
+                    Page {pageNum}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <button

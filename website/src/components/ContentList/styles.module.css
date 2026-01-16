@@ -28,12 +28,19 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 2rem;
+  max-width: 100%;
   animation: gridFadeIn 0.5s ease-out;
   will-change: opacity, transform, scale;
   position: relative;
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+@media (min-width: 1400px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 @keyframes gridFadeIn {
@@ -157,6 +164,7 @@
 /* Pagination styles */
 .pagination {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 1rem;
@@ -187,6 +195,8 @@
 
 .paginationNumbers {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.5rem;
 }
 
@@ -215,6 +225,31 @@
   background-color: var(--ifm-color-primary);
   border-color: var(--ifm-color-primary);
   color: var(--ifm-color-primary-contrast-background);
+}
+
+.paginationDropdown {
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  background-color: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  font-size: 0.9375rem;
+  transition: background-color 0.2s, border-color 0.2s;
+  appearance: none;
+  text-align: center;
+}
+
+.paginationDropdown:hover {
+  background-color: var(--ifm-color-emphasis-100);
+  border-color: var(--ifm-color-primary);
+}
+
+.paginationDropdown:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
 }
 
 .paginationInfo {
@@ -285,15 +320,17 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  align-items: center;
   margin-bottom: 60px;
   width: 100%;
 }
 
-.blogFilterSection > * {
-  width: fit-content;
-  min-width: 300px;
-  max-width: 100%;
+.blogFilters {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
 }
 
 .categoryBar {
@@ -375,8 +412,9 @@
   border: 1px solid rgba(10, 37, 64, 0.08);
   box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04) inset;
   background-color: var(--ifm-background-color);
-  width: 100%;
+  width: auto;
   height: 50px !important;
+  flex-shrink: 0;
 }
 
 .searchIcon {
@@ -416,8 +454,8 @@
 }
 
 @media (max-width: 996px) {
-  .blogFilterSection > * {
-    min-width: 250px;
+  .blogFilters {
+    flex-direction: column;
   }
 
   .categoryBar {
@@ -433,6 +471,7 @@
   .searchContainer {
     padding: 8px 16px;
     gap: 10px;
+    width: 100%;
   }
 
   .searchIcon {
@@ -444,11 +483,4 @@
     font-size: 15px;
   }
 }
-
-.blogFilters {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
 
