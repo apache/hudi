@@ -40,8 +40,8 @@ import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.FlinkMiniCluster;
 
 import lombok.extern.slf4j.Slf4j;
@@ -313,7 +313,7 @@ public class ITTestSchemaEvolution {
   private void writeTableWithSchema2(TableOptions tableOptions) throws ExecutionException, InterruptedException {
     tableOptions.withOption(
         FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
-        AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
+        HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
 
     //language=SQL
     tEnv.executeSql("drop table t1");
@@ -384,7 +384,7 @@ public class ITTestSchemaEvolution {
         KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition",
         KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), true,
         FlinkOptions.WRITE_BATCH_SIZE.key(), 0.000001, // each record triggers flush
-        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
+        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
         FlinkOptions.READ_TASKS.key(), 1,
         FlinkOptions.WRITE_TASKS.key(), 1,
         FlinkOptions.INDEX_BOOTSTRAP_TASKS.key(), 1,

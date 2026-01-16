@@ -688,7 +688,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   def getRow(record: GenericRecord, schema: HoodieSchema, structType: StructType): Row = {
-    val converterFn = AvroConversionUtils.createConverterToRow(schema.toAvroSchema, structType)
+    val converterFn = AvroConversionUtils.createConverterToRow(schema, structType)
     val row = converterFn.apply(record)
     new GenericRowWithSchema(structType.fieldNames.indices.map(i => row.get(i)).toArray, structType)
   }

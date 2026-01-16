@@ -37,7 +37,7 @@ import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.avro.SchemaConverters
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieOptionConfig._
@@ -218,7 +218,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         if (StringUtils.isNullOrEmpty(databaseFromIdentifier)) "default" else databaseFromIdentifier)
 
       val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
-      val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
+      val schema = HoodieSparkSchemaConverters.toHoodieType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
         SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
       } else if (table.partitionColumnNames.isEmpty) {
