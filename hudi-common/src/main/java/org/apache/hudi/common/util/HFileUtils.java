@@ -245,7 +245,7 @@ public class HFileUtils extends FileFormatUtils {
    */
   private void logRecordMetadata(String msg, byte[] bs, HoodieSchema schema) throws IOException {
     GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema.toAvroSchema());
-    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null) {
+    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()) {
       LOG.error("{}: Hudi meta field values -> Record key: {}, Partition Path: {}, FileName: {}, CommitTime: {}, CommitSeqNo: {}", msg,
           record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
           record.get(HoodieRecord.FILENAME_METADATA_FIELD), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
