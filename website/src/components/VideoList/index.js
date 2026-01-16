@@ -38,7 +38,7 @@ const sortedVideos = allVideos
     return dateB - dateA;
   });
 
-const POSTS_PER_PAGE = 12;
+const POSTS_PER_PAGE = 9;
 
 export default function VideoList() {
   const { withBaseUrl } = useBaseUrlUtils();
