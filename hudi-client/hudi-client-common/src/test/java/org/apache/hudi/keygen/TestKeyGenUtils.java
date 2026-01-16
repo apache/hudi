@@ -104,10 +104,10 @@ public class TestKeyGenUtils {
     Schema nullableStringSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
     Schema schema = Schema.createRecord("TestRecord", "doc", "test", false,
         Arrays.asList(
-            new Schema.Field("key1", nullableStringSchema),
-            new Schema.Field("key2", nullableStringSchema),
-            new Schema.Field("key3", nullableStringSchema),
-            new Schema.Field("key4", nullableStringSchema)
+            new Schema.Field("key1", nullableStringSchema, "", null),
+            new Schema.Field("key2", nullableStringSchema, "", null),
+            new Schema.Field("key3", nullableStringSchema, "", null),
+            new Schema.Field("key4", nullableStringSchema, "", null)
         ));
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("key1", "value1");
