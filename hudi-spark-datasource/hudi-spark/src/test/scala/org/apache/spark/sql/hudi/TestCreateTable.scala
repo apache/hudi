@@ -26,13 +26,13 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.hudi.testutils.Assertions
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+import org.junit.jupiter.api.function.Executable
 
 import scala.collection.JavaConverters._
 
@@ -1604,7 +1604,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                                                expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
     if (tableVersion < 9) {
       // By default, the complex key generator validation is enabled and should throw exception on DML
-      Assertions.assertComplexKeyGeneratorValidationThrows(() => spark.sql(dmlToWrite), "ingestion")
+      Assertions.assertComplexKeyGeneratorValidationThrows(new Executable {
+        override def execute(): Unit = () => spark.sql(dmlToWrite)
+      }, "ingestion")
       // Query should still succeed
       checkAnswer(query)(expectedRowsBefore: _*)
       // Disabling the complex key generator validation should let write succeed
