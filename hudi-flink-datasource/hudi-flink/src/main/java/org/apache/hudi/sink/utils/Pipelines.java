@@ -52,7 +52,6 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.partitioner.MiniBatchBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction;
@@ -66,6 +65,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -384,6 +384,9 @@ public class Pipelines {
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }
     } else {
+      // uuid is used to generate operator id for the write operator, then the bucket assign operator can send
+      // operator event to the coordinator of the write operator based on the operator id.
+      // @see org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway.
       String writeOperatorUid = opUID("stream_write", conf);
       DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType, writeOperatorUid);
       return bucketAssignStream
@@ -425,7 +428,7 @@ public class Pipelines {
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              new BucketAssignOperator(new BucketAssignFunction(conf), OperatorIDGenerator.fromUid(writeOperatorUid)))
+              new KeyedProcessOperator<>(new BucketAssignFunction(conf)))
           .uid(opUID(assignerOperatorName, conf))
           .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     }

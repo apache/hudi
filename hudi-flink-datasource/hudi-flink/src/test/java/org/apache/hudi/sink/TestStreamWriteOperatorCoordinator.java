@@ -585,21 +585,21 @@ public class TestStreamWriteOperatorCoordinator {
     OperatorEvent event2 = createOperatorEvent(1, 2, instant2, "par2", false, false, 0.2);
     coordinator.handleEventFromOperator(1, event2);
 
-    // Call handleCoordinationRequest with InFlightInstantsRequest
+    // Call handleCoordinationRequest with InflightInstantsRequest
     CompletableFuture<CoordinationResponse> responseFuture =
-        coordinator.handleCoordinationRequest(Correspondent.InFlightInstantsRequest.getInstance());
+        coordinator.handleCoordinationRequest(Correspondent.InflightInstantsRequest.getInstance());
 
     // Unwrap and verify the response
-    Correspondent.InFlightInstantsResponse response =
+    Correspondent.InflightInstantsResponse response =
         CoordinationResponseSerDe.unwrap(responseFuture.get());
 
     // Check that the response contains the expected checkpoint IDs and instant times
-    Map<Long, String> inFlightInstants = response.getInFlightInstants();
-    assertEquals(2, inFlightInstants.size());
-    assertTrue(inFlightInstants.containsKey(1L));
-    assertTrue(inFlightInstants.containsKey(2L));
-    assertEquals(instant1, inFlightInstants.get(1L));
-    assertEquals(instant2, inFlightInstants.get(2L));
+    Map<Long, String> inflightInstants = response.getInflightInstants();
+    assertEquals(2, inflightInstants.size());
+    assertTrue(inflightInstants.containsKey(1L));
+    assertTrue(inflightInstants.containsKey(2L));
+    assertEquals(instant1, inflightInstants.get(1L));
+    assertEquals(instant2, inflightInstants.get(2L));
   }
 
   // -------------------------------------------------------------------------

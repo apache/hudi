@@ -21,10 +21,12 @@ package org.apache.hudi.sink.partitioner;
 import org.apache.hudi.adapter.ProcessFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.MinibatchIndexBackend;
 
+import lombok.Getter;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
@@ -61,6 +63,8 @@ public class MinibatchBucketAssignFunction
   /**
    * The maximum number of input records can be buffered for MiniBatch.
    */
+  @VisibleForTesting
+  @Getter
   private final int miniBatchSize;
 
   /**
@@ -76,7 +80,7 @@ public class MinibatchBucketAssignFunction
     this.delegateFunction = new BucketAssignFunction(conf);
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
-    this.miniBatchSize = conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE);
+    this.miniBatchSize = Math.max(conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE), FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE.defaultValue());
   }
 
   @Override

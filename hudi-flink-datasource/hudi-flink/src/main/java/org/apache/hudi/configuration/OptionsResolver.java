@@ -187,7 +187,7 @@ public class OptionsResolver {
    */
   public static boolean isMiniBatchBucketAssign(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
-    return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX && conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE) > 0;
+    return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
 
   /**

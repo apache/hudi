@@ -288,6 +288,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     resetCoordinatorToCheckpoint();
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    this.correspondent = new MockCorrespondent(coordinator);
   }
 
   public void checkpointFails(long checkpointId) {

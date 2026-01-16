@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.flink.calcite.shaded.com.google.common.hash.Hashing;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.shaded.curator5.com.google.common.hash.Hashing;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 

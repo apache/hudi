@@ -375,8 +375,8 @@ public class StreamWriteOperatorCoordinator
     if (request instanceof Correspondent.InstantTimeRequest) {
       return handleInstantRequest((Correspondent.InstantTimeRequest) request);
     }
-    if (request instanceof Correspondent.InFlightInstantsRequest) {
-      return handleInFlightInstantsRequest((Correspondent.InFlightInstantsRequest) request);
+    if (request instanceof Correspondent.InflightInstantsRequest) {
+      return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
     }
     throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
   }
@@ -400,8 +400,8 @@ public class StreamWriteOperatorCoordinator
     return response;
   }
 
-  private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InFlightInstantsRequest request) {
-    CoordinationResponse coordinationResponse = Correspondent.InFlightInstantsResponse.getInstance(eventBuffers.getAllCheckpointIdAndInstants());
+  private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
+    CoordinationResponse coordinationResponse = Correspondent.InflightInstantsResponse.getInstance(eventBuffers.getAllCheckpointIdAndInstants());
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(coordinationResponse));
   }
 

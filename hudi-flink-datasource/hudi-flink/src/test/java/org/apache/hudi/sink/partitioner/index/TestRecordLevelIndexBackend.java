@@ -103,9 +103,9 @@ public class TestRecordLevelIndexBackend {
 
       // previous instant commit success, clean
       Correspondent correspondent = mock(Correspondent.class);
-      Map<Long, String> inFlightInstants = new HashMap<>();
-      inFlightInstants.put(1L, "0001");
-      when(correspondent.requestInFlightInstants()).thenReturn(inFlightInstants);
+      Map<Long, String> inflightInstants = new HashMap<>();
+      inflightInstants.put(1L, "0001");
+      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
       recordLevelIndexBackend.onCheckpointComplete(correspondent);
       assertEquals(1, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
       // the cache will only contain 'new_key', others are cleaned.

@@ -76,13 +76,13 @@ public class Correspondent {
   }
 
   /**
-   * Sends a request to the coordinator to fetch the inFlight instants.
+   * Sends a request to the coordinator to fetch the inflight instants.
    */
-  public Map<Long, String> requestInFlightInstants() {
+  public Map<Long, String> requestInflightInstants() {
     try {
-      InFlightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
-          new SerializedValue<>(InFlightInstantsRequest.getInstance())).get());
-      return response.getInFlightInstants();
+      InflightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+          new SerializedValue<>(InflightInstantsRequest.getInstance())).get());
+      return response.getInflightInstants();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);
     }
@@ -117,14 +117,14 @@ public class Correspondent {
   }
 
   /**
-   * A request for the current in-flight instants in the coordinator.
+   * A request for the current inflight instants in the coordinator.
    */
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
-  public static class InFlightInstantsRequest implements CoordinationRequest {
+  public static class InflightInstantsRequest implements CoordinationRequest {
 
-    public static InFlightInstantsRequest getInstance() {
-      return new InFlightInstantsRequest();
+    public static InflightInstantsRequest getInstance() {
+      return new InflightInstantsRequest();
     }
   }
 
@@ -133,12 +133,12 @@ public class Correspondent {
    */
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
-  public static class InFlightInstantsResponse implements CoordinationResponse {
+  public static class InflightInstantsResponse implements CoordinationResponse {
 
-    private final HashMap<Long, String> inFlightInstants;
+    private final HashMap<Long, String> inflightInstants;
 
-    public static InFlightInstantsResponse getInstance(HashMap<Long, String> inFlightInstants) {
-      return new InFlightInstantsResponse(inFlightInstants);
+    public static InflightInstantsResponse getInstance(HashMap<Long, String> inflightInstants) {
+      return new InflightInstantsResponse(inflightInstants);
     }
   }
 }

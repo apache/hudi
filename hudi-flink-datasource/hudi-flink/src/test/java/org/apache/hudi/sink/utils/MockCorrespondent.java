@@ -44,12 +44,12 @@ public class MockCorrespondent extends Correspondent {
   }
 
   @Override
-  public Map<Long, String> requestInFlightInstants() {
+  public Map<Long, String> requestInflightInstants() {
     try {
-      InFlightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InFlightInstantsRequest.getInstance()).get());
-      return response.getInFlightInstants();
+      InflightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InflightInstantsRequest.getInstance()).get());
+      return response.getInflightInstants();
     } catch (Exception e) {
-      throw new HoodieException("Error requesting the inFlight instants from the coordinator", e);
+      throw new HoodieException("Error requesting the inflight instants from the coordinator", e);
     }
   }
 }
