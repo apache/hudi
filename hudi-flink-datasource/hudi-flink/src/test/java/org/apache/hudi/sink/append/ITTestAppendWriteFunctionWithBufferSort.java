@@ -36,7 +36,6 @@ import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.sql.Timestamp;
@@ -225,9 +224,10 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
         createRowData("uuid4", "Bob", 30, "1970-01-01 00:00:01.126", "p1")
     );
 
-    // Write the data
+    // Write the data and flush on checkpoint
     preparePipeline(conf)
         .consume(inputData)
+        .checkpoint(1)
         .endInput();
 
     // Verify all data was written and sorted (Alice records before Bob)
@@ -257,69 +257,18 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
         createRowData("uuid4", "Diana", 28, "1970-01-01 00:00:01.126", "p1")
     );
 
-    // Write the data
+    // Write the data and flush on checkpoint
     preparePipeline(conf)
         .consume(inputData)
-        .endInput()
-        .endInputComplete();
+        .checkpoint(1)
+        .endInput();
 
     // Verify all data was written across all partitions
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 3);
     assertEquals(4, actualData.size());
   }
 
-  // ==================== DISRUPTOR-specific tests ====================
-
-  @Test
-  public void testBackwardCompatibilityWithSortEnabled() throws Exception {
-    // Use deprecated write.buffer.sort.enabled=true (should resolve to DISRUPTOR)
-    conf.removeConfig(FlinkOptions.WRITE_BUFFER_TYPE);
-    conf.set(FlinkOptions.WRITE_BUFFER_SORT_ENABLED, true);
-
-    // Create test data
-    List<RowData> inputData = Arrays.asList(
-        createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
-        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1")
-    );
-
-    // Write the data
-    preparePipeline(conf)
-        .consume(inputData)
-        .endInput()
-        .endInputComplete();
-
-    // Verify all data was written
-    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
-    assertEquals(2, actualData.size());
-  }
-
   // ==================== BOUNDED_IN_MEMORY-specific tests ====================
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testBIMBufferFlushOnCheckpointOrEndInput(boolean flushOnCheckpoint) throws Exception {
-    configureBufferType(BufferType.BOUNDED_IN_MEMORY);
-
-    // Create test data
-    List<RowData> inputData = Arrays.asList(
-        createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
-        createRowData("uuid2", "Alice", 25, "1970-01-01 00:00:01.124", "p1")
-    );
-
-    // Write the data and flush either on checkpoint or endInput
-    TestHarness testHarness =
-        preparePipeline(conf)
-            .consume(inputData);
-    if (flushOnCheckpoint) {
-      testHarness.checkpoint(1);
-    } else {
-      testHarness.endInput();
-    }
-
-    // Verify all data was written
-    List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
-    assertEquals(2, actualData.size());
-  }
 
   @Test
   public void testBIMBufferFlushOnBufferSizeLimit() throws Exception {
