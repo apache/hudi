@@ -59,12 +59,12 @@ public abstract class WriteMarkers implements Serializable {
    * Creates a marker without checking if the marker already exists.
    *
    * @param partitionPath partition path in the table.
-   * @param dataFileName  data file name.
+   * @param fileName      file name.
    * @param type          write IO type.
    * @return the marker path.
    */
-  public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
-    return create(partitionPath, dataFileName, type, false);
+  public Option<Path> create(String partitionPath, String fileName, IOType type) {
+    return create(partitionPath, fileName, type, false);
   }
 
   /**
@@ -72,14 +72,14 @@ public abstract class WriteMarkers implements Serializable {
    * This can invoke marker-based early conflict detection when enabled for multi-writers.
    *
    * @param partitionPath  partition path in the table
-   * @param dataFileName   data file name
+   * @param fileName       file name
    * @param type           write IO type
    * @param writeConfig    Hudi write configs.
    * @param fileId         File ID.
    * @param activeTimeline Active timeline for the write operation.
    * @return the marker path.
    */
-  public Option<Path> create(String partitionPath, String dataFileName, IOType type, HoodieWriteConfig writeConfig,
+  public Option<Path> create(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && writeConfig.isEarlyConflictDetectionEnable()) {
@@ -88,23 +88,23 @@ public abstract class WriteMarkers implements Serializable {
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
-        return create(partitionPath, dataFileName, type, false);
+        return create(partitionPath, fileName, type, false);
       }
-      return createWithEarlyConflictDetection(partitionPath, dataFileName, type, false, writeConfig, fileId, activeTimeline);
+      return createWithEarlyConflictDetection(partitionPath, fileName, type, false, writeConfig, fileId, activeTimeline);
     }
-    return create(partitionPath, dataFileName, type, false);
+    return create(partitionPath, fileName, type, false);
   }
 
   /**
    * Creates a marker if the marker does not exist.
    *
    * @param partitionPath partition path in the table
-   * @param dataFileName data file name
+   * @param fileName file name
    * @param type write IO type
    * @return the marker path or empty option if already exists
    */
-  public Option<Path> createIfNotExists(String partitionPath, String dataFileName, IOType type) {
-    return create(partitionPath, dataFileName, type, true);
+  public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type) {
+    return create(partitionPath, fileName, type, true);
   }
 
   /**
@@ -161,27 +161,27 @@ public abstract class WriteMarkers implements Serializable {
   }
 
   /**
-   * Gets the marker file name, in the format of "[data_file_name].marker.[IO_type]".
+   * Gets the marker file name, in the format of "[file_name].marker.[IO_type]".
    *
-   * @param dataFileName data file name
+   * @param fileName file name
    * @param type IO type
    * @return the marker file name
    */
-  protected String getMarkerFileName(String dataFileName, IOType type) {
-    return String.format("%s%s.%s", dataFileName, HoodieTableMetaClient.MARKER_EXTN, type.name());
+  protected static String getMarkerFileName(String fileName, IOType type) {
+    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, type.name());
   }
 
   /**
    * Returns the marker path. Would create the partition path first if not exists
    *
    * @param partitionPath The partition path
-   * @param dataFileName  The data file name
+   * @param fileName      The file name
    * @param type          The IO type
    * @return path of the marker file
    */
-  protected Path getMarkerPath(String partitionPath, String dataFileName, IOType type) {
+  protected Path getMarkerPath(String partitionPath, String fileName, IOType type) {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
-    String markerFileName = getMarkerFileName(dataFileName, type);
+    String markerFileName = getMarkerFileName(fileName, type);
     return new Path(path, markerFileName);
   }
 
@@ -203,10 +203,18 @@ public abstract class WriteMarkers implements Serializable {
   /**
    * @param context {@code HoodieEngineContext} instance.
    * @param parallelism parallelism for reading the marker files in the directory.
-   * @return all the data file paths of write IO type "CREATE" and "MERGE"
+   * @return all the data file or log file paths of write IO type "CREATE" and "MERGE"
    * @throws IOException
    */
   public abstract Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException;
+
+  /**
+   * @param context {@code HoodieEngineContext} instance.
+   * @param parallelism parallelism for reading the marker files in the directory.
+   * @return all the log file paths of write IO type "APPEND"
+   * @throws IOException
+   */
+  public abstract Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException;
 
   /**
    * @return all the marker paths
@@ -218,19 +226,19 @@ public abstract class WriteMarkers implements Serializable {
    * Creates a marker.
    *
    * @param partitionPath  partition path in the table
-   * @param dataFileName  data file name
+   * @param fileName file name
    * @param type write IO type
    * @param checkIfExists whether to check if the marker already exists
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
-  abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
+  abstract Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists);
 
   /**
    * Creates a marker with early conflict detection for multi-writers. If conflict is detected,
    * an exception is thrown to fail the write operation.
    *
    * @param partitionPath  partition path in the table.
-   * @param dataFileName   data file name.
+   * @param fileName       file name.
    * @param type           write IO type.
    * @param checkIfExists  whether to check if the marker already exists.
    * @param config         Hudi write configs.
@@ -238,6 +246,6 @@ public abstract class WriteMarkers implements Serializable {
    * @param activeTimeline Active timeline for the write operation.
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true.
    */
-  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String fileName, IOType type, boolean checkIfExists,
                                                                 HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline);
 }

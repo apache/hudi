@@ -315,6 +315,63 @@ public class FSUtils {
     }
   }
 
+  /**
+   * Get all the files in the given partition path.
+   *
+   * @param fileSystem File System
+   * @param partitionPathIncludeBasePath The full partition path including the base path
+   * @param filesNamesUnderThisPartition The names of the files under this partition for which file status is needed
+   * @param ignoreMissingFiles If true, missing files will be ignored and empty Option will be added to the result list
+   * @return List of file statuses for the files under this partition
+   */
+  public static List<Option<FileStatus>> getFileStatusesUnderPartition(FileSystem fileSystem,
+                                                                       Path partitionPathIncludeBasePath,
+                                                                       Set<String> filesNamesUnderThisPartition,
+                                                                       boolean ignoreMissingFiles) {
+    String fileSystemType = fileSystem.getScheme();
+    boolean useListStatus = StorageSchemes.isListStatusFriendly(fileSystemType);
+    List<Option<FileStatus>> result = new ArrayList<>(filesNamesUnderThisPartition.size());
+    try {
+      if (useListStatus) {
+        FileStatus[] fileStatuses = fileSystem.listStatus(partitionPathIncludeBasePath,
+            path -> filesNamesUnderThisPartition.contains(path.getName()));
+        Map<String, FileStatus> filenameToFileStatusMap = Arrays.stream(fileStatuses)
+            .collect(Collectors.toMap(
+                fileStatus -> fileStatus.getPath().getName(),
+                fileStatus -> fileStatus
+            ));
+
+        for (String fileName : filesNamesUnderThisPartition) {
+          if (filenameToFileStatusMap.containsKey(fileName)) {
+            result.add(Option.of(filenameToFileStatusMap.get(fileName)));
+          } else {
+            if (!ignoreMissingFiles) {
+              throw new FileNotFoundException("File not found: " + new Path(partitionPathIncludeBasePath.toString(), fileName));
+            }
+            result.add(Option.empty());
+          }
+        }
+      } else {
+        for (String fileName : filesNamesUnderThisPartition) {
+          Path fullPath = new Path(partitionPathIncludeBasePath.toString(), fileName);
+          try {
+            FileStatus fileStatus = fileSystem.getFileStatus(fullPath);
+            result.add(Option.of(fileStatus));
+          } catch (FileNotFoundException fileNotFoundException) {
+            if (ignoreMissingFiles) {
+              result.add(Option.empty());
+            } else {
+              throw new FileNotFoundException("File not found: " + fullPath.toString());
+            }
+          }
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("List files under " + partitionPathIncludeBasePath + " failed", e);
+    }
+    return result;
+  }
+
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
     String fileName = new File(fullName).getName();
@@ -525,6 +582,7 @@ public class FSUtils {
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
     try {
+      // TODO: Use a better filter to avoid listing all files i.e. use baseCommitTime in the filter too.
       PathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
       return Arrays.stream(fs.listStatus(partitionPath, pathFilter))
           .map(HoodieLogFile::new)
