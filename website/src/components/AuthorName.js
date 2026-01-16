@@ -12,22 +12,20 @@ const AuthorName = ({ authors = [], className, withLink = true }) => {
   return (
     <>
       {authors.map((author, idx) => (
-        <div key={idx}>
-          <div>
-            {author.name && (
-              <div>
-                {idx !== 0 ? (idx !== authors.length - 1 ? "," : "and") : ""}
-                {withLink ? (
-                  <Link href={author.url} itemProp="url">
-                    {renderName(author)}
-                  </Link>
-                ) : (
-                  renderName(author)
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <span key={idx}>
+          {author.name && (
+            <>
+              {idx !== 0 ? (idx !== authors.length - 1 ? ", " : " and ") : " "}
+              {withLink ? (
+                <Link href={author.url} itemProp="url">
+                  {renderName(author)}
+                </Link>
+              ) : (
+                renderName(author)
+              )}
+            </>
+          )}
+        </span>
       ))}
     </>
   );
