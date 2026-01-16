@@ -18,8 +18,6 @@
 
 package org.apache.hudi.sink.append;
 
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -46,11 +44,9 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Sink function to write the data to the underneath filesystem using LMAX Disruptor
@@ -94,14 +90,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     super.open(parameters);
 
     // Resolve sort keys (defaults to record key if not specified)
-    String sortKeys = AppendWriteFunctions.resolveSortKeys(config);
-    ValidationUtils.checkArgument(StringUtils.nonEmpty(sortKeys),
-        "Sort keys can't be null or empty for append write with disruptor sort. "
-            + "Either set write.buffer.sort.keys or ensure record key field is configured.");
-
-    List<String> sortKeyList = Arrays.stream(sortKeys.split(","))
-        .map(String::trim)
-        .collect(Collectors.toList());
+    List<String> sortKeyList = AppendWriteFunctions.resolveSortKeys(config);
 
     // Create Flink-native sort components
     SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, sortKeyList.toArray(new String[0]));
@@ -113,7 +102,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     initDisruptorBuffer();
 
     log.info("{} initialized with disruptor buffer, sort keys: {}, ring size: {}",
-        getClass().getSimpleName(), sortKeys, ringBufferSize);
+        getClass().getSimpleName(), sortKeyList, ringBufferSize);
   }
 
   private void initDisruptorBuffer() throws Exception {

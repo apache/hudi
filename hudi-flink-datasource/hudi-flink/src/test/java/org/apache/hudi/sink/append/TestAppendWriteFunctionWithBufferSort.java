@@ -25,6 +25,9 @@ import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -58,15 +61,15 @@ public class TestAppendWriteFunctionWithBufferSort {
   public void testSortKeysDefaultToRecordKey() {
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
 
-    String resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
-    assertEquals(conf.get(FlinkOptions.RECORD_KEY_FIELD), resolvedSortKeys);
+    List<String> resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
+    assertEquals(Arrays.asList("uuid"), resolvedSortKeys);
   }
 
   @Test
   public void testCustomSortKeysOverrideDefault() {
     conf.set(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "age,name");
 
-    String resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
-    assertEquals("age,name", resolvedSortKeys);
+    List<String> resolvedSortKeys = AppendWriteFunctions.resolveSortKeys(conf);
+    assertEquals(Arrays.asList("age", "name"), resolvedSortKeys);
   }
 }

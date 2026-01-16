@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.buffer.BufferType;
 
@@ -28,6 +29,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Factory utilities for creating {@link AppendWriteFunction} instances based on configuration.
@@ -59,7 +64,6 @@ public abstract class AppendWriteFunctions {
    * Resolves the buffer type from configuration, handling backward compatibility.
    */
   public static String resolveBufferType(Configuration conf) {
-    // New config takes precedence
     String bufferType = conf.get(FlinkOptions.WRITE_BUFFER_TYPE);
     if (!BufferType.NONE.name().equalsIgnoreCase(bufferType)) {
       return bufferType;
@@ -76,13 +80,23 @@ public abstract class AppendWriteFunctions {
 
   /**
    * Resolves sort keys from configuration, defaulting to record key field(s) if not specified.
+   * Validates that sort keys are non-empty and parses them into a list.
+   *
+   * @param conf the Flink configuration
+   * @return list of sort key field names
+   * @throws IllegalArgumentException if sort keys are null or empty
    */
-  public static String resolveSortKeys(Configuration conf) {
+  public static List<String> resolveSortKeys(Configuration conf) {
     String sortKeys = conf.get(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
     if (StringUtils.isNullOrEmpty(sortKeys)) {
       // Default to record key field(s)
-      return conf.get(FlinkOptions.RECORD_KEY_FIELD);
+      sortKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD);
     }
-    return sortKeys;
+    ValidationUtils.checkArgument(StringUtils.nonEmpty(sortKeys),
+        "Sort keys can't be null or empty for append write with buffer sort. "
+            + "Either set write.buffer.sort.keys or ensure record key field is configured.");
+    return Arrays.stream(sortKeys.split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
   }
 }
