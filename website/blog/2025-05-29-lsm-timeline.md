@@ -2,13 +2,12 @@
 title: "Exploring Apache Hudi’s New Log-Structured Merge (LSM) Timeline"
 excerpt: "What is the new LSM timeline in Hudi & how is it implemented"
 authors: [dipankar-mazumdar]
-category: blog
+category: deep-dive
 image: /assets/images/blog/lsm-1200x600.jpg
 tags:
-- Apache Hudi
-- LSM Tree
-- Performance
-- Non-Blocking Concurrency Control
+- lsm tree
+- performance
+- non blocking concurrency control
 ---
 
 :::tip TL;DR

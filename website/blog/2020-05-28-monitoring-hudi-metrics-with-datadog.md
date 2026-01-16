@@ -2,11 +2,9 @@
 title: "Monitor Hudi metrics with Datadog"
 excerpt: "Introducing the feature of reporting Hudi metrics via Datadog HTTP API"
 authors: [xushiyan]
-category: blog
+category: how-to
 tags:
-- how-to
 - metrics
-- apache hudi
 ---
 
 ## Availability

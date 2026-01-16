@@ -2,13 +2,12 @@
 title: "Column File Formats: How Hudi Leverages Parquet and ORC "
 excerpt: "Explains how Hudi uses Parquet and ORC"
 author: Albert Wong
-category: blog
+category: deep-dive
 image: /assets/images/blog/hudi-parquet-orc.png
 tags:
-- Data Lake
-- Apache Hudi
-- Apache Parquet
-- Apache ORC
+- data lake
+- apache parquet
+- apache orc
 ---
 
 ## Introduction

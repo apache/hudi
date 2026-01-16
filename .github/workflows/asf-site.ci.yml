@@ -148,6 +148,31 @@ jobs:
             echo ""
             echo "✅ All docs markdown links are properly formatted"
           fi
+      - name: Validate blog posts
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "🔍 Checking blog post formatting..."
+
+          # Get the base branch
+          git fetch origin ${{ github.base_ref }}
+
+          # Get list of changed files in the PR
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
+
+          # Filter for .md and .mdx files in website/blog/
+          BLOG_FILES=$(echo "$CHANGED_FILES" | grep -E '^website/blog/.*\.(md|mdx)$' || true)
+
+          if [ -z "$BLOG_FILES" ]; then
+            echo "✅ No blog files changed in this PR"
+            exit 0
+          fi
+
+          echo "📝 Validating the following blog files:"
+          echo "$BLOG_FILES"
+          echo ""
+
+          # Run the validation script
+          python3 .github/scripts/validate-blog.py $BLOG_FILES
       - name: Prepare branch
         run: |
           git config --global user.name "CI BOT"

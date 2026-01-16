@@ -250,43 +250,54 @@ Apr 2017, DataEngConf, San Francisco, CA [Slides](https://www.slideshare.net/vin
 
 When adding a new blog, please follow these guidelines.
 
-1. Every Blog should have the `title`, `authors`, `image`, `tags` in the metadata of the blog. For example the front matter
+1. Every Blog should have the `title`, `authors`, `category`, `image`, `tags` in the metadata of the blog. For example the front matter
    for a blog should look like below.
 
 ```
 ---
 title: "Blog title"
 author: FirstName LastName
-category: blog
+category: deep-dive
 image: /assets/images/blog/<image_file>
 tags:
-- how-to
 - deltastreamer
-- incremental-processing
-- apache hudi
+- incremental processing
 ---
 ```
+
+### Blog Categories
+
+The `category` field determines how the blog appears in the blog list filter UI. Use one of the following categories:
+
+| Category | Value | Description |
+|----------|-------|-------------|
+| Deep Dive | `deep-dive` | Technical articles exploring Hudi internals, architecture, or advanced concepts |
+| How To | `how-to` | Tutorials, recipes, step-by-step guides showing how to use features |
+| Case Study | `case-study` | Real-world adoption stories from companies using Hudi in production |
+| Community | `community` | Announcements, release updates, meetup recaps, community news |
+
+**Note:** Categories are derived dynamically from the blog frontmatter. If you add a blog with a new category value,
+it will automatically appear in the filter UI. However, for consistency, prefer using one of the established categories above.
+
+### Blog File Format
 
 2. The blog can be inline or referring to an external blog. If its an inline blog please save it as `.md` file.
    Example for an inline blog - (Build Open Lakehouse using Apache Hudi & dbt)[https://github.com/apache/hudi/blob/asf-site/website/blog/2022-07-11-build-open-lakehouse-using-apache-hudi-and-dbt.md].
    If the blog is referring to an external blog you would need to embed the redirect url and save it as a `.mdx` file.
    Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Compariso)[https://raw.githubusercontent.com/apache/hudi/asf-site/website/blog/2022-08-18-Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison.mdx]
 3. The image must be uploaded in the path /assets/images/blog/<image_file-name> and should be of standard size 1200 \* 600
+
+### Blog Tags
+
 4. The tags should be representative of these
    1. tag1
-      - how-to (tutorial, recipes, show case how to use feature x)
-      - use-case (some community users talking about their use-case)
-      - design (technical articles talking about Hudi internal design/impl)
-      - performance (involves performance related blogs)
-      - blog (anything else such as announcements/release updates/insights/guides/tutorials/concepts overview etc)
-   2. tag 2
       - Represent individual features - clustering, compaction, ingestion, meta-sync etc. Make sure you keep the features **singular**, i.e., Use `upsert` not `upserts` or use `delete` not `deletes`
-   3. tag 3
-      - Source. This is usually the second level domain name for this article gathered from the url link.
-        For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here.
-        Another example - for https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf we would use
-        `robinhood` as the tag. For blogs directly contributed to hudi repo, we can use `apache hudi` as the tag.
-   4. Please refer to guidelines for tagging [below](guidelines-to-tag-properly)
+   2. tag 2
+      - Source attribution using `source:` prefix. For example:
+        - `source:medium` for Medium articles
+        - `source:linkedin` for LinkedIn articles
+        - `source:onehouse` for Onehouse blog posts
+   3. Please refer to guidelines for tagging [below](guidelines-to-tag-properly)
 
 ## Video Guides
 
@@ -310,7 +321,6 @@ tags:
 - hands-on
 - csv
 - aws glue
-- apache hudi
 ---
 ```
 
@@ -347,7 +357,7 @@ tags:
       - Please do not use `index` as a tag. Instead, use `indexing`.
       - Please do not use `-` in tags, since it may affect discoverability.
       - When referring to a specific type of query like `snapshot query` with query as the suffix use singular.
-      - When referring to write operation types prefer plural. Ex: `inserts` over `insert`.
+      - When referring to write operation types prefer singular. Ex: `insert` over `inserts`, `upsert` over `upserts`.
       - Avoid class names
 
 ## Maintainer

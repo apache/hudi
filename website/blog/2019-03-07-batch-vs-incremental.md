@@ -1,8 +1,10 @@
 ---
 title: "Big Batch vs Incremental Processing"
 authors: [vinoth-chandar]
-category: blog
+category: deep-dive
 image: /assets/images/blog/batch_vs_incremental.png
+tags:
+- incremental processing
 ---
 
 ![](/assets/images/blog/batch_vs_incremental.png)

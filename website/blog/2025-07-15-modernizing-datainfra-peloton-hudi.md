@@ -2,12 +2,11 @@
 title: "Modernizing Data Infrastructure at Peloton Using Apache Hudi"
 excerpt: "How Peloton's Data Platform team scaled their data infrastructure using Hudi"
 author: Amaresh Bingumalla, Thinh Kenny Vu, Gabriel Wang, Arun Vasudevan in collaboration with Dipankar Mazumdar
-category: blog
+category: case-study
 image: /assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/peloton-1200x600.jpg
 tags:
-- Apache Hudi
-- Peloton
-- Community
+- peloton
+- community
 ---
 
 :::tip TL;DR

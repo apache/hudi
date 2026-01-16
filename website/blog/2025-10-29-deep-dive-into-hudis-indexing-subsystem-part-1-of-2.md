@@ -2,12 +2,11 @@
 title: "Deep Dive Into Hudi’s Indexing Subsystem (Part 1 of 2)"
 excerpt: ""
 authors: [xushiyan]
-category: blog
+category: deep-dive
 image: /assets/images/blog/2025-10-29-deep-dive-into-hudis-indexing-subsystem-part-1-of-2/fig1.png
 tags:
-- hudi
 - indexing
-- data lakehouse
+- lakehouse
 - data skipping
 ---
 

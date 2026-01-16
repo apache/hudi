@@ -2,12 +2,11 @@
 title: "Introducing Secondary Index in Apache Hudi Lakehouse Platform"
 excerpt: "What's & How's of Secondary indexes in Hudi 1.0"
 authors: [dipankar-mazumdar, aditya-goenka]
-category: blog
+category: deep-dive
 image: /assets/images/blog/sec-thumb.jpg
 tags:
-- Apache Hudi
-- Indexing
-- Performance
+- indexing
+- performance
 ---
 
 :::tip TL;DR

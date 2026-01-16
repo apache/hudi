@@ -2,17 +2,14 @@
 title: "Concurrency Control in Open Data Lakehouse"
 excerpt: "How various concurrency control techniques works in Apache Hudi, Apache Iceberg & Delta Lake"
 authors: [dipankar-mazumdar]
-category: blog
+category: deep-dive
 image: /assets/images/blog/concurrency_control/concurrency_blog_thumb.jpg
 tags:
-- multi-writer
-- concurrency
-- concurrency-control
-- non-blocking concurrency-control
-- Apache Hudi
-- Apache Iceberg
-- Delta Lake
-- blog
+- multi writer
+- concurrency control
+- non blocking concurrency control
+- apache iceberg
+- delta lake
 - design
 ---
 

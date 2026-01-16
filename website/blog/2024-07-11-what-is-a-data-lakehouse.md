@@ -2,14 +2,13 @@
 title: "What is a Data Lakehouse & How does it Work?"
 excerpt: "Explains the concept of the lakehouse architecture"
 authors: [dipankar-mazumdar]
-category: blog
+category: deep-dive
 image: /assets/images/blog/dlh_1200.png
 tags:
-- data lakehouse
-- Apache Hudi
-- Apache Iceberg
-- Delta Lake
-- Open Architecture
+- lakehouse
+- apache iceberg
+- delta lake
+- open architecture
 ---
 
 A data lakehouse is a hybrid data architecture that combines the best attributes of data warehouses and data lakes to address their respective limitations. This innovative approach to data management brings the transactional capabilities of data warehouses to cloud-based data lakes, offering scalability at lower costs. 
