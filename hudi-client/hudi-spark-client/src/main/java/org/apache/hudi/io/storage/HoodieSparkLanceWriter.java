@@ -81,7 +81,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
                                 boolean populateMetaFields) throws IOException {
-    super(storage, file, DEFAULT_BATCH_SIZE);
+    super(file, DEFAULT_BATCH_SIZE);
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
@@ -191,7 +191,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     }
 
     @Override
-    public void finish() {
+    public void finishBatch() {
       lanceArrowWriter.finish();
     }
   }
