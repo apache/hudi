@@ -667,7 +667,7 @@ Batch (Snapshot) read still merge all the intermediate changes, regardless of wh
 :::note
 After setting `changelog.enable` as `true`, the retention of changelog records are only best effort: the asynchronous compaction task will merge the changelog records into one record, so if the
 stream source does not consume timely, only the merged record for each key can be read after compaction. The solution is to reserve some buffer time for the reader by adjusting the compaction strategy, such as
-the compaction options: [`compaction.delta_commits`](hoodie_streaming_ingestion.md#compaction) and [`compaction.delta_seconds`](hoodie_streaming_ingestion.md#compaction).
+the compaction options: `compaction.delta_commits` and `compaction.delta_seconds`.
 :::
 
 
