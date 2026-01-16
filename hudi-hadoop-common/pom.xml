@@ -160,7 +160,7 @@
     </dependency>
     <!-- Lance Core SDK -->
     <dependency>
-      <groupId>com.lancedb</groupId>
+      <groupId>org.lance</groupId>
       <artifactId>lance-core</artifactId>
     </dependency>
   </dependencies>
