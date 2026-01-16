@@ -6,7 +6,6 @@ This script checks newly added or modified blog posts for:
 1. Required fields (title, author/authors, category, image, tags)
 2. Valid category values
 3. Tag format rules
-4. Source attribution for external blogs
 """
 
 import os
@@ -25,7 +24,7 @@ FORBIDDEN_TAGS = {
 }
 
 # Required frontmatter fields
-REQUIRED_FIELDS = ['title', 'category', 'image', 'tags']
+REQUIRED_FIELDS = ['title', 'category', 'image']
 
 
 def parse_frontmatter(content: str) -> dict | None:
@@ -75,12 +74,6 @@ def parse_frontmatter(content: str) -> dict | None:
     return frontmatter
 
 
-def check_has_redirect(content: str) -> bool:
-    """Check if the blog post redirects to an external URL."""
-    # Look for Redirect component or meta refresh
-    return 'Redirect' in content or 'http-equiv="refresh"' in content
-
-
 def validate_blog(filepath: str) -> list[str]:
     """Validate a single blog post. Returns list of error messages."""
     errors = []
@@ -94,9 +87,6 @@ def validate_blog(filepath: str) -> list[str]:
     frontmatter = parse_frontmatter(content)
     if frontmatter is None:
         return ["Missing or invalid frontmatter (must start with --- and end with ---)"]
-
-    filename = os.path.basename(filepath)
-    is_external = filepath.endswith('.mdx') and check_has_redirect(content)
 
     # Check required fields
     for field in REQUIRED_FIELDS:
@@ -119,40 +109,25 @@ def validate_blog(filepath: str) -> list[str]:
             f"Must be one of: {', '.join(sorted(ALLOWED_CATEGORIES))}"
         )
 
-    # Validate tags
+    # Validate tags (optional, but if present must follow format rules)
     tags = frontmatter.get('tags', [])
     if isinstance(tags, str):
         tags = [tags]
 
-    if not tags:
-        errors.append("At least one tag is required")
-    else:
-        has_source_tag = False
-        for tag in tags:
-            tag_lower = tag.lower().strip()
+    for tag in tags:
+        tag_lower = tag.lower().strip()
 
-            # Check forbidden tags
-            if tag_lower in FORBIDDEN_TAGS:
-                errors.append(
-                    f"Forbidden tag '{tag}': {FORBIDDEN_TAGS[tag_lower]}"
-                )
-
-            # Check for hyphens in tags
-            if '-' in tag and not tag.startswith('source:'):
-                errors.append(
-                    f"Tag '{tag}' contains hyphen. "
-                    f"Use spaces instead (e.g., 'apache spark' not 'apache-spark')"
-                )
-
-            # Track source attribution
-            if tag.startswith('source:'):
-                has_source_tag = True
-
-        # External blogs should have source attribution
-        if is_external and not has_source_tag:
+        # Check forbidden tags
+        if tag_lower in FORBIDDEN_TAGS:
             errors.append(
-                "External blog (with redirect) should have a 'source:' tag "
-                "(e.g., 'source:medium', 'source:linkedin')"
+                f"Forbidden tag '{tag}': {FORBIDDEN_TAGS[tag_lower]}"
+            )
+
+        # Check for hyphens in tags
+        if '-' in tag:
+            errors.append(
+                f"Tag '{tag}' contains hyphen. "
+                f"Use spaces instead (e.g., 'apache spark' not 'apache-spark')"
             )
 
     return errors
