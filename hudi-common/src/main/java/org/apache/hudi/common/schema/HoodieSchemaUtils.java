@@ -521,10 +521,10 @@ public final class HoodieSchemaUtils {
 
   /**
    * Appends provided new fields at the end of the given schema
-   * <p></p>
+   * <p>
    * NOTE: No deduplication is made, this method simply appends fields at the end of the list
    *       of the source schema as is
-   * <p></p>
+   * <p>
    * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
    */
   public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {

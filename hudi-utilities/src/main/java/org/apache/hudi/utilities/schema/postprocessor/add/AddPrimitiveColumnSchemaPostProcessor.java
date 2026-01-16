@@ -100,7 +100,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
     ValidationUtils.checkArgument(!Schema.Type.NULL.getName().equals(type));
 
     HoodieSchema newSchema = createSchema(type, nullable);
-    return HoodieSchemaField.of(columnName, newSchema, doc, defaultValue.isPresent() ? defaultValue.get() : null);
+    return HoodieSchemaField.of(columnName, newSchema, doc, defaultValue.orElse(null));
   }
 
   private HoodieSchema createSchema(String type, boolean nullable) {
