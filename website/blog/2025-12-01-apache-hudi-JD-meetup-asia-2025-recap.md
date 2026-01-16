@@ -2,13 +2,12 @@
 title: "Next Generation Lakehouse: New Engine for the Intelligent Future | Apache Hudi Meetup Asia Recap"
 excerpt: "A comprehensive recap of the Apache Hudi Meetup Asia held at JD.com headquarters, featuring insights from Onehouse, JD.com, Kuaishou, and Huawei on Hudi 1.1, AI-native architectures, and production optimizations."
 author: "Team at JD.com"
-category: blog
+category: community
 image: /assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image7.jpg
 tags:
-  - hudi
-  - meetup
-  - lakehouse
-  - community
+- meetup
+- lakehouse
+- community
 ---
 
 ---

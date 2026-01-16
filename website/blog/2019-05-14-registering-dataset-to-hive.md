@@ -2,10 +2,9 @@
 title: "Registering sample dataset to Hive via beeline"
 excerpt: "How to manually register HUDI dataset into Hive using beeline"
 authors: [vinoth-chandar]
-category: blog
+category: how-to
 tags:
-- how-to
-- apache hudi
+- hive
 ---
 
 Hudi hive sync tool typically handles registration of the dataset into Hive metastore. In case, there are issues with quickstart around this, following page shows commands that can be used to do this manually via beeline.  

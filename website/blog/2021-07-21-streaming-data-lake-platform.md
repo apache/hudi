@@ -2,12 +2,10 @@
 title: "Apache Hudi - The Data Lake Platform"
 excerpt: "It's been called many things. But, we have always been building a data lake platform"
 authors: [vinoth-chandar]
-category: blog
+category: deep-dive
 image: /assets/images/blog/hudi_streaming.png
 tags:
-- datalake platform
-- blog
-- apache hudi
+- data lake
 ---
 
 As early as 2016, we set out a [bold, new vision](https://www.oreilly.com/content/ubers-case-for-incremental-processing-on-hadoop/) reimagining batch data processing through a new “**incremental**” data processing stack - alongside the existing batch and streaming stacks. 

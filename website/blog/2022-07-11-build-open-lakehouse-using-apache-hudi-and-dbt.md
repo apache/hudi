@@ -2,13 +2,11 @@
 title: "Build Open Lakehouse using Apache Hudi & dbt"
 excerpt: "How to style blog focused projects on teaching how to build an open Lakehouse using Apache Hudi & dbt"
 author: Vinoth Govindarajan
-category: blog
+category: how-to
 image: /assets/images/blog/hudi_dbt_lakehouse.png
 tags:
-- how-to
-- deltastreamer
+- hudi streamer
 - incremental processing
-- apache hudi
 ---
 
 The focus of this blog is to show you how to build an open lakehouse leveraging incremental data processing and performing field-level updates. We are excited to announce that you can now use Apache Hudi + dbt for building open [data lakehouses](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/).

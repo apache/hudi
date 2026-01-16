@@ -2,14 +2,12 @@
 title: "Record Level Index: Hudi's blazing fast indexing for large-scale datasets"
 excerpt: "Announcing the Record Level Index in Apache Hudi"
 authors: [xushiyan, sivabalan]
-category: blog
+category: deep-dive
 image: /assets/images/blog/record-level-index/03.RLI_bulkinsert.png
 tags:
 - design
 - indexing
 - metadata
-- apache hudi
-- blog
 ---
 
 ## Introduction

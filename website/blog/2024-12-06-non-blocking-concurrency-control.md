@@ -2,14 +2,13 @@
 title: "Introducing Hudi's Non-blocking Concurrency Control for streaming, high-frequency writes"
 excerpt: "Announcing the Non-blocking Concurrency Control in Apache Hudi"
 authors: [danny-chan]
-category: blog
+category: deep-dive
 image: /assets/images/blog/non-blocking-concurrency-control/lsm_archive_timeline.png
 tags:
 - design
-- streaming ingestion
-- multi-writer
-- concurrency-control
-- blog
+- streaming
+- multi writer
+- concurrency control
 ---
 
 ## Introduction

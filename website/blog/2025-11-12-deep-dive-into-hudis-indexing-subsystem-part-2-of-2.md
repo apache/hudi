@@ -2,13 +2,12 @@
 title: Deep Dive Into Hudi's Indexing Subsystem (Part 2 of 2)
 excerpt: 'Explore advanced indexing in Apache Hudi: record and secondary indexes for fast point lookups, expression indexes for transformed predicates, and async indexing for building indexes without blocking writes.'
 authors: [xushiyan]
-category: blog
+category: deep-dive
 image: /assets/images/blog/2025-11-12-deep-dive-into-hudis-indexing-subsystem-part-2-of-2/fig1.png
 tags:
-  - hudi
-  - indexing
-  - data lakehouse
-  - data skipping
+- indexing
+- lakehouse
+- data skipping
 ---
 
 In [part 1](https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2/), we explored how Hudi's metadata table functions as a self-managed, multimodal indexing subsystem. We covered its internal architecture—a partitioned Hudi Merge-on-Read (MOR) table using HFile format for efficient key lookups—and how the files, column stats, and partition stats indexes work together to implement powerful data skipping. These indexes dramatically reduce I/O by pruning partitions and files that don't contain the data your query needs.

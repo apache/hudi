@@ -2,13 +2,11 @@
 title: "Understanding Data Lake Change Data Capture"
 excerpt: "Explains the concept of CDC in data lakes"
 authors: [sagar-lakshmipathy]
-category: blog
+category: deep-dive
 image: /assets/images/blog/data-lake-cdc/hudi-cdc.jpg
 tags:
-- Data Lake
-- Apache Hudi
-- Change Data Capture
-- CDC
+- data lake
+- cdc
 ---
 
 ## Introduction

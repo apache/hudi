@@ -2,12 +2,11 @@
 title: "A Deep Dive on Merge-on-Read (MoR) in Lakehouse Table Formats"
 excerpt: "How is MoR implemented in Hudi, Iceberg, Delta and how it impacts workloads"
 authors: [dipankar-mazumdar]
-category: blog
+category: deep-dive
 image: /assets/images/blog/2025-07-21-mor-comparison/mor-1200x600.jpg
 tags:
-- Apache Hudi
-- Merge-on-Read (MoR)
-- Streaming
+- mor
+- streaming
 ---
 
 :::tip 

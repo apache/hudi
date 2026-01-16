@@ -2,11 +2,10 @@
 title: "Hudi’s Automatic File Sizing Delivers Unmatched Performance"
 excerpt: "Explains how Hudi handles small files during ingestion and its benefits"
 authors: [aditya-goenka]
-category: blog
+category: deep-dive
 image: /assets/images/blog/2024-06-07-apache-hudi-a-deep-dive-with-python-code-examples.png
 tags:
-- Data Lake
-- Apache Hudi
+- data lake
 ---
 
 ## Introduction

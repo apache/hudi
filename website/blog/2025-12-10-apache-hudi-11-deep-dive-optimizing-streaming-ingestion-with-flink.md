@@ -2,12 +2,11 @@
 title: "Apache Hudi 1.1 Deep Dive: Optimizing Streaming Ingestion with Apache Flink"
 excerpt: ''
 authors: [shuo-cheng]
-category: blog
+category: deep-dive
 image: /assets/images/blog/2025-12-10-apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink/benchmark-string-schemas.png
 tags:
-  - hudi
-  - flink
-  - performance
+- apache flink
+- performance
 ---
 
 ---

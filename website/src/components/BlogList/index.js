@@ -185,7 +185,7 @@ export default function BlogList() {
     };
 
     // Sort categories alphabetically, with known ones first in preferred order
-    const preferredOrder = ['deep-dive', 'how-to', 'case-study', 'community'];
+    const preferredOrder = ['community', 'deep-dive', 'how-to', 'case-study'];
     const sortedCategories = Array.from(categorySet).sort((a, b) => {
       const aIndex = preferredOrder.indexOf(a);
       const bIndex = preferredOrder.indexOf(b);
