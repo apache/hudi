@@ -982,12 +982,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select _hoodie_record_key, id, name, value, ts, day, hh from $tableName")(
           Seq(keyPrefix + "1", 1, "a1", 10, 1000, "2025-07-29", 12)
         )
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.new.encoding = '$encodeSingleKeyFieldValue'
-             |)
-             |""".stripMargin)
+
+        spark.sql(s"set hoodie.write.complex.keygen.new.encoding = $encodeSingleKeyFieldValue")
+
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
@@ -1047,6 +1044,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         )(
           Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
         )
+
+        spark.sql(s"set hoodie.write.complex.keygen.new.encoding=")
       }
     }
   }
