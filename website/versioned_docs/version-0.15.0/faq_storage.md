@@ -129,7 +129,7 @@ This is an advanced version of the bloom filter which grows dynamically as the n
 
 ### How do I verify datasource schema reconciliation in Hudi?
 
-With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](/docs/0.15.0/configurations/#hoodiedatasourcewritereconcileschema) config.
+With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](configurations.md#hoodiedatasourcewritereconcileschema) config.
 
 Example how schema reconciliation works with Spark:
 

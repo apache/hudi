@@ -7,7 +7,7 @@ keywords: [ hudi, metadata, S3 file listings]
 
 Database indices contain auxiliary data structures to quickly locate records needed, without reading unnecessary data 
 from storage. Given that Hudi’s design has been heavily optimized for handling mutable change streams, with different 
-write patterns, Hudi considers [indexing](/docs/0.15.0/metadata#indexing) as an integral part of its design and has uniquely supported 
+write patterns, Hudi considers [indexing](metadata.md#indexing) as an integral part of its design and has uniquely supported 
 [indexing capabilities](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) from its inception, to speed 
 up upserts on the [Data Lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/). While Hudi's indices has benefited writers for fast upserts and deletes, Hudi's metadata table 
 aims to tap these benefits more generally for both the readers and writers. The metadata table implemented as a single 

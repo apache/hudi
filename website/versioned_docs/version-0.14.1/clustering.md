@@ -133,7 +133,7 @@ dynamically expanding the buckets for bucket index datasets.
 
 After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
 based on sort columns and size. The strategy can be specified using the
-config [hoodie.clustering.execution.strategy.class](/docs/0.14.1/configurations/#hoodieclusteringexecutionstrategyclass). By
+config [hoodie.clustering.execution.strategy.class](configurations.md#hoodieclusteringexecutionstrategyclass). By
 default, Hudi sorts the file groups in the plan by the specified columns, while meeting the configured target file
 sizes.
 
@@ -159,12 +159,12 @@ The available strategies are as follows:
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the config for update strategy - [`hoodie.clustering.updates.strategy`](/docs/0.14.1/configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
+the config for update strategy - [`hoodie.clustering.updates.strategy`](configurations.md#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
 exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
 simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 
 We discussed the critical strategy configurations. All other configurations related to clustering are
-listed [here](/docs/0.14.1/configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
+listed [here](configurations.md#Clustering-Configs). Out of this list, a few configurations that will be very useful
 for inline or async clustering are shown below with code samples.
 
 ## Inline clustering

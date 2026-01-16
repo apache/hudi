@@ -37,7 +37,7 @@ frequent `file handle` switching.
 :::note  
 The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism will affect the number of small files.
 In theory, the parallelism of `bulk_insert` is the number of `bucket`s (In particular, when each bucket writes to maximum file size, it
-will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](/docs/1.0.2/configurations#writebucket_assigntasks).
+will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](configurations.md#writebucket_assigntasks).
 :::
 
 #### Options
@@ -101,7 +101,7 @@ Batch (Snapshot) read still merge all the intermediate changes, regardless of wh
 :::note
 After setting `changelog.enable` as `true`, the retention of changelog records are only best effort: the asynchronous compaction task will merge the changelog records into one record, so if the
 stream source does not consume timely, only the merged record for each key can be read after compaction. The solution is to reserve some buffer time for the reader by adjusting the compaction strategy, such as
-the compaction options: [`compaction.delta_commits`](/docs/1.0.2/ingestion_flink#compaction) and [`compaction.delta_seconds`](/docs/1.0.2/ingestion_flink#compaction).
+the compaction options: [`compaction.delta_commits`](ingestion_flink.md#compaction) and [`compaction.delta_seconds`](/docs/1.0.2/ingestion_flink#compaction).
 :::
 
 

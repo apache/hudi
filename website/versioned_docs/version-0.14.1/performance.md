@@ -14,7 +14,7 @@ column statistics etc. Even on some cloud data stores, there is often cost to li
 
 Here are some ways to efficiently manage the storage of your Hudi tables.
 
-- The [small file handling feature](/docs/0.14.1/configurations/#hoodieparquetsmallfilelimit) in Hudi, profiles incoming workload
+- The [small file handling feature](configurations.md#hoodieparquetsmallfilelimit) in Hudi, profiles incoming workload
   and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.
 - Cleaner can be [configured](configurations.md#hoodiecleanercommitsretained) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
 - User can also tune the size of the [base/parquet file](configurations.md#hoodieparquetmaxfilesize), [log files](configurations.md#hoodielogfilemaxsize) & expected [compression ratio](configurations.md#hoodieparquetcompressionratio),

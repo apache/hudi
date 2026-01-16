@@ -11,7 +11,7 @@ concurrency. These file versions provide history and enable time travel and roll
 how much history you keep to balance your costs. Cleaning service plays a crucial role in manging the tradeoff between 
 retaining long history of data and the associated storage costs.  
 
-Hudi enables [Automatic Hudi cleaning](/docs/1.0.0/configurations/#hoodiecleanautomatic) by default. Cleaning is invoked 
+Hudi enables [Automatic Hudi cleaning](configurations.md#hoodiecleanautomatic) by default. Cleaning is invoked 
 immediately after each commit, to delete older file slices. It's recommended to leave this enabled to ensure metadata 
 and data storage growth is bounded. Cleaner can also be scheduled after every few commits instead of after every commit by 
 configuring [hoodie.clean.max.commits](https://hudi.apache.org/docs/configurations#hoodiecleanmaxcommits).

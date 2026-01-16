@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### Does Hudi support cloud storage/object stores?
 
-Yes. Generally speaking, Hudi is able to provide its functionality on any Hadoop FileSystem implementation and thus can read and write tables on [Cloud stores](cloud.md) (Amazon S3 or Microsoft Azure or Google Cloud Storage). Over time, Hudi has also incorporated specific design aspects that make building Hudi tables on the cloud easy, such as [consistency checks for s3](/docs/1.0.0/configurations#hoodieconsistencycheckenabled), Zero moves/renames involved for data files.
+Yes. Generally speaking, Hudi is able to provide its functionality on any Hadoop FileSystem implementation and thus can read and write tables on [Cloud stores](cloud.md) (Amazon S3 or Microsoft Azure or Google Cloud Storage). Over time, Hudi has also incorporated specific design aspects that make building Hudi tables on the cloud easy, such as [consistency checks for s3](configurations.md#hoodieconsistencycheckenabled), Zero moves/renames involved for data files.
 
 ### What is the difference between copy-on-write (COW) vs merge-on-read (MOR) table types?
 
@@ -129,7 +129,7 @@ This is an advanced version of the bloom filter which grows dynamically as the n
 
 ### How do I verify datasource schema reconciliation in Hudi?
 
-With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](/docs/1.0.0/configurations/#hoodiedatasourcewritereconcileschema) config.
+With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](configurations.md#hoodiedatasourcewritereconcileschema) config.
 
 Example how schema reconciliation works with Spark:
 

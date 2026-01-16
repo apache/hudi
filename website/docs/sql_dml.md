@@ -29,7 +29,7 @@ SELECT <columns> FROM <source>;
 
 :::note Deprecations
 From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are deprecated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](/docs/configurations#hoodiedatasourceinsertduppolicy).
+To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](configurations.md#hoodiedatasourceinsertduppolicy).
 :::
 
 Examples: 
@@ -409,7 +409,7 @@ INSERT INTO hudi_table select ... from ...;
 
 Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
 concurrently without blocking each other. One can read more about this mode in
-the [concurrency control](/docs/concurrency_control#model-c-multi-writer) docs. Let us see it in action here.
+the [concurrency control](concurrency_control.md#model-c-multi-writer) docs. Let us see it in action here.
 
 In the below example, we have two streaming ingestion pipelines that concurrently update the same table. One of the
 pipeline is responsible for the compaction and cleaning table services, while the other pipeline is just for data
