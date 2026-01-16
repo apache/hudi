@@ -160,15 +160,6 @@ public class HoodieIndexUtils {
   }
 
   /**
-   * Check if the given schema type is a complex type (Record, Array, Map).
-   */
-  private static boolean isExpressionIndexSupportedType(HoodieSchema schema) {
-    return schema.getType() != HoodieSchemaType.RECORD
-        && schema.getType() != HoodieSchemaType.ARRAY
-        && schema.getType() != HoodieSchemaType.MAP;
-  }
-
-  /**
    * Fetches Pair of partition path and {@link FileSlice}s for interested partitions.
    *
    * @param partition   Partition of interest
@@ -732,7 +723,7 @@ public class HoodieIndexUtils {
       }
     } else {
       // Expression Index Validation: Loose Deny-List/Blacklist
-      if (!isExpressionIndexSupportedType(fieldSchema)) {
+      if (fieldSchema.getNonNullType().getType().isComplex()) {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create expression index '%s': Column '%s' has unsupported data type '%s'. "
                 + "Complex types (RECORD, ARRAY, MAP) are not supported for indexing. "
