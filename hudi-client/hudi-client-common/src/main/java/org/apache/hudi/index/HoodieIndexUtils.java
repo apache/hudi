@@ -64,7 +64,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
@@ -130,29 +129,11 @@ public class HoodieIndexUtils {
   }
 
   /**
-   * Given table schema and fields to index, checks if each field's data types are supported.
-   *
-   * @param sourceFields fields to index
-   * @param tableSchema  table schema
-   * @return true if each field's data types are supported, false otherwise
-   */
-  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, HoodieSchema tableSchema) {
-    return sourceFields.stream().anyMatch(fieldToIndex -> {
-      Pair<String, HoodieSchemaField> nestedField = HoodieSchemaUtils.getNestedField(tableSchema, fieldToIndex)
-          .orElseThrow(() -> new HoodieException("Failed to get schema. Not a valid field name: " + fieldToIndex));
-      HoodieSchema fieldSchema = nestedField.getRight().schema();
-      return fieldSchema.getType() != HoodieSchemaType.RECORD
-          && fieldSchema.getType() != HoodieSchemaType.ARRAY
-          && fieldSchema.getType() != HoodieSchemaType.MAP;
-    });
-  }
-
-  /**
    * Check if the given schema type is supported for secondary index.
    * Supported types are: String (including CHAR), Integer types (Int, BigInt, Long, Short), and timestamp
    */
   @VisibleForTesting
-  public static boolean isSecondaryIndexSupportedType(HoodieSchema schema) {
+  static boolean isSecondaryIndexSupportedType(HoodieSchema schema) {
     // Handle union types (nullable fields)
     if (schema.getType() == HoodieSchemaType.UNION) {
       // For union types, check if any of the types is supported
@@ -176,15 +157,6 @@ public class HoodieIndexUtils {
       default:
         return false;
     }
-  }
-
-  /**
-   * Check if the given schema type is a complex type (Record, Array, Map).
-   */
-  private static boolean isComplexType(HoodieSchema schema) {
-    return schema.getType() == HoodieSchemaType.RECORD
-        || schema.getType() == HoodieSchemaType.ARRAY
-        || schema.getType() == HoodieSchemaType.MAP;
   }
 
   /**
@@ -751,7 +723,7 @@ public class HoodieIndexUtils {
       }
     } else {
       // Expression Index Validation: Loose Deny-List/Blacklist
-      if (isComplexType(fieldSchema)) {
+      if (fieldSchema.getType().isComplex()) {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create expression index '%s': Column '%s' has unsupported data type '%s'. "
                 + "Complex types (RECORD, ARRAY, MAP) are not supported for indexing. "

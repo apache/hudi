@@ -43,7 +43,6 @@ import java.util.Set;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.index.HoodieIndexUtils.isSecondaryIndexSupportedType;
-import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -139,25 +138,6 @@ public class TestHoodieIndexUtils {
       assertDoesNotThrow(() -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
           mockMetaClient, PARTITION_NAME_SECONDARY_INDEX, options, columns, "test_index"));
     }
-  }
-
-  @Test
-  public void testValidateDataTypeForSecondaryOrExpressionIndex() {
-    // Create a dummy schema with both complex and primitive types
-    HoodieSchema schema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
-        HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
-        HoodieSchemaField.of("intField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("arrayField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
-        HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT))),
-        HoodieSchemaField.of("structField", HoodieSchema.createRecord("NestedRecord", null, null, Arrays.asList(
-            HoodieSchemaField.of("nestedString", HoodieSchema.create(HoodieSchemaType.STRING))
-        )))
-    ));
-    // Test for primitive fields
-    assertTrue(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("stringField", "intField"), schema));
-
-    // Test for complex fields
-    assertFalse(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
   }
 
   /**
