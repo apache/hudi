@@ -21,7 +21,6 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.keygen.SimpleKeyGenerator
@@ -32,7 +31,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.function.Executable
@@ -950,14 +949,12 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("Test Create Table with Complex Key Generator and Key Encoding") {
     withTempDir { tmp =>
-      Seq((false, 6), (true, 6)).foreach { params =>
+      Seq(false, true).foreach { encodeSingleKeyFieldValue =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val encodeSingleKeyFieldValue = params._1
-        val tableVersion = params._2
         import spark.implicits._
         // The COMPLEX_KEYGEN_NEW_ENCODING config only works for table version 8 and below
-        val keyPrefix = if (encodeSingleKeyFieldValue && tableVersion < 9) "" else "id:"
+        val keyPrefix = if (encodeSingleKeyFieldValue) "" else "id:"
         val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")
@@ -972,7 +969,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(
             HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key,
             encodeSingleKeyFieldValue.toString)
-          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, (tableVersion >= 9).toString)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
@@ -988,8 +985,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.new.encoding = '$encodeSingleKeyFieldValue',
-             | hoodie.write.table.version = '$tableVersion')
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.new.encoding = '$encodeSingleKeyFieldValue'
+             |)
              |""".stripMargin)
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
@@ -1002,7 +999,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
         // Test insert into
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"insert into $tableName values(2, 'a2', 10, 1000, '2025-07-29', 12)", query
         )(
           Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12)
@@ -1012,8 +1009,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         )
 
         // Test merge into
-        writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+        writeAndValidateWithComplexKeyGenerator(spark, tableName,
           s"""
              |merge into $tableName h0
              |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
@@ -1031,7 +1027,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
         // Test update
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"update $tableName set value = value + 1 where id = 2", query
         )(
           Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
@@ -1043,7 +1039,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
         // Test delete
         writeAndValidateWithComplexKeyGenerator(
-          spark, tableVersion, tableName,
+          spark, tableName,
           s"delete from $tableName where id = 1", query
         )(
           Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
@@ -1576,23 +1572,23 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   def writeAndValidateWithComplexKeyGenerator(spark: SparkSession,
-                                              tableVersion: Int,
                                               tableName: String,
                                               dmlToWrite: String,
-                                              query: String)(
-                                               expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
-    if (tableVersion < 9) {
-      // By default, the complex key generator validation is enabled and should throw exception on DML
-      Assertions.assertComplexKeyGeneratorValidationThrows(new Executable {
-        override def execute(): Unit = () => spark.sql(dmlToWrite)
-      }, "ingestion")
-      // Query should still succeed
-      checkAnswer(query)(expectedRowsBefore: _*)
-      // Disabling the complex key generator validation should let write succeed
-      HoodieSparkSqlTestBase.disableComplexKeygenValidation(spark, tableName)
-    }
+                                              query: String)
+                                             (expectedRowsBefore: Seq[Any]*)
+                                             (expectedRowsAfter: Seq[Any]*): Unit = {
+    // By default, the complex key generator validation is enabled and should throw exception on DML
+    Assertions.assertComplexKeyGeneratorValidationThrows(new Executable() {
+      override def execute(): Unit = {
+        spark.sql(dmlToWrite)
+      }
+    }, "ingestion")
+    // Query should still succeed
+    checkAnswer(query)(expectedRowsBefore: _*)
+    // Disabling the complex key generator validation should let write succeed
+    spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=false")
     spark.sql(dmlToWrite)
-    HoodieSparkSqlTestBase.enableComplexKeygenValidation(spark, tableName)
+    spark.sql(s"set ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()}=true")
     checkAnswer(query)(expectedRowsAfter: _*)
   }
 }
