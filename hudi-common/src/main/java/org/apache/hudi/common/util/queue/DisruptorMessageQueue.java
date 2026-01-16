@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.queue;
 
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import com.lmax.disruptor.EventTranslator;
@@ -56,10 +57,8 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private static final long TIMEOUT_WAITING_SECS = 10L;
 
   public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyId, int totalProducers, Runnable preExecuteRunnable) {
-    if ((bufferSize & (bufferSize - 1)) != 0) {
-      throw new IllegalArgumentException(
-          "Disruptor ring buffer size must be a power of 2, got: " + bufferSize);
-    }
+    ValidationUtils.checkArgument((bufferSize & (bufferSize - 1)) == 0,
+        "Disruptor ring buffer size must be a power of 2, got: " + bufferSize);
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyId);
     CustomizedThreadFactory threadFactory = new CustomizedThreadFactory("disruptor", true, preExecuteRunnable);
 

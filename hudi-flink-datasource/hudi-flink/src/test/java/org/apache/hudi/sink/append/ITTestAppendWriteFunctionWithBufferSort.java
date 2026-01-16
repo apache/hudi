@@ -260,7 +260,8 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     // Write the data
     preparePipeline(conf)
         .consume(inputData)
-        .endInput();
+        .endInput()
+        .endInputComplete();
 
     // Verify all data was written across all partitions
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 3);
@@ -284,7 +285,8 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     // Write the data
     preparePipeline(conf)
         .consume(inputData)
-        .endInput();
+        .endInput()
+        .endInputComplete();
 
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);

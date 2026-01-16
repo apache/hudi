@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -88,10 +89,9 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
 
     // Resolve sort keys (defaults to record key if not specified)
     String sortKeys = AppendWriteFunctions.resolveSortKeys(config);
-    if (StringUtils.isNullOrEmpty(sortKeys)) {
-      throw new IllegalArgumentException("Sort keys can't be null or empty for append write with buffer sort. "
-          + "Either set write.buffer.sort.keys or ensure record key field is configured.");
-    }
+    ValidationUtils.checkArgument(StringUtils.nonEmpty(sortKeys),
+        "Sort keys can't be null or empty for append write with buffer sort. "
+            + "Either set write.buffer.sort.keys or ensure record key field is configured.");
 
     List<String> sortKeyList = Arrays.stream(sortKeys.split(","))
         .map(String::trim)
