@@ -48,13 +48,13 @@ public enum StorageSchemes {
   // Google Cloud Storage
   GCS("gs", true, null, "org.apache.hudi.gcp.transaction.lock.GCSStorageLockClient"),
   // Azure WASB
-  WASB("wasb", null, null, null),
-  WASBS("wasbs", null, null, null),
+  WASB("wasb", null, null, "org.apache.hudi.azure.transaction.lock.AzureStorageLockClient"),
+  WASBS("wasbs", null, null, "org.apache.hudi.azure.transaction.lock.AzureStorageLockClient"),
   // Azure ADLS
   ADL("adl", null, null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", null, null, null),
-  ABFSS("abfss", null, null, null),
+  ABFS("abfs", null, null, "org.apache.hudi.azure.transaction.lock.AzureStorageLockClient"),
+  ABFSS("abfss", null, null, "org.apache.hudi.azure.transaction.lock.AzureStorageLockClient"),
   // Aliyun OSS
   OSS("oss", null, null, null),
   // View FS for federated setups. If federating across cloud stores, then append
