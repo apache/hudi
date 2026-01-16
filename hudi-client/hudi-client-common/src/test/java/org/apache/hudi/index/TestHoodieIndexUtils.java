@@ -42,7 +42,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
-import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryIndex;
+import static org.apache.hudi.index.HoodieIndexUtils.isSecondaryIndexSupportedType;
 import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -187,25 +187,19 @@ public class TestHoodieIndexUtils {
     ));
 
     // Test supported types for secondary index
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("stringField"), schema));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("charField"), schema)); // CHAR as STRING
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("intField"), schema));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("longField"), schema));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampField"), schema));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("doubleField"), schema));
-
-    // Test multiple supported fields
-    assertTrue(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "intField", "longField"), schema));
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("stringField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("charField").get().schema())); // CHAR as STRING
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("intField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("longField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("timestampField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("doubleField").get().schema()));
 
     // Test unsupported types for secondary index
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("booleanField"), schema));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("arrayField"), schema));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("mapField"), schema));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("structField"), schema));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("floatField"), schema));
-
-    // Test mix of supported and unsupported types (should fail)
-    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "booleanField"), schema));
+    assertFalse(isSecondaryIndexSupportedType(schema.getField("booleanField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schema.getField("arrayField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schema.getField("mapField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schema.getField("structField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schema.getField("floatField").get().schema()));
   }
 
   /**
@@ -251,21 +245,18 @@ public class TestHoodieIndexUtils {
     ));
 
     // Test supported timestamp and date/time logical types
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampMillisField"), schemaWithLogicalTypes));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampMicrosField"), schemaWithLogicalTypes));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("dateField"), schemaWithLogicalTypes));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timeMillisField"), schemaWithLogicalTypes));
-    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timeMicrosField"), schemaWithLogicalTypes));
+    assertTrue(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("timestampMillisField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("timestampMicrosField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("dateField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("timeMillisField").get().schema()));
+    assertTrue(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("timeMicrosField").get().schema()));
 
     // Test unsupported logical types
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("decimalBytesBackedField"), schemaWithLogicalTypes));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("decimalFixedBackedField"), schemaWithLogicalTypes));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("uuidField"), schemaWithLogicalTypes));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("localTimestampMillisField"), schemaWithLogicalTypes));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("localTimestampMicrosField"), schemaWithLogicalTypes));
-
-    // Test mix of supported and unsupported logical types
-    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("timestampMillisField", "decimalBytesBackedField"), schemaWithLogicalTypes));
+    assertFalse(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("decimalBytesBackedField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("decimalFixedBackedField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("uuidField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("localTimestampMillisField").get().schema()));
+    assertFalse(isSecondaryIndexSupportedType(schemaWithLogicalTypes.getField("localTimestampMicrosField").get().schema()));
   }
 
   /**
