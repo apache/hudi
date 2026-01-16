@@ -2,11 +2,110 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2026-01-09T00:00:00.000Z</updated>
+    <updated>2026-01-15T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[From Legacy to Leading: Funding Circle's Journey with Apache Hudi]]></title>
+        <id>https://hudi.apache.org/blog/2026/01/15/funding-circle</id>
+        <link href="https://hudi.apache.org/blog/2026/01/15/funding-circle"/>
+        <updated>2026-01-15T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[---]]></summary>
+        <content type="html"><![CDATA[<hr>
+<p><em>This post summarizes Funding Circle's presentation at the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=P29dfaxUdTU" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
+<hr>
+<p><img decoding="async" loading="lazy" alt="og" src="https://hudi.apache.org/assets/images/01-hudi-sync-funding-circle-5e541fbef46383b1af3482fce37acccb.png" width="1999" height="969" class="img_ev3q"></p>
+<p><a href="https://www.fundingcircle.com/" target="_blank" rel="noopener noreferrer" class="">Funding Circle</a> is a lending company focused on helping small and medium-sized businesses access the funding they need to grow. Their instant decisioning engine allows customers to complete loan applications in minutes and receive decisions in seconds. To date, the company has supported more than 135,000 businesses with over £15 billion in loans.</p>
+<p>In this community sync, Daniel Ford, Data Platform Engineer at Funding Circle, shared how his team built a modern data ingestion framework using Apache Hudi and the significant improvements they achieved.</p>
+<p>Funding Circle's lending capability relies on a broad and complex data platform. The goal of the platform is to make data easy to work with, enabling users to drive business decisions without requiring specialized data engineering knowledge. Developers should be able to build quickly, while data consumers should be able to find and use information without constantly seeking support.</p>
+<p>However, their existing legacy Kafka ingestion solution, developed back in 2018-2019, was actively undermining these goals.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="why-the-legacy-ingestion-system-needed-to-change">Why the Legacy Ingestion System Needed to Change<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#why-the-legacy-ingestion-system-needed-to-change" class="hash-link" aria-label="Direct link to Why the Legacy Ingestion System Needed to Change" title="Direct link to Why the Legacy Ingestion System Needed to Change" translate="no">​</a></h2>
+<p>The legacy ingestion tool suffered from multiple critical problems that made maintaining and scaling the platform difficult:</p>
+<ul>
+<li class="">
+<p><strong>Schema Evolution Instability:</strong> Handling changes in data schemas was often unreliable or completely unviable, leading to frequent pipeline breaks and manual intervention.</p>
+</li>
+<li class="">
+<p><strong>Code Complexity and Age:</strong> The codebase was massively complex and dated, predating almost every current engineer on the Data Platform team, making maintenance and updates a slow, painful process.</p>
+</li>
+<li class="">
+<p><strong>Centralized Control vs. Data Mesh:</strong> The pipelines featured centralized deployment and management, which fundamentally opposed the company's strategic aim of achieving a data mesh architecture.</p>
+</li>
+<li class="">
+<p><strong>Lack of Ownership and Observability:</strong> There was no effective way to establish true end-to-end domain ownership for a data pipeline, and a general lack of observability made it hard to quickly diagnose and fix issues.</p>
+</li>
+<li class="">
+<p><strong>Prohibitive Backfilling Times:</strong> Syncing large Kafka topics took prohibitively long in the legacy solution, severely limiting the ability to correct or reload historical data.</p>
+</li>
+<li class="">
+<p><strong>Inability to Support Real-Time Data:</strong> The system was not designed to support near-real-time ingestion, trapping users in slow batch-processing cycles.</p>
+</li>
+</ul>
+<p>To move forward, the team defined clear goals: the new system needed to deliver data within ten minutes, support stable schema evolution, integrate with metadata systems like DataHub, and offer strong monitoring, scalability, and built-in PII masking. It also needed to shift ownership to individual teams by allowing decentralized pipeline definitions.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="introducing-project-kirby-the-new-ingestion-framework">Introducing Project Kirby: The New Ingestion Framework<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#introducing-project-kirby-the-new-ingestion-framework" class="hash-link" aria-label="Direct link to Introducing Project Kirby: The New Ingestion Framework" title="Direct link to Introducing Project Kirby: The New Ingestion Framework" translate="no">​</a></h2>
+<p>After six to seven months of development, the team created Kirby—short for <strong>"Kafka Ingestion Real-Time or Batch through YAML"</strong>—which provides a simple, configuration-driven interface built around Apache Hudi Streamer running on AWS EMR.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="architecture-and-user-experience">Architecture and User Experience<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#architecture-and-user-experience" class="hash-link" aria-label="Direct link to Architecture and User Experience" title="Direct link to Architecture and User Experience" translate="no">​</a></h3>
+<p><img decoding="async" loading="lazy" alt="Kirby pipelines running both batch and streaming workloads" src="https://hudi.apache.org/assets/images/02-hudi-sync-funding-circle-0eedf72d96f6d96ddd3e95c42a4b838e.png" width="2441" height="1246" class="img_ev3q"></p>
+<p>Kirby organizes ingestion into three major areas: declaration, compute, and access.</p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="pipeline-declaration-and-deployment">Pipeline Declaration and Deployment<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#pipeline-declaration-and-deployment" class="hash-link" aria-label="Direct link to Pipeline Declaration and Deployment" title="Direct link to Pipeline Declaration and Deployment" translate="no">​</a></h4>
+<p>Users define their pipeline in a simple YAML file stored in their own repository. This file specifies metadata such as region, domain ownership, and pipeline type. Users deploy the pipeline through GitHub Actions or Drone, depending on their existing CI/CD setup. Kirby converts the YAML definition into an Airflow DAG, letting users track the history and progress of their ingestion tasks. To safely manage secrets, the team extended the EMR step operator to load credentials from AWS Secrets Manager at runtime. Metadata embedded in the DAG also gives the central team visibility into how many pipelines exist, who owns them, and which versions are running.</p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="compute-layer">Compute Layer<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#compute-layer" class="hash-link" aria-label="Direct link to Compute Layer" title="Direct link to Compute Layer" translate="no">​</a></h4>
+<p>The actual ingestion jobs run via Hudi Streamer 0.11.1 on EMR 6.8, utilizing both batch and continuous streaming configurations. Hudi Streamer directly ingests data from Kafka on Funding Circle's centrally maintained EMR cluster.</p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="access-layer">Access Layer<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#access-layer" class="hash-link" aria-label="Direct link to Access Layer" title="Direct link to Access Layer" translate="no">​</a></h4>
+<p>Data is stored in S3 in the Hudi format and automatically registered with the Glue Data Catalog, making it instantly queryable via Athena.</p>
+<p>The team currently serves approximately 80 topics with a range of batch and streaming workloads running simultaneously—some completing in minutes, others running continuously for hours.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="challenges-and-lessons-learned">Challenges and Lessons Learned<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#challenges-and-lessons-learned" class="hash-link" aria-label="Direct link to Challenges and Lessons Learned" title="Direct link to Challenges and Lessons Learned" translate="no">​</a></h2>
+<p>The team discovered several challenges in building the system:</p>
+<p><strong>EMR Learning Curve:</strong> Managing EMR required a deep understanding of Hadoop, YARN, HDFS, and Spark—knowledge the team initially lacked. For a young team of engineers with no prior domain knowledge, this was a significant hurdle to overcome. Issues still crop up occasionally, but the team now has a firm grasp on maintaining the cluster in a sustainable, scalable manner.</p>
+<p><strong>Debugging Complexity:</strong> Debugging proved difficult due to EMR cluster complexity. Without a deep understanding of Spark and Hadoop, investigations led to many red herrings and doubling back. Building proficiency with these underlying technologies was essential for efficient troubleshooting.</p>
+<p><strong>Scope Management:</strong> Initially excited by Hudi's extensive capabilities—such as time-travel querying and advanced table management—the team promised features that, while technically impressive, weren't core business requirements. This diluted the project scope and distracted from the primary goal: building a fast, simple Kafka ingestion pipeline. Through thorough testing and leveraging the Hudi community's expertise—which Daniel described as "the best I've ever encountered"—the team learned to align their scope more precisely with actual business needs.</p>
+<p>The key lesson: properly assess business cases before committing to features. The team is now far more mature and capable of building future iterations, having gained this wealth of knowledge.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="concrete-achievements-and-business-value">Concrete Achievements and Business Value<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#concrete-achievements-and-business-value" class="hash-link" aria-label="Direct link to Concrete Achievements and Business Value" title="Direct link to Concrete Achievements and Business Value" translate="no">​</a></h2>
+<p><img decoding="async" loading="lazy" alt="Achievements and business impact from Kirby and Hudi" src="https://hudi.apache.org/assets/images/03-hudi-sync-funding-circle-40c0c617187d079314da96348a9e469b.png" width="2446" height="1298" class="img_ev3q"></p>
+<p>Despite the challenges, the transition to Kirby powered by Hudi delivered multiple benefits:</p>
+<ul>
+<li class="">
+<p><strong>Real-Time Data Enablement:</strong> Pipeline refresh times dropped dramatically—from 30 to 60 minutes down to just 3 to 4 minutes. This enabled minute-level refreshes for analytics teams, providing fresher data and establishing a new paradigm for self-service analytics at the company.</p>
+</li>
+<li class="">
+<p><strong>Elimination of Backfilling Problems:</strong> Massive-scale backfills that previously took weeks now complete in hours. Instead of working around hacky solutions to backfill data into the lake, teams can now use the same tool for that task.</p>
+</li>
+<li class="">
+<p><strong>Automatic Schema Management:</strong> Schema evolution no longer requires manual work. What used to be an expensive full-load activity is now just an afterthought. Data producers have significantly increased confidence in their ability to evolve schemas without fear of breaking downstream pipelines.</p>
+</li>
+<li class="">
+<p><strong>Engineering Efficiency:</strong> The shift to decentralized ownership allows teams to build and maintain their own ingestion pipelines without relying on central platform engineers. Integration with DataHub enables automatic column-level lineage between Kafka topics and Athena tables. Engineering teams have drastically simplified their ingestion workflows, freeing up valuable time to focus on building quality data products.</p>
+</li>
+<li class="">
+<p><strong>Platform Modernization:</strong> Hudi served as the catalyst for the team to learn about and apply table formats to their platform for the first time. This knowledge has led them to identify a wealth of future use cases, such as migrating legacy pipelines to modern Change Data Capture (CDC) patterns using Hudi's upsert capabilities.</p>
+</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-future-with-hudi">The Future with Hudi<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#the-future-with-hudi" class="hash-link" aria-label="Direct link to The Future with Hudi" title="Direct link to The Future with Hudi" translate="no">​</a></h2>
+<p>Kirby currently serves approximately 80 topics across the UK and US, with a range of batch and streaming workloads. That volume is expected to grow to over 200 topics in the coming years. Future development focuses on stability and expansion:</p>
+<ul>
+<li class="">
+<p><strong>Reduce EMR Reliance:</strong> The team hopes to move to lightweight compute services such as AWS Glue for less time-critical batch workloads.</p>
+</li>
+<li class="">
+<p><strong>S3 as a Source:</strong> To achieve 100% coverage, the team plans to leverage Hudi Streamer's S3 source capabilities, extending their unified ingestion interface to handle additional topic types beyond direct Kafka ingestion.</p>
+</li>
+<li class="">
+<p><strong>Extended Source Support:</strong> The team also wants to extend the familiar Kirby interface to support new source types, including SFTP, API-based sources, and other internal systems.</p>
+</li>
+</ul>
+<p>Project Kirby and Apache Hudi are poised to become the foundation of Funding Circle's future ingestion platform, transforming a complex, legacy system into a scalable, high-performance, and decentralized engine for data-driven decisions.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2026/01/15/funding-circle#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
+<p>Funding Circle's presentation offered a clear and practical look at how adopting a modern data platform can solve significant real-world engineering challenges. By moving away from their legacy architecture and building Project Kirby around Apache Hudi, the team delivered a solution that is faster, more reliable, and far easier for teams across the organization to use. The core of their success was Hudi's ability to provide a unified data lake storage format, enabling crucial features like automatic schema evolution and near-real-time ingestion. Ultimately, Hudi catalyzed the maturation of the team's data platform and decentralized model, setting the stage for advanced use cases like Change Data Capture (CDC).</p>]]></content>
+        <author>
+            <name>The Hudi Community</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="case-study" term="case-study"/>
+        <category label="funding-circle" term="funding-circle"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 1.1 Deep Dive: Async Instant Time Generation for Flink Writers]]></title>
         <id>https://hudi.apache.org/blog/2026/01/09/hudi-11-deep-dive-flink-async-instant-gen</id>
@@ -1510,121 +1609,5 @@ The architecture efficiently handles high‑frequency updates across more than 6
         <category label="Apache Hudi" term="Apache Hudi"/>
         <category label="Merge-on-Read (MoR)" term="Merge-on-Read (MoR)"/>
         <category label="Streaming" term="Streaming"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Modernizing Data Infrastructure at Peloton Using Apache Hudi]]></title>
-        <id>https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi</id>
-        <link href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi"/>
-        <updated>2025-07-15T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Peloton re-architected its data platform using Apache Hudi to overcome snapshot delays, rigid service coupling, and high operational costs. By adopting CDC-based ingestion from PostgreSQL and DynamoDB, moving from CoW to MoR tables, and leveraging asynchronous services with fine-grained schema control, Peloton achieved 10-minute ingestion cycles, reduced compute/storage overhead, and enabled time travel and GDPR compliance.]]></summary>
-        <content type="html"><![CDATA[<div class="theme-admonition theme-admonition-tip admonition_xJq3 alert alert--success"><div class="admonitionHeading_Gvgb"><span class="admonitionIcon_Rf37"><svg viewBox="0 0 12 16"><path fill-rule="evenodd" d="M6.5 0C3.48 0 1 2.19 1 5c0 .92.55 2.25 1 3 1.34 2.25 1.78 2.78 2 4v1h5v-1c.22-1.22.66-1.75 2-4 .45-.75 1-2.08 1-3 0-2.81-2.48-5-5.5-5zm3.64 7.48c-.25.44-.47.8-.67 1.11-.86 1.41-1.25 2.06-1.45 3.23-.02.05-.02.11-.02.17H5c0-.06 0-.13-.02-.17-.2-1.17-.59-1.83-1.45-3.23-.2-.31-.42-.67-.67-1.11C2.44 6.78 2 5.65 2 5c0-2.2 2.02-4 4.5-4 1.22 0 2.36.42 3.22 1.19C10.55 2.94 11 3.94 11 5c0 .66-.44 1.78-.86 2.48zM4 14h5c-.23 1.14-1.3 2-2.5 2s-2.27-.86-2.5-2z"></path></svg></span>TL;DR</div><div class="admonitionContent_BuS1"><p>Peloton re-architected its data platform using Apache Hudi to overcome snapshot delays, rigid service coupling, and high operational costs. By adopting CDC-based ingestion from PostgreSQL and DynamoDB, moving from CoW to MoR tables, and leveraging asynchronous services with fine-grained schema control, Peloton achieved 10-minute ingestion cycles, reduced compute/storage overhead, and enabled time travel and GDPR compliance.</p></div></div>
-<p>Peloton is a global interactive fitness platform that delivers connected, instructor-led fitness experiences to millions of members worldwide. Known for its immersive classes and cutting-edge equipment, Peloton combines software, hardware, and data to create personalized workout journeys. With a growing member base and increasing product diversity, data has become central to how Peloton delivers value. The <em>Data Platform</em> team at Peloton is responsible for building and maintaining the core infrastructure that powers analytics, reporting, and real-time data applications. Their work ensures that data flows seamlessly from transactional systems to the data lake, enabling teams across the organization to make timely, data-driven decisions.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-challenge-data-growth-latency-and-operational-bottlenecks">The Challenge: Data Growth, Latency, and Operational Bottlenecks<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#the-challenge-data-growth-latency-and-operational-bottlenecks" class="hash-link" aria-label="Direct link to The Challenge: Data Growth, Latency, and Operational Bottlenecks" title="Direct link to The Challenge: Data Growth, Latency, and Operational Bottlenecks" translate="no">​</a></h2>
-<p>As Peloton evolved into a global interactive fitness platform, its data infrastructure was challenged by the growing need for timely insights, agile service migrations, and cost-effective analytics. Daily operations, recommendation systems, and compliance requirements demanded an architecture that could support near real-time access, high-frequency updates, and scalable service boundaries.</p>
-<p>However, the team faced persistent bottlenecks with the existing setup:</p>
-<ul>
-<li class="">Reporting pipelines were gated by the completion of full snapshot jobs.</li>
-<li class="">Recommender systems could only function on daily refreshed datasets.</li>
-<li class="">The analytics platform was tightly coupled with operational systems.</li>
-<li class="">Microservice migrations were constrained to all-at-once shifts.</li>
-<li class="">Database read replicas incurred high infrastructure costs.</li>
-</ul>
-<p>These limitations made it difficult to meet SLA expectations, scale workloads efficiently, and adapt the platform to new user and product needs.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-legacy-architecture">The Legacy Architecture<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#the-legacy-architecture" class="hash-link" aria-label="Direct link to The Legacy Architecture" title="Direct link to The Legacy Architecture" translate="no">​</a></h2>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig1.png" alt="challenge" width="1000" align="middle">
-<p>Peloton's earlier architecture relied on daily snapshots from a monolithic <strong>PostgreSQL</strong> database. The analytics systems would consume these snapshots, often waiting hours for completion. This not only delayed reporting but also introduced downstream rigidity.</p>
-<p>Because the same data platform supported both online and analytical workloads, any schema or service migration required significant planning and coordination. Database read replicas, used to scale reads, increased cost overhead. Moreover, recommendation systems that depended on data freshness were constrained by the snapshot interval, limiting personalization capabilities. This architecture struggled to support a fast-moving product roadmap, near real-time analytics, and the data agility needed to experiment and iterate.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="reimagining-the-data-platform-with-apache-hudi">Reimagining the Data Platform with Apache Hudi<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#reimagining-the-data-platform-with-apache-hudi" class="hash-link" aria-label="Direct link to Reimagining the Data Platform with Apache Hudi" title="Direct link to Reimagining the Data Platform with Apache Hudi" translate="no">​</a></h2>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig2.png" alt="challenge" width="1000" align="middle">
-<p>To address these challenges, the data platform team introduced Apache Hudi as the foundation of its modern data lake. The architecture was rebuilt to support Change Data Capture (CDC) ingestion from both PostgreSQL and DynamoDB using Debezium, with Kafka acting as the transport layer. A custom-built Hudi writer was developed to ingest CDC records into S3 using Apache Spark on EMR (version 6.12.0 with Hudi 0.13.1).</p>
-<p>Peloton initially chose Copy-on-Write (CoW) table formats to support querying via Redshift Spectrum and simplify adoption. However, performance and cost bottlenecks prompted a transition to Merge-on-Read (MoR) tables with asynchronous table services for cleaning and compaction.</p>
-<p>Key architectural enhancements included:</p>
-<ul>
-<li class=""><strong>Support for GDPR compliance</strong> through structured delete propagation.</li>
-<li class=""><strong>Time travel queries</strong> for recommender model training and data recovery.</li>
-<li class=""><strong>Phased migration support</strong> for microservices via decoupled ingestion.</li>
-</ul>
-<p>Peloton's broader data platform tech stack supports this architecture with a range of tools for orchestration, analytics, and governance. This includes EMR for compute, Redshift for querying, DBT for data transformations, Looker for BI and visualization, Airflow for orchestration, and DataHub for metadata management. These components complement Apache Hudi in forming a modular and production-ready lakehouse stack.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig3.png" alt="challenge" width="1000" align="middle">
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="learnings-from-running-hudi-at-scale">Learnings from Running Hudi at Scale<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#learnings-from-running-hudi-at-scale" class="hash-link" aria-label="Direct link to Learnings from Running Hudi at Scale" title="Direct link to Learnings from Running Hudi at Scale" translate="no">​</a></h2>
-<p>With Hudi now integrated into Peloton's data lake, the team began to observe and address new operational and architectural challenges that emerged at scale. This section outlines the major lessons learned while maintaining high-ingestion throughput, ensuring data reliability, and keeping infrastructure costs under control.</p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="cow-vs-mor-performance-trade-offs">CoW vs MoR: Performance Trade-offs<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#cow-vs-mor-performance-trade-offs" class="hash-link" aria-label="Direct link to CoW vs MoR: Performance Trade-offs" title="Direct link to CoW vs MoR: Performance Trade-offs" translate="no">​</a></h3>
-<p>Initially, Copy-on-Write (CoW) tables were chosen to simplify deployment and ensure compatibility with Redshift Spectrum. However, as ingestion frequency increased and update volumes spanned hundreds of partitions, performance became a bottleneck. Some high-frequency tables with updates across 256 partitions took nearly an hour to process per run. Additionally, retaining 30 days of commits for training recommender models significantly inflated storage requirements, reaching into the hundreds of gigabytes.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig4.png" alt="challenge" width="1000" align="middle">
-<p>To resolve this, the team migrated to Hudi’s Merge-on-Read (MoR) tables and reduced commit retention to 7 days. With ingestion jobs now running every 10 minutes, latency dropped significantly, and storage and compute usage became more efficient.</p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="async-vs-inline-table-services">Async vs Inline Table Services<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#async-vs-inline-table-services" class="hash-link" aria-label="Direct link to Async vs Inline Table Services" title="Direct link to Async vs Inline Table Services" translate="no">​</a></h3>
-<p>To improve write throughput and meet low-latency ingestion goals, the Peloton team initially configured Apache Hudi with asynchronous cleaner and compactor services. This approach worked well across most tables, allowing ingestion pipelines to run every 10 minutes with minimal blocking but introduced some operational edge cases. Some of the challenges encountered included:</p>
-<ul>
-<li class="">Concurrent execution of writer and cleaner jobs, leading to conflicts. These were mitigated by introducing DynamoDB-based locks to serialize access.</li>
-<li class="">Reader-cleaner race conditions, where time travel queries intermittently failed with <code>"File Not Found"</code> errors - traced back to cleaners deleting files mid-read.</li>
-<li class="">Compaction disruptions caused by EMR node terminations, which led to orphaned files when jobs failed mid-way.</li>
-</ul>
-<p>These edge cases were largely due to the operational complexity of managing concurrent workloads at Peloton’s scale. After weighing reliability against latency, the team opted to switch to inline table services for compaction and cleaning, augmented with custom logic to control when these actions would run. This change improved system stability while maintaining acceptable latency trade-offs.</p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="glue-schema-version-limits">Glue Schema Version Limits<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#glue-schema-version-limits" class="hash-link" aria-label="Direct link to Glue Schema Version Limits" title="Direct link to Glue Schema Version Limits" translate="no">​</a></h3>
-<p>As schema evolution continued, the team used Hudi's <code>META_SYNC_ENABLED</code> to sync schema updates with AWS Glue. Over time, high-frequency schema updates pushed the number of <code>TABLE_VERSION</code> resources in Glue beyond the <em>1 million</em> limit. This caused jobs to fail in ways that were initially difficult to trace.</p>
-<p>One such failure manifested as the following error:</p>
-<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">ERROR Client: Application diagnostics message: User class threw exception:</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">java.lang.NoSuchMethodError: 'org.apache.hudi.exception.HoodieException </span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">org.apache.hudi.sync.common.util.SyncUtilHelpers.getExceptionFromList(java.util.Collection)'</span><br></span></code></pre></div></div>
-<p>After significant debugging, the issue was traced to AWS Glue limits. The team implemented a multi-step fix:</p>
-<ul>
-<li class="">Worked with AWS to temporarily raise resource limits.</li>
-<li class="">Developed a Python service to identify and delete outdated table versions, removing over 1 million entries.</li>
-<li class="">Added an Airflow job to schedule weekly cleanup tasks.</li>
-<li class="">Improved schema sync logic to trigger only when the schema changed.</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="debezium--toast-handling">Debezium &amp; TOAST Handling<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#debezium--toast-handling" class="hash-link" aria-label="Direct link to Debezium &amp; TOAST Handling" title="Direct link to Debezium &amp; TOAST Handling" translate="no">​</a></h3>
-<p>PostgreSQL CDC ingestion posed unique challenges due to the database’s handling of large fields using TOAST (The Oversized-Attribute Storage Technique). When fields over 8KB were unchanged, Debezium emitted a placeholder value <code>__debezium_unavailable_value</code>, making it impossible to determine whether the value had changed.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig5.png" alt="challenge" width="1000" align="middle">
-<p>To address this, Peloton:</p>
-<ul>
-<li class="">Populated initial data using PostgreSQL snapshots.</li>
-<li class="">Implemented self-joins between incoming CDC records and existing Hudi records to fill in missing values.</li>
-<li class="">Separated inserts, updates, and deletes within Spark batch processing.</li>
-<li class="">Used the <code>ts</code> field as the precombine key to ensure only the latest record state was retained.</li>
-</ul>
-<p>A reconciliation pipeline was also developed to heal data inconsistencies caused by multiple operations on the same key within a batch (e.g., create-delete-create).</p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="data-validation-and-quality-enforcement">Data Validation and Quality Enforcement<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#data-validation-and-quality-enforcement" class="hash-link" aria-label="Direct link to Data Validation and Quality Enforcement" title="Direct link to Data Validation and Quality Enforcement" translate="no">​</a></h3>
-<p>Data quality was critical to ensure trust in the newly established data lake. The team developed several internal libraries and checks:</p>
-<ul>
-<li class="">A Crypto Shredding Library to encrypt <code>user_id</code> and other PII fields before storage.</li>
-<li class="">A Data Validation Framework that compared records in the lake against snapshot data.</li>
-<li class="">A Data Quality Library that enforced column-level thresholds. These checks integrated with DataHub and were tied to Airflow sensors to halt downstream jobs on failures.</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="dynamodb-ingestion-and-schema-challenges">DynamoDB Ingestion and Schema Challenges<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#dynamodb-ingestion-and-schema-challenges" class="hash-link" aria-label="Direct link to DynamoDB Ingestion and Schema Challenges" title="Direct link to DynamoDB Ingestion and Schema Challenges" translate="no">​</a></h3>
-<p>Some Peloton services relied on DynamoDB for operational workloads (NoSQL). To ingest these datasets into the lake, the team used DynamoDB Streams and a Kafka Connector, allowing reuse of the existing Kafka-based Hudi ingestion path.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig6.png" alt="challenge" width="1000" align="middle">
-<p>However, the NoSQL nature of DynamoDB introduced schema management challenges. Two strategies were evaluated:</p>
-<ol>
-<li class="">Stakeholder-defined schemas, using SUPER-type fields.</li>
-<li class="">Dynamic schema inference, where incoming JSON records were parsed, and the evolving schema was inferred and reconciled.</li>
-</ol>
-<p>The team opted for dynamic inference despite increased processing time, as it enabled better support for exploratory workloads. Daily snapshots and reconciliation steps helped clean up inconsistent schema states.</p>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="reducing-operational-costs">Reducing Operational Costs<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#reducing-operational-costs" class="hash-link" aria-label="Direct link to Reducing Operational Costs" title="Direct link to Reducing Operational Costs" translate="no">​</a></h3>
-<img src="https://hudi.apache.org/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig7.png" alt="challenge" width="1000" align="middle">
-<p>As the system matured, cost optimization became a priority. The team used <a href="https://github.com/ganglia/" target="_blank" rel="noopener noreferrer" class="">Ganglia</a> to analyze job profiles and identify areas for improvement:</p>
-<ul>
-<li class="">EMR resources were gradually right-sized based on CPU and memory usage.</li>
-<li class="">Conditional Hive syncing was introduced to avoid unnecessary sync operations during each run.</li>
-<li class="">A Spark-side inefficiency was discovered where archived timelines were unnecessarily loaded, causing jobs to take 4x longer. Fixing this reduced overall latency and compute resource usage.</li>
-</ul>
-<p>These operational refinements significantly reduced idle times and improved the cost-efficiency of the platform.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="gains-from-hudi-adoption">Gains from Hudi Adoption<a href="https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi#gains-from-hudi-adoption" class="hash-link" aria-label="Direct link to Gains from Hudi Adoption" title="Direct link to Gains from Hudi Adoption" translate="no">​</a></h2>
-<p>Peloton's transition to Apache Hudi led to measurable performance, operational, and cost-related improvements across its modern data platform.</p>
-<p>Peloton's transition to Apache Hudi yielded several measurable improvements:</p>
-<ul>
-<li class="">Ingestion frequency increased from once daily to every 10 minutes.</li>
-<li class="">Reduced snapshot job durations from an hour to under 15 minutes.</li>
-<li class="">Cost savings by eliminating read replicas and optimizing EMR cluster usage.</li>
-<li class="">Time travel support enabled retrospective analysis and model re-training.</li>
-<li class="">Improved compliance posture through structured deletes and encrypted PII.</li>
-</ul>
-<p>The modernization laid the groundwork for future evolution, including real-time streaming ingestion using Apache Flink and continued improvements in data freshness, latency, and governance.</p>
-<p>This blog is based on Peloton’s presentation at the Apache Hudi Community Sync. If you are interested in watching the recorded version of the video, you can find it <a href="https://youtu.be/-Pyid5K9dyU?feature=shared" target="_blank" rel="noopener noreferrer" class="">here</a>.</p>
-<hr>]]></content>
-        <author>
-            <name>Amaresh Bingumalla, Thinh Kenny Vu, Gabriel Wang, Arun Vasudevan in collaboration with Dipankar Mazumdar</name>
-        </author>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Peloton" term="Peloton"/>
-        <category label="Community" term="Community"/>
     </entry>
 </feed>

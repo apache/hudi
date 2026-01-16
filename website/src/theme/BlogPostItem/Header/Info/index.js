@@ -30,10 +30,7 @@ function ReadingTime({readingTime}) {
   return <span className={styles.marker}>{readingTimePlural(readingTime)}</span>;
 }
 function DateTime({date, formattedDate}) {
-  return <time dateTime={date}>{formattedDate}</time>;
-}
-function Spacer() {
-  return <span className={styles.spacer}>{' · '}</span>;
+  return <time className={styles.marker} dateTime={date}>{formattedDate}</time>;
 }
 export default function BlogPostItemHeaderInfo({className}) {
   const {metadata} = useBlogPost();
@@ -47,8 +44,8 @@ export default function BlogPostItemHeaderInfo({className}) {
   const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
   return (
     <div className={clsx(styles.container, 'margin-vert--sm', className)}>
-      <DateTime date={date} formattedDate={formatDate(date)} />
       <BlogPostItemHeaderAuthors />
+      <DateTime date={date} formattedDate={formatDate(date)} />
       {typeof readingTime !== 'undefined' && (
         <>
           <ReadingTime readingTime={readingTime} />

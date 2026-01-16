@@ -1,5 +1,7 @@
 .authorWrapper {
-  margin-left: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .author {
