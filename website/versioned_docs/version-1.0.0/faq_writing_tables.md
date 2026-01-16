@@ -187,7 +187,7 @@ Hudi employs [optimistic concurrency control](concurrency_control.md) between wr
 
 ### Can single-writer inserts have duplicates?
 
-By default, Hudi turns off key based de-duplication for INSERT/BULK_INSERT operations and thus the table could contain duplicates. If users believe, they have duplicates in inserts, they can either issue UPSERT or consider specifying the option to de-duplicate input in either datasource using [`hoodie.datasource.write.insert.drop.duplicates`](configurations.md#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](/docs/1.0.0/configurations/#hoodiecombinebeforeinsert) or in deltastreamer using [`--filter-dupes`](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L229).
+By default, Hudi turns off key based de-duplication for INSERT/BULK_INSERT operations and thus the table could contain duplicates. If users believe, they have duplicates in inserts, they can either issue UPSERT or consider specifying the option to de-duplicate input in either datasource using [`hoodie.datasource.write.insert.drop.duplicates`](configurations.md#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations.md#hoodiecombinebeforeinsert) or in deltastreamer using [`--filter-dupes`](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L229).
 
 ### Can concurrent inserts cause duplicates?
 
