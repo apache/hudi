@@ -42,17 +42,12 @@ public class TransactionManager implements Serializable {
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
-    this(createLockManager(config, fs), config.isLockRequired());
+    this(new LockManager(config, fs), config.isLockRequired());
   }
 
   protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
-  }
-
-  private static LockManager createLockManager(HoodieWriteConfig config, FileSystem fs) {
-    fs.getConf().addResource(fs.getConf());
-    return new LockManager(config, fs);
   }
 
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
