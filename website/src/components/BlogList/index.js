@@ -237,8 +237,8 @@ export default function BlogList() {
     ];
   }, []);
 
-  // Derive popular tags from blog data (tags with at least 12 posts)
-  const tagData = useMemo(() => {
+  // Derive popular tags from all posts (tags with at least 12 posts total)
+  const popularTags = useMemo(() => {
     const tagCounts = {};
     allBlogPosts.forEach(post => {
       const tags = post.frontMatter?.tags;
@@ -255,8 +255,32 @@ export default function BlogList() {
     return Object.entries(tagCounts)
       .filter(([, count]) => count >= 12)
       .sort((a, b) => b[1] - a[1])
-      .map(([tag, count]) => ({ tag, count }));
+      .map(([tag]) => tag);
   }, []);
+
+  // Compute tag counts based on current category filter
+  const tagData = useMemo(() => {
+    const filteredPosts = category === 'all'
+      ? allBlogPosts
+      : allBlogPosts.filter(post => post.frontMatter?.category === category);
+
+    const tagCounts = {};
+    filteredPosts.forEach(post => {
+      const tags = post.frontMatter?.tags;
+      if (Array.isArray(tags)) {
+        tags.forEach(tag => {
+          if (tag && typeof tag === 'string') {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    // Use popularTags order but with category-filtered counts
+    return popularTags
+      .map(tag => ({ tag, count: tagCounts[tag] || 0 }))
+      .filter(({ count }) => count > 0);
+  }, [category, popularTags]);
 
 
   return (
@@ -300,14 +324,14 @@ export default function BlogList() {
           >
             All Tags
           </button>
-          {tagData.map(({ tag }) => (
+          {tagData.map(({ tag, count }) => (
             <button
               key={tag}
               className={selectedTags.includes(tag) ? styles.tagActive : styles.tag}
               onClick={() => handleTagClick(tag)}
               type="button"
             >
-              {tag}
+              {tag} ({count})
             </button>
           ))}
         </div>

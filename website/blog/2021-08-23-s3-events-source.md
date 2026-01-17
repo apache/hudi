@@ -2,7 +2,7 @@
 title: "Reliable ingestion from AWS S3 using Hudi"
 excerpt: "From listing to log-based approach, a reliable way of ingesting data from AWS S3 into Hudi."
 authors: [sagar-sumit]
-category: deep-dive
+category: how-to
 image: /assets/images/blog/s3_events_source_design.png
 tags:
 - hudi streamer
