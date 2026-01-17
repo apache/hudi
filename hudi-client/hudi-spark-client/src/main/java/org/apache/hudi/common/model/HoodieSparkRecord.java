@@ -334,7 +334,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     }
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     GenericRecord avroRecord = AvroConversionUtils
-        .createInternalRowToAvroConverter(structType, recordSchema.toAvroSchema(), false)
+        .createInternalRowToAvroConverter(structType, recordSchema, false)
         .apply(data);
     return HoodieAvroUtils.avroToBytesStream(avroRecord);
   }
