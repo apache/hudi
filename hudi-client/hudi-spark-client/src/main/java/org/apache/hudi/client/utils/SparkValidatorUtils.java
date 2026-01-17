@@ -19,7 +19,6 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.WriteStatus;
