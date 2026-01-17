@@ -1840,7 +1840,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(insertWriteConfig);
     Option<String> clusteringInstant = clusteringClient.scheduleClustering(Option.empty());
     assertTrue(clusteringInstant.isPresent());
-    assertEquals(clusteringInstant, metaClient.reloadActiveTimeline()
+    assertEquals(clusteringInstant.get(), metaClient.reloadActiveTimeline()
             .filterPendingReplaceOrClusteringTimeline().lastInstant().get().requestedTime());
 
     String secondInstant = WriteClientTestUtils.createNewInstantTime();
@@ -1853,7 +1853,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
           clusteringClient.cluster(clusteringInstant.get()));
       assertTrue(exception.getCause() instanceof HoodieWriteConflictException);
       HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
-      assertEquals(clusteringInstant, timeline.filterPendingReplaceOrClusteringTimeline().lastInstant().get().requestedTime());
+      assertEquals(clusteringInstant.get(), timeline.filterPendingReplaceOrClusteringTimeline().lastInstant().get().requestedTime());
       assertEquals(secondInstant, timeline.filterCompletedInstants().lastInstant().get().requestedTime());
     } else {
       assertThrows(HoodieWriteConflictException.class, () ->
