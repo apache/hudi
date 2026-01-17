@@ -107,7 +107,8 @@ class TestHoodieBackedTableMetadataWriter {
     } else {
       expectedResult = initialTimeline;
     }
-    assertSame(expectedResult, HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(metaClient, writeClient, requiresRefresh));
+    assertSame(expectedResult, HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
+        metaClient, writeClient, requiresRefresh, Option.empty()));
 
     verify(writeClient, times(hasPendingCompaction ? 1 : 0)).runAnyPendingCompactions();
     verify(writeClient, times(hasPendingLogCompaction ? 1 : 0)).runAnyPendingLogCompactions();
