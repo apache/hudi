@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -61,12 +62,13 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
+
+import javax.annotation.Nonnull;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -110,14 +112,14 @@ public class HoodieTestUtils {
   public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
   public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
   public static final InstantComparator INSTANT_COMPARATOR = new DefaultInstantComparator();
-  public static final Schema SIMPLE_RECORD_SCHEMA = getSchemaFromResource(HoodieTestUtils.class, "/exampleSchema.avsc", false);
+  public static final HoodieSchema SIMPLE_RECORD_SCHEMA = getSchemaFromResource(HoodieTestUtils.class, "/exampleSchema.avsc", false);
 
   public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number) {
     return createSimpleRecord(rowKey, time, number, Option.empty());
   }
 
   public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number, Option<String> partitionPath) {
-    GenericRecord record = new GenericData.Record(SIMPLE_RECORD_SCHEMA);
+    GenericRecord record = new GenericData.Record(SIMPLE_RECORD_SCHEMA.toAvroSchema());
     record.put("_row_key", rowKey);
     record.put("time", time);
     record.put("number", number);
@@ -532,5 +534,18 @@ public class HoodieTestUtils {
     });
     nonExistentConfigs.forEach(key -> assertFalse(
         tableConfig.contains(key), key + " should not be present in the table config"));
+  }
+
+  /**
+   * Fetches inner-most cause of the provided {@link Throwable}
+   */
+  @Nonnull
+  public static Throwable getRootCause(@Nonnull Throwable t) {
+    Throwable cause = t;
+    while (cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+
+    return cause;
   }
 }

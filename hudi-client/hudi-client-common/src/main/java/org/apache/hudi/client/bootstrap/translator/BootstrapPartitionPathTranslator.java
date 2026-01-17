@@ -18,12 +18,12 @@
 
 package org.apache.hudi.client.bootstrap.translator;
 
+import lombok.NoArgsConstructor;
+
 import java.io.Serializable;
 
+@NoArgsConstructor
 public abstract class BootstrapPartitionPathTranslator implements Serializable {
-
-  public BootstrapPartitionPathTranslator() {
-  }
 
   /**
    * Given a bootstrap partition path, translated partition path.

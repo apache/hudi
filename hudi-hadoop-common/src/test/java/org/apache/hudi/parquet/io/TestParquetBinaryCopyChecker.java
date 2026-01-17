@@ -306,7 +306,7 @@ public class TestParquetBinaryCopyChecker {
     String testFile = makeTestFile(schema, "simple");
     ParquetFileInfo info = ParquetBinaryCopyChecker.collectFileInfo(conf, testFile);
     Assertions.assertNotNull(info);
-    Assertions.assertTrue(info.canBinaryCopy());
+    Assertions.assertTrue(info.isBinaryCopyEnabled());
     String schemaString = schema.toString();
     assertFileInfo(
         info,
@@ -381,7 +381,7 @@ public class TestParquetBinaryCopyChecker {
 
   private void assertFileInfo(ParquetFileInfo info, boolean support, String codeType, String schema) {
     Assertions.assertNotNull(info);
-    Assertions.assertEquals(support, info.canBinaryCopy());
+    Assertions.assertEquals(support, info.isBinaryCopyEnabled());
     if (support) {
       Assertions.assertEquals(codeType, info.getBloomFilterTypeCode());
       Assertions.assertEquals(schema, info.getSchema().toString());

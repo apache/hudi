@@ -18,19 +18,22 @@
 
 package org.apache.hudi.index.bloom;
 
+import lombok.Value;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Metadata about a given file group, useful for index lookup.
  */
+@Value
 public class BloomIndexFileInfo implements Serializable {
 
-  private final String fileId;
+  String fileId;
 
-  private final String minRecordKey;
+  String minRecordKey;
 
-  private final String maxRecordKey;
+  String maxRecordKey;
 
   public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {
     this.fileId = fileId;
@@ -44,18 +47,6 @@ public class BloomIndexFileInfo implements Serializable {
     this.maxRecordKey = null;
   }
 
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getMinRecordKey() {
-    return minRecordKey;
-  }
-
-  public String getMaxRecordKey() {
-    return maxRecordKey;
-  }
-
   public boolean hasKeyRanges() {
     return minRecordKey != null && maxRecordKey != null;
   }
@@ -66,33 +57,5 @@ public class BloomIndexFileInfo implements Serializable {
   public boolean isKeyInRange(String recordKey) {
     return Objects.requireNonNull(minRecordKey).compareTo(recordKey) <= 0
         && Objects.requireNonNull(maxRecordKey).compareTo(recordKey) >= 0;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
-    BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equals(that.fileId, fileId) && Objects.equals(that.minRecordKey, minRecordKey)
-        && Objects.equals(that.maxRecordKey, maxRecordKey);
-
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(fileId, minRecordKey, maxRecordKey);
-  }
-
-  @Override
-  public String toString() {
-    return "BloomIndexFileInfo {" + " fileId=" + fileId
-        + " minRecordKey=" + minRecordKey
-        + " maxRecordKey=" + maxRecordKey
-        + '}';
   }
 }

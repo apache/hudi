@@ -183,6 +183,14 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether {@link org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction} should be used for bucket assigning.
+   */
+  public static boolean isMiniBatchBucketAssign(Configuration conf) {
+    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
+    return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX && conf.get(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE) > 0;
+  }
+
+  /**
    * Returns whether it is a MERGE_ON_READ table, and updates by bucket index.
    */
   public static boolean isMorWithBucketIndexUpsert(Configuration conf) {

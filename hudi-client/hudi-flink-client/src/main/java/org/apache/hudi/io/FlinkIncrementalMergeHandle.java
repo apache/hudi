@@ -28,8 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -46,11 +45,10 @@ import java.util.List;
  * for the previous mini-batch ingestion will be rewritten as the final file path before committing,
  * which behaves like all the data are written into the last file.
  */
+@Slf4j
 public class FlinkIncrementalMergeHandle<T, I, K, O>
     extends FlinkMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkIncrementalMergeHandle.class);
 
   public FlinkIncrementalMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,

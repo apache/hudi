@@ -21,53 +21,24 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.orc.CompressionKind;
 
+@AllArgsConstructor
+@Getter
 public class HoodieOrcConfig {
+
   public static final String AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
 
+  private final StorageConfiguration<?> storageConf;
   private final CompressionKind compressionKind;
   private final int stripeSize;
   private final int blockSize;
   private final long maxFileSize;
-  private final StorageConfiguration<?> storageConf;
   private final BloomFilter bloomFilter;
-
-  public HoodieOrcConfig(StorageConfiguration<?> storageConf, CompressionKind compressionKind, int stripeSize,
-      int blockSize, long maxFileSize, BloomFilter bloomFilter) {
-    this.storageConf = storageConf;
-    this.compressionKind = compressionKind;
-    this.stripeSize = stripeSize;
-    this.blockSize = blockSize;
-    this.maxFileSize = maxFileSize;
-    this.bloomFilter = bloomFilter;
-  }
-
-  public StorageConfiguration<?> getStorageConf() {
-    return storageConf;
-  }
-
-  public CompressionKind getCompressionKind() {
-    return compressionKind;
-  }
-
-  public int getStripeSize() {
-    return stripeSize;
-  }
-
-  public int getBlockSize() {
-    return blockSize;
-  }
-
-  public long getMaxFileSize() {
-    return maxFileSize;
-  }
 
   public boolean useBloomFilter() {
     return bloomFilter != null;
-  }
-
-  public BloomFilter getBloomFilter() {
-    return bloomFilter;
   }
 }

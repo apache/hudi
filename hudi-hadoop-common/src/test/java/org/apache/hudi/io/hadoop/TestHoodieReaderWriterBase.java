@@ -35,7 +35,6 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -76,7 +75,7 @@ public abstract class TestHoodieReaderWriterBase {
   protected abstract StoragePath getFilePath();
 
   protected abstract HoodieAvroFileWriter createWriter(
-      Schema avroSchema, boolean populateMetaFields) throws Exception;
+      HoodieSchema schema, boolean populateMetaFields) throws Exception;
 
   protected abstract HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception;
@@ -132,16 +131,16 @@ public abstract class TestHoodieReaderWriterBase {
   @Test
   public void testWriteReadComplexRecord() throws Exception {
     String schemaPath = "/exampleSchemaWithUDT.avsc";
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
-    Schema udtSchema = avroSchema.getField("driver").schema().getTypes().get(1);
-    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
+    HoodieSchema schema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
+    HoodieSchema udtSchema = schema.getField("driver").get().schema().getTypes().get(1);
+    HoodieAvroFileWriter writer = createWriter(schema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String key = "key" + String.format("%02d", i);
       record.put("_row_key", key);
       record.put("time", Integer.toString(i));
       record.put("number", i);
-      GenericRecord innerRecord = new GenericData.Record(udtSchema);
+      GenericRecord innerRecord = new GenericData.Record(udtSchema.toAvroSchema());
       innerRecord.put("driver_name", "driver" + i);
       innerRecord.put("list", Collections.singletonList(i));
       innerRecord.put("map", Collections.singletonMap(key, "value" + i));
@@ -181,7 +180,7 @@ public abstract class TestHoodieReaderWriterBase {
 
   protected void writeFileWithSimpleSchema() throws Exception {
     HoodieSchema schema = getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    HoodieAvroFileWriter writer = createWriter(schema.getAvroSchema(), true);
+    HoodieAvroFileWriter writer = createWriter(schema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
       GenericRecord record = new GenericData.Record(schema.getAvroSchema());
       String key = "key" + String.format("%02d", i);
@@ -195,10 +194,10 @@ public abstract class TestHoodieReaderWriterBase {
   }
 
   private void writeFileWithSchemaWithMeta() throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
+    HoodieSchema schema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieAvroFileWriter writer = createWriter(schema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
-      GenericRecord record = new GenericData.Record(avroSchema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       String key = "key" + String.format("%02d", i);
       record.put("_row_key", key);
       record.put("time", Integer.toString(i));

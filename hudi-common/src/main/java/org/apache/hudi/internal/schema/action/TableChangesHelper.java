@@ -28,6 +28,7 @@ import java.util.List;
  * Helper class to support Table schema changes.
  */
 public class TableChangesHelper {
+
   /**
    * Apply add operation and column position change operation.
    *
@@ -52,7 +53,7 @@ public class TableChangesHelper {
         Types.Field dsrField = result.stream().filter(f -> f.fieldId() == pchange.getDsrId()).findFirst().orElse(null);
         // we remove srcField first
         result.remove(srcField);
-        switch (pchange.type()) {
+        switch (pchange.getType()) {
           case AFTER:
             // add srcField after dsrField
             result.add(result.indexOf(dsrField) + 1, srcField);

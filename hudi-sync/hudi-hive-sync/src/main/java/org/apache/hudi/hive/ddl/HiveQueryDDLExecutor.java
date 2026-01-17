@@ -23,6 +23,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -31,8 +32,6 @@ import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,9 +46,8 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 /**
  * This class offers DDL executor backed by the hive.ql Driver This class preserves the old useJDBC = false way of doing things.
  */
+@Slf4j
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveQueryDDLExecutor.class);
 
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState;
@@ -69,7 +67,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
         try {
           this.sessionState.close();
         } catch (IOException ioException) {
-          LOG.error("Error while closing SessionState", ioException);
+          log.error("Error while closing SessionState", ioException);
         }
       }
       if (this.hiveDriver != null) {
@@ -91,7 +89,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
         if (hiveDriver != null) {
           HoodieTimer timer = HoodieTimer.start();
           responses.add(hiveDriver.run(sql));
-          LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, timer.endTimer()));
+          log.info("Time taken to execute [{}]: {} ms", sql, timer.endTimer());
         }
       }
     } catch (Exception e) {
@@ -118,7 +116,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       schema.putAll(columnsMap);
       schema.putAll(partitionKeysMap);
       final long end = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to getTableSchema: %s ms", (end - start)));
+      log.info("Time taken to getTableSchema: {} ms", (end - start));
       return schema;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get table schema for : " + tableName, e);
@@ -128,11 +126,11 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   @Override
   public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
     if (partitionsToDrop.isEmpty()) {
-      LOG.info("No partitions to drop for " + tableName);
+      log.info("No partitions to drop for {}", tableName);
       return;
     }
 
-    LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
+    log.info("Drop partitions {} on {}", partitionsToDrop.size(), tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
         if (HivePartitionUtil.partitionExists(metaStoreClient, tableName, dropPartition, partitionValueExtractor,
@@ -141,10 +139,10 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
               HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
           metaStoreClient.dropPartition(databaseName, tableName, partitionClause, false);
         }
-        LOG.info("Drop partition " + dropPartition + " on " + tableName);
+        log.info("Drop partition {} on {}", dropPartition, tableName);
       }
     } catch (Exception e) {
-      LOG.error(tableId(databaseName, tableName) + " drop partition failed", e);
+      log.error("{} drop partition failed", tableId(databaseName, tableName), e);
       throw new HoodieHiveSyncException(tableId(databaseName, tableName) + " drop partition failed", e);
     }
   }

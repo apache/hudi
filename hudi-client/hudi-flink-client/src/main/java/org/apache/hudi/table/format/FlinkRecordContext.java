@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
@@ -32,11 +34,12 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
+import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -59,6 +62,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   // for DELETE cases, it'll not be initialized if primary key semantics is lost.
   // For e.g, if the pk fields are [a, b] but user only select a, then the pk
   // semantics is lost.
+  @Setter
   private RecordKeyToRowDataConverter recordKeyRowConverter;
   private OrderingValueEngineTypeConverter orderingValueConverter;
 
@@ -77,9 +81,9 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public Object getValue(RowData record, Schema schema, String fieldName) {
-    RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext =
-        RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
+  public Object getValue(RowData record, HoodieSchema schema, String fieldName) {
+    RowDataQueryContexts.FieldQueryContext fieldQueryContext =
+        RowDataQueryContexts.fromSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
     if (fieldQueryContext == null) {
       return null;
     } else {
@@ -103,8 +107,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public GenericRecord convertToAvroRecord(RowData record, Schema schema) {
-    return (GenericRecord) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowDataToAvroConverter().convert(schema, record);
+  public GenericRecord convertToAvroRecord(RowData record, HoodieSchema schema) {
+    return (GenericRecord) RowDataQueryContexts.fromSchema(schema).getRowDataToAvroConverter().convert(schema, record);
   }
 
   @Override
@@ -121,7 +125,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone).getAvroToRowDataConverter();
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataQueryContexts.fromSchema(HoodieSchema.fromAvroSchema(recordSchema), utcTimezone).getAvroToRowDataConverter();
     RowData rowData = (RowData) converter.convert(avroRecord);
     Schema.Field operationField = recordSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
     if (operationField != null) {
@@ -143,16 +147,16 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+  public RowData constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     return GenericRowData.of(fieldValues);
   }
 
   @Override
-  public RowData mergeWithEngineRecord(Schema schema,
+  public RowData mergeWithEngineRecord(HoodieSchema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {
     GenericRowData genericRowData = new GenericRowData(schema.getFields().size());
-    for (Schema.Field field : schema.getFields()) {
+    for (HoodieSchemaField field : schema.getFields()) {
       int pos = field.pos();
       if (updateValues.containsKey(pos)) {
         genericRowData.setField(pos, updateValues.get(pos));
@@ -172,11 +176,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData toBinaryRow(Schema avroSchema, RowData record) {
+  public RowData toBinaryRow(HoodieSchema schema, RowData record) {
     if (record instanceof BinaryRowData) {
       return record;
     }
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(avroSchema);
+    RowDataSerializer rowDataSerializer = RowDataQueryContexts.getRowDataSerializer(schema);
     return rowDataSerializer.toBinaryRow(record);
   }
 
@@ -192,18 +196,14 @@ public class FlinkRecordContext extends RecordContext<RowData> {
    * @return a function that takes in a record and returns the record with reordered columns
    */
   @Override
-  public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
-    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
+  public UnaryOperator<RowData> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    RowType fromType = (RowType) RowDataQueryContexts.fromSchema(from).getRowType().getLogicalType();
+    RowType toType =  (RowType) RowDataQueryContexts.fromSchema(to).getRowType().getLogicalType();
     RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
   }
 
-  public void setRecordKeyRowConverter(RecordKeyToRowDataConverter recordKeyRowConverter) {
-    this.recordKeyRowConverter = recordKeyRowConverter;
-  }
-
-  public void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
+  public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, utcTimezone);
   }
 }

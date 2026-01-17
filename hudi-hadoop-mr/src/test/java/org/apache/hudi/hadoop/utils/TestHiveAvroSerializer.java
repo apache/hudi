@@ -19,15 +19,15 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
@@ -84,24 +84,24 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testSerialize() {
-    Schema avroSchema = new Schema.Parser().parse(SIMPLE_SCHEMA);
-    // create a test record with avroSchema
-    GenericData.Record avroRecord = new GenericData.Record(avroSchema);
+    HoodieSchema schema = HoodieSchema.parse(SIMPLE_SCHEMA);
+    // create a test record with schema
+    GenericData.Record avroRecord = new GenericData.Record(schema.toAvroSchema());
     avroRecord.put("id", 1);
     avroRecord.put("col1", 1000L);
     avroRecord.put("col2", -5.001f);
     avroRecord.put("col3", 12.999d);
-    Schema currentDecimalType = avroSchema.getField("col4").schema().getTypes().get(1);
-    BigDecimal bd = new BigDecimal("123.456").setScale(((LogicalTypes.Decimal) currentDecimalType.getLogicalType()).getScale());
-    avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType()));
+    HoodieSchema.Decimal currentDecimalType = (HoodieSchema.Decimal) schema.getField("col4").get().schema().getTypes().get(1);
+    BigDecimal bd = new BigDecimal("123.456").setScale(currentDecimalType.getScale());
+    avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType.toAvroSchema(), currentDecimalType.toAvroSchema().getLogicalType()));
     avroRecord.put("col5", "2011-01-01");
     avroRecord.put("col6", 18987);
     avroRecord.put("col7", 1640491505111222L);
     avroRecord.put("col8", false);
     ByteBuffer bb = ByteBuffer.wrap(new byte[]{97, 48, 53});
     avroRecord.put("col9", bb);
-    assertTrue(GenericData.get().validate(avroSchema, avroRecord));
-    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroSchema, true);
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), avroRecord));
+    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, schema.toAvroSchema(), true);
 
     List<Writable> writableList = Arrays.stream(writable.get()).collect(Collectors.toList());
     writableList.remove(writableList.size() - 1);
@@ -110,20 +110,20 @@ public class TestHiveAvroSerializer {
     List<TypeInfo> columnTypeList = createHiveTypeInfoFrom("int,bigint,float,double,decimal(10,4),string,date,timestamp,boolean,binary,date");
     List<String> columnNameList = createHiveColumnsFrom("id,col1,col2,col3,col4,col5,col6,col7,col8,col9,par");
     StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
-    GenericRecord testRecord = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList).serialize(writable, avroSchema);
-    assertTrue(GenericData.get().validate(avroSchema, testRecord));
+    GenericRecord testRecord = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList).serialize(writable, schema);
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), testRecord));
     // test
     List<TypeInfo> columnTypeListClip = createHiveTypeInfoFrom("int,bigint,float,double,decimal(10,4),string,date,timestamp,boolean,binary");
     List<String> columnNameListClip = createHiveColumnsFrom("id,col1,col2,col3,col4,col5,col6,col7,col8,col9");
     StructTypeInfo rowTypeInfoClip = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameListClip, columnTypeListClip);
-    GenericRecord testRecordClip = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfoClip), columnNameListClip, columnTypeListClip).serialize(clipWritable, avroSchema);
-    assertTrue(GenericData.get().validate(avroSchema, testRecordClip));
+    GenericRecord testRecordClip = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfoClip), columnNameListClip, columnTypeListClip).serialize(clipWritable, schema);
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), testRecordClip));
   }
 
   @Test
   public void testNestedValueSerialize() {
-    Schema nestedSchema = new Schema.Parser().parse(NESTED_SCHEMA);
-    GenericRecord avroRecord = new GenericData.Record(nestedSchema);
+    HoodieSchema nestedSchema = HoodieSchema.parse(NESTED_SCHEMA);
+    GenericRecord avroRecord = new GenericData.Record(nestedSchema.toAvroSchema());
     avroRecord.put("firstname", "person1");
     avroRecord.put("lastname", "person2");
     GenericArray scores = new GenericData.Array<>(avroRecord.getSchema().getField("scores").schema(), Arrays.asList(1,2));
@@ -136,14 +136,14 @@ public class TestHiveAvroSerializer {
     GenericArray teachers = new GenericData.Array<>(avroRecord.getSchema().getField("teachers").schema(), Arrays.asList(studentRecord));
     avroRecord.put("teachers", teachers);
 
-    assertTrue(GenericData.get().validate(nestedSchema, avroRecord));
-    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, nestedSchema, true);
+    assertTrue(GenericData.get().validate(nestedSchema.toAvroSchema(), avroRecord));
+    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, nestedSchema.toAvroSchema(), true);
 
     List<TypeInfo> columnTypeList = createHiveTypeInfoFrom("string,string,array<int>,struct<firstname:string,lastname:string>,array<struct<firstname:string,lastname:string>>");
     List<String> columnNameList = createHiveColumnsFrom("firstname,lastname,arrayRecord,student,teachers");
     StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
     GenericRecord testRecord = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList).serialize(writable, nestedSchema);
-    assertTrue(GenericData.get().validate(nestedSchema, testRecord));
+    assertTrue(GenericData.get().validate(nestedSchema.toAvroSchema(), testRecord));
   }
 
   private List<String> createHiveColumnsFrom(final String columnNamesStr) {
@@ -198,7 +198,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetTopLevelFields() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_RECORD);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
@@ -216,7 +216,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetNestedFields() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_RECORD);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
@@ -234,7 +234,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testInvalidFieldNameThrows() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_RECORD);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
@@ -257,7 +257,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetValueFromArrayOrMap() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_ARRAY_AND_MAP);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_ARRAY_AND_MAP);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable tagsArray = new ArrayWritable(Text.class, new Text[]{
@@ -298,7 +298,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetJavaTopLevelFields() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_RECORD);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
@@ -316,7 +316,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetJavaNestedFields() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_RECORD);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
@@ -334,7 +334,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetJavaArrayAndMap() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_ARRAY_AND_MAP);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_ARRAY_AND_MAP);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable tagsArray = new ArrayWritable(Text.class, new Text[]{
@@ -381,7 +381,7 @@ public class TestHiveAvroSerializer {
 
   @Test
   public void testGetJavaInvalidFieldAccess() {
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_ARRAY_AND_MAP);
+    HoodieSchema schema = HoodieSchema.parse(SCHEMA_WITH_ARRAY_AND_MAP);
     HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
 
     ArrayWritable tagsArray = new ArrayWritable(Text.class, new Text[]{
@@ -408,5 +408,204 @@ public class TestHiveAvroSerializer {
     assertThrows(HoodieException.class, () -> {
       serializer.getValueAsJava(record, "properties.value");
     });
+  }
+
+  @Test
+  public void testSerializeDecimalBackedByBytes() {
+    // Create schema with BYTES-backed decimal (not FIXED)
+    String schemaWithBytesDecimal = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"amount\",\"type\":[\"null\",{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithBytesDecimal);
+
+    // Create an Avro record with BYTES-backed decimal
+    GenericData.Record avroRecord = new GenericData.Record(schema.toAvroSchema());
+    avroRecord.put("id", 42);
+
+    HoodieSchema.Decimal decimalType = (HoodieSchema.Decimal) schema.getField("amount").get().schema().getTypes().get(1);
+    BigDecimal bd = new BigDecimal("1234.56").setScale(decimalType.getScale());
+    ByteBuffer decimalBytes = HoodieAvroUtils.DECIMAL_CONVERSION.toBytes(bd, decimalType.toAvroSchema(), decimalType.toAvroSchema().getLogicalType());
+    avroRecord.put("amount", decimalBytes);
+
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), avroRecord));
+
+    // Convert to ArrayWritable
+    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, schema.toAvroSchema(), true);
+
+    // Set up Hive types and serializer
+    List<TypeInfo> columnTypeList = createHiveTypeInfoFrom("int,decimal(10,2)");
+    List<String> columnNameList = createHiveColumnsFrom("id,amount");
+    StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
+
+    // Serialize and verify
+    GenericRecord testRecord = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList).serialize(writable, schema);
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), testRecord));
+
+    // Verify the decimal value is correctly serialized
+    assertEquals(42, testRecord.get("id"));
+    ByteBuffer resultBytes = (ByteBuffer) testRecord.get("amount");
+    BigDecimal resultDecimal = HoodieAvroUtils.DECIMAL_CONVERSION.fromBytes(resultBytes, decimalType.toAvroSchema(), decimalType.toAvroSchema().getLogicalType());
+    assertEquals(bd, resultDecimal);
+  }
+
+  @Test
+  public void testSerializeDecimalBackedByFixed() {
+    // Create schema with FIXED-backed decimal (existing test covers this but making it explicit)
+    String schemaWithFixedDecimal = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"amount\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"fixed_decimal\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithFixedDecimal);
+
+    // Create an Avro record with FIXED-backed decimal
+    GenericData.Record avroRecord = new GenericData.Record(schema.toAvroSchema());
+    avroRecord.put("id", 42);
+
+    HoodieSchema.Decimal decimalType = (HoodieSchema.Decimal) schema.getField("amount").get().schema().getTypes().get(1);
+    BigDecimal bd = new BigDecimal("1234.56").setScale(decimalType.getScale());
+    avroRecord.put("amount", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, decimalType.toAvroSchema(), decimalType.toAvroSchema().getLogicalType()));
+
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), avroRecord));
+
+    // Convert to ArrayWritable
+    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, schema.toAvroSchema(), true);
+
+    // Set up Hive types and serializer
+    List<TypeInfo> columnTypeList = createHiveTypeInfoFrom("int,decimal(10,2)");
+    List<String> columnNameList = createHiveColumnsFrom("id,amount");
+    StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
+
+    // Serialize and verify
+    GenericRecord testRecord = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList).serialize(writable, schema);
+    assertTrue(GenericData.get().validate(schema.toAvroSchema(), testRecord));
+
+    // Verify the decimal value is correctly serialized
+    assertEquals(42, testRecord.get("id"));
+    GenericData.Fixed resultFixed = (GenericData.Fixed) testRecord.get("amount");
+    BigDecimal resultDecimal = HoodieAvroUtils.DECIMAL_CONVERSION.fromFixed(resultFixed, decimalType.toAvroSchema(), decimalType.toAvroSchema().getLogicalType());
+    assertEquals(bd, resultDecimal);
+  }
+
+  @Test
+  public void testGenerateColumnTypesForDecimalBackedByBytes() throws AvroSerdeException {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 152-162 for decimal backed by bytes
+    String schemaWithDecimalBytes = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"amount\",\"type\":[\"null\",{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithDecimalBytes);
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies bytes-backed decimal as decimal type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be decimal(10,2) type due to the decimal logical type backed by bytes
+    assertEquals(TypeInfoFactory.getDecimalTypeInfo(10, 2), columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForDecimalBackedByFixed() throws AvroSerdeException {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 152-162 for decimal backed by fixed
+    String schemaWithDecimalFixed = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"amount\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"fixed_decimal\",\"size\":6,\"logicalType\":\"decimal\",\"precision\":12,\"scale\":4}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithDecimalFixed);
+    assertInstanceOf(HoodieSchema.Decimal.class, schema.getField("amount").get().getNonNullSchema());
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies fixed-backed decimal as decimal type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be decimal(12,4) type due to the decimal logical type backed by fixed
+    assertEquals(TypeInfoFactory.getDecimalTypeInfo(12, 4), columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForDate() throws AvroSerdeException {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 187-189 for date
+    String schemaWithDate = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"birth_date\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithDate);
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies date as date type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be date type due to the date logical type
+    assertEquals(TypeInfoFactory.dateTypeInfo, columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimestampMillis() throws AvroSerdeException {
+    // Test HiveTypeUtils.generateColumnTypes and convertToTypeInfo branch at lines 192-194 for timestamp-millis
+    String schemaWithTimestampMillis = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"created_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimestampMillis);
+
+    // Test that HiveTypeUtils.generateColumnTypes correctly identifies timestamp-millis as timestamp type
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(2, columnTypes.size());
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be timestamp type due to the timestamp-millis logical type
+    assertEquals(TypeInfoFactory.timestampTypeInfo, columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimestampMicros() throws AvroSerdeException {
+    // Test timestamp-micros - AvroSerDe.TIMESTAMP_TYPE_NAME is only "timestamp-millis", NOT "timestamp-micros"
+    String schemaWithTimestampMicros = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"updated_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimestampMicros);
+
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be bigint type
+    assertEquals(TypeInfoFactory.longTypeInfo, columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimeMillis() throws AvroSerdeException {
+    // Test time-millis logical type - there's no specific branch for TIME type in HiveTypeUtils
+    String schemaWithTimeMillis = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"event_time\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"time-millis\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMillis);
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    System.out.println(columnTypes);
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be int type
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(1));
+  }
+
+  @Test
+  public void testGenerateColumnTypesForTimeMicros() throws AvroSerdeException {
+    // Test time-micros logical type
+    String schemaWithTimeMicros = "{\"type\":\"record\",\"name\":\"test_record\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"int\"},"
+        + "{\"name\":\"event_time\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"time-micros\"}],\"default\":null}"
+        + "]}";
+
+    HoodieSchema schema = HoodieSchema.parse(schemaWithTimeMicros);
+    List<TypeInfo> columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    assertEquals(TypeInfoFactory.intTypeInfo, columnTypes.get(0));
+    // The second column should be bigint type
+    assertEquals(TypeInfoFactory.longTypeInfo, columnTypes.get(1));
   }
 }

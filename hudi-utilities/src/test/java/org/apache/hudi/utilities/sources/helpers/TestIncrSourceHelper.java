@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -42,7 +44,6 @@ import org.apache.hudi.utilities.sources.TestS3EventsHoodieIncrSource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -72,7 +73,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
   private JavaSparkContext jsc;
   private HoodieTableMetaClient metaClient;
 
-  private static final Schema S3_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
+  private static final HoodieSchema S3_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
       TestS3EventsHoodieIncrSource.class, "/streamer-config/s3-metadata.avsc", true);
 
   @BeforeEach
@@ -287,22 +288,22 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
 
   private HoodieRecord generateS3EventMetadata(String commitTime, String bucketName, String objectKey, Long objectSize) {
     String partitionPath = bucketName;
-    Schema schema = S3_METADATA_SCHEMA;
-    GenericRecord rec = new GenericData.Record(schema);
-    Schema.Field s3Field = schema.getField("s3");
-    Schema s3Schema = s3Field.schema().getTypes().get(1); // Assuming the record schema is the second type
+    HoodieSchema schema = S3_METADATA_SCHEMA;
+    GenericRecord rec = new GenericData.Record(schema.toAvroSchema());
+    HoodieSchemaField s3Field = schema.getField("s3").get();
+    HoodieSchema s3Schema = s3Field.schema().getTypes().get(1); // Assuming the record schema is the second type
     // Create a generic record for the "s3" field
-    GenericRecord s3Record = new GenericData.Record(s3Schema);
+    GenericRecord s3Record = new GenericData.Record(s3Schema.toAvroSchema());
 
-    Schema.Field s3BucketField = s3Schema.getField("bucket");
-    Schema s3Bucket = s3BucketField.schema().getTypes().get(1); // Assuming the record schema is the second type
-    GenericRecord s3BucketRec = new GenericData.Record(s3Bucket);
+    HoodieSchemaField s3BucketField = s3Schema.getField("bucket").get();
+    HoodieSchema s3Bucket = s3BucketField.schema().getTypes().get(1); // Assuming the record schema is the second type
+    GenericRecord s3BucketRec = new GenericData.Record(s3Bucket.toAvroSchema());
     s3BucketRec.put("name", bucketName);
 
 
-    Schema.Field s3ObjectField = s3Schema.getField("object");
-    Schema s3Object = s3ObjectField.schema().getTypes().get(1); // Assuming the record schema is the second type
-    GenericRecord s3ObjectRec = new GenericData.Record(s3Object);
+    HoodieSchemaField s3ObjectField = s3Schema.getField("object").get();
+    HoodieSchema s3Object = s3ObjectField.schema().getTypes().get(1); // Assuming the record schema is the second type
+    GenericRecord s3ObjectRec = new GenericData.Record(s3Object.toAvroSchema());
     s3ObjectRec.put("key", objectKey);
     s3ObjectRec.put("size", objectSize);
 

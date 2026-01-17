@@ -18,11 +18,11 @@
 
 package org.apache.hudi.connect;
 
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,18 +32,14 @@ import java.util.Map;
 /**
  * HudiSinkConnector is a Kafka Connect Connector implementation
  * that ingest data from Kafka to Hudi.
+ *
  */
+@NoArgsConstructor // No-arg constructor. It is instantiated by Connect framework.
+@Slf4j
 public class HoodieSinkConnector extends SinkConnector {
 
   public static final String VERSION = "0.1.0";
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSinkConnector.class);
   private Map<String, String> configProps;
-
-  /**
-   * No-arg constructor. It is instantiated by Connect framework.
-   */
-  public HoodieSinkConnector() {
-  }
 
   @Override
   public String version() {
@@ -72,7 +68,7 @@ public class HoodieSinkConnector extends SinkConnector {
 
   @Override
   public void stop() {
-    LOG.info(String.format("Shutting down Hudi Sink connector %s", configProps.get("name")));
+    log.info("Shutting down Hudi Sink connector {}", configProps.get("name"));
   }
 
   @Override

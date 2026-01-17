@@ -46,7 +46,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERT
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -102,7 +101,6 @@ public class HiveSyncContext {
     TypedProperties props = StreamerUtil.flinkConf2TypedProperties(conf);
     props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.get(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.get(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
-    props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_DB));
     props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_TABLE));
     props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), conf.get(FlinkOptions.HIVE_SYNC_MODE));

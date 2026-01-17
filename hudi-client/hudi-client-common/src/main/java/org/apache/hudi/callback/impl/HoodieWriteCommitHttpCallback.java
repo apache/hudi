@@ -23,15 +23,13 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * A http implementation of {@link HoodieWriteCommitCallback}.
  */
+@Slf4j
 public class HoodieWriteCommitHttpCallback implements HoodieWriteCommitCallback {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitHttpCallback.class);
 
   private final HoodieWriteCommitHttpCallbackClient client;
 

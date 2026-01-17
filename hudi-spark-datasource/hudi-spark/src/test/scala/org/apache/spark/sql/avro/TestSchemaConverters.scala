@@ -18,8 +18,9 @@
 package org.apache.spark.sql.avro
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
+import org.apache.hudi.common.schema.HoodieSchema
 
-import org.apache.spark.sql.avro.SchemaConverters.SchemaType
+import org.apache.avro.JsonProperties
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -27,15 +28,22 @@ class TestSchemaConverters {
 
   @Test
   def testAvroUnionConversion(): Unit = {
-    val originalAvroSchema = HoodieMetadataColumnStats.SCHEMA$
+    val originalSchema = HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$)
 
-    val SchemaType(convertedStructType, _) = SchemaConverters.toSqlType(originalAvroSchema)
-    val convertedAvroSchema = SchemaConverters.toAvroType(convertedStructType)
+    val (convertedStructType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
+    val convertedSchema = HoodieSparkSchemaConverters.toHoodieType(convertedStructType)
 
     // NOTE: Here we're validating that converting Avro -> Catalyst and Catalyst -> Avro are inverse
     //       transformations, but since it's not an easy endeavor to match Avro schemas, we match
     //       derived Catalyst schemas instead
-    assertEquals(convertedStructType, SchemaConverters.toSqlType(convertedAvroSchema).dataType)
+    assertEquals(convertedStructType, HoodieSparkSchemaConverters.toSqlType(convertedSchema)._1)
+    // validate that the doc string and default null value are set
+    originalSchema.getFields.forEach { field =>
+      val convertedField = convertedSchema.getField(field.name()).get()
+      assertEquals(field.doc(), convertedField.doc())
+      if (field.schema().isNullable) {
+        assertEquals(JsonProperties.NULL_VALUE, convertedField.defaultVal().get())
+      }
+    }
   }
-
 }

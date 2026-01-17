@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 
@@ -33,9 +33,9 @@ import java.io.Serializable;
  * for a given partition path, supporting both fixed bucket numbers and partition-specific
  * bucket numbers.
  */
+@Slf4j
 public class NumBucketsFunction implements Serializable {
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(NumBucketsFunction.class);
 
   /**
    * The default number of buckets to use when partition-specific buckets are not configured.
@@ -45,6 +45,7 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Flag indicating whether partition-level bucket index is enabled.
    */
+  @Getter
   private final boolean isPartitionLevelBucketIndexEnabled;
 
   /**
@@ -65,11 +66,11 @@ public class NumBucketsFunction implements Serializable {
     if (isPartitionLevelBucketIndexEnabled) {
       this.calculator = PartitionBucketIndexCalculator.getInstance(
           expressions, ruleType, defaultBucketsNum);
-      LOG.info("Initialized partition-level bucket index with expressions: {}, rule: {}, default bucket number: {}",
+      log.info("Initialized partition-level bucket index with expressions: {}, rule: {}, default bucket number: {}",
           expressions, ruleType, defaultBucketsNum);
     } else {
       this.calculator = null;
-      LOG.info("Using fixed bucket number: {}", defaultBucketsNum);
+      log.info("Using fixed bucket number: {}", defaultBucketsNum);
     }
   }
 
@@ -115,14 +116,5 @@ public class NumBucketsFunction implements Serializable {
    */
   public int getDefaultBucketNumber() {
     return defaultBucketsNum;
-  }
-
-  /**
-   * Checks if partition-level bucket index is enabled.
-   *
-   * @return True if partition-level bucket index is enabled, false otherwise.
-   */
-  public boolean isPartitionLevelBucketIndexEnabled() {
-    return isPartitionLevelBucketIndexEnabled;
   }
 }

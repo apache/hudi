@@ -28,6 +28,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -120,7 +124,8 @@ public class TestHoodieSchema {
     }, "Should throw exception for invalid JSON schema");
 
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.parse(null);
+      String invalid = null;
+      HoodieSchema.parse(invalid);
     }, "Should throw exception for null schema string");
 
     assertThrows(IllegalArgumentException.class, () -> {
@@ -425,8 +430,8 @@ public class TestHoodieSchema {
   public void testBuilderPattern() {
     // Test the new Builder pattern
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID"),
-        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name")
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name", null)
     );
 
     HoodieSchema recordSchema = new HoodieSchema.Builder(HoodieSchemaType.RECORD)
@@ -526,8 +531,8 @@ public class TestHoodieSchema {
   @Test
   public void testCreateRecordWithErrorFlag() {
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID"),
-        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name")
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "User ID", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name", null)
     );
 
     HoodieSchema recordSchema = HoodieSchema.createRecord("ErrorRecord", "Error record", "com.example", true, fields);
@@ -543,7 +548,7 @@ public class TestHoodieSchema {
   @Test
   public void testMutableOperations() {
     List<HoodieSchemaField> fields = Arrays.asList(
-        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "ID")
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "ID", null)
     );
 
     HoodieSchema recordSchema = HoodieSchema.createRecord("TestRecord", "com.example", "Test record", fields);
@@ -928,5 +933,113 @@ public class TestHoodieSchema {
     HoodieSchema retrievedValueSchema = mapSchema.getValueType();
     assertTrue(retrievedValueSchema instanceof HoodieSchema.Time);
     assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Time) retrievedValueSchema).getPrecision());
+  }
+
+  @Test
+  void validateSerialization() throws Exception {
+    HoodieSchema originalSchema = HoodieSchema.parse(SAMPLE_RECORD_SCHEMA);
+    ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+      out.writeObject(originalSchema);
+    }
+    byte[] bytesWritten = byteOut.toByteArray();
+    HoodieSchema deserializedSchema;
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytesWritten))) {
+      deserializedSchema = (HoodieSchema) in.readObject();
+    }
+    assertEquals(originalSchema, deserializedSchema);
+  }
+
+  @Test
+  void validateSerializationOfSubclass() throws Exception {
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(15, 5);
+    ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+      out.writeObject(decimalSchema);
+    }
+    byte[] bytesWritten = byteOut.toByteArray();
+    HoodieSchema deserializedSchema;
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytesWritten))) {
+      deserializedSchema = (HoodieSchema) in.readObject();
+    }
+    assertEquals(decimalSchema, deserializedSchema);
+    assertTrue(deserializedSchema instanceof HoodieSchema.Decimal);
+    assertEquals(15, ((HoodieSchema.Decimal) deserializedSchema).getPrecision());
+    assertEquals(5, ((HoodieSchema.Decimal) deserializedSchema).getScale());
+
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMicros();
+    byteOut = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+      out.writeObject(timestampSchema);
+    }
+    bytesWritten = byteOut.toByteArray();
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytesWritten))) {
+      deserializedSchema = (HoodieSchema) in.readObject();
+    }
+    assertEquals(timestampSchema, deserializedSchema);
+    assertTrue(deserializedSchema instanceof HoodieSchema.Timestamp);
+    assertEquals(HoodieSchema.TimePrecision.MICROS, ((HoodieSchema.Timestamp) deserializedSchema).getPrecision());
+  }
+
+  @Test
+  public void testParseLogicalTypesCreatesCorrectSubclasses() {
+    // Test that parsing schemas with logical types creates the correct subclass instances
+
+    // Test decimal on BYTES
+    String decimalBytes = "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}";
+    HoodieSchema parsedDecimalBytes = HoodieSchema.parse(decimalBytes);
+    assertInstanceOf(HoodieSchema.Decimal.class, parsedDecimalBytes);
+    HoodieSchema.Decimal decBytes = (HoodieSchema.Decimal) parsedDecimalBytes;
+    assertEquals(10, decBytes.getPrecision());
+    assertEquals(2, decBytes.getScale());
+    assertFalse(decBytes.isFixed());
+
+    // Test decimal on FIXED
+    String decimalFixed = "{\"type\":\"fixed\",\"name\":\"DecimalFixed\",\"size\":16,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}";
+    HoodieSchema parsedDecimalFixed = HoodieSchema.parse(decimalFixed);
+    assertInstanceOf(HoodieSchema.Decimal.class, parsedDecimalFixed);
+    HoodieSchema.Decimal decFixed = (HoodieSchema.Decimal) parsedDecimalFixed;
+    assertEquals(10, decFixed.getPrecision());
+    assertEquals(2, decFixed.getScale());
+    assertTrue(decFixed.isFixed());
+    assertEquals(16, decFixed.getFixedSize());
+
+    // Test timestamp-millis
+    String timestampMillis = "{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}";
+    HoodieSchema parsedTimestampMillis = HoodieSchema.parse(timestampMillis);
+    assertInstanceOf(HoodieSchema.Timestamp.class, parsedTimestampMillis);
+    HoodieSchema.Timestamp tsMillis = (HoodieSchema.Timestamp) parsedTimestampMillis;
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, tsMillis.getPrecision());
+    assertTrue(tsMillis.isUtcAdjusted());
+
+    // Test timestamp-micros
+    String timestampMicros = "{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}";
+    HoodieSchema parsedTimestampMicros = HoodieSchema.parse(timestampMicros);
+    assertInstanceOf(HoodieSchema.Timestamp.class, parsedTimestampMicros);
+    HoodieSchema.Timestamp tsMicros = (HoodieSchema.Timestamp) parsedTimestampMicros;
+    assertEquals(HoodieSchema.TimePrecision.MICROS, tsMicros.getPrecision());
+    assertTrue(tsMicros.isUtcAdjusted());
+
+    // Test local-timestamp-millis
+    String localTimestampMillis = "{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}";
+    HoodieSchema parsedLocalTimestampMillis = HoodieSchema.parse(localTimestampMillis);
+    assertInstanceOf(HoodieSchema.Timestamp.class, parsedLocalTimestampMillis);
+    HoodieSchema.Timestamp localTsMillis = (HoodieSchema.Timestamp) parsedLocalTimestampMillis;
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, localTsMillis.getPrecision());
+    assertFalse(localTsMillis.isUtcAdjusted());
+
+    // Test time-millis
+    String timeMillis = "{\"type\":\"int\",\"logicalType\":\"time-millis\"}";
+    HoodieSchema parsedTimeMillis = HoodieSchema.parse(timeMillis);
+    assertInstanceOf(HoodieSchema.Time.class, parsedTimeMillis);
+    HoodieSchema.Time tmMillis = (HoodieSchema.Time) parsedTimeMillis;
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, tmMillis.getPrecision());
+
+    // Test time-micros
+    String timeMicros = "{\"type\":\"long\",\"logicalType\":\"time-micros\"}";
+    HoodieSchema parsedTimeMicros = HoodieSchema.parse(timeMicros);
+    assertInstanceOf(HoodieSchema.Time.class, parsedTimeMicros);
+    HoodieSchema.Time tmMicros = (HoodieSchema.Time) parsedTimeMicros;
+    assertEquals(HoodieSchema.TimePrecision.MICROS, tmMicros.getPrecision());
   }
 }

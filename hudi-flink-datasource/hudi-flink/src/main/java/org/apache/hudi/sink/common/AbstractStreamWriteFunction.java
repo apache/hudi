@@ -31,6 +31,9 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -41,8 +44,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,11 +55,10 @@ import java.util.stream.StreamSupport;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public abstract class AbstractStreamWriteFunction<I>
     extends AbstractWriteFunction<I>
     implements CheckpointedFunction {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractStreamWriteFunction.class);
 
   /**
    * Config options.
@@ -88,6 +88,8 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * Correspondent to request the instant time.
    */
+  @Getter
+  @Setter
   protected transient Correspondent correspondent;
 
   /**
@@ -175,18 +177,6 @@ public abstract class AbstractStreamWriteFunction<I>
     this.inputEnded = true;
   }
 
-  // -------------------------------------------------------------------------
-  //  Getter/Setter
-  // -------------------------------------------------------------------------
-
-  public void setCorrespondent(Correspondent correspondent) {
-    this.correspondent = correspondent;
-  }
-
-  public Correspondent getCorrespondent() {
-    return correspondent;
-  }
-
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     this.eventGateway = operatorEventGateway;
   }
@@ -230,14 +220,14 @@ public abstract class AbstractStreamWriteFunction<I>
             // The checkpoint succeed but the meta does not commit,
             // re-commit the inflight instant
             this.eventGateway.sendEventToCoordinator(event);
-            LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
+            log.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
           }
         }
       }
     } else {
       // otherwise sends an empty bootstrap event instead.
       this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId));
-      LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
+      log.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
   }
 

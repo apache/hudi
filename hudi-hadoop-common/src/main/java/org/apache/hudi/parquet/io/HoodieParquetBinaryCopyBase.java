@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.bytes.BytesInput;
@@ -66,8 +67,6 @@ import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -93,9 +92,8 @@ import static org.apache.parquet.schema.OriginalType.MAP;
  *    3. We need to combine file metas added by hudi, such as 'hoodie_min_record_key'/'hoodie_max_record_key'/'org.apache.hudi.bloomfilter'
  *    4. We need to overwrite column '_hoodie_file_name' with the output file name
  */
+@Slf4j
 public abstract class HoodieParquetBinaryCopyBase implements Closeable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetBinaryCopyBase.class);
 
   // Key to store original writer version in the file key-value metadata
   public static final String ORIGINAL_CREATED_BY_KEY = "original.created.by";
@@ -150,9 +148,9 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
           DEFAULT_STATISTICS_TRUNCATE_LENGTH,
           ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
       writer.start();
-      LOG.info("init writer ");
+      log.info("init writer ");
     } catch (Exception e) {
-      LOG.error("failed to init parquet writer", e);
+      log.error("failed to init parquet writer", e);
       throw new HoodieException(e);
     }
   }
@@ -174,7 +172,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       BlockMetaData block,
       String originalCreatedBy) throws IOException {
     if (store == null) {
-      LOG.info("stores is empty");
+      log.info("stores is empty");
       return;
     }
 
@@ -434,7 +432,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
           pageOrdinal++;
           break;
         default:
-          LOG.debug("skipping page of type {} of size {}", pageHeader.getType(), compressedPageSize);
+          log.debug("skipping page of type {} of size {}", pageHeader.getType(), compressedPageSize);
           break;
       }
     }
@@ -698,7 +696,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
             changed = true;
           }
         } catch (InvalidRecordException e) {
-          LOG.debug("field not found due to schema evolution, nothing need to do");
+          log.debug("field not found due to schema evolution, nothing need to do");
         }
       }
     }
@@ -719,7 +717,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
           changed = true;
         }
       } catch (Throwable e) {
-        LOG.debug("field not found due to schema evolution, nothing need to do");
+        log.debug("field not found due to schema evolution, nothing need to do");
       }
     }
     return changed;

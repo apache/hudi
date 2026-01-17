@@ -31,10 +31,9 @@ import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,10 +49,9 @@ import scala.Tuple2;
  * {@link HoodieBloomFilterProbingResult} w/in corresponding files identified by {@link HoodieFileGroupId}
  * to validate whether the record w/ the provided key is indeed persisted in it
  */
+@Slf4j
 public class HoodieFileProbingFunction implements
     FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>>, List<HoodieKeyLookupResult>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFileProbingFunction.class);
 
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
@@ -130,7 +128,7 @@ public class HoodieFileProbingFunction implements
             List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
                 dataFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
 
-            LOG.debug(
+            log.debug(
                 String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",
                     candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(),
                     matchingKeysAndPositions.size()));

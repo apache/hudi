@@ -111,8 +111,6 @@ class TimelineRelation(val sqlContext: SQLContext,
       }
     }))
 
-    // Using deprecated `JavaConversions` to be compatible with scala versions < 2.12.
-    // Can replace with JavaConverters.seqAsJavaList(...) once the support for scala versions < 2.12 is stopped
     sqlContext.createDataFrame(data.asJava, schema).rdd
   }
 

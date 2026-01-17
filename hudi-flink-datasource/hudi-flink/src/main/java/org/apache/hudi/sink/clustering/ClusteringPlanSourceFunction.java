@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li>If the timeline has no inflight instants,
- *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime() as the instant time;</li>
+ *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime()} as the instant time;</li>
  *   <li>If the timeline has inflight instants,
  *   use the median instant time between [last complete instant time, earliest inflight instant time]
  *   as the instant time.</li>

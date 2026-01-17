@@ -25,13 +25,12 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Sink function that cleans the old commits.
@@ -40,9 +39,9 @@ import org.slf4j.LoggerFactory;
  * at a time, a new task can not be scheduled until the last task finished(fails or normally succeed).
  * The cleaning task never expects to throw but only log.
  */
+@Slf4j
 public class CleanFunction<T> extends AbstractRichFunctionAdapter
     implements SinkFunctionAdapter<T>, CheckpointedFunction, CheckpointListener {
-  private static final Logger LOG = LoggerFactory.getLogger(CleanFunction.class);
 
   private final Configuration conf;
 
@@ -60,7 +59,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
+    this.executor = NonThrownExecutor.builder(log).waitForTasksFinish(true).build();
     if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       executor.execute(() -> {
         this.isCleaning = true;
@@ -95,7 +94,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
         this.isCleaning = true;
       } catch (Throwable throwable) {
         // catch the exception to not affect the normal checkpointing
-        LOG.warn("Failed to start async cleaning", throwable);
+        log.warn("Failed to start async cleaning", throwable);
       }
     }
   }

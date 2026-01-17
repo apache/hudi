@@ -20,7 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
+import org.apache.hudi.io.storage.hadoop.HoodieHadoopIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 
 /**

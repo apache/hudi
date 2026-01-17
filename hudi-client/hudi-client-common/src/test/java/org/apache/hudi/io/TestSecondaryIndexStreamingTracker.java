@@ -26,11 +26,11 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,16 +84,16 @@ class TestSecondaryIndexStreamingTracker {
       + "  ]\n"
       + "}";
 
-  private Schema schema;
-  private Schema nullableSchema;
+  private HoodieSchema schema;
+  private HoodieSchema nullableSchema;
   private HoodieWriteConfig config;
   private WriteStatus writeStatus;
   private HoodieIndexDefinition fareIndexDef;
   
   @BeforeEach
   void setUp() {
-    schema = new Schema.Parser().parse(SIMPLE_SCHEMA_STR);
-    nullableSchema = new Schema.Parser().parse(NULLABLE_SCHEMA_STR);
+    schema = HoodieSchema.parse(SIMPLE_SCHEMA_STR);
+    nullableSchema = HoodieSchema.parse(NULLABLE_SCHEMA_STR);
     Properties props = new Properties();
     config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/test")
@@ -115,7 +115,7 @@ class TestSecondaryIndexStreamingTracker {
   @ParameterizedTest
   @MethodSource("insertTestCases")
   void testTrackSecondaryIndexStats_Insert(String testName, Object fareValue, 
-      String expectedSecondaryKeyValue, Schema testSchema) {
+      String expectedSecondaryKeyValue, HoodieSchema testSchema) {
     String recordKey = "test-record-key-" + testName;
     String partitionPath = "2023/01/01";
     HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
@@ -138,8 +138,8 @@ class TestSecondaryIndexStreamingTracker {
 
   private static Stream<Arguments> insertTestCases() {
     return Stream.of(
-        Arguments.of("insert-normal", 100.5, "100.5", new Schema.Parser().parse(SIMPLE_SCHEMA_STR)),
-        Arguments.of("insert-null", null, null, new Schema.Parser().parse(NULLABLE_SCHEMA_STR))
+        Arguments.of("insert-normal", 100.5, "100.5", HoodieSchema.parse(SIMPLE_SCHEMA_STR)),
+        Arguments.of("insert-null", null, null, HoodieSchema.parse(NULLABLE_SCHEMA_STR))
     );
   }
 
@@ -368,9 +368,9 @@ class TestSecondaryIndexStreamingTracker {
 
   // Helper Methods
 
-  private GenericRecord createRecord(Schema recordSchema, String recordKey, String partitionPath,
+  private GenericRecord createRecord(HoodieSchema recordSchema, String recordKey, String partitionPath,
       String name, Object fare, long timestamp) {
-    GenericRecord avroRecord = new GenericData.Record(recordSchema);
+    GenericRecord avroRecord = new GenericData.Record(recordSchema.toAvroSchema());
     avroRecord.put("_hoodie_record_key", recordKey);
     avroRecord.put("_hoodie_partition_path", partitionPath);
     avroRecord.put("_hoodie_commit_time", "20231201120000");
@@ -389,13 +389,13 @@ class TestSecondaryIndexStreamingTracker {
   }
 
   private void trackSecondaryIndexStats(HoodieKey hoodieKey, HoodieRecord<HoodieAvroPayload> newRecord,
-      HoodieRecord<HoodieAvroPayload> oldRecord, boolean isDelete, Schema recordSchema) {
+      HoodieRecord<HoodieAvroPayload> oldRecord, boolean isDelete, HoodieSchema recordSchema) {
     trackSecondaryIndexStats(hoodieKey, newRecord, oldRecord, isDelete, recordSchema, 
         Collections.singletonList(fareIndexDef));
   }
 
   private void trackSecondaryIndexStats(HoodieKey hoodieKey, HoodieRecord<HoodieAvroPayload> newRecord,
-      HoodieRecord<HoodieAvroPayload> oldRecord, boolean isDelete, Schema recordSchema, 
+      HoodieRecord<HoodieAvroPayload> oldRecord, boolean isDelete, HoodieSchema recordSchema,
       List<HoodieIndexDefinition> indexDefs) {
     SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
         hoodieKey,

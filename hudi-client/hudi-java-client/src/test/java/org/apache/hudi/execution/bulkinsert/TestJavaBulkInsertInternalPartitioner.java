@@ -70,7 +70,7 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestH
     cfg.setValue(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "partition_path");
     cfg.setValue(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED, "false");
     testBulkInsertInternalPartitioner(
-        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, cfg),
+        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.HOODIE_SCHEMA, cfg),
         records, true, generatePartitionNumRecords(records), Option.of(columnComparator));
   }
 

@@ -32,8 +32,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
@@ -48,10 +47,9 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
  */
+@Slf4j
 public class SimpleConcurrentFileWritesConflictResolutionStrategy
     implements ConflictResolutionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SimpleConcurrentFileWritesConflictResolutionStrategy.class);
 
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
@@ -138,7 +136,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     Set<Pair<String, String>> intersection = new HashSet<>(partitionAndFileIdsSetForFirstInstant);
     intersection.retainAll(partitionAndFileIdsSetForSecondInstant);
     if (!intersection.isEmpty()) {
-      LOG.info("Found conflicting writes between first operation = " + thisOperation
+      log.info("Found conflicting writes between first operation = " + thisOperation
           + ", second operation = " + otherOperation + " , intersecting file ids " + intersection);
       return true;
     }

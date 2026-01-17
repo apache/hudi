@@ -39,11 +39,10 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -54,10 +53,10 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 /**
  * Create handle with RowData for datasource implementation of bulk insert.
  */
+@Slf4j
 public class HoodieRowDataCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowDataCreateHandle.class);
   private static final AtomicLong SEQGEN = new AtomicLong(1);
 
   private final String instantTime;
@@ -115,7 +114,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
-    LOG.info("New handle created for partition :" + partitionPath + " with fileId " + fileId);
+    log.info("New handle created for partition :" + partitionPath + " with fileId " + fileId);
   }
 
   /**

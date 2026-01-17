@@ -31,10 +31,9 @@ import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.util.ConsistentHashingUpdateStrategyUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -44,9 +43,8 @@ import java.util.stream.Collectors;
 /**
  * Helper class for native row writer for bulk_insert with consistent hashing bucket index.
  */
+@Slf4j
 public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBulkInsertDataInternalWriterHelper {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketBulkInsertDataInternalWriterHelper.class);
 
   public ConsistentBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -70,7 +68,7 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
       }
       handle.write(row);
     } catch (Throwable t) {
-      LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
+      log.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw new IOException(t);
     }
   }
@@ -111,7 +109,7 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
   @Override
   public void close() throws IOException {
     if (handle != null) {
-      LOG.info("Closing bulk insert file {}", handle.getFileName());
+      log.info("Closing bulk insert file {}", handle.getFileName());
       writeStatusList.add(handle.close());
       handle = null;
     }

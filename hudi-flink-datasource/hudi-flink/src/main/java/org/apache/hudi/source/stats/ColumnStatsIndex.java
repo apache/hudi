@@ -20,7 +20,6 @@ package org.apache.hudi.source.stats;
 
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 
-import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 
@@ -28,13 +27,7 @@ import java.util.Set;
  * Base support that leverages Metadata Table's indexes, such as Column Stats Index
  * and Partition Stats Index, to prune files and partitions.
  */
-public interface ColumnStatsIndex extends Serializable {
-
-  /**
-   * Returns the partition name of the index.
-   */
-  String getIndexPartitionName();
-
+public interface ColumnStatsIndex extends FlinkMetadataIndex {
   /**
    * Computes the filtered files with given candidates.
    *

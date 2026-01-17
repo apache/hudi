@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import java.util.List;
 import java.util.Map;
@@ -35,9 +35,9 @@ import java.util.Properties;
 public class HoodieFlinkAvroDataBlock extends HoodieAvroDataBlock {
 
   public HoodieFlinkAvroDataBlock(
-      @NotNull List<HoodieRecord> records,
-      @NotNull Map<HeaderMetadataType, String> header,
-      @NotNull String keyField) {
+      @Nonnull List<HoodieRecord> records,
+      @Nonnull Map<HeaderMetadataType, String> header,
+      @Nonnull String keyField) {
     super(records, header, keyField);
   }
 

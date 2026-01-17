@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -31,8 +31,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
-
-import org.apache.avro.Schema;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -60,7 +58,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 Option<byte[]> content,
                                 boolean readBlockLazily,
                                 HoodieLogBlockContentLocation logBlockContentLocation,
-                                Option<Schema> readerSchema,
+                                Option<HoodieSchema> readerSchema,
                                 Map<HeaderMetadataType, String> header,
                                 Map<FooterMetadataType, String> footer,
                                 String keyField) {
@@ -95,8 +93,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
     paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
     paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(useDictionaryEncoding.get()));
-    Schema writerSchema = AvroSchemaCache.intern(new Schema.Parser().parse(
-        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
+    HoodieSchema writerSchema = HoodieSchemaCache.intern(HoodieSchema.parse(super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
         .serializeRecordsToLogBlock(storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
@@ -121,13 +118,12 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getBlockSize());
 
     HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlineLogFilePath, inlineConf);
-    Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    HoodieSchema writerSchema = HoodieSchema.parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(type)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
-        .getRecordIterator(HoodieSchema.fromAvroSchema(writerSchema), HoodieSchema.fromAvroSchema(readerSchema));
+        .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }
 
@@ -146,8 +142,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getBlockSize());
     HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlineLogFilePath, inlineConf);
 
-    Schema writerSchema =
-        new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    HoodieSchema writerSchema = HoodieSchema.parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     return readerContext.getFileRecordIterator(
         inlineLogFilePath, 0, blockContentLoc.getBlockSize(),

@@ -39,8 +39,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,9 +59,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
  */
+@Slf4j
 public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(UpsertPartitioner.class);
 
   /**
    * List of all small files to be corrected.
@@ -104,9 +102,9 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
       assignInserts(profile, context);
     }
 
-    LOG.info("Total Buckets: {}, bucketInfoMap size: {}, partitionPathToInsertBucketInfos size: {}, updateLocationToBucket size: {}",
+    log.info("Total Buckets: {}, bucketInfoMap size: {}, partitionPathToInsertBucketInfos size: {}, updateLocationToBucket size: {}",
         totalBuckets, bucketInfoMap.size(), partitionPathToInsertBucketInfos.size(), updateLocationToBucket.size());
-    LOG.debug("Buckets info => {}, Partition to insert buckets => {} UpdateLocations mapped to buckets => {}",
+    log.debug("Buckets info => {}, Partition to insert buckets => {} UpdateLocations mapped to buckets => {}",
         bucketInfoMap, partitionPathToInsertBucketInfos, updateLocationToBucket);
   }
 
@@ -178,7 +176,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     long averageRecordSize = recordSizeEstimator.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
         .filterCompletedInstants(),  layout.getCommitMetadataSerDe());
-    LOG.info("AvgRecordSize => {}", averageRecordSize);
+    log.info("AvgRecordSize => {}", averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
         getSmallFilesForPartitions(new ArrayList<>(partitionPaths), context);
@@ -196,8 +194,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
         this.smallFiles.addAll(smallFiles);
 
-        LOG.info("For partitionPath : {} Total Small Files => {}", partitionPath, smallFiles.size());
-        LOG.debug("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
+        log.info("For partitionPath : {} Total Small Files => {}", partitionPath, smallFiles.size());
+        log.debug("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
         List<Integer> bucketNumbers = new ArrayList<>();
@@ -212,10 +210,10 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
             int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
-              LOG.debug("Assigning {} inserts to existing update bucket {}", recordsToAppend, bucket);
+              log.debug("Assigning {} inserts to existing update bucket {}", recordsToAppend, bucket);
             } else {
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
-              LOG.debug("Assigning {} inserts to new update bucket {}", recordsToAppend, bucket);
+              log.debug("Assigning {} inserts to new update bucket {}", recordsToAppend, bucket);
             }
             if (profile.hasOutputWorkLoadStats()) {
               outputWorkloadStats.addInserts(smallFile.location, recordsToAppend);
@@ -238,7 +236,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
-          LOG.info("After small file assignment: unassignedInserts => {}, totalInsertBuckets => {}, recordsPerBucket => {}",
+          log.info("After small file assignment: unassignedInserts => {}, totalInsertBuckets => {}, recordsPerBucket => {}",
               totalUnassignedInserts, insertBuckets, insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
@@ -266,7 +264,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
           currentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
-        LOG.info("Total insert buckets for partition path {} => {}", partitionPath, insertBuckets);
+        log.info("Total insert buckets for partition path {} => {}", partitionPath, insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
       if (profile.hasOutputWorkLoadStats()) {
@@ -287,7 +285,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
     long startTimeMs = System.currentTimeMillis();
     Map<String, List<SmallFile>> partitionSmallFilesMap = context.mapToPair(partitionPaths, paritionPath -> Pair.of(paritionPath, getSmallFiles(paritionPath)), partitionPaths.size());
-    LOG.info("Fetched small files in {}ms", System.currentTimeMillis() - startTimeMs);
+    log.info("Fetched small files in {}ms", System.currentTimeMillis() - startTimeMs);
     return partitionSmallFilesMap;
   }
 

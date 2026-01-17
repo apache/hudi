@@ -20,13 +20,13 @@ package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
-import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +39,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.GlueServiceClientConfiguration;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
@@ -74,7 +75,6 @@ import software.amazon.awssdk.services.glue.model.UpdateTableResponse;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
-import software.amazon.awssdk.regions.Region;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -137,7 +137,7 @@ class TestAWSGlueSyncClient {
     String tableName = "testTable";
     String databaseName = "testdb";
     String inputFormatClass = "inputFormat";
-    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
     String outputFormatClass = "outputFormat";
     String serdeClass = "serde";
     HashMap<String, String> serdeProperties = new HashMap<>();
@@ -182,7 +182,7 @@ class TestAWSGlueSyncClient {
   @Test
   void testCreateOrReplaceTable_TableDoesNotExist() {
     String tableName = "testTable";
-    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
     String inputFormatClass = "inputFormat";
     String outputFormatClass = "outputFormat";
     String serdeClass = "serde";
@@ -752,7 +752,7 @@ class TestAWSGlueSyncClient {
 
     // Test table creation with tagging
     String tableName = "test_table";
-    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    HoodieSchema storageSchema = GlueTestUtil.getSimpleSchema();
     clientWithTags.createTable(tableName, storageSchema, "inputFormat", "outputFormat", 
         "serdeClass", new HashMap<>(), new HashMap<>());
 

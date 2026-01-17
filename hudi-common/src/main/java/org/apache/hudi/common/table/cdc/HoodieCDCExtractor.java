@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.AS_IS;
@@ -341,6 +342,27 @@ public class HoodieCDCExtractor {
               .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new StoragePath(partitionPath, logFile))
               .collect(Collectors.toList());
+          // get files list from unfinished compaction commit
+          List<StoragePath> filesToCompact = new ArrayList<>();
+          AtomicReference<String> lastBaseFile =  new AtomicReference<>();
+          metaClient.getActiveTimeline().filterPendingCompactionTimeline().filter(i -> i.compareTo(instant) < 0).getInstants()
+              .forEach(i -> {
+                try {
+                  metaClient.getActiveTimeline().readCompactionPlan(i).getOperations()
+                      .stream()
+                      .filter(op -> op.getPartitionPath().equals(fgId.getPartitionPath()) && op.getFileId().equals(fgId.getFileId()))
+                      .forEach(operation ->  {
+                        filesToCompact.addAll(operation.getDeltaFilePaths().stream().map(logFile -> new StoragePath(partitionPath, logFile)).collect(Collectors.toList()));
+                        lastBaseFile.set(operation.getDataFilePath());
+                      });
+                } catch (IOException e) {
+                  throw new HoodieIOException("Failed to read a compaction plan on instant " + i, e);
+                }
+              });
+          if (baseFile == null && lastBaseFile.get() != null) {
+            baseFile = new HoodieBaseFile(storage.getPathInfo(new StoragePath(partitionPath, lastBaseFile.get())));
+          }
+          logFilePaths.addAll(filesToCompact);
           List<HoodieLogFile> logFiles = storage.listDirectEntries(logFilePaths).stream()
               .map(HoodieLogFile::new).collect(Collectors.toList());
           return Option.of(new FileSlice(fgId, instant.requestedTime(), baseFile, logFiles));

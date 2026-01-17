@@ -20,6 +20,7 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -115,6 +116,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     try {
@@ -125,6 +127,14 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
+  public HoodieSchema getTargetHoodieSchema() {
+    // By default, delegate to legacy getTargetSchema() method
+    Schema schema = getTargetSchema();
+    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+  }
+
+  @Override
+  @Deprecated
   public Schema getTargetSchema() {
     String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl = getStringWithAltKeys(

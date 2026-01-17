@@ -33,7 +33,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import java.io.IOException;
@@ -72,7 +72,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
     HoodieJavaEngineContext context = new HoodieJavaEngineContext(getStorageConf(), taskContextSupplier);
     //init table if not exists
     StoragePath basePath = new StoragePath(getBasePath());
-    try (HoodieStorage storage = new HoodieHadoopStorage(basePath, getStorageConf())) {
+    try (HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, getStorageConf())) {
       boolean basepathExists = storage.exists(basePath);
       if (!basepathExists || firstCommit) {
         if (basepathExists) {

@@ -33,8 +33,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.util.Lazy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,10 +48,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * This strategy automatically sets the SparkStreamCopyClusteringExecutionStrategy
  * as the execution strategy when building the clustering plan.
  */
+@Slf4j
 public class SparkStreamCopyClusteringPlanStrategy<T>
     extends SparkSizeBasedClusteringPlanStrategy<T> {
-  
-  private static final Logger LOG = LoggerFactory.getLogger(SparkStreamCopyClusteringPlanStrategy.class);
   
   private static final String SPARK_STREAM_COPY_CLUSTERING_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkStreamCopyClusteringExecutionStrategy";
@@ -80,10 +78,10 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
     // When schema evolution is disabled, use schema-aware grouping
     // When schema evolution is enabled, use the default size-only grouping
     if (!getWriteConfig().isBinaryCopySchemaEvolutionEnabled()) {
-      LOG.info("Schema evolution disabled, using schema-aware grouping for partition: {}", partitionPath);
+      log.info("Schema evolution disabled, using schema-aware grouping for partition: {}", partitionPath);
       return buildClusteringGroupsForPartitionWithSchemaGrouping(partitionPath, fileSlices);
     } else {
-      LOG.info("Schema evolution enabled, using size-only grouping for partition: {}", partitionPath);
+      log.info("Schema evolution enabled, using size-only grouping for partition: {}", partitionPath);
       return super.buildClusteringGroupsForPartition(partitionPath, fileSlices);
     }
   }
@@ -124,7 +122,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
       if ((totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() || schemaMismatch) 
           && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        LOG.info("Adding clustering group - size: {} max bytes: {} num input slices: {} output groups: {}{}",
+        log.info("Adding clustering group - size: {} max bytes: {} num input slices: {} output groups: {}{}",
             totalSizeSoFar, writeConfig.getClusteringMaxBytesInGroup(), currentGroup.size(), numOutputGroups,
             schemaMismatch ? " (schema change detected)" : "");
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
@@ -134,7 +132,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
         
         // If fileSliceGroups size reaches the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
-          LOG.info("Having generated the maximum number of groups: {}", writeConfig.getClusteringMaxNumGroups());
+          log.info("Having generated the maximum number of groups: {}", writeConfig.getClusteringMaxNumGroups());
           partialScheduled = true;
           break;
         }
@@ -152,7 +150,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
     if (!currentGroup.isEmpty()) {
       if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        LOG.info("Adding final clustering group - size: {} max bytes: {} num input slices: {} output groups: {}",
+        log.info("Adding final clustering group - size: {} max bytes: {} num input slices: {} output groups: {}",
             totalSizeSoFar, writeConfig.getClusteringMaxBytesInGroup(), currentGroup.size(), numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
       }
@@ -178,7 +176,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
             getHoodieTable().getStorage(),
             new StoragePath(filePath));
       } catch (Exception e) {
-        LOG.warn("Failed to read schema hash from file: {}", filePath, e);
+        log.warn("Failed to read schema hash from file: {}", filePath, e);
         // Return a default hash if we can't read the schema
         return 0;
       }
@@ -200,7 +198,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
           .setStrategyParams(getStrategyParams())
           .build();
       
-      LOG.info("Setting execution strategy to SparkStreamCopyClusteringExecutionStrategy for stream copy clustering");
+      log.info("Setting execution strategy to SparkStreamCopyClusteringExecutionStrategy for stream copy clustering");
       
       return Option.of(HoodieClusteringPlan.newBuilder()
           .setStrategy(strategy)

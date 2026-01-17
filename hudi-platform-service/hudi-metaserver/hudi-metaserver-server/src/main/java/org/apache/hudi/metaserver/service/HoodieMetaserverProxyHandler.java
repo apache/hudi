@@ -20,9 +20,8 @@ package org.apache.hudi.metaserver.service;
 
 import org.apache.hudi.metaserver.thrift.MetaserverException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -32,8 +31,8 @@ import java.util.Arrays;
 /**
  * AOP for meta server.
  */
+@Slf4j
 public class HoodieMetaserverProxyHandler implements InvocationHandler {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetaserverProxyHandler.class);
 
   private final HoodieMetaserverGateway metaserverGateway;
 
@@ -52,7 +51,7 @@ public class HoodieMetaserverProxyHandler implements InvocationHandler {
       err = e;
     }
     if (err != null) {
-      LOG.error("Error in calling metaserver method=" + method.getName() + " args=" +  Arrays.toString(args) + " error", err);
+      log.error("Error in calling metaserver method={} args={} error", method.getName(), Arrays.toString(args), err);
       if (err instanceof TException) {
         throw err;
       } else {

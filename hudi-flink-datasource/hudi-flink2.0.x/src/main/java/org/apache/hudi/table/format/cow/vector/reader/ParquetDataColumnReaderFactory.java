@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.parquet.bytes.ByteBufferInputStream;
 import org.apache.parquet.column.Dictionary;
@@ -40,10 +43,8 @@ import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnRead
  * schema evolution). This factory is used to retrieve user required typed data via corresponding
  * reader which reads the underlying data.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ParquetDataColumnReaderFactory {
-
-  private ParquetDataColumnReaderFactory() {
-  }
 
   /**
    * default reader for {@link ParquetDataColumnReader}.
@@ -54,6 +55,7 @@ public final class ParquetDataColumnReaderFactory {
 
     // After the data is read in the parquet type, isValid will be set to true if the data can
     // be returned in the type defined in HMS.  Otherwise isValid is set to false.
+    @Getter
     boolean isValid = true;
 
     public DefaultParquetDataColumnReader(ValuesReader valuesReader) {
@@ -168,11 +170,6 @@ public final class ParquetDataColumnReaderFactory {
     @Override
     public int readInteger(int id) {
       return dict.decodeToInt(id);
-    }
-
-    @Override
-    public boolean isValid() {
-      return isValid;
     }
 
     @Override

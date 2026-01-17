@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,6 +32,7 @@ import java.util.Map;
  * HoodieRollbackRequest in HoodieRollbackPlan (avro pojo) is not operable directly within spark parallel engine.
  * Hence converting the same to this {@link SerializableHoodieRollbackRequest} and then using it within spark.parallelize.
  */
+@Getter
 public class SerializableHoodieRollbackRequest implements Serializable {
 
   private final String partitionPath;
@@ -44,25 +47,5 @@ public class SerializableHoodieRollbackRequest implements Serializable {
     this.latestBaseInstant = rollbackRequest.getLatestBaseInstant();
     this.filesToBeDeleted.addAll(rollbackRequest.getFilesToBeDeleted());
     this.logBlocksToBeDeleted.putAll(rollbackRequest.getLogBlocksToBeDeleted());
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getLatestBaseInstant() {
-    return latestBaseInstant;
-  }
-
-  public List<String> getFilesToBeDeleted() {
-    return filesToBeDeleted;
-  }
-
-  public Map<String, Long> getLogBlocksToBeDeleted() {
-    return logBlocksToBeDeleted;
   }
 }

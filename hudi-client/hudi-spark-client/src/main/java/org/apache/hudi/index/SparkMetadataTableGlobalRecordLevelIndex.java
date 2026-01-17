@@ -40,11 +40,10 @@ import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -60,9 +59,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 /**
  * Hoodie Index implementation backed by the global record level index present in the Metadata Table.
  */
+@Slf4j
 public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object, Object> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataTableGlobalRecordLevelIndex.class);
 
   public SparkMetadataTableGlobalRecordLevelIndex(HoodieWriteConfig config) {
     super(config);
@@ -77,7 +75,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
       ValidationUtils.checkState(getTotalFileGroupCount(fileGroupSize) > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
       // This means that record index has not been initialized.
-      LOG.warn("Record index not initialized. Falling back to {} for tagging records", getFallbackIndexType().name());
+      log.warn("Record index not initialized. Falling back to {} for tagging records", getFallbackIndexType().name());
 
       // Fallback to another index so that tagLocation is still accurate and there are no duplicates.
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
@@ -136,7 +134,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
-    return Either.left(hoodieTable.getMetadataTable().getNumFileGroupsForPartition(RECORD_INDEX));
+    return Either.left(hoodieTable.getTableMetadata().getNumFileGroupsForPartition(RECORD_INDEX));
   }
 
   protected int getTotalFileGroupCount(Either<Integer, Map<String, Integer>> fileGroupSize) {
@@ -195,7 +193,7 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
 
       // recordIndexInfo object only contains records that are present in record_index.
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
+          hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
         List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
         return recordIndexInfo.stream()

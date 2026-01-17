@@ -31,11 +31,11 @@ import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.DataTypeUtils;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -56,10 +56,10 @@ import static org.apache.hudi.common.util.FutureUtils.allOf;
 /**
  * Helper class for bulk insert used by Flink.
  */
+@Slf4j
 public class BulkInsertWriterHelper {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BulkInsertWriterHelper.class);
-
+  @Getter
   protected final String instantTime;
   protected final int taskPartitionId;
   protected final long totalSubtaskNum;
@@ -114,13 +114,6 @@ public class BulkInsertWriterHelper {
     this.writeMetrics = writeMetrics;
   }
 
-  /**
-   * Returns the write instant time.
-   */
-  public String getInstantTime() {
-    return this.instantTime;
-  }
-
   public void write(RowData record) throws IOException {
     try {
       String recordKey = preserveHoodieMetadata
@@ -139,7 +132,7 @@ public class BulkInsertWriterHelper {
       writeMetrics.ifPresent(FlinkStreamWriteMetrics::markRecordIn);
     } catch (Throwable t) {
       IOException ioException = new IOException("Exception happened when bulk insert.", t);
-      LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", ioException);
+      log.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", ioException);
       throw new IOException(ioException);
     }
   }
@@ -151,7 +144,7 @@ public class BulkInsertWriterHelper {
         close();
       }
 
-      LOG.info("Creating new file for partition path " + partitionPath);
+      log.info("Creating new file for partition path " + partitionPath);
       writeMetrics.ifPresent(FlinkStreamWriteMetrics::startHandleCreation);
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
           instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata, isAppendMode && !populateMetaFields);
@@ -161,7 +154,7 @@ public class BulkInsertWriterHelper {
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
       // create a new one.
-      LOG.info("Rolling max-size file for partition path " + partitionPath);
+      log.info("Rolling max-size file for partition path " + partitionPath);
       writeStatusList.add(closeWriteHandle(handles.remove(partitionPath)));
       HoodieRowDataCreateHandle rowCreateHandle = createWriteHandle(partitionPath);
       handles.put(partitionPath, rowCreateHandle);
@@ -179,7 +172,7 @@ public class BulkInsertWriterHelper {
     allOf(handles.values().stream()
         .map(rowCreateHandle -> CompletableFuture.supplyAsync(() -> {
           try {
-            LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
+            log.info("Closing bulk insert file " + rowCreateHandle.getFileName());
             return rowCreateHandle.close();
           } catch (IOException e) {
             throw new HoodieIOException("IOE during rowCreateHandle.close()", e);

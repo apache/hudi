@@ -26,8 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
@@ -37,9 +36,8 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DE
 /**
  * Upgrade handler to upgrade Hudi's table version from 4 to 5.
  */
+@Slf4j
 public class FourToFiveUpgradeHandler implements UpgradeHandler {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FourToFiveUpgradeHandler.class);
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
@@ -50,7 +48,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
       HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
       if (!config.doSkipDefaultPartitionValidation() && hasDefaultPartitionPath(config, table)) {
-        LOG.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to \"%s\"."
+        log.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to \"%s\"."
                 + " Please read and write back the data in \"%s\" partition in hudi to new partition path \"%s\". \"\n"
                 + "Sample spark command to use to re-write the data: \n\n"
                 + "val df = spark.read.format(\"hudi\").load(HUDI_TABLE_PATH).filter(col(\"PARTITION_PATH_COLUMN\") === \"%s\"); \t \n\n"
@@ -69,7 +67,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
       }
       return new UpgradeDowngrade.TableConfigChangeSet();
     } catch (IOException e) {
-      LOG.error("Fetching file system instance failed", e);
+      log.error("Fetching file system instance failed", e);
       throw new HoodieException("Fetching FileSystem instance failed ", e);
     }
   }

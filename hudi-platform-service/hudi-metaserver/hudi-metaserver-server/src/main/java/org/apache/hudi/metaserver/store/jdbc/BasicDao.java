@@ -19,6 +19,7 @@
 package org.apache.hudi.metaserver.store.jdbc;
 
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
+
 import org.apache.ibatis.session.SqlSession;
 
 import java.io.Serializable;

@@ -44,6 +44,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.HoodieSparkKryoRegistrar;
@@ -54,8 +55,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -73,9 +72,8 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFi
 /**
  * Utility methods to aid testing inside the HoodieClient module.
  */
+@Slf4j
 public class HoodieClientTestUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestUtils.class);
 
   /**
    * Returns a Spark config for this test.
@@ -131,7 +129,7 @@ public class HoodieClientTestUtils {
       Configuration testHadoopConfig = new Configuration(false);
       hadoopConfigurationField.set(sparkContext, testHadoopConfig);
     } catch (NoSuchFieldException | IllegalAccessException e) {
-      LOG.warn(e.getMessage());
+      log.warn(e.getMessage());
     }
   }
 
@@ -154,7 +152,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
-      LOG.info("Path :{}", paths.values());
+      log.info("Path :{}", paths.values());
       Dataset<Row> unFilteredRows = null;
       if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
         unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
@@ -287,7 +285,7 @@ public class HoodieClientTestUtils {
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
-      LOG.info("Timeline service server port: {}", timelineServicePort);
+      log.info("Timeline service server port: {}", timelineServicePort);
       return timelineService;
     } catch (Exception ex) {
       throw new RuntimeException(ex);

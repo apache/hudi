@@ -21,10 +21,10 @@ package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hadoop.HadoopSeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileContext;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;

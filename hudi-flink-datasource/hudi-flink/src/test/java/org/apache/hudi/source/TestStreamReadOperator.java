@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -25,13 +26,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
@@ -247,21 +247,20 @@ public class TestStreamReadOperator {
 
     // This input format is used to opening the emitted split.
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    final Schema tableAvroSchema;
+    final HoodieSchema tableSchema;
     try {
-      tableAvroSchema = schemaResolver.getTableAvroSchema();
+      tableSchema = schemaResolver.getTableSchema();
     } catch (Exception e) {
       throw new HoodieException("Get table avro schema error", e);
     }
-    final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+    final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
         rowType,
         TestConfigurations.ROW_TYPE,
-        tableAvroSchema.toString(),
-        AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
-        Collections.emptyList(),
-        new String[0]);
+        tableSchema.toString(),
+        HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
+        Collections.emptyList());
     MergeOnReadInputFormat inputFormat = MergeOnReadInputFormat.builder()
         .config(conf)
         .tableState(hoodieTableState)

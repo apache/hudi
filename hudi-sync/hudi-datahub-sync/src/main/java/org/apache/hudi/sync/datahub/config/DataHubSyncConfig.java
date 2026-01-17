@@ -30,8 +30,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParametersDelegate;
 import datahub.client.rest.RestEmitter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -44,12 +43,11 @@ import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
 
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "DataHub Sync Configs",
     groupName = ConfigGroups.Names.META_SYNC,
     description = "Configurations used by the Hudi to sync metadata to DataHub.")
 public class DataHubSyncConfig extends HoodieSyncConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DataHubSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataset.identifier.class")
@@ -181,7 +179,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     super(props);
     // Log warning if the domain identifier is provided but is not in urn form
     if (contains(META_SYNC_DATAHUB_DOMAIN_IDENTIFIER) && !getString(META_SYNC_DATAHUB_DOMAIN_IDENTIFIER).startsWith("urn:li:domain:")) {
-      LOG.warn(
+      log.warn(
           "Domain identifier must be in urn form (e.g., urn:li:domain:_domain_id). Provided {}. Will remove this from configuration.",
           getString(META_SYNC_DATAHUB_DOMAIN_IDENTIFIER));
       this.props.remove(META_SYNC_DATAHUB_DOMAIN_IDENTIFIER.key());

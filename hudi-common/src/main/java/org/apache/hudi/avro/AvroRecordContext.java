@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
@@ -31,7 +33,6 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -69,17 +70,16 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
-    Schema currentSchema = record.getSchema();
+    HoodieSchema currentSchema = HoodieSchema.fromAvroSchema(record.getSchema());
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
-      if (currentSchema.isUnion()) {
-        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
-      }
-      Schema.Field field = currentSchema.getField(path[i]);
-      if (field == null) {
+      currentSchema = currentSchema.getNonNullType();
+      Option<HoodieSchemaField> fieldOpt = currentSchema.getField(path[i]);
+      if (fieldOpt.isEmpty()) {
         return null;
       }
+      HoodieSchemaField field = fieldOpt.get();
       Object value = currentRecord.get(field.pos());
       if (i == path.length - 1) {
         return value;
@@ -91,7 +91,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
+  public Object getValue(IndexedRecord record, HoodieSchema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, fieldName);
   }
 
@@ -128,7 +128,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+  public IndexedRecord extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
     try {
       return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
     } catch (IOException e) {
@@ -137,8 +137,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
-    GenericData.Record record = new GenericData.Record(recordSchema);
+  public IndexedRecord constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
+    GenericData.Record record = new GenericData.Record(recordSchema.toAvroSchema());
     for (int i = 0; i < fieldValues.length; i++) {
       record.put(i, fieldValues[i]);
     }
@@ -146,7 +146,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord mergeWithEngineRecord(Schema schema,
+  public IndexedRecord mergeWithEngineRecord(HoodieSchema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<IndexedRecord> baseRecord) {
     IndexedRecord engineRecord = baseRecord.getRecord();
@@ -162,7 +162,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
+  public GenericRecord convertToAvroRecord(IndexedRecord record, HoodieSchema schema) {
     return (GenericRecord) record;
   }
 
@@ -177,13 +177,13 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
+  public IndexedRecord toBinaryRow(HoodieSchema schema, IndexedRecord record) {
     return record;
   }
 
   @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
+  public UnaryOperator<IndexedRecord> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to.toAvroSchema(), renamedColumns);
   }
 
   @Override

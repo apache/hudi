@@ -25,8 +25,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -41,8 +43,11 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 @EnumDescription("Key generator type, indicating the key generator class to use, that implements "
     + "`org.apache.hudi.keygen.KeyGenerator`.")
+@Slf4j
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
@@ -104,15 +109,6 @@ public enum KeyGeneratorType {
   USER_PROVIDED(StringUtils.EMPTY_STRING);
 
   private String className;
-  private static final Logger LOG = LoggerFactory.getLogger(KeyGeneratorType.class);
-
-  KeyGeneratorType(String className) {
-    this.className = className;
-  }
-
-  public String getClassName() {
-    return className;
-  }
 
   public static KeyGeneratorType fromClassName(String className) {
     if (StringUtils.isNullOrEmpty(className)) {
@@ -150,7 +146,7 @@ public enum KeyGeneratorType {
       return keyGeneratorType.getClassName();
     }
     // No key generator information is provided.
-    LOG.info("No key generator type is set properly");
+    log.info("No key generator type is set properly");
     return null;
   }
 

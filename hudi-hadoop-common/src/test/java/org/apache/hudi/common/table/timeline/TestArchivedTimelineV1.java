@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -489,7 +490,7 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
   private void readAndValidateArchivedFile(String path, HoodieStorage storage) throws IOException {
     try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
-        storage, new HoodieLogFile(path), HoodieArchivedMetaEntry.getClassSchema())) {
+        storage, new HoodieLogFile(path), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
       while (reader.hasNext()) {
         HoodieLogBlock block = reader.next();

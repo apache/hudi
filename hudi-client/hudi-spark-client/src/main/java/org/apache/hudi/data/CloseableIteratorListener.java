@@ -19,10 +19,9 @@
 
 package org.apache.hudi.data;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.TaskContext;
 import org.apache.spark.util.TaskCompletionListener;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
@@ -30,8 +29,8 @@ import java.util.Iterator;
  * Helper class for adding a spark task completion listener that will ensure the iterator is closed if it is an instance of {@link AutoCloseable}.
  * This is commonly used with {@link org.apache.hudi.common.util.collection.ClosableIterator} to ensure the resources are closed after the task completes.
  */
+@Slf4j
 public class CloseableIteratorListener implements TaskCompletionListener {
-  private static final Logger LOG = LoggerFactory.getLogger(CloseableIteratorListener.class);
   private final Object iterator;
 
   private CloseableIteratorListener(Object iterator) {
@@ -59,7 +58,7 @@ public class CloseableIteratorListener implements TaskCompletionListener {
       try {
         ((AutoCloseable) iterator).close();
       } catch (Exception ex) {
-        LOG.warn("Failed to properly close iterator", ex);
+        log.warn("Failed to properly close iterator", ex);
       }
     }
   }

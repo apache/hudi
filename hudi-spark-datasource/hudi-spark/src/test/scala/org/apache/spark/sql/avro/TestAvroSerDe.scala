@@ -19,9 +19,9 @@ package org.apache.spark.sql.avro
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, IntWrapper}
+import org.apache.hudi.common.schema.HoodieSchema
 
 import org.apache.avro.generic.GenericData
-import org.apache.spark.sql.avro.SchemaConverters.SchemaType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -48,11 +48,11 @@ class TestAvroSerDe extends SparkAdapterSupport {
       record
     }
 
-    val avroSchema = HoodieMetadataColumnStats.SCHEMA$
-    val SchemaType(catalystSchema, _) = SchemaConverters.toSqlType(avroSchema)
+    val schema = HoodieSchema.fromAvroSchema(HoodieMetadataColumnStats.SCHEMA$)
+    val (catalystSchema, _) = HoodieSparkSchemaConverters.toSqlType(schema)
 
-    val deserializer = sparkAdapter.createAvroDeserializer(avroSchema, catalystSchema)
-    val serializer = sparkAdapter.createAvroSerializer(catalystSchema, avroSchema, nullable = false)
+    val deserializer = sparkAdapter.createAvroDeserializer(schema, catalystSchema)
+    val serializer = sparkAdapter.createAvroSerializer(catalystSchema, schema, nullable = false)
 
     val row = deserializer.deserialize(originalAvroRecord).get
     val deserializedAvroRecord = serializer.serialize(row)

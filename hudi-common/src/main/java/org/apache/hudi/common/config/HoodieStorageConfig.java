@@ -264,7 +264,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> HOODIE_IO_FACTORY_CLASS = ConfigProperty
       .key("hoodie.io.factory.class")
-      .defaultValue("org.apache.hudi.io.hadoop.HoodieHadoopIOFactory")
+      .defaultValue("org.apache.hudi.io.storage.hadoop.HoodieHadoopIOFactory")
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("The fully-qualified class name of the factory class to return readers and writers of files used "

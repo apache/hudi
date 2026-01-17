@@ -28,7 +28,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 import org.apache.hudi.utils.SchemaBuilder;
@@ -215,6 +215,12 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+
+    // Valid index type will be ok
+    this.conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
+    this.conf.set(FlinkOptions.METADATA_ENABLED, false);
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
   }
 
   @Test
@@ -364,7 +370,7 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink3 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
     final Configuration conf3 = tableSink3.getConf();
-    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    final String expected = HoodieSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
     assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 
@@ -565,7 +571,7 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink3 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
     final Configuration conf3 = tableSink3.getConf();
-    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    final String expected = HoodieSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
     assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 

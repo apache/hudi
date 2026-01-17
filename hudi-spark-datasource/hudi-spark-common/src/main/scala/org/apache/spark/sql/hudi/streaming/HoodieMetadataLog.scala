@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.common.util.FileIOUtils
+import org.apache.hudi.io.util.FileIOUtils
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.streaming.HDFSMetadataLog

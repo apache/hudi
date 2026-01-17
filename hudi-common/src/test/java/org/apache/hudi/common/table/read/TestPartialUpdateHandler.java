@@ -20,8 +20,9 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -52,33 +53,33 @@ class TestPartialUpdateHandler {
 
   @Test
   void testDirectMatch() {
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
-    assertTrue(PartialUpdateHandler.hasTargetType(stringSchema, Schema.Type.STRING));
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertTrue(PartialUpdateHandler.hasTargetType(stringSchema, HoodieSchemaType.STRING));
   }
 
   @Test
   void testUnionWithTargetType() {
-    Schema unionSchema = Schema.createUnion(
-        Schema.create(Schema.Type.NULL),
-        Schema.create(Schema.Type.BOOLEAN),
-        Schema.create(Schema.Type.STRING)
+    HoodieSchema unionSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        HoodieSchema.create(HoodieSchemaType.STRING)
     );
-    assertTrue(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertTrue(PartialUpdateHandler.hasTargetType(unionSchema, HoodieSchemaType.STRING));
   }
 
   @Test
   void testUnionWithoutTargetType() {
-    Schema unionSchema = Schema.createUnion(
-        Schema.create(Schema.Type.NULL),
-        Schema.create(Schema.Type.BOOLEAN),
-        Schema.create(Schema.Type.INT)
+    HoodieSchema unionSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        HoodieSchema.create(HoodieSchemaType.INT)
     );
-    assertFalse(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertFalse(PartialUpdateHandler.hasTargetType(unionSchema, HoodieSchemaType.STRING));
   }
 
   @Test
   void testNonUnionNonTargetType() {
-    Schema intSchema = Schema.create(Schema.Type.INT);
-    assertFalse(PartialUpdateHandler.hasTargetType(intSchema, Schema.Type.STRING));
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+    assertFalse(PartialUpdateHandler.hasTargetType(intSchema, HoodieSchemaType.STRING));
   }
 }

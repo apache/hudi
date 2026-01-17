@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,10 +35,10 @@ import com.linkedin.common.BrowsePathEntry;
 import com.linkedin.common.BrowsePathEntryArray;
 import com.linkedin.common.BrowsePathsV2;
 import com.linkedin.common.DataPlatformInstance;
-import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.Status;
 import com.linkedin.common.SubTypes;
 import com.linkedin.common.UrnArray;
+import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.common.urn.Urn;
 import com.linkedin.container.Container;
@@ -46,14 +47,13 @@ import com.linkedin.data.template.StringArray;
 import com.linkedin.domain.Domains;
 import com.linkedin.metadata.aspect.patch.builder.DatasetPropertiesPatchBuilder;
 import com.linkedin.mxe.MetadataChangeProposal;
+import com.linkedin.schema.SchemaMetadata;
 import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import io.datahubproject.schematron.converters.avro.AvroSchemaConverter;
-import org.apache.avro.Schema;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -69,9 +69,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@Slf4j
 public class DataHubSyncClient extends HoodieSyncClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DataHubSyncClient.class);
 
   protected final DataHubSyncConfig config;
   private final DataPlatformUrn dataPlatformUrn;
@@ -79,7 +78,9 @@ public class DataHubSyncClient extends HoodieSyncClient {
   private final Option<Urn> dataPlatformInstanceUrn;
   private final DatasetUrn datasetUrn;
   private final Urn databaseUrn;
+  @Getter
   private final String tableName;
+  @Getter
   private final String databaseName;
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
@@ -95,16 +96,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
     this.databaseUrn = datasetIdentifier.getDatabaseUrn();
     this.tableName = datasetIdentifier.getTableName();
     this.databaseName = datasetIdentifier.getDatabaseName();
-  }
-
-  @Override
-  public String getDatabaseName() {
-    return this.databaseName;
-  }
-
-  @Override
-  public String getTableName() {
-    return this.tableName;
   }
 
   @Override
@@ -126,14 +117,14 @@ public class DataHubSyncClient extends HoodieSyncClient {
     if (lastCommitTime.isPresent()) {
       updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTime.get()));
     } else {
-      LOG.error("Failed to get last commit time");
+      log.error("Failed to get last commit time");
     }
 
     Option<String> lastCommitCompletionTime = getLastCommitCompletionTime();
     if (lastCommitCompletionTime.isPresent()) {
       updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionTime.get()));
     } else {
-      LOG.error("Failed to get last commit completion time");
+      log.error("Failed to get last commit completion time");
     }
   }
 
@@ -163,14 +154,14 @@ public class DataHubSyncClient extends HoodieSyncClient {
         throw new HoodieDataHubSyncException(
                 "Failed to sync properties for Dataset " + datasetUrn + ": " + tableProperties, e);
       } else {
-        LOG.error("Failed to sync properties for Dataset {}: {}", datasetUrn, tableProperties, e);
+        log.error("Failed to sync properties for Dataset {}: {}", datasetUrn, tableProperties, e);
         return false;
       }
     }
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType schema, SchemaDifference schemaDifference) {
+  public void updateTableSchema(String tableName, HoodieSchema schema, SchemaDifference schemaDifference) {
     try (RestEmitter emitter = config.getRestEmitter()) {
       DataHubResponseLogger responseLogger = new DataHubResponseLogger();
 
@@ -206,7 +197,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
           throw new HoodieDataHubSyncException("Failed to sync " + failures.size() + " operations", failures.get(0));
         } else {
           for (Throwable failure : failures) {
-            LOG.error("Failed to sync operation", failure);
+            log.error("Failed to sync operation", failure);
           }
         }
       }
@@ -214,7 +205,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
       if (!config.suppressExceptions()) {
         throw new HoodieDataHubSyncException(String.format("Failed to sync metadata for dataset %s", tableName), e);
       } else {
-        LOG.error("Failed to sync metadata for dataset {}", tableName, e);
+        log.error("Failed to sync metadata for dataset {}", tableName, e);
       }
     }
   }
@@ -266,7 +257,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
               .build();
       return attachDomainProposal;
     } catch (URISyntaxException e) {
-      LOG.warn("Failed to create domain URN from string: {}", config.getDomainIdentifier());
+      log.warn("Failed to create domain URN from string: {}", config.getDomainIdentifier());
     }
     return null;
   }
@@ -325,10 +316,10 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private MetadataChangeProposalWrapper createSchemaMetadataAspect(String tableName) {
-    Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
+    HoodieSchema tableSchema = getTableSchemaWithoutMetadataFields(metaClient);
     AvroSchemaConverter avroSchemaConverter = AvroSchemaConverter.builder().build();
-    com.linkedin.schema.SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
-            avroSchema,
+    SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
+            tableSchema.toAvroSchema(),
             false,
             false,
             datasetUrn.getPlatformEntity(),
@@ -368,9 +359,9 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return result;
   }
 
-  Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+  HoodieSchema getTableSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
+      return new TableSchemaResolver(metaClient).getTableSchema(true);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read avro schema", e);
     }

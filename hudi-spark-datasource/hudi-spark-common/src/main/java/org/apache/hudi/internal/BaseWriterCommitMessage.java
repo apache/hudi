@@ -20,27 +20,20 @@ package org.apache.hudi.internal;
 
 import org.apache.hudi.client.WriteStatus;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.List;
 
 /**
  * Base class for HoodieWriterCommitMessage used by Spark datasource v2.
  */
+@AllArgsConstructor
+@Getter
+@ToString
 public class BaseWriterCommitMessage implements Serializable {
 
   private final List<WriteStatus> writeStatuses;
-
-  public BaseWriterCommitMessage(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieWriterCommitMessage{" + "writeStatuses=" + Arrays.toString(writeStatuses.toArray()) + '}';
-  }
 }

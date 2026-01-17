@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.Configuration;
@@ -31,14 +32,12 @@ import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.configuration.SchedulerExecutionMode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Tool helping to infer the flink options {@link FlinkOptions}.
  */
+@Slf4j
 public class OptionsInference {
-  private static final Logger LOG = LoggerFactory.getLogger(OptionsInference.class);
 
   private static final String FLINK2_VERSION = "2.0";
 
@@ -146,7 +145,7 @@ public class OptionsInference {
         conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, hashingConfig.getExpressions());
         conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, hashingConfig.getRule());
         conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, hashingConfig.getDefaultBucketNumber());
-        LOG.info("Loaded Latest Hashing Config " + hashingConfig
+        log.info("Loaded Latest Hashing Config " + hashingConfig
             + ". Reset hoodie.bucket.index.num.buckets to " + hashingConfig.getDefaultBucketNumber());
       }
     }

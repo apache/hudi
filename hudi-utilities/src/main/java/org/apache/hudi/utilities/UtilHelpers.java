@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -68,7 +68,6 @@ import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
-import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -77,7 +76,6 @@ import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -225,13 +223,13 @@ public class UtilHelpers {
   }
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
-    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != InputBatch.NULL_SCHEMA) {
-      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceHoodieSchema().toAvroSchema());
+    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != HoodieSchema.NULL_SCHEMA) {
+      return HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemaProvider.getSourceHoodieSchema());
     }
     return null;
   }
 
-  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<Schema>> sourceSchemaSupplier,
+  public static Option<Transformer> createTransformer(Option<List<String>> classNamesOpt, Supplier<Option<HoodieSchema>> sourceSchemaSupplier,
                                                       boolean isErrorTableWriterEnabled) throws IOException {
 
     try {
@@ -384,7 +382,7 @@ public class UtilHelpers {
   /**
    * Build Spark Context for ingestion/compaction.
    *
-   * @return
+   * @return {@link JavaSparkContext}
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
@@ -449,13 +447,13 @@ public class UtilHelpers {
   }
 
   /**
-   * Returns a factory for creating connections to the given JDBC URL.
+   * Creates a connection to the given JDBC URL.
    *
    * @param options - JDBC options that contains url, table and other information.
-   * @return
+   * @return {@link Connection}
    * @throws SQLException if the driver could not open a JDBC connection.
    */
-  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+  private static Connection createConnection(Map<String, String> options) throws SQLException {
     String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
     DriverRegistry.register(driverClass);
     Enumeration<Driver> drivers = DriverManager.getDrivers();
@@ -510,7 +508,7 @@ public class UtilHelpers {
     String table;
     boolean tableExists;
     try {
-      conn = createConnectionFactory(options);
+      conn = createConnection(options);
       url = options.get(JDBCOptions.JDBC_URL());
       table = options.get(JDBCOptions.JDBC_TABLE_NAME());
       tableExists = tableExists(conn, options);
@@ -535,7 +533,7 @@ public class UtilHelpers {
             structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
                 .getSchema(conn, rs, dialect, false, false);
           }
-          return HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table));
+          return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, table, "hoodie." + table);
         }
       }
     } catch (HoodieException e) {
@@ -592,15 +590,15 @@ public class UtilHelpers {
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
-  public static Option<Schema> getLatestTableSchema(JavaSparkContext jssc,
-                                                    HoodieStorage storage,
-                                                    String basePath,
-                                                    HoodieTableMetaClient tableMetaClient) {
+  public static Option<HoodieSchema> getLatestTableSchema(JavaSparkContext jssc,
+                                                          HoodieStorage storage,
+                                                          String basePath,
+                                                          HoodieTableMetaClient tableMetaClient) {
     try {
       if (FSUtils.isTableExists(basePath, storage)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
 
-        return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);
+        return tableSchemaResolver.getTableSchemaFromLatestCommit(false);
       }
     } catch (Exception e) {
       LOG.warn("Failed to fetch latest table's schema", e);
@@ -647,7 +645,7 @@ public class UtilHelpers {
 
   public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    Schema schema = schemaResolver.getTableAvroSchema(false);
+    HoodieSchema schema = schemaResolver.getTableSchema(false);
     return schema.toString();
   }
 }

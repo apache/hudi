@@ -21,17 +21,15 @@ package org.apache.hudi.metrics;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 
 /**
  * Hudi Console metrics reporter. Reports the metrics by printing them to the stdout on the console.
  */
+@Slf4j
 public class ConsoleMetricsReporter extends MetricsReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConsoleMetricsReporter.class);
   private final ConsoleReporter consoleReporter;
 
   public ConsoleMetricsReporter(MetricRegistry registry) {
@@ -46,7 +44,7 @@ public class ConsoleMetricsReporter extends MetricsReporter {
     if (consoleReporter != null) {
       consoleReporter.start(30, TimeUnit.SECONDS);
     } else {
-      LOG.error("Cannot start as the consoleReporter is null.");
+      log.error("Cannot start as the consoleReporter is null.");
     }
   }
 
@@ -55,7 +53,7 @@ public class ConsoleMetricsReporter extends MetricsReporter {
     if (consoleReporter != null) {
       consoleReporter.report();
     } else {
-      LOG.error("Cannot report metrics as the consoleReporter is null.");
+      log.error("Cannot report metrics as the consoleReporter is null.");
     }
   }
 

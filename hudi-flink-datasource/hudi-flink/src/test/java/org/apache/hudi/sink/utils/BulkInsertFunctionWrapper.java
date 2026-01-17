@@ -27,13 +27,15 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
@@ -73,7 +75,9 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final IOManager ioManager;
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  @Getter
   private final MockOperatorCoordinatorContext coordinatorContext;
+  @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final boolean needSortInput;
 
@@ -93,7 +97,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
-    this.rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
+    this.rowType = (RowType) HoodieSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
@@ -178,17 +182,9 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     coordinator.notifyCheckpointAborted(checkpointId);
   }
 
-  public StreamWriteOperatorCoordinator getCoordinator() {
-    return coordinator;
-  }
-
   @Override
   public AbstractWriteFunction getWriteFunction() {
     return this.writeFunction;
-  }
-
-  public MockOperatorCoordinatorContext getCoordinatorContext() {
-    return coordinatorContext;
   }
 
   @Override
@@ -217,7 +213,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   private void setupMapFunction() {
-    RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+    RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
     String indexKeys = OptionsResolver.getIndexKeyField(conf);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();

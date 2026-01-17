@@ -25,8 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -40,9 +39,8 @@ import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.i
 /**
  * KeepByTimeStrategy will return expired partitions by their lastCommitTime.
  */
+@Slf4j
 public class KeepByTimeStrategy extends PartitionTTLStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KeepByTimeStrategy.class);
 
   protected final long ttlInMilis;
 
@@ -60,7 +58,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
     }
     List<String> expiredPartitions = getExpiredPartitionsForTimeStrategy(getPartitionPathsForTTL());
     int limit = writeConfig.getPartitionTTLMaxPartitionsToDelete();
-    LOG.info("Total expired partitions count {}, limit {}", expiredPartitions.size(), limit);
+    log.info("Total expired partitions count {}, limit {}", expiredPartitions.size(), limit);
     return expiredPartitions.stream()
         .limit(limit) // Avoid a single replace commit too large
         .collect(Collectors.toList());
@@ -69,7 +67,7 @@ public class KeepByTimeStrategy extends PartitionTTLStrategy {
   protected List<String> getExpiredPartitionsForTimeStrategy(List<String> partitionsForTTLManagement) {
     HoodieTimer timer = HoodieTimer.start();
     Map<String, Option<String>> lastCommitTimeForPartitions = getLastCommitTimeForPartitions(partitionsForTTLManagement);
-    LOG.info("Collect last commit time for partitions cost {} ms", timer.endTimer());
+    log.info("Collect last commit time for partitions cost {} ms", timer.endTimer());
     return lastCommitTimeForPartitions.entrySet()
         .stream()
         .filter(entry -> entry.getValue().isPresent())

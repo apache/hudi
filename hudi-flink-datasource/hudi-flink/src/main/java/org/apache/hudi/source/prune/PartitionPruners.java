@@ -27,6 +27,8 @@ import org.apache.hudi.source.stats.PartitionStatsIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.DataTypeUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -50,12 +52,16 @@ import java.util.stream.Stream;
  */
 public class PartitionPruners {
 
-  public interface PartitionPruner extends Serializable {
+  public interface PartitionPruner extends Serializable, AutoCloseable {
 
     /**
      * Applies partition pruning on the given partition list, return remained partitions.
      */
     Set<String> filter(Collection<String> partitions);
+
+    default void close() {
+      // do nothing.
+    }
   }
 
   /**
@@ -163,6 +169,11 @@ public class PartitionPruners {
       }
       return partitions.stream().filter(candidatePartitions::contains).collect(Collectors.toSet());
     }
+
+    @Override
+    public void close() {
+      this.partitionStatsIndex.close();
+    }
   }
 
   /**
@@ -183,12 +194,18 @@ public class PartitionPruners {
       }
       return new HashSet<>(partitions);
     }
+
+    @Override
+    public void close() {
+      pruners.forEach(PartitionPruner::close);
+    }
   }
 
   public static Builder builder() {
     return new Builder();
   }
 
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class Builder {
     private RowType rowType;
     private String basePath;
@@ -201,9 +218,6 @@ public class PartitionPruners {
     private String defaultParName;
     private boolean hivePartition;
     private Collection<String> candidatePartitions;
-
-    private Builder() {
-    }
 
     public Builder rowType(RowType rowType) {
       this.rowType = rowType;

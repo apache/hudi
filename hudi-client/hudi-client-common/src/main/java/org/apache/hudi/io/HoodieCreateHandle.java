@@ -29,9 +29,7 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -39,8 +37,8 @@ import java.io.IOException;
 import java.util.Map;
 
 @NotThreadSafe
+@Slf4j
 public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCreateHandle.class);
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -56,13 +54,13 @@ public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O>
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, Option<Schema> overriddenSchema,
+                            String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, Option<Schema> overriddenSchema,
+                            String partitionPath, String fileId, Option<HoodieSchema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, preserveMetadata);
     createPartitionMetadataAndMarkerFile();
@@ -71,14 +69,13 @@ public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O>
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
-    LOG.info("New CreateHandle for partition {} with fileId {}", partitionPath, fileId);
+    log.info("New CreateHandle for partition {} with fileId {}", partitionPath, fileId);
   }
 
   @VisibleForTesting
   HoodieFileWriter initializeFileWriter() throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
-          //TODO boundary to revisit in follow up to use HoodieSchema directly
-          HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), this.taskContextSupplier, config.getRecordMerger().getRecordType());
+        writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
   }
 
   /**

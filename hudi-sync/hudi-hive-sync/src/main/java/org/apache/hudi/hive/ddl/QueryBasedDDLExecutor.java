@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -29,10 +30,8 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,9 +50,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 /**
  * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
  */
+@Slf4j
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
 
   protected final HiveSyncConfig config;
   protected final String databaseName;
@@ -83,13 +81,13 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+  public void createTable(String tableName, HoodieSchema storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                           Map<String, String> tableProperties) {
     try {
       String createSQLQuery =
           HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, config, inputFormatClass,
               outputFormatClass, serdeClass, serdeProperties, tableProperties);
-      LOG.info("Creating table with " + createSQLQuery);
+      log.info("Creating table with {}", createSQLQuery);
       runSQL(createSQLQuery);
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to create table " + tableName, e);
@@ -97,7 +95,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void updateTableDefinition(String tableName, MessageType newSchema) {
+  public void updateTableDefinition(String tableName, HoodieSchema newSchema) {
     try {
       String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       // Cascade clause should not be present for non-partitioned tables
@@ -107,7 +105,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
           .append(HIVE_ESCAPE_CHARACTER).append(tableName)
           .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
           .append(newSchemaStr).append(" )").append(cascadeClause);
-      LOG.info("Updating table definition with " + sqlBuilder);
+      log.info("Updating table definition with {}", sqlBuilder);
       runSQL(sqlBuilder.toString());
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
@@ -117,10 +115,10 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for " + tableName);
+      log.info("No partitions to add for {}", tableName);
       return;
     }
-    LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
+    log.info("Adding partitions {} to table {}", partitionsToAdd.size(), tableName);
     List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
     sqls.stream().forEach(sql -> runSQL(sql));
   }
@@ -128,10 +126,10 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for " + tableName);
+      log.info("No partitions to change for {}", tableName);
       return;
     }
-    LOG.info("Changing partitions " + changedPartitions.size() + " on " + tableName);
+    log.info("Changing partitions {} on {}", changedPartitions.size(), tableName);
     List<String> sqls = constructChangePartitions(tableName, changedPartitions);
     for (String sql : sqls) {
       runSQL(sql);

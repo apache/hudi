@@ -22,12 +22,14 @@ package org.apache.hudi.io.compress;
 import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
 import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /**
  * Factory for {@link HoodieCompressor}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class HoodieCompressorFactory {
-  private HoodieCompressorFactory() {
-  }
 
   public static HoodieCompressor getCompressor(CompressionCodec compressionCodec) {
     switch (compressionCodec) {

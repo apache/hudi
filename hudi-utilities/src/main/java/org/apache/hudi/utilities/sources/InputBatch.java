@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
@@ -31,7 +30,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class InputBatch<T> {
 
-  public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
   private final Option<T> batch;
   private final Checkpoint checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
@@ -90,7 +88,7 @@ public class InputBatch<T> {
 
     @Override
     public HoodieSchema getSourceHoodieSchema() {
-      return NULL_SCHEMA;
+      return HoodieSchema.NULL_SCHEMA;
     }
   }
 }

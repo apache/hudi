@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.writers.AbstractConnectWriter;
@@ -33,7 +34,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -75,7 +76,7 @@ public class TestAbstractConnectWriter {
   @ParameterizedTest
   @EnumSource(value = TestInputFormats.class)
   public void testAbstractWriterForAllFormats(TestInputFormats inputFormats) throws Exception {
-    Schema schema = schemaProvider.getSourceSchema();
+    HoodieSchema schema = schemaProvider.getSourceHoodieSchema();
     List<?> inputRecords;
     List<HoodieRecord> expectedRecords;
 
@@ -83,12 +84,12 @@ public class TestAbstractConnectWriter {
     switch (inputFormats) {
       case JSON_STRING:
         formatConverter = AbstractConnectWriter.KAFKA_STRING_CONVERTER;
-        GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(schema, schema);
+        GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(schema.toAvroSchema(), schema.toAvroSchema());
         inputRecords = SchemaTestUtil.generateTestJsonRecords(0, NUM_RECORDS);
         expectedRecords = ((List<String>) inputRecords).stream().map(s -> {
           try {
-            return HoodieAvroUtils.rewriteRecord((GenericRecord) reader.read(null, DecoderFactory.get().jsonDecoder(schema, s)),
-                schema);
+            return HoodieAvroUtils.rewriteRecord((GenericRecord) reader.read(null, DecoderFactory.get().jsonDecoder(schema.toAvroSchema(), s)),
+                schema.toAvroSchema());
           } catch (IOException exception) {
             throw new HoodieException("Error converting JSON records to AVRO");
           }
@@ -97,7 +98,7 @@ public class TestAbstractConnectWriter {
       case AVRO:
         formatConverter = AbstractConnectWriter.KAFKA_AVRO_CONVERTER;
         inputRecords = SchemaTestUtil.generateTestRecords(0, NUM_RECORDS);
-        expectedRecords = inputRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
+        expectedRecords = inputRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema.toAvroSchema()))
             .map(p -> convertToHoodieRecords(p, p.get(RECORD_KEY_INDEX).toString(), "000/00/00")).collect(Collectors.toList());
         break;
       default:
@@ -147,15 +148,12 @@ public class TestAbstractConnectWriter {
 
   private static class AbstractHudiConnectWriterTestWrapper extends AbstractConnectWriter {
 
+    @Getter
     private List<HoodieRecord> writtenRecords;
 
     public AbstractHudiConnectWriterTestWrapper(KafkaConnectConfigs connectConfigs, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {
       super(connectConfigs, keyGenerator, schemaProvider, "000");
       writtenRecords = new ArrayList<>();
-    }
-
-    public List<HoodieRecord> getWrittenRecords() {
-      return writtenRecords;
     }
 
     @Override
@@ -194,7 +192,7 @@ public class TestAbstractConnectWriter {
   static class TestSchemaProvider extends SchemaProvider {
 
     @Override
-    public Schema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       try {
         return SchemaTestUtil.getSimpleSchema();
       } catch (IOException exception) {

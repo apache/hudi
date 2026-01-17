@@ -29,15 +29,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CopyOnWriteRollbackActionExecutor.class);
 
   public CopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
                                            HoodieWriteConfig config,
@@ -68,7 +66,7 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
 
     if (instantToRollback.isCompleted()) {
-      LOG.info("Unpublishing instant " + instantToRollback);
+      log.info("Unpublishing instant " + instantToRollback);
       table.getMetaClient().getTableFormat().rollback(instantToRollback, table.getContext(), table.getMetaClient(), table.getViewManager());
       // Revert the completed instant to inflight in native format.
       resolvedInstant = activeTimeline.revertToInflight(instantToRollback);
@@ -90,13 +88,13 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
       // delete all the data files for this commit
-      LOG.info("Clean out all base files generated for commit: " + resolvedInstant);
+      log.info("Clean out all base files generated for commit: " + resolvedInstant);
       stats = executeRollback(resolvedInstant, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(instantToRollback);
 
-    LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
+    log.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return stats;
   }
 }

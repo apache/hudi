@@ -45,11 +45,11 @@ import org.apache.flink.types.Row;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Factory for CollectTableSink.
@@ -61,7 +61,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
   public static final String FACTORY_ID = "collect";
 
   // global results to collect and query
-  public static final Map<Integer, List<Row>> RESULT = new HashMap<>();
+  public static final Map<Integer, List<Row>> RESULT = new ConcurrentHashMap<>();
 
   // options
   private static final ConfigOption<Integer> SINK_EXPECTED_ROW_NUM =

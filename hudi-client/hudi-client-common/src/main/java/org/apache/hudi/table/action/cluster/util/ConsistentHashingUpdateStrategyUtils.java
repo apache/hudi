@@ -33,8 +33,7 @@ import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.List;
@@ -46,9 +45,8 @@ import java.util.stream.Stream;
 /**
  * Utility class for update strategy of table with consistent hash bucket index.
  */
+@Slf4j
 public class ConsistentHashingUpdateStrategyUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentHashingUpdateStrategyUtils.class);
 
   /**
    * Construct identifier for the given partitions that are under concurrent resizing (i.e., clustering).
@@ -99,7 +97,7 @@ public class ConsistentHashingUpdateStrategyUtils {
         List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(nodeJson);
         partitionToHashingMeta.get(p).getChildrenNodes().addAll(nodes);
       } catch (Exception e) {
-        LOG.error("Failed to parse child nodes in clustering plan.", e);
+        log.error("Failed to parse child nodes in clustering plan.", e);
         throw new HoodieException("Failed to parse child nodes in clustering plan, partition: " + p + ", cluster group: " + group, e);
       }
     }

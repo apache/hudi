@@ -25,6 +25,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -40,9 +41,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -68,9 +67,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * CLI command to display hudi table options.
  */
 @ShellComponent
+@Slf4j
 public class TableCommand {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TableCommand.class);
 
   static {
     System.out.println("Table command getting loaded");
@@ -206,9 +204,9 @@ public class TableCommand {
               help = "File path to write schema") final String outputFilePath) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(client);
-    Schema schema = tableSchemaResolver.getTableAvroSchema();
+    HoodieSchema schema = tableSchemaResolver.getTableSchema();
     if (outputFilePath != null) {
-      LOG.info("Latest table schema : " + schema.toString(true));
+      log.info("Latest table schema : " + schema.toString(true));
       writeToFile(outputFilePath, schema.toString(true));
       return String.format("Latest table schema written to %s", outputFilePath);
     } else {
@@ -301,7 +299,7 @@ public class TableCommand {
           int compactionCount = activeTimeline.filter(instant -> instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)).countInstants();
           if (compactionCount > 0) {
             String errMsg = String.format("Remain %s compactions to compact, please set --enable-compaction=true", compactionCount);
-            LOG.error(errMsg);
+            log.error(errMsg);
             throw new HoodieException(errMsg);
           }
           Option<HoodieInstant> lastInstant = client.getActiveTimeline().lastInstant();
@@ -309,7 +307,7 @@ public class TableCommand {
               && (!lastInstant.get().getAction().equals(HoodieTimeline.COMMIT_ACTION) || !lastInstant.get().isCompleted())) {
             String errMsg = String.format("The last action must be a completed compaction(commit[COMPLETED]) for this operation. "
                 + "But is %s[status=%s]", lastInstant.get().getAction(), lastInstant.get().getState());
-            LOG.error(errMsg);
+            log.error(errMsg);
             throw new HoodieException(errMsg);
           }
           break;
@@ -317,12 +315,12 @@ public class TableCommand {
 
         // compact all pending compactions.
         List<HoodieInstant> pendingCompactionInstants = client.getActiveTimeline().filterPendingCompactionTimeline().getInstants();
-        LOG.info("Remain {} compaction instants to compact", pendingCompactionInstants.size());
+        log.info("Remain {} compaction instants to compact", pendingCompactionInstants.size());
         for (int i = 0; i < pendingCompactionInstants.size(); i++) {
           HoodieInstant compactionInstant = pendingCompactionInstants.get(i);
-          LOG.info("compact {} instant {}", i + 1, compactionInstant);
+          log.info("compact {} instant {}", i + 1, compactionInstant);
           String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, compactionInstant.requestedTime(), propsFilePath, configs);
-          LOG.info("compact instant {} result: {}", compactionInstant, result);
+          log.info("compact instant {} result: {}", compactionInstant, result);
           if (!result.startsWith(CompactionCommand.COMPACTION_EXE_SUCCESSFUL)) {
             throw new HoodieException(String.format("Compact %s failed", compactionInstant));
           }
@@ -333,7 +331,7 @@ public class TableCommand {
         if (lastInstant.isPresent()) {
           // before changing mor to cow, need to do a full compaction to merge all logfiles;
           if (!lastInstant.get().getAction().equals(HoodieTimeline.COMMIT_ACTION) || !lastInstant.get().isCompleted()) {
-            LOG.info("There are remaining logfiles, will perform a full compaction");
+            log.info("There are remaining logfiles, will perform a full compaction");
             boolean compactionStrategyExist = false;
             boolean compactionNumDeltaExist = false;
             List<String> newConfigs = new ArrayList<>();
@@ -355,7 +353,7 @@ public class TableCommand {
               newConfigs.add(String.format("%s=%s", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1"));
             }
             String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, propsFilePath, newConfigs.toArray(new String[0]));
-            LOG.info("Full compaction result: {}", result);
+            log.info("Full compaction result: {}", result);
             if (!result.equals(CompactionCommand.COMPACTION_SCH_EXE_SUCCESSFUL)) {
               throw new HoodieException("Change table type to COW: schedule and execute the full compaction failed");
             }

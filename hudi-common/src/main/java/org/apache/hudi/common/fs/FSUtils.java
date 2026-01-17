@@ -683,6 +683,7 @@ public class FSUtils {
       result = hoodieEngineContext.mapToPair(subPaths,
           subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, storageConf))),
           actualParallelism);
+      hoodieEngineContext.clearJobStatus();
     }
     return result;
   }
@@ -737,6 +738,17 @@ public class FSUtils {
   // Converts s3a to s3a
   public static String s3aToS3(String s3aUrl) {
     return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
+  }
+
+  public static StoragePathInfo toStoragePathInfo(HoodieFileStatus fileStatus) {
+    if (null == fileStatus) {
+      return null;
+    }
+
+    return new StoragePathInfo(
+        new StoragePath(fileStatus.getPath().getUri()), fileStatus.getLength(),
+        fileStatus.getIsDir() != null && fileStatus.getIsDir(),
+        fileStatus.getBlockReplication().shortValue(), fileStatus.getBlockSize(), fileStatus.getModificationTime());
   }
 
   /**

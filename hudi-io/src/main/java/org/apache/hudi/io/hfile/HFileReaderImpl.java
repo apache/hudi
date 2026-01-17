@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.SeekableDataInputStream;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.logging.log4j.util.Strings;
 
 import java.io.ByteArrayInputStream;
@@ -48,6 +50,7 @@ public class HFileReaderImpl implements HFileReader {
 
   protected final HFileCursor cursor;
   protected boolean isMetadataInitialized = false;
+  @Getter(AccessLevel.PACKAGE)
   protected HFileTrailer trailer;
   protected HFileContext context;
   protected TreeMap<Key, BlockIndexEntry> dataBlockIndexEntryMap;
@@ -263,10 +266,6 @@ public class HFileReaderImpl implements HFileReader {
     currentDataBlock = Option.empty();
     cursor.setEof();
     stream.close();
-  }
-
-  HFileTrailer getTrailer() {
-    return trailer;
   }
 
   Map<Key, BlockIndexEntry> getDataBlockIndexMap() {

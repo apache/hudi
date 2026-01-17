@@ -17,14 +17,13 @@
 
 package org.apache.hudi.testutils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerUnpersistRDD;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -37,9 +36,8 @@ import java.util.stream.Collectors;
  * This addresses the issue where RDD unpersist operations are asynchronous and may not be
  * immediately reflected when checking via SparkContext.getPersistentRDDs().
  */
+@Slf4j
 public class SparkRDDValidationUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkRDDValidationUtils.class);
   private static final int DEFAULT_TIMEOUT_SECONDS = 1;
 
   /**
@@ -83,7 +81,7 @@ public class SparkRDDValidationUtils {
     while (iter.hasNext()) {
       initiallyPersistedRddIds.add((Integer) iter.next());
     }
-    LOG.debug("Initially persisted RDD IDs: {}", initiallyPersistedRddIds);
+    log.debug("Initially persisted RDD IDs: {}", initiallyPersistedRddIds);
 
     // Track initial dropped events count
     long initialDroppedEvents = getDroppedEventsCount(spark);
@@ -93,7 +91,7 @@ public class SparkRDDValidationUtils {
     SparkListener rddPersistenceListener = new SparkListener() {
       @Override
       public void onUnpersistRDD(SparkListenerUnpersistRDD event) {
-        LOG.debug("[RDD Tracker] Unpersist event for RDD ID: {}", event.rddId());
+        log.debug("[RDD Tracker] Unpersist event for RDD ID: {}", event.rddId());
         unpersistEventRddIds.add(event.rddId());
       }
     };
@@ -141,7 +139,7 @@ public class SparkRDDValidationUtils {
           .metricRegistry().getCounters()
           .get("queue.shared.numDroppedEvents").getCount();
     } catch (Exception e) {
-      LOG.warn("Unable to get dropped events count from metrics: {}", e.getMessage());
+      log.warn("Unable to get dropped events count from metrics: {}", e.getMessage());
       return 0L;
     }
   }
@@ -187,7 +185,7 @@ public class SparkRDDValidationUtils {
           .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
       if (problematicRdds.isEmpty()) {
-        LOG.debug("All new RDDs have been properly unpersisted or have unpersist events.");
+        log.debug("All new RDDs have been properly unpersisted or have unpersist events.");
         return;
       }
 
@@ -207,10 +205,10 @@ public class SparkRDDValidationUtils {
           sb.append(String.format("Problematic RDD count: %d\n", problematicRddCount));
           sb.append("Note: Since dropped events count is less than problematic RDD count, this indicates a potential RDD leak.");
           // Spark does not provide a reliable way of tracking persistent rdds. We only do logging here.
-          LOG.error(sb.toString());
+          log.error(sb.toString());
           return;
         } else {
-          LOG.info("Found {} persisted RDDs but {} events were dropped. Assuming unpersist events were lost.", 
+          log.info("Found {} persisted RDDs but {} events were dropped. Assuming unpersist events were lost.", 
               problematicRddCount, droppedEventsDelta);
           return;
         }

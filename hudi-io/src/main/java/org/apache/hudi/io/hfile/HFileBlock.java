@@ -23,6 +23,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
 
 import com.google.protobuf.CodedOutputStream;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -75,10 +78,12 @@ public abstract class HFileBlock {
   }
 
   protected final HFileContext context;
+  @Getter
   protected final byte[] byteBuff;
   protected final int startOffsetInBuff;
   protected final int sizeCheckSum;
   protected final int uncompressedEndOffset;
+  @Getter
   private final HFileBlockType blockType;
   protected final int onDiskSizeWithoutHeader;
   protected final int uncompressedSizeWithoutHeader;
@@ -88,6 +93,8 @@ public abstract class HFileBlock {
   protected int startOffsetInCompressedBuff;
 
   // Write properties
+  @Getter(AccessLevel.PROTECTED)
+  @Setter(AccessLevel.PROTECTED)
   private long startOffsetInBuffForWrite = -1;
   private long previousBlockOffsetForWrite = -1;
 
@@ -200,14 +207,6 @@ public abstract class HFileBlock {
     return (int) numChunks;
   }
 
-  public HFileBlockType getBlockType() {
-    return blockType;
-  }
-
-  public byte[] getByteBuff() {
-    return byteBuff;
-  }
-
   public int getOnDiskSizeWithHeader() {
     return onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE;
   }
@@ -306,20 +305,6 @@ public abstract class HFileBlock {
     // Convert to ByteBuffer for return
     byte[] result = baos.toByteArray();
     return ByteBuffer.wrap(result);
-  }
-
-  /**
-   * Sets start offset of the block in the buffer.
-   */
-  protected void setStartOffsetInBuffForWrite(long startOffsetInBuffForWrite) {
-    this.startOffsetInBuffForWrite = startOffsetInBuffForWrite;
-  }
-
-  /**
-   * Gets start offset of the block in the buffer.
-   */
-  protected long getStartOffsetInBuffForWrite() {
-    return this.startOffsetInBuffForWrite;
   }
 
   /**

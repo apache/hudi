@@ -23,6 +23,8 @@ import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
 import org.apache.hudi.examples.quickstart.factory.ContinuousFileSourceFactory;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -42,9 +44,8 @@ import java.util.stream.Collectors;
 /**
  * Configurations for the test.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class QuickstartConfigurations {
-  private QuickstartConfigurations() {
-  }
 
   public static final DataType ROW_DATA_TYPE = DataTypes.ROW(
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key

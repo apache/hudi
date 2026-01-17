@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -44,7 +45,7 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -61,8 +62,6 @@ import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -83,11 +82,10 @@ import static org.apache.hudi.util.StreamerUtil.metadataConfig;
  *
  * <p>The output records should then shuffle by the recordKey and thus do scalable write.
  */
+@Slf4j
 public class BootstrapOperator
     extends AbstractStreamOperator<HoodieFlinkInternalRow>
     implements OneInputStreamOperator<HoodieFlinkInternalRow, HoodieFlinkInternalRow> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
@@ -161,14 +159,14 @@ public class BootstrapOperator
   protected void preLoadIndexRecords() throws Exception {
     StoragePath basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
-    LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
+    log.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
     for (String partitionPath : FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getMetaClient(), metadataConfig(conf))) {
       if (pattern.matcher(partitionPath).matches()) {
         loadRecords(partitionPath);
       }
     }
 
-    LOG.info("Finish sending index records, taskId = {}.", taskID);
+    log.info("Finish sending index records, taskId = {}.", taskID);
 
     // wait for the other bootstrap tasks finish bootstrapping.
     waitForBootstrapReady(taskID);
@@ -184,11 +182,11 @@ public class BootstrapOperator
     while (taskNum != readyTaskNum) {
       try {
         readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME + conf.get(FlinkOptions.TABLE_NAME), taskID, new BootstrapAggFunction());
-        LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
+        log.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
 
         TimeUnit.SECONDS.sleep(5);
       } catch (Exception e) {
-        LOG.error("Updating global task bootstrap summary failed", e);
+        log.error("Updating global task bootstrap summary failed", e);
       }
     }
   }
@@ -217,7 +215,8 @@ public class BootstrapOperator
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedAndCompactionInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
-      Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
+      HoodieSchema schema =
+          new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
           .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().requestedTime())
@@ -227,7 +226,7 @@ public class BootstrapOperator
         if (!shouldLoadFile(fileSlice.getFileId(), maxParallelism, parallelism, taskID)) {
           continue;
         }
-        LOG.info("Load records from {}.", fileSlice);
+        log.info("Load records from {}.", fileSlice);
         try (ClosableIterator<String> recordKeyIterator = getRecordKeyIterator(fileSlice, schema)) {
           while (recordKeyIterator.hasNext()) {
             String recordKey = recordKeyIterator.next();
@@ -238,7 +237,7 @@ public class BootstrapOperator
     }
 
     long cost = System.currentTimeMillis() - start;
-    LOG.info("Task [{}}:{}}] finish loading the index under partition {} and sending them to downstream, time cost: {} milliseconds.",
+    log.info("Task [{}}:{}}] finish loading the index under partition {} and sending them to downstream, time cost: {} milliseconds.",
         this.getClass().getSimpleName(), taskID, partitionPath, cost);
   }
 
@@ -250,7 +249,7 @@ public class BootstrapOperator
    *
    * @return A record key iterator for the file slice.
    */
-  private ClosableIterator<String> getRecordKeyIterator(FileSlice fileSlice, Schema tableSchema) throws IOException {
+  private ClosableIterator<String> getRecordKeyIterator(FileSlice fileSlice, HoodieSchema tableSchema) throws IOException {
     FileSlice scanFileSlice = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
     // filter out crushed base file
     fileSlice.getBaseFile().map(f -> isValidFile(f.getPathInfo()) ? f : null).ifPresent(scanFileSlice::setBaseFile);

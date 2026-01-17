@@ -21,6 +21,8 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,21 +38,25 @@ public class WorkloadProfile implements Serializable {
   /**
    * Computed workload stats.
    */
+  @Getter
   protected final Map<String, WorkloadStat> inputPartitionPathStatMap;
 
   /**
    * Execution/Output workload stats
    */
+  @Getter
   protected final Map<String, WorkloadStat> outputPartitionPathStatMap;
 
   /**
    * Global workloadStat.
    */
+  @Getter
   protected final WorkloadStat globalStat;
 
   /**
    * Write operation type.
    */
+  @Getter
   private WriteOperationType operationType;
 
   private final boolean hasOutputWorkLoadStats;
@@ -71,24 +77,12 @@ public class WorkloadProfile implements Serializable {
     this.operationType = operationType;
   }
 
-  public WorkloadStat getGlobalStat() {
-    return globalStat;
-  }
-
   public Set<String> getPartitionPaths() {
     return inputPartitionPathStatMap.keySet();
   }
 
   public Set<String> getOutputPartitionPaths() {
     return hasOutputWorkLoadStats ? outputPartitionPathStatMap.keySet() : inputPartitionPathStatMap.keySet();
-  }
-
-  public Map<String, WorkloadStat> getInputPartitionPathStatMap() {
-    return inputPartitionPathStatMap;
-  }
-
-  public Map<String, WorkloadStat> getOutputPartitionPathStatMap() {
-    return outputPartitionPathStatMap;
   }
 
   public boolean hasOutputWorkLoadStats() {
@@ -107,10 +101,6 @@ public class WorkloadProfile implements Serializable {
 
   public WorkloadStat getOutputWorkloadStat(String partitionPath) {
     return hasOutputWorkLoadStats ? outputPartitionPathStatMap.get(partitionPath) : inputPartitionPathStatMap.get(partitionPath);
-  }
-
-  public WriteOperationType getOperationType() {
-    return operationType;
   }
 
   @Override

@@ -24,10 +24,12 @@ import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -38,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -55,11 +58,11 @@ class TestUpdateProcessor {
   private final HoodieReaderContext<IndexedRecord> readerContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
   private final RecordContext<IndexedRecord> recordContext = mock(RecordContext.class);
   private static final String KEY = "key";
-  private static final Schema SCHEMA = SchemaBuilder.record("TestRecord")
-      .fields()
-      .name("key").type().stringType().noDefault()
-      .name("value").type().stringType().noDefault()
-      .endRecord();
+  private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("TestRecord", null, null,
+      Arrays.asList(
+          HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.STRING))
+      ));
 
   private static Stream<Arguments> handleEmitDeletes() {
     BufferedRecord<IndexedRecord> previous = getRecord("value1", null);
@@ -229,7 +232,7 @@ class TestUpdateProcessor {
   }
 
   private static BufferedRecord<IndexedRecord> getRecord(String value, HoodieOperation operation) {
-    GenericRecord record = new GenericData.Record(SCHEMA);
+    GenericRecord record = new GenericData.Record(SCHEMA.toAvroSchema());
     record.put("key", KEY);
     record.put("value", value);
     return new BufferedRecord<>(KEY, 1, SerializableIndexedRecord.createInstance(record), 0, operation);

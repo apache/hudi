@@ -20,17 +20,17 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.ParquetTableSchemaResolver;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
@@ -38,9 +38,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -63,8 +60,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER
 /**
  * Helper class to read/write flink table options as a map.
  */
+@Slf4j
 public class TableOptionProperties {
-  private static final Logger LOG = LoggerFactory.getLogger(TableOptionProperties.class);
 
   public static final String SPARK_SOURCE_PROVIDER = "spark.sql.sources.provider";
   public static final String SPARK_VERSION = "spark.version";
@@ -108,7 +105,7 @@ public class TableOptionProperties {
                                       Configuration hadoopConf,
                                       Map<String, String> options) throws IOException {
     Path propertiesFilePath = writePropertiesFile(basePath, hadoopConf, options, false);
-    LOG.info(String.format("Create file %s success.", propertiesFilePath));
+    log.info(String.format("Create file %s success.", propertiesFilePath));
   }
 
   /**
@@ -118,7 +115,7 @@ public class TableOptionProperties {
       Configuration hadoopConf,
       Map<String, String> options) throws IOException {
     Path propertiesFilePath = writePropertiesFile(basePath, hadoopConf, options, true);
-    LOG.info(String.format("Update file %s success.", propertiesFilePath));
+    log.info(String.format("Update file %s success.", propertiesFilePath));
   }
 
   private static Path writePropertiesFile(String basePath,
@@ -153,7 +150,7 @@ public class TableOptionProperties {
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Could not load table option properties from %s", propertiesFilePath), e);
     }
-    LOG.info(String.format("Loading table option properties from %s success.", propertiesFilePath));
+    log.info(String.format("Loading table option properties from %s success.", propertiesFilePath));
     return options;
   }
 
@@ -202,19 +199,17 @@ public class TableOptionProperties {
 
   public static Map<String, String> translateFlinkTableProperties2Spark(
       CatalogTable catalogTable,
-      Configuration hadoopConf,
       Map<String, String> properties,
       List<String> partitionKeys,
       boolean withOperationField) {
     RowType rowType = supplementMetaFields(DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()), withOperationField);
-    Schema schema = AvroSchemaConverter.convertToSchema(rowType);
-    MessageType messageType = ParquetTableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
         partitionKeys,
         sparkVersion,
         4000,
-        messageType);
+        schema);
     properties.putAll(sparkTableProperties);
     return properties.entrySet().stream()
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))

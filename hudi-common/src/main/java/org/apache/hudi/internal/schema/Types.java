@@ -21,6 +21,10 @@ package org.apache.hudi.internal.schema;
 import org.apache.hudi.internal.schema.Type.NestedType;
 import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,9 +37,8 @@ import java.util.stream.Collectors;
 /**
  * Types supported in schema evolution.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class Types {
-  private Types() {
-  }
 
   /**
    * Boolean primitive type.
@@ -166,14 +169,12 @@ public class Types {
   /**
    * Time primitive type.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class TimeType extends PrimitiveType {
     private static final TimeType INSTANCE = new TimeType();
 
     public static TimeType get() {
       return INSTANCE;
-    }
-
-    private TimeType() {
     }
 
     @Override
@@ -190,14 +191,12 @@ public class Types {
   /**
    * Time primitive type.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class TimestampType extends PrimitiveType {
     private static final TimestampType INSTANCE = new TimestampType();
 
     public static TimestampType get() {
       return INSTANCE;
-    }
-
-    private TimestampType() {
     }
 
     @Override
@@ -583,12 +582,14 @@ public class Types {
       return new Field(true, id, name, type, null, null);
     }
 
+    @Getter
     private final boolean isOptional;
     private final int id;
     private final String name;
     private final Type type;
     private final String doc;
     // Experimental properties
+    @Getter
     private final Object defaultValue;
 
     private Field(boolean isOptional, int id, String name, Type type, String doc, Object defaultValue) {
@@ -598,14 +599,6 @@ public class Types {
       this.type = type;
       this.doc = doc;
       this.defaultValue = defaultValue;
-    }
-
-    public Object getDefaultValue() {
-      return defaultValue;
-    }
-
-    public boolean isOptional() {
-      return isOptional;
     }
 
     public int fieldId() {

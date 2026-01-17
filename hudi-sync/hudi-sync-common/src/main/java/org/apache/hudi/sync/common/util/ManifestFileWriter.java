@@ -32,9 +32,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.OutputStream;
@@ -44,12 +43,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@Slf4j
 public class ManifestFileWriter {
 
   public static final String MANIFEST_FOLDER_NAME = "manifest";
   public static final String ABSOLUTE_PATH_MANIFEST_FOLDER_NAME = "absolute-path-manifest";
   public static final String MANIFEST_FILE_NAME = "latest-snapshot.csv";
-  private static final Logger LOG = LoggerFactory.getLogger(ManifestFileWriter.class);
 
   private final HoodieTableMetaClient metaClient;
   private final boolean useFileListingFromMetadata;
@@ -67,10 +66,10 @@ public class ManifestFileWriter {
       List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(useAbsolutePath)
           .collect(Collectors.toList());
       if (baseFiles.isEmpty()) {
-        LOG.warn("No base file to generate manifest file.");
+        log.warn("No base file to generate manifest file.");
         return;
       } else {
-        LOG.info("Writing base file names to manifest file: {}", baseFiles.size());
+        log.info("Writing base file names to manifest file: {}", baseFiles.size());
       }
       final StoragePath manifestFilePath = getManifestFilePath(useAbsolutePath);
       try (OutputStream outputStream = metaClient.getStorage().create(manifestFilePath, true);
@@ -105,12 +104,10 @@ public class ManifestFileWriter {
   static Stream<String> getLatestBaseFiles(boolean canUseMetadataTable, HoodieEngineContext engContext, HoodieTableMetaClient metaClient,
                                            boolean useAbsolutePath) {
     List<String> partitions = FSUtils.getAllPartitionPaths(engContext, metaClient, canUseMetadataTable);
-    LOG.info("Retrieve all partitions: {}", partitions.size());
-    HoodieTableFileSystemView fsView = null;
-    try {
-      fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engContext, metaClient,
-          HoodieMetadataConfig.newBuilder().enable(canUseMetadataTable).build(),
-          metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+    log.info("Retrieve all partitions: {}", partitions.size());
+    try (HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engContext, metaClient,
+        HoodieMetadataConfig.newBuilder().enable(canUseMetadataTable).build(),
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants())) {
       if (canUseMetadataTable) {
         // incase of MDT, we can load all partitions at once. If not for MDT, we can rely on fsView.getLatestBaseFiles(partition) for each partition to load from FS.
         fsView.loadAllPartitions();
@@ -120,8 +117,6 @@ public class ManifestFileWriter {
       // fails the getLatestBaseFiles call. Hence we collect and return a stream.
       return partitions.parallelStream().flatMap(partition -> finalFsView.getLatestBaseFiles(partition)
           .map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName)).collect(Collectors.toList()).stream();
-    } finally {
-      fsView.close();
     }
   }
 

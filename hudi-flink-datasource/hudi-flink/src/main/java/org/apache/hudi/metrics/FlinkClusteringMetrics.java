@@ -24,9 +24,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sink.clustering.ClusteringOperator;
 import org.apache.hudi.sink.clustering.ClusteringPlanOperator;
 
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.text.ParseException;
 import java.time.Duration;
@@ -35,9 +35,8 @@ import java.time.Instant;
 /**
  * Metrics for flink clustering.
  */
+@Slf4j
 public class FlinkClusteringMetrics extends FlinkWriteMetrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkClusteringMetrics.class);
 
   /**
    * Key for clustering timer.
@@ -49,6 +48,7 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
    *
    * @see ClusteringPlanOperator
    */
+  @Setter
   private long pendingClusteringCount;
 
   /**
@@ -77,10 +77,6 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "clusteringCost"), () -> clusteringCost);
   }
 
-  public void setPendingClusteringCount(long pendingClusteringCount) {
-    this.pendingClusteringCount = pendingClusteringCount;
-  }
-
   public void setFirstPendingClusteringInstant(Option<HoodieInstant> firstPendingClusteringInstant) {
     try {
       if (!firstPendingClusteringInstant.isPresent()) {
@@ -90,7 +86,7 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
         this.clusteringDelay = Duration.between(start, Instant.now()).getSeconds();
       }
     } catch (ParseException e) {
-      LOG.warn("Invalid input clustering instant: {}", firstPendingClusteringInstant);
+      log.warn("Invalid input clustering instant: {}", firstPendingClusteringInstant);
     }
   }
 

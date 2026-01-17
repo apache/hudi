@@ -18,7 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;

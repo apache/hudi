@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Set;
@@ -27,14 +29,8 @@ import java.util.Set;
  */
 class KeyRangeLookupTree implements Serializable {
 
+  @Getter
   private KeyRangeNode root;
-
-  /**
-   * @return the root of the tree. Could be {@code null}
-   */
-  public KeyRangeNode getRoot() {
-    return root;
-  }
 
   /**
    * Inserts a new {@link KeyRangeNode} to this look up tree.

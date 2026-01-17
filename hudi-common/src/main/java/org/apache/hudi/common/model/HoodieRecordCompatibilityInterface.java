@@ -18,11 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-
-import org.apache.avro.Schema;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -34,25 +33,25 @@ public interface HoodieRecordCompatibilityInterface {
    * This method used to extract HoodieKey not through keyGenerator.
    */
   HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
-      Schema recordSchema,
+      HoodieSchema recordSchema,
       Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
       Boolean populateMetaFieldsOp,
-      Option<Schema> schemaWithoutMetaFields) throws IOException;
+      Option<HoodieSchema> schemaWithoutMetaFields) throws IOException;
 
   /**
    * This method used to extract HoodieKey through keyGenerator. This method used in ClusteringExecutionStrategy.
    */
-  HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen);
+  HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(HoodieSchema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen);
 
   /**
    * This method used to overwrite record key field.
    */
-  HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException;
+  HoodieRecord truncateRecordKey(HoodieSchema recordSchema, Properties props, String keyFieldName) throws IOException;
 
-  Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException;
+  Option<HoodieAvroIndexedRecord> toIndexedRecord(HoodieSchema recordSchema, Properties props) throws IOException;
 
-  ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException;
+  ByteArrayOutputStream getAvroBytes(HoodieSchema recordSchema, Properties props) throws IOException;
 }

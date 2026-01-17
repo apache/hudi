@@ -113,7 +113,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
             .withIndexType(HoodieIndex.IndexType.BUCKET)
             .withIndexKeyField("_row_key")
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
-            .withBucketNum("8")
+            .withBucketNum("4")
             .build())
         .build();
     writeClient = getHoodieWriteClient(config);

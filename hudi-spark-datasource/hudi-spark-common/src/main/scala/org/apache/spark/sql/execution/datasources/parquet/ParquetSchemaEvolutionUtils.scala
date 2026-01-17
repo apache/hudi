@@ -25,10 +25,11 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.HoodieStorageUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -62,7 +63,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits, layout)
+      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
   } else {
     null
   }

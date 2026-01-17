@@ -18,13 +18,12 @@
 
 package org.apache.hudi.avro.processors;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
-
-import org.apache.avro.Schema;
 
 public abstract class EnumTypeProcessor extends JsonFieldProcessor {
 
-  protected Object convertToJavaObject(Object value, String name, Schema schema) {
+  protected Object convertToJavaObject(Object value, String name, HoodieSchema schema) {
     if (schema.getEnumSymbols().contains(value.toString())) {
       return value.toString();
     }

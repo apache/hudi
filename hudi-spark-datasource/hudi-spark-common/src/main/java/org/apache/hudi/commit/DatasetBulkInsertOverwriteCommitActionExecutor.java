@@ -36,6 +36,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -62,6 +63,11 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses) {
+    if (!table.isPartitioned()) {
+      // Short-circuit for unpartitioned tables - only one partition path: empty string
+      return Collections.singletonMap(StringUtils.EMPTY_STRING, getAllExistingFileIds(StringUtils.EMPTY_STRING));
+    }
+
     String staticOverwritePartition = writeConfig.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
     if (StringUtils.nonEmpty(staticOverwritePartition)) {
       // static insert overwrite partitions

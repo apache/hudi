@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -64,7 +64,7 @@ public class HiveSchemaUtils {
   public static org.apache.flink.table.api.Schema convertTableSchema(Table hiveTable) {
     List<FieldSchema> allCols = hiveTable.getSd().getCols().stream()
         // filter out the metadata columns
-        .filter(s -> !HoodieAvroUtils.isMetadataField(s.getName()))
+        .filter(s -> !HoodieSchemaUtils.isMetadataField(s.getName()))
         .collect(Collectors.toList());
     // need to refactor the partition key field positions: they are not always in the last
     allCols.addAll(hiveTable.getPartitionKeys());

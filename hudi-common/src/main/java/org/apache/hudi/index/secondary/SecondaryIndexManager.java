@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index.secondary;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -26,9 +27,9 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -41,13 +42,11 @@ import java.util.stream.Collectors;
 /**
  * Manages secondary index.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class SecondaryIndexManager {
-  private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexManager.class);
 
   private static volatile SecondaryIndexManager _instance;
-
-  private SecondaryIndexManager() {
-  }
 
   public static SecondaryIndexManager getInstance() {
     if (_instance == null) {
@@ -83,16 +82,16 @@ public class SecondaryIndexManager {
       Map<String, String> options) {
     Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
     Set<String> colNames = columns.keySet();
-    Schema avroSchema;
+    HoodieSchema schema;
     try {
-      avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema(false);
+      schema = new TableSchemaResolver(metaClient).getTableSchema(false);
     } catch (Exception e) {
       throw new HoodieSecondaryIndexException(
           "Failed to get table avro schema: " + metaClient.getTableConfig().getTableName());
     }
 
     for (String col : colNames) {
-      if (avroSchema.getField(col) == null) {
+      if (schema.getField(col).isEmpty()) {
         throw new HoodieSecondaryIndexException("Field not exists: " + col);
       }
     }
@@ -124,7 +123,7 @@ public class SecondaryIndexManager {
         SecondaryIndexUtils.toJsonString(newSecondaryIndexes));
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
 
-    LOG.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
+    log.info("Success to add secondary index metadata: {}", secondaryIndexToAdd);
 
     // TODO: build index
   }
@@ -160,7 +159,7 @@ public class SecondaryIndexManager {
           CollectionUtils.createSet(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key()));
     }
 
-    LOG.info("Success to delete secondary index metadata: {}", indexName);
+    log.info("Success to delete secondary index metadata: {}", indexName);
 
     // TODO: drop index data
   }

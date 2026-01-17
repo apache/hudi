@@ -47,6 +47,12 @@
             <artifactId>hadoop-common</artifactId>
         </dependency>
 
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>

@@ -25,6 +25,7 @@ import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.io.GlobFilePathFilter;
@@ -38,8 +39,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -63,10 +62,9 @@ import java.util.Set;
  *
  * @see ParquetSplitReaderUtil
  */
+@Slf4j
 public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(CopyOnWriteInputFormat.class);
 
   private final String[] fullFieldNames;
   private final DataType[] fullFieldTypes;
@@ -210,7 +208,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       if (this.minSplitSize <= blockSize) {
         minSplitSize = this.minSplitSize;
       } else {
-        LOG.warn("Minimal split size of {} is larger than the block size of {}."
+        log.warn("Minimal split size of {} is larger than the block size of {}."
             + " Decreasing minimal split size to block size.", this.minSplitSize, blockSize);
         minSplitSize = blockSize;
       }
@@ -313,7 +311,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           length += addFilesInDir(dir.getPath(), files, logExcludedFiles);
         } else {
           if (logExcludedFiles) {
-            LOG.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
+            log.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
           }
         }
       } else {
@@ -323,7 +321,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           testForUnsplittable(dir);
         } else {
           if (logExcludedFiles) {
-            LOG.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
+            log.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
           }
         }
       }

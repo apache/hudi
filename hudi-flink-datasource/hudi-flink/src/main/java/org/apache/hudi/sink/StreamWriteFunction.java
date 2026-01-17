@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -36,6 +37,7 @@ import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
@@ -47,7 +49,7 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -57,8 +59,6 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -108,11 +108,10 @@ import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldName
  *
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlinkInternalRow> {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(StreamWriteFunction.class);
 
   /**
    * Write buffer as buckets for a checkpoint. The key is bucket ID.
@@ -151,7 +150,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   public StreamWriteFunction(Configuration config, RowType rowType) {
     super(config);
     this.rowType = rowType;
-    this.keyGen = RowDataKeyGen.instance(config, rowType);
+    this.keyGen = RowDataKeyGens.instance(config, rowType);
   }
 
   @Override
@@ -241,11 +240,11 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        new Schema.Parser().parse(writeClient.getConfig().getSchema()),
+        HoodieSchema.parse(writeClient.getConfig().getSchema()),
         readerContext.getPayloadClasses(writeClient.getConfig().getProps()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
-    LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
+    log.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 
   /**
@@ -272,7 +271,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
       return bucket.writeRow(record.getRowData());
     } catch (MemoryPagesExhaustedException e) {
-      LOG.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
+      log.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
       return false;
     }
   }
@@ -307,7 +306,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         this.tracer.countDown(bucketToFlush.getBufferSize());
         disposeBucket(bucketToFlush);
       } else {
-        LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
+        log.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
       // 2.2 try to write row again
       success = doBufferRecord(bucketID, record);
@@ -361,7 +360,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
-      LOG.info("No inflight instant when flushing data, skip.");
+      log.info("No inflight instant when flushing data, skip.");
       return false;
     }
 
@@ -401,7 +400,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
             }
           });
     } else {
-      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
+      log.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
     }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -487,6 +486,14 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    * Write function to trigger the actual write action.
    */
   protected interface WriteFunction extends Serializable {
-    List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
+    List<WriteStatus> doWrite(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
+
+    default List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant) {
+      if (!records.hasNext()) {
+        log.info("Empty records with bucket info => {}.", bucketInfo);
+        return Collections.emptyList();
+      }
+      return doWrite(records, bucketInfo, instant);
+    }
   }
 }

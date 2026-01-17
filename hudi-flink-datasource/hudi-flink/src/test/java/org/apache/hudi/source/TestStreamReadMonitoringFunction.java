@@ -34,6 +34,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
+import lombok.Getter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.StreamSource;
@@ -532,6 +533,7 @@ public class TestStreamReadMonitoringFunction {
    */
   private static class CollectingSourceContext implements SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> {
     private final List<MergeOnReadInputSplit> splits = new ArrayList<>();
+    @Getter
     private final Object checkpointLock = new Object();
     private volatile CountDownLatch latch;
 
@@ -558,11 +560,6 @@ public class TestStreamReadMonitoringFunction {
     @Override
     public void markAsTemporarilyIdle() {
 
-    }
-
-    @Override
-    public Object getCheckpointLock() {
-      return checkpointLock;
     }
 
     @Override

@@ -587,18 +587,165 @@ public class TestHoodieSchemaCompatibility {
   }
 
   @Test
-  public void testCompatibilityConsistency() {
-    // Test that compatibility checks are consistent between Avro and Hoodie utilities
+  public void testIsSchemaCompatibleWithCheckNamingAndAllowProjection() {
+    // Test with checkNaming=true, allowProjection=true
     HoodieSchema baseSchema = HoodieSchema.parse(SIMPLE_SCHEMA);
     HoodieSchema evolvedSchema = HoodieSchema.parse(EVOLVED_SCHEMA);
 
-    Schema baseAvro = baseSchema.toAvroSchema();
-    Schema evolvedAvro = evolvedSchema.toAvroSchema();
+    // Evolved schema should be compatible with base schema (can read data written with base schema)
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(baseSchema, evolvedSchema, true, true));
 
-    // Results should be consistent
-    boolean avroCompatible = AvroSchemaUtils.isSchemaCompatible(baseAvro, evolvedAvro);
-    boolean hoodieCompatible = HoodieSchemaCompatibility.isSchemaCompatible(baseSchema, evolvedSchema);
+    // Base schema should also be compatible with evolved schema if projection is allowed
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(evolvedSchema, baseSchema, true, true));
+  }
 
-    assertEquals(avroCompatible, hoodieCompatible);
+  @Test
+  public void testIsSchemaCompatibleWithCheckNamingNoProjection() {
+    // Test with checkNaming=true, allowProjection=false
+    HoodieSchema fullSchema = HoodieSchema.fromAvroSchema(FULL_SCHEMA);
+    HoodieSchema shortSchema = HoodieSchema.fromAvroSchema(SHORT_SCHEMA);
+
+    // Short schema is not compatible with full schema when projection is not allowed
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(fullSchema, shortSchema, true, false));
+
+    // Full schema should be compatible with short schema (has all fields)
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(shortSchema, fullSchema, true, false));
+  }
+
+  @Test
+  public void testIsSchemaCompatibleWithoutCheckNaming() {
+    // Test with checkNaming=false, allowProjection=true
+    // Create schemas with different names but same structure
+    String schema1 = "{\"type\":\"record\",\"name\":\"Record1\",\"namespace\":\"ns1\",\"fields\":["
+        + "{\"name\":\"field1\",\"type\":\"int\"}]}";
+    String schema2 = "{\"type\":\"record\",\"name\":\"Record2\",\"namespace\":\"ns2\",\"fields\":["
+        + "{\"name\":\"field1\",\"type\":\"int\"}]}";
+
+    HoodieSchema s1 = HoodieSchema.parse(schema1);
+    HoodieSchema s2 = HoodieSchema.parse(schema2);
+
+    // With checkNaming=false, schemas with different names should be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(s1, s2, false, true));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(s2, s1, false, true));
+  }
+
+  @Test
+  public void testIsSchemaCompatibleWithTypePromotion() {
+    // Test type promotion scenarios
+    String intSchema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"num\",\"type\":\"int\"}]}";
+    String longSchema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"num\",\"type\":\"long\"}]}";
+
+    HoodieSchema intS = HoodieSchema.parse(intSchema);
+    HoodieSchema longS = HoodieSchema.parse(longSchema);
+
+    // Long can read int (type promotion)
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(intS, longS, true, true));
+
+    // Int cannot read long (no type demotion)
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(longS, intS, true, true));
+  }
+
+  @Test
+  public void testIsSchemaCompatibleWithNestedSchemas() {
+    // Test with nested record schemas
+    String nestedSchema1 = "{\"type\":\"record\",\"name\":\"Outer\",\"fields\":["
+        + "{\"name\":\"inner\",\"type\":{\"type\":\"record\",\"name\":\"Inner\",\"fields\":["
+        + "{\"name\":\"field1\",\"type\":\"string\"},"
+        + "{\"name\":\"field2\",\"type\":\"int\"}]}}]}";
+
+    String nestedSchema2 = "{\"type\":\"record\",\"name\":\"Outer\",\"fields\":["
+        + "{\"name\":\"inner\",\"type\":{\"type\":\"record\",\"name\":\"Inner\",\"fields\":["
+        + "{\"name\":\"field1\",\"type\":\"string\"},"
+        + "{\"name\":\"field2\",\"type\":\"int\"},"
+        + "{\"name\":\"field3\",\"type\":[\"null\",\"string\"],\"default\":null}]}}]}";
+
+    HoodieSchema s1 = HoodieSchema.parse(nestedSchema1);
+    HoodieSchema s2 = HoodieSchema.parse(nestedSchema2);
+
+    // Schema with added nullable field should be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(s1, s2, true, true));
+
+    // Reverse should also work with projection allowed
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(s2, s1, true, true));
+  }
+
+  @Test
+  public void testIsSchemaCompatibleWithArrays() {
+    // Test with array type changes
+    String arrayIntSchema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}]}";
+    String arrayLongSchema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"arr\",\"type\":{\"type\":\"array\",\"items\":\"long\"}}]}";
+
+    HoodieSchema intArray = HoodieSchema.parse(arrayIntSchema);
+    HoodieSchema longArray = HoodieSchema.parse(arrayLongSchema);
+
+    // Array element type promotion
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(intArray, longArray, true, true));
+  }
+
+  @Test
+  public void testIsSchemaCompatibleWithMaps() {
+    // Test with map value type changes
+    String mapIntSchema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"map\",\"type\":{\"type\":\"map\",\"values\":\"int\"}}]}";
+    String mapLongSchema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"map\",\"type\":{\"type\":\"map\",\"values\":\"long\"}}]}";
+
+    HoodieSchema intMap = HoodieSchema.parse(mapIntSchema);
+    HoodieSchema longMap = HoodieSchema.parse(mapLongSchema);
+
+    // Map value type promotion
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(intMap, longMap, true, true));
+  }
+
+  @SuppressWarnings("DataFlowIssue")
+  @Test
+  public void testIsSchemaCompatibleValidationBothParams() {
+    HoodieSchema schema = HoodieSchema.parse(SIMPLE_SCHEMA);
+
+    // Should throw on null previous schema
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaCompatibility.isSchemaCompatible(null, schema, true, true));
+
+    // Should throw on null new schema
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaCompatibility.isSchemaCompatible(schema, null, true, true));
+
+    // Should throw on both null
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaCompatibility.isSchemaCompatible(null, null, true, true));
+  }
+
+  @Test
+  public void testIsSchemaCompatibleConsistencyWithAvro() {
+    // Verify HoodieSchemaCompatibility results match AvroSchemaUtils for various scenarios
+    HoodieSchema s1 = HoodieSchema.parse(SIMPLE_SCHEMA);
+    HoodieSchema s2 = HoodieSchema.parse(EVOLVED_SCHEMA);
+
+    // Test all combinations of checkNaming and allowProjection
+    for (boolean checkNaming : Arrays.asList(true, false)) {
+      for (boolean allowProjection : Arrays.asList(true, false)) {
+        boolean avroResult = AvroSchemaUtils.isSchemaCompatible(
+            s1.toAvroSchema(), s2.toAvroSchema(), checkNaming, allowProjection);
+        boolean hoodieResult = HoodieSchemaCompatibility.isSchemaCompatible(
+            s1, s2, checkNaming, allowProjection);
+
+        assertEquals(avroResult, hoodieResult,
+            String.format("Results should match for checkNaming=%s, allowProjection=%s",
+                checkNaming, allowProjection));
+      }
+    }
+  }
+
+  @Test
+  public void testIsSchemaCompatibleIdenticalSchemas() {
+    // Test with identical schemas
+    HoodieSchema schema = HoodieSchema.parse(SOURCE_SCHEMA);
+
+    // Identical schemas should always be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, true, true));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, false, true));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, false, false));
   }
 }

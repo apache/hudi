@@ -21,6 +21,10 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.IOUtils;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.ToString;
+
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.HFileUtils.compareKeys;
@@ -29,7 +33,11 @@ import static org.apache.hudi.io.util.IOUtils.readShort;
 /**
  * Represents the key part only.
  */
+@AllArgsConstructor
+@Getter
+@ToString
 public class Key implements Comparable<Key> {
+
   private static final int CONTENT_LENGTH_SIZE = SIZEOF_INT16;
   private final byte[] bytes;
   private final int offset;
@@ -37,24 +45,6 @@ public class Key implements Comparable<Key> {
 
   public Key(byte[] bytes) {
     this(bytes, 0, bytes.length);
-  }
-
-  public Key(byte[] bytes, int offset, int length) {
-    this.bytes = bytes;
-    this.offset = offset;
-    this.length = length;
-  }
-
-  public byte[] getBytes() {
-    return bytes;
-  }
-
-  public int getOffset() {
-    return this.offset;
-  }
-
-  public int getLength() {
-    return length;
   }
 
   public int getContentOffset() {
@@ -87,12 +77,5 @@ public class Key implements Comparable<Key> {
   @Override
   public int compareTo(Key o) {
     return compareKeys(this, o);
-  }
-
-  @Override
-  public String toString() {
-    return "Key{"
-        + new String(getBytes(), getContentOffset(), getContentLength())
-        + "}";
   }
 }

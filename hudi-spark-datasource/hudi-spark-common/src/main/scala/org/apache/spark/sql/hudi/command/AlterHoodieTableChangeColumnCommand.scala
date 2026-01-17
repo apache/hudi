@@ -17,12 +17,11 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.AvroConversionUtils
-import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.HoodieSchemaConversionUtils
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.avro.Schema
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -73,8 +72,8 @@ case class AlterHoodieTableChangeColumnCommand(
           field
         }
       })
-    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableIdentifier.table)
-    val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newTableSchema, structName, nameSpace)
+    val (structName, nameSpace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableIdentifier.table)
+    val newSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(newTableSchema, structName, nameSpace)
 
     // Validate the compatibility between new schema and origin schema.
     validateSchema(newSchema, hoodieCatalogTable.metaClient)
@@ -86,10 +85,10 @@ case class AlterHoodieTableChangeColumnCommand(
     Seq.empty[Row]
   }
 
-  private def validateSchema(newSchema: Schema, metaClient: HoodieTableMetaClient): Unit = {
+  private def validateSchema(newSchema: HoodieSchema, metaClient: HoodieTableMetaClient): Unit = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchema(false))
-    if (!AvroSchemaUtils.isSchemaCompatible(tableSchema, newSchema)) {
+    val tableSchema = HoodieSchemaUtils.addMetadataFields(schemaUtil.getTableSchema(false), false)
+    if (!HoodieSchemaCompatibility.isSchemaCompatible(tableSchema, newSchema)) {
       throw new HoodieException("Failed schema compatibility check for newSchema :" + newSchema +
         ", origin table schema :" + tableSchema + ", base path :" + metaClient.getBasePath)
     }

@@ -21,6 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
@@ -28,7 +29,6 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
@@ -49,7 +49,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
     val commitMetadata = metaClient.getActiveTimeline.readCommitMetadata(lastInstant)
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
-    val schema = new Schema.Parser().parse(schemaStr)
+    val schema = HoodieSchema.parse(schemaStr)
     val fields = schema.getFields.asScala.map(_.name())
     assert(expectedSchema == fields, s"Commit metadata should include no meta fields, received $fields")
   }

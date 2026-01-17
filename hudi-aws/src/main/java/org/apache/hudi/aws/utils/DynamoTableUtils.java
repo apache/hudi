@@ -18,8 +18,7 @@
 
 package org.apache.hudi.aws.utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
@@ -45,14 +44,11 @@ import software.amazon.awssdk.services.dynamodb.model.TableStatus;
  * // ... start making calls to table ...
  * </pre>
  */
+@Slf4j
 public class DynamoTableUtils {
 
   private static final int DEFAULT_WAIT_TIMEOUT = 20 * 60 * 1000;
   private static final int DEFAULT_WAIT_INTERVAL = 10 * 1000;
-  /**
-   * The logging utility.
-   */
-  private static final Logger LOGGER = LoggerFactory.getLogger(DynamoTableUtils.class);
 
   /**
    * Waits up to 10 minutes for a specified DynamoDB table to resolve,
@@ -225,8 +221,8 @@ public class DynamoTableUtils {
       dynamo.createTable(createTableRequest);
       return true;
     } catch (final ResourceInUseException e) {
-      if (LOGGER.isTraceEnabled()) {
-        LOGGER.trace("Table " + createTableRequest.tableName() + " already exists", e);
+      if (log.isTraceEnabled()) {
+        log.trace("Table " + createTableRequest.tableName() + " already exists", e);
       }
     }
     return false;
@@ -243,8 +239,8 @@ public class DynamoTableUtils {
       dynamo.deleteTable(deleteTableRequest);
       return true;
     } catch (final ResourceNotFoundException e) {
-      if (LOGGER.isTraceEnabled()) {
-        LOGGER.trace("Table " + deleteTableRequest.tableName() + " does not exist", e);
+      if (log.isTraceEnabled()) {
+        log.trace("Table " + deleteTableRequest.tableName() + " does not exist", e);
       }
     }
     return false;

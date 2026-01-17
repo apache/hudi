@@ -65,6 +65,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.junit.jupiter.api.AfterEach;
@@ -75,8 +76,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -108,10 +107,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie table file system view {@link HoodieTableFileSystemView}.
  */
+@Slf4j
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableFileSystemView.class);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with bootstrap enable={0}";
   private static final String TEST_NAME_WITH_PARAMS_2 = "[{index}] Test with bootstrap enable={0}, preTableVersion8={1}";
 
@@ -1200,7 +1198,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     roView.getAllBaseFiles(partitionPath);
 
     fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
-    LOG.info("FILESLICE LIST=" + fileSliceList);
+    log.info("FILESLICE LIST=" + fileSliceList);
     dataFiles = fileSliceList.stream().map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
     assertEquals(1, dataFiles.size(), "Expect only one data-files in latest view as there is only one file-group");

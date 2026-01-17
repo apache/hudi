@@ -104,11 +104,6 @@
                   <pattern>org.objenesis.</pattern>
                   <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
                 </relocation>
-
-                <relocation>
-                  <pattern>org.apache.parquet.avro.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
-                </relocation>
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>

@@ -72,6 +72,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getRequestedSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     DeleteContext deleteContext = mock(DeleteContext.class);
     when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());

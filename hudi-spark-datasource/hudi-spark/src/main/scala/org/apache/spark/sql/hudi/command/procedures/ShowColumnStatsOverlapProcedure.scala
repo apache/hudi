@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
+import org.apache.hudi.{ColumnStatsIndexSupport, HoodieSchemaConversionUtils}
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -149,7 +149,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
   }
 
   def getStructSchema(hoodieSchema: HoodieSchema): StructType = {
-    AvroConversionUtils.convertAvroSchemaToStructType(hoodieSchema.toAvroSchema)
+    HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
   }
 
 

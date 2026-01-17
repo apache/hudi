@@ -18,12 +18,15 @@
 
 package org.apache.hudi.util;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.types.RowKind;
 
 /**
  * Utilities for all kinds of common {@link org.apache.flink.table.connector.ChangelogMode}s.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ChangelogModes {
   public static final ChangelogMode FULL = ChangelogMode.newBuilder()
       .addContainedKind(RowKind.INSERT)
@@ -40,7 +43,4 @@ public class ChangelogModes {
       .addContainedKind(RowKind.UPDATE_AFTER)
       .addContainedKind(RowKind.DELETE)
       .build();
-
-  private ChangelogModes() {
-  }
 }

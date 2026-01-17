@@ -24,8 +24,7 @@ import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ConcurrentModificationException;
 import java.util.Set;
@@ -39,9 +38,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * trying to do early conflict detection by asynchronously and periodically checking
  * write conflict among multiple writers based on the timeline-server-based markers.
  */
+@Slf4j
 public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBasedDetectionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AsyncTimelineServerBasedDetectionStrategy.class);
 
   private final AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService asyncDetectorExecutor;

@@ -21,18 +21,16 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.text.ParseException;
 
 /**
  * Common flink write commit metadata metrics.
  */
+@Slf4j
 public class FlinkWriteMetrics extends HoodieFlinkMetrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkWriteMetrics.class);
 
   protected final String actionType;
 
@@ -78,7 +76,7 @@ public class FlinkWriteMetrics extends HoodieFlinkMetrics {
     try {
       commitEpochTimeInMs = HoodieInstantTimeGenerator.parseDateFromInstantTime(instantTime).getTime();
     } catch (ParseException e) {
-      LOG.warn("Invalid input issued instant: {}", instantTime);
+      log.warn("Invalid input issued instant: {}", instantTime);
       return;
     }
     updateCommitMetrics(commitEpochTimeInMs, System.currentTimeMillis() - commitEpochTimeInMs, metadata);

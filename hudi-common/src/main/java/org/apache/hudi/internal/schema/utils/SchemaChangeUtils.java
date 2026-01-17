@@ -24,16 +24,17 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.action.TableChangesHelper;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Helper methods for schema Change.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SchemaChangeUtils {
-  private SchemaChangeUtils() {
-
-  }
 
   /**
    * Whether to allow the column type to be updated.

@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -34,9 +33,8 @@ import java.util.concurrent.Executors;
 /**
  * Async archive service to run concurrently with write operation.
  */
+@Slf4j
 public class AsyncArchiveService extends HoodieAsyncTableService {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AsyncArchiveService.class);
 
   private final BaseHoodieWriteClient writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -48,7 +46,7 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
 
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
-    LOG.info("Starting async archive service...");
+    log.info("Starting async archive service...");
     return Pair.of(CompletableFuture.supplyAsync(() -> {
       writeClient.archive();
       return true;
@@ -58,7 +56,7 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
   public static AsyncArchiveService startAsyncArchiveIfEnabled(BaseHoodieWriteClient writeClient) {
     HoodieWriteConfig config = writeClient.getConfig();
     if (!config.isAutoArchive() || !config.isAsyncArchive()) {
-      LOG.info("The HoodieWriteClient is not configured to auto & async archive. Async archive service will not start.");
+      log.info("The HoodieWriteClient is not configured to auto & async archive. Async archive service will not start.");
       return null;
     }
     AsyncArchiveService asyncArchiveService = new AsyncArchiveService(writeClient);
@@ -68,7 +66,7 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
 
   public static void waitForCompletion(AsyncArchiveService asyncArchiveService) {
     if (asyncArchiveService != null) {
-      LOG.info("Waiting for async archive service to finish");
+      log.info("Waiting for async archive service to finish");
       try {
         asyncArchiveService.waitForShutdown();
       } catch (Exception e) {
@@ -79,7 +77,7 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
 
   public static void forceShutdown(AsyncArchiveService asyncArchiveService) {
     if (asyncArchiveService != null) {
-      LOG.info("Shutting down async archive service...");
+      log.info("Shutting down async archive service...");
       asyncArchiveService.shutdown(true);
     }
   }

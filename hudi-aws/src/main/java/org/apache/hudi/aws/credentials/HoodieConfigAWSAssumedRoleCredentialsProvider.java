@@ -21,8 +21,7 @@ package org.apache.hudi.aws.credentials;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieAWSConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.services.sts.StsClient;
@@ -34,9 +33,8 @@ import java.util.Properties;
 /**
  * Credentials provider which assumes AWS role from Hoodie config and fetches its credentials.
  */
+@Slf4j
 public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AwsCredentialsProvider {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieConfigAWSAssumedRoleCredentialsProvider.class);
 
   private final StsAssumeRoleCredentialsProvider credentialsProvider;
 

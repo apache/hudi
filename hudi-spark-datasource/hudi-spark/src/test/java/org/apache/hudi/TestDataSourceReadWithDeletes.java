@@ -39,7 +39,7 @@ import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -80,12 +80,12 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
       + "  ]\n"
       + "}";
 
-  private Schema schema;
+  private HoodieSchema schema;
   private HoodieTableMetaClient metaClient;
 
   @BeforeEach
   public void setUp() {
-    schema = new Schema.Parser().parse(jsonSchema);
+    schema = HoodieSchema.parse(jsonSchema);
   }
 
   @ParameterizedTest
@@ -167,7 +167,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     return Stream.of(records).map(rawRecordStr -> {
       String[] parts = rawRecordStr.split(",");
       String hoodieOperationStr = parts[0];
-      GenericRecord record = new GenericData.Record(schema);
+      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
       record.put("id", parts[1]);
       record.put("name", parts[2]);
       record.put("age", Integer.parseInt(parts[3]));

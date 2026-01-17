@@ -25,9 +25,8 @@ import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -45,9 +44,9 @@ import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.C
 /**
  * The Dag scheduler schedules the workflow DAGs. It will convert DAG to node set and execute the nodes according to the relations between nodes.
  */
+@Slf4j
 public class DagScheduler {
 
-  private static Logger log = LoggerFactory.getLogger(DagScheduler.class);
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
 
@@ -88,7 +87,7 @@ public class DagScheduler {
     int curRound = 1;
     do {
       log.warn("===================================================================");
-      log.warn("Running workloads for round num " + curRound);
+      log.warn("Running workloads for round num {}", curRound);
       log.warn("===================================================================");
       Queue<DagNode> queue = new PriorityQueue<>();
       for (DagNode dagNode : nodes) {
@@ -99,7 +98,7 @@ public class DagScheduler {
         Set<DagNode> childNodes = new HashSet<>();
         while (queue.size() > 0) {
           DagNode nodeToExecute = queue.poll();
-          log.warn("Executing node \"" + nodeToExecute.getConfig().getOtherConfigs().get(CONFIG_NAME) + "\" :: " + nodeToExecute.getConfig());
+          log.warn("Executing node \"{}\" :: {}", nodeToExecute.getConfig().getOtherConfigs().get(CONFIG_NAME), nodeToExecute.getConfig());
           int finalCurRound = curRound;
           futures.add(service.submit(() -> executeNode(nodeToExecute, finalCurRound)));
           if (nodeToExecute.getChildNodes().size() > 0) {
@@ -112,7 +111,7 @@ public class DagScheduler {
           future.get(1, TimeUnit.HOURS);
         }
       } while (queue.size() > 0);
-      log.info("Finished workloads for round num " + curRound);
+      log.info("Finished workloads for round num {}", curRound);
       if (curRound < workflowDag.getRounds()) {
         new DelayNode(workflowDag.getIntermittentDelayMins()).execute(executionContext, curRound);
       }

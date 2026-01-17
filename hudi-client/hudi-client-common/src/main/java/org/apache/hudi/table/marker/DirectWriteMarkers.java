@@ -39,8 +39,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,9 +55,8 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
  * marker files for table version 8 and above.
  * Each data file has a corresponding marker file.
  */
+@Slf4j
 public class DirectWriteMarkers extends WriteMarkers {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DirectWriteMarkers.class);
   private static final Predicate<String> NOT_APPEND_MARKER_PREDICATE = pathStr -> pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name());
 
   protected final transient HoodieStorage storage;
@@ -172,9 +170,9 @@ public class DirectWriteMarkers extends WriteMarkers {
                                                               HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     String strategyClassName = config.getEarlyConflictDetectionStrategyClassName();
     if (!ReflectionUtils.isSubClass(strategyClassName, DirectMarkerBasedDetectionStrategy.class)) {
-      LOG.warn("Cannot use {} for direct markers.", strategyClassName);
+      log.warn("Cannot use {} for direct markers.", strategyClassName);
       strategyClassName = getDefaultEarlyConflictDetectionStrategy(MarkerType.DIRECT);
-      LOG.warn("Falling back to {}", strategyClassName);
+      log.warn("Falling back to {}", strategyClassName);
     }
     DirectMarkerBasedDetectionStrategy strategy =
         (DirectMarkerBasedDetectionStrategy) ReflectionUtils.loadClass(strategyClassName,
@@ -190,15 +188,15 @@ public class DirectWriteMarkers extends WriteMarkers {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (checkIfExists && storage.exists(markerPath)) {
-        LOG.info("Marker Path={} already exists, cancel creation", markerPath);
+        log.info("Marker Path={} already exists, cancel creation", markerPath);
         return Option.empty();
       }
-      LOG.debug("Creating Marker Path={}", markerPath);
+      log.debug("Creating Marker Path={}", markerPath);
       storage.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
-    LOG.info("[direct] Created marker file {} in {} ms", markerPath, timer.endTimer());
+    log.info("[direct] Created marker file {} in {} ms", markerPath, timer.endTimer());
     return Option.of(markerPath);
   }
 }

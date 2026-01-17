@@ -28,9 +28,9 @@ import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.connect.writers.KafkaConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,11 +52,10 @@ import java.util.stream.Collectors;
  * coordinates the Hudi write transactions
  * across all the Kafka partitions for a single Kafka Topic.
  */
+@Slf4j
 public class ConnectTransactionCoordinator implements TransactionCoordinator, Runnable {
 
   public static final int COORDINATOR_KAFKA_PARTITION = 0;
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConnectTransactionCoordinator.class);
   private static final String BOOTSTRAP_SERVERS_CFG = "bootstrap.servers";
   private static final String KAFKA_OFFSET_KEY = "kafka.commit.offsets";
   private static final String KAFKA_OFFSET_DELIMITER = ",";
@@ -66,6 +65,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private static final int COORDINATOR_EVENT_LOOP_TIMEOUT_MS = 1000;
 
   private final KafkaConnectConfigs configs;
+  @Getter
   private final TopicPartition partition;
   private final KafkaControlAgent kafkaControlClient;
   private final ConnectTransactionServices transactionServices;
@@ -120,8 +120,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
       executorService.submit(this);
     }
     kafkaControlClient.registerTransactionCoordinator(this);
-    LOG.info(String.format("Start Transaction Coordinator for topic %s partition %s",
-        partition.topic(), partition.partition()));
+    log.info("Start Transaction Coordinator for topic {} partition {}", partition.topic(), partition.partition());
 
     initializeGlobalCommittedKafkaOffsets();
     // Submit the first start commit
@@ -139,25 +138,20 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     if (executorService != null) {
       boolean terminated = false;
       try {
-        LOG.info("Shutting down executor service.");
+        log.info("Shutting down executor service.");
         executorService.shutdown();
-        LOG.info("Awaiting termination.");
+        log.info("Awaiting termination.");
         terminated = executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
         // ignored
       }
 
       if (!terminated) {
-        LOG.warn(
+        log.warn(
             "Unclean Kafka Control Manager executor service shutdown ");
         executorService.shutdownNow();
       }
     }
-  }
-
-  @Override
-  public TopicPartition getPartition() {
-    return partition;
   }
 
   @Override
@@ -166,7 +160,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     if (message.getType().equals(ControlMessage.EventType.WRITE_STATUS)) {
       type = CoordinatorEvent.CoordinatorEventType.WRITE_STATUS;
     } else {
-      LOG.warn("Illegal message type [{}] processee by coordinator", message.getType().name());
+      log.warn("Illegal message type [{}] processee by coordinator", message.getType().name());
       return;
     }
 
@@ -186,7 +180,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
           processCoordinatorEvent(event);
         }
       } catch (InterruptedException exception) {
-        LOG.warn("Error received while polling the event loop in Partition Coordinator", exception);
+        log.warn("Error received while polling the event loop in Partition Coordinator", exception);
       }
     }
   }
@@ -223,7 +217,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               && currentState.equals(State.ENDED_COMMIT)) {
             onReceiveWriteStatus(event.getMessage());
           } else {
-            LOG.warn("Could not process WRITE_STATUS due to missing message");
+            log.warn("Could not process WRITE_STATUS due to missing message");
           }
           break;
         case ACK_COMMIT:
@@ -236,7 +230,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
           throw new IllegalStateException("Partition Coordinator has received an illegal event type " + event.getEventType().name());
       }
     } catch (Exception exception) {
-      LOG.warn("Error received while polling the event loop in Partition Coordinator", exception);
+      log.warn("Error received while polling the event loop in Partition Coordinator", exception);
     }
   }
 
@@ -253,7 +247,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               currentCommitTime),
           configs.getCommitIntervalSecs(), TimeUnit.SECONDS);
     } catch (Exception exception) {
-      LOG.error(String.format("Failed to start a new commit %s, will retry", currentCommitTime), exception);
+      log.error("Failed to start a new commit {}, will retry", currentCommitTime, exception);
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
               partition.topic(),
               StringUtils.EMPTY_STRING),
@@ -265,7 +259,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.END_COMMIT));
     } catch (Exception exception) {
-      LOG.warn("Could not send END_COMMIT message for partition {} and commitTime {}",
+      log.warn("Could not send END_COMMIT message for partition {} and commitTime {}",
           partition, currentCommitTime, exception);
     }
     currentConsumedKafkaOffsets.clear();
@@ -300,7 +294,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               transformKafkaOffsets(currentConsumedKafkaOffsets));
 
           if (success) {
-            LOG.info("Commit " + currentCommitTime + " successful!");
+            log.info("Commit {} successful!", currentCommitTime);
             currentState = State.WRITE_STATUS_RCVD;
             globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
             submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,
@@ -308,29 +302,29 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
                 currentCommitTime));
             return;
           } else {
-            LOG.error("Commit " + currentCommitTime + " failed!");
+            log.error("Commit {} failed!", currentCommitTime);
           }
         } else if (hasErrors) {
-          LOG.error("Coordinator found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-          LOG.error("Printing out the top 100 errors");
+          log.error("Coordinator found errors when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+          log.error("Printing out the top 100 errors");
           allWriteStatuses.stream().filter(WriteStatus::hasErrors).limit(100).forEach(ws -> {
-            LOG.error("Global error :", ws.getGlobalError());
+            log.error("Global error :", ws.getGlobalError());
             if (ws.getErrors().size() > 0) {
-              ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+              ws.getErrors().forEach((key, value) -> log.trace("Error for key:{} is {}", key, value));
             }
           });
         }
 
         // Submit the next start commit, that will rollback the current commit.
         currentState = State.FAILED_COMMIT;
-        LOG.warn("Current commit {} failed. Starting a new commit after recovery delay of {} {}",
+        log.warn("Current commit {} failed. Starting a new commit after recovery delay of {} {}",
             currentCommitTime, RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS.name());
         submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
                 partition.topic(),
                 StringUtils.EMPTY_STRING),
             RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS);
       } catch (Exception exception) {
-        LOG.error("Fatal error while committing file", exception);
+        log.error("Fatal error while committing file", exception);
       }
     }
   }
@@ -339,7 +333,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     // If we are still stuck in ENDED_STATE
     if (currentState.equals(State.ENDED_COMMIT)) {
       currentState = State.WRITE_STATUS_TIMEDOUT;
-      LOG.warn("Current commit {} failed after a write status timeout. Starting a new commit after recovery delay of {} {}",
+      log.warn("Current commit {} failed after a write status timeout. Starting a new commit after recovery delay of {} {}",
           currentCommitTime, RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS.name());
       // Submit the next start commit
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
@@ -353,7 +347,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.ACK_COMMIT));
     } catch (Exception exception) {
-      LOG.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
+      log.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
     }
     currentState = State.ACKED_COMMIT;
 
@@ -369,11 +363,11 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
       Map<String, String> commitMetadata = transactionServices.fetchLatestExtraCommitMetadata();
       String latestKafkaOffsets = commitMetadata.get(KAFKA_OFFSET_KEY);
       if (!StringUtils.isNullOrEmpty(latestKafkaOffsets)) {
-        LOG.info("Retrieved Raw Kafka offsets from Hudi Commit File " + latestKafkaOffsets);
+        log.info("Retrieved Raw Kafka offsets from Hudi Commit File {}", latestKafkaOffsets);
         globalCommittedKafkaOffsets = Arrays.stream(latestKafkaOffsets.split(KAFKA_OFFSET_DELIMITER))
             .map(entry -> entry.split(KAFKA_OFFSET_KV_DELIMITER))
             .collect(Collectors.toMap(entry -> Integer.parseInt(entry[0]), entry -> Long.parseLong(entry[1])));
-        LOG.info("Initialized the kafka offset commits " + globalCommittedKafkaOffsets);
+        log.info("Initialized the kafka offset commits {}", globalCommittedKafkaOffsets);
       }
     } catch (Exception exception) {
       throw new HoodieException("Could not deserialize the kafka commit offsets", exception);

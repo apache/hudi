@@ -33,8 +33,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -45,8 +44,8 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMPACT_MERGE_HANDLE_CLAS
 /**
  * Factory class for instantiating the appropriate implementation of {@link HoodieMergeHandle}.
  */
+@Slf4j
 public class HoodieMergeHandleFactory {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleFactory.class);
 
   /**
    * Creates a merge handle for normal write path.
@@ -65,7 +64,7 @@ public class HoodieMergeHandleFactory {
     boolean isFallbackEnabled = writeConfig.isMergeHandleFallbackEnabled();
     Pair<String, String> mergeHandleClasses = getMergeHandleClassesWrite(operationType, writeConfig, table);
     String logContext = String.format("for fileId %s and partition path %s at commit %s", fileId, partitionPath, instantTime);
-    LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClasses.getLeft(), logContext);
+    log.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClasses.getLeft(), logContext);
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, Iterator.class,
@@ -94,7 +93,7 @@ public class HoodieMergeHandleFactory {
     boolean isFallbackEnabled = writeConfig.isMergeHandleFallbackEnabled();
     Pair<String, String> mergeHandleClasses = getMergeHandleClassesCompaction(writeConfig, table);
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", fileId, partitionPath, instantTime);
-    LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClasses.getLeft(), logContext);
+    log.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClasses.getLeft(), logContext);
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, Map.class,
@@ -123,7 +122,7 @@ public class HoodieMergeHandleFactory {
 
     String mergeHandleClass = config.getCompactionMergeHandleClassName();
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
-    LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
+    log.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, CompactionOperation.class,
@@ -150,7 +149,7 @@ public class HoodieMergeHandleFactory {
     } catch (Throwable e1) {
       if (isFallbackEnabled && fallbackClass != null && !Objects.equals(primaryClass, fallbackClass)) {
         try {
-          LOG.warn("HoodieMergeHandle implementation {} failed, now creating fallback implementation {} {}",
+          log.warn("HoodieMergeHandle implementation {} failed, now creating fallback implementation {} {}",
               primaryClass, fallbackClass, logContext);
           return (HoodieMergeHandle<T, I, K, O>) ReflectionUtils.loadClass(fallbackClass, constructorParamTypes, initargs);
         } catch (Throwable e2) {

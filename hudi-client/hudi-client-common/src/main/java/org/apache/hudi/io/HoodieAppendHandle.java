@@ -67,9 +67,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -92,9 +90,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRang
 /**
  * IO Operation to append data onto an existing file.
  */
+@Slf4j
 public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
@@ -165,7 +162,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // When enabling writing partial updates to the data blocks in log files,
             // i.e., partial update schema is set, the writer schema is the partial
             // schema containing the updated fields only
-            ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
+            ? Option.of(HoodieSchema.parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier,
         preserveMetadata);
@@ -228,7 +225,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
         prevCommit = getInstantTimeForLogFile(record);
         // This means there is no base data file, start appending to a new log file
-        LOG.info("New file group from append handle for partition {}", partitionPath);
+        log.info("New file group from append handle for partition {}", partitionPath);
       }
     }
 
@@ -263,7 +260,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
       this.writer = createLogWriter(instantTime, fileSliceOpt);
     } catch (Exception e) {
-      LOG.error("Error in update task at commit " + instantTime, e);
+      log.error("Error in update task at commit " + instantTime, e);
       writeStatus.setGlobalError(e);
       throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
           + instantTime + " on storage path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
@@ -297,7 +294,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void bufferRecord(HoodieRecord<T> hoodieRecord) {
-    Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     Option<Map<String, String>> recordMetadata = getRecordMetadata(hoodieRecord, schema, recordProperties);
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
@@ -318,7 +315,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // record successful.
       hoodieRecord.deflate();
     } catch (Exception e) {
-      LOG.error("Error writing record {}", hoodieRecord, e);
+      log.error("Error writing record {}", hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
   }
@@ -436,20 +433,19 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     updateWriteStatus(result, stat);
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      HoodieSchema writerHoodieSchemaWithMetaFields = HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields);
       HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(writerHoodieSchemaWithMetaFields)),
+              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
               Option.of(this.recordMerger.getRecordType()), indexVersion).keySet());
       final List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndexSet.stream()
-          .map(fieldName -> HoodieSchemaUtils.getNestedField(writerHoodieSchemaWithMetaFields, fieldName))
+          .map(fieldName -> HoodieSchemaUtils.getNestedField(writeSchemaWithMetaFields, fieldName))
           .filter(Option::isPresent)
           .map(Option::get)
           .collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-            collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writerHoodieSchemaWithMetaFields, storage.getConf(),
+            collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf(),
                 indexVersion);
         stat.putRecordsStats(columnRangeMetadataMap);
       } catch (HoodieException e) {
@@ -459,7 +455,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;
-    LOG.info("AppendHandle for partitionPath {} filePath {}, took {} ms.", partitionPath,
+    log.info("AppendHandle for partitionPath {} filePath {}, took {} ms.", partitionPath,
         stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
     timer.startTimer();
   }
@@ -523,7 +519,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   @Override
-  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
+  protected void doWrite(HoodieRecord record, HoodieSchema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     try {
       init(record);
@@ -533,7 +529,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
       writeStatus.markFailure(record, t, recordMetadata);
-      LOG.error("Error writing record " + record, t);
+      log.error("Error writing record " + record, t);
     }
   }
 
@@ -575,7 +571,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // secondary index considering all the log files.
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(partitionPath, fileId, getReadFileSlice(),
             statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
-            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields));
+            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
 
       return statuses;
@@ -634,7 +630,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     numberOfRecords++;
   }
 
-  private void bufferInsertAndUpdate(Schema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
+  private void bufferInsertAndUpdate(HoodieSchema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
     // Check if the record should be ignored (special case for [[ExpressionPayload]])
     if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
       return;
@@ -683,7 +679,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (numberOfRecords >= (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
-      LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
+      log.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
       // Delete blocks will be appended after appending all the data blocks.
       appendDataAndDeleteBlocks(header, appendDeleteBlocks);
       estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;

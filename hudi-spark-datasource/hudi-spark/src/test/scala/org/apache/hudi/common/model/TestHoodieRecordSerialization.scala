@@ -18,13 +18,13 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
-import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
+import org.apache.hudi.AvroConversionUtils.createInternalRowToAvroConverter
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{cloneUsingKryo, convertToAvroRecord, toUnsafeRow, OverwriteWithLatestAvroPayloadWithEquality}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.{HoodieInternalRowUtils, Row}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -87,7 +87,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
   @Test
   def testAvroRecords(): Unit = {
-    def routine(record: HoodieRecord[_], schema: Schema, expectedSize: Int): Unit = {
+    def routine(record: HoodieRecord[_], schema: HoodieSchema, expectedSize: Int): Unit = {
       // Step 1: Serialize/de- original [[HoodieRecord]]
       val (cloned, originalBytes) = cloneUsingKryo(record)
 
@@ -120,7 +120,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
     Seq(
       (legacyRecord, null, expectedLegacyRecordSize),
-      (avroIndexedRecord, avroRecord.getSchema, expectedAvroIndexedRecordSize)
+      (avroIndexedRecord, HoodieSchema.fromAvroSchema(avroRecord.getSchema), expectedAvroIndexedRecordSize)
     ) foreach { case (record, schema, expectedSize) => routine(record, schema, expectedSize) }
   }
 
@@ -183,7 +183,7 @@ object TestHoodieRecordSerialization {
   }
 
   private def convertToAvroRecord(row: Row): GenericRecord = {
-    val schema = convertStructTypeToAvroSchema(row.schema, "testRecord", "testNamespace")
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(row.schema, "testRecord", "testNamespace")
 
     createInternalRowToAvroConverter(row.schema, schema, nullable = false)
       .apply(toUnsafeRow(row, row.schema))

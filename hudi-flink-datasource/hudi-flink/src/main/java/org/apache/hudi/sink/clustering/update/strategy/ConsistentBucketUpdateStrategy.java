@@ -28,15 +28,15 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.hudi.table.action.cluster.util.ConsistentHashingUpdateStrategyUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.table.action.commit.BucketType;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,9 +52,8 @@ import java.util.stream.Collectors;
  * Update strategy for consistent hashing bucket index. If updates to file groups that are under clustering are identified,
  * then the current batch of records will route to both old and new file groups, i.e., dual write.
  */
+@Slf4j
 public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<BucketRecords>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketUpdateStrategy.class);
 
   private boolean initialized = false;
   private final List<String> indexKeyFields;
@@ -78,7 +77,7 @@ public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<Bu
     if (!instants.isEmpty()) {
       HoodieInstant latestPendingReplaceInstant = instants.get(instants.size() - 1);
       if (latestPendingReplaceInstant.requestedTime().compareTo(lastRefreshInstant) > 0) {
-        LOG.info("Found new pending replacement commit. Last pending replacement commit is {}.", latestPendingReplaceInstant);
+        log.info("Found new pending replacement commit. Last pending replacement commit is {}.", latestPendingReplaceInstant);
         this.table = table;
         this.fileGroupsInPendingClustering = table.getFileSystemView().getFileGroupsInPendingClustering()
             .map(Pair::getKey).collect(Collectors.toSet());
@@ -132,7 +131,7 @@ public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<Bu
       bucketRecordsList.add(BucketRecords.of(e.getValue().iterator(), bucketInfo, clusteringInstant));
       fgs.add(new HoodieFileGroupId(fileId.getPartitionPath(), newFileId));
     }
-    LOG.info("Apply duplicate update for FileGroup {}, routing records to: {}.", fileId, String.join(",", fileIdToRecords.keySet()));
+    log.info("Apply duplicate update for FileGroup {}, routing records to: {}.", fileId, String.join(",", fileIdToRecords.keySet()));
     // TODO add option to skip dual update, i.e., write updates only to the new file group
     // `recordItr` inside `bucketRecords` is based on MutableObjectIterator, which is one-time iterator and cannot be reused.
     bucketRecordsList.add(BucketRecords.of(records.iterator(), bucketRecords.getBucketInfo(), bucketRecords.getInstant()));
@@ -145,31 +144,14 @@ public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<Bu
     );
   }
 
+  @Value
   public static class BucketRecords {
-    private final Iterator<HoodieRecord> recordItr;
-    private final BucketInfo bucketInfo;
-    private final String instant;
-
-    private BucketRecords(Iterator<HoodieRecord> recordItr, BucketInfo bucketInfo, String instant) {
-      this.recordItr = recordItr;
-      this.bucketInfo = bucketInfo;
-      this.instant = instant;
-    }
+    Iterator<HoodieRecord> recordItr;
+    BucketInfo bucketInfo;
+    String instant;
 
     public static BucketRecords of(Iterator<HoodieRecord> recordItr, BucketInfo bucketInfo, String instant) {
       return new BucketRecords(recordItr, bucketInfo, instant);
-    }
-
-    public Iterator<HoodieRecord> getRecordItr() {
-      return this.recordItr;
-    }
-
-    public BucketInfo getBucketInfo() {
-      return this.bucketInfo;
-    }
-
-    public String getInstant() {
-      return this.instant;
     }
   }
 }

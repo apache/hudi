@@ -21,13 +21,13 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -41,7 +41,7 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
 
   private final HoodieStorage storage;
 
-  private final Schema cdcSchema;
+  private final HoodieSchema cdcSchema;
 
   private final Iterator<HoodieLogFile> cdcLogFileIter;
 
@@ -51,7 +51,7 @@ public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecor
 
   private IndexedRecord record;
 
-  public HoodieCDCLogRecordIterator(HoodieStorage storage, HoodieLogFile[] cdcLogFiles, Schema cdcSchema) {
+  public HoodieCDCLogRecordIterator(HoodieStorage storage, HoodieLogFile[] cdcLogFiles, HoodieSchema cdcSchema) {
     this.storage = storage;
     this.cdcSchema = cdcSchema;
     this.cdcLogFileIter = Arrays.stream(cdcLogFiles).iterator();

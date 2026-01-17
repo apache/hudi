@@ -23,10 +23,10 @@ import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -46,8 +46,8 @@ import static org.mockito.Mockito.when;
  */
 public class TestPartialUpdateFlinkRecordMerger {
   private final RecordContext<RowData> recordContext = mock(RecordContext.class);
-  private Schema schema;
-  private Schema schemaWithoutMetaField;
+  private HoodieSchema schema;
+  private HoodieSchema schemaWithoutMetaField;
 
   String jsonSchema = "{\n"
       + "  \"type\": \"record\",\n"
@@ -80,8 +80,8 @@ public class TestPartialUpdateFlinkRecordMerger {
 
   @BeforeEach
   public void setUp() throws Exception {
-    schema = new Schema.Parser().parse(jsonSchema);
-    schemaWithoutMetaField = new Schema.Parser().parse(jsonSchemaWithoutMetaField);
+    schema = HoodieSchema.parse(jsonSchema);
+    schemaWithoutMetaField = HoodieSchema.parse(jsonSchemaWithoutMetaField);
   }
 
   @Test

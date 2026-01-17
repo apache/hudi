@@ -38,6 +38,7 @@ import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
@@ -51,7 +52,10 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.partitioner.MiniBatchBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
+import org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction;
+import org.apache.hudi.sink.partitioner.RecordIndexPartitioner;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -121,7 +125,7 @@ public class Pipelines {
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
       BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeys);
-      RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+      RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
       boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
@@ -146,7 +150,7 @@ public class Pipelines {
         // see BatchExecutionUtils#applyBatchExecutionSettings for details.
         Partitioner<String> partitioner = (key, channels) -> KeyGroupRangeAssignment.assignKeyToParallelOperator(key,
             KeyGroupRangeAssignment.computeDefaultMaxParallelism(PARALLELISM_VALUE), channels);
-        RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+        RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
 
@@ -208,7 +212,7 @@ public class Pipelines {
 
     Option<Partitioner> insertPartitioner = OptionsResolver.getInsertPartitioner(conf);
     if (insertPartitioner.isPresent()) {
-      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+      RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
       dataStream = dataStream.partitionCustom(insertPartitioner.get(), rowDataKeyGen::getHoodieKey);
     }
 
@@ -288,7 +292,7 @@ public class Pipelines {
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream) {
-    final RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+    final RowDataKeyGen rowDataKeyGen = RowDataKeyGens.instance(conf, rowType);
     // shuffle by partition keys
     dataStream = dataStream
         .keyBy(rowDataKeyGen::getPartitionPath);
@@ -380,15 +384,8 @@ public class Pipelines {
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }
     } else {
-      return dataStream
-          // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-          .keyBy(HoodieFlinkInternalRow::getRecordKey)
-          .transform(
-              "bucket_assigner",
-              new HoodieFlinkInternalRowTypeInfo(rowType),
-              new KeyedProcessOperator<>(new BucketAssignFunction(conf)))
-          .uid(opUID("bucket_assigner", conf))
-          .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS))
+      DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType);
+      return bucketAssignStream
           // shuffle by fileId(bucket id)
           .keyBy(HoodieFlinkInternalRow::getFileId)
           .transform(
@@ -397,6 +394,39 @@ public class Pipelines {
               StreamWriteOperator.getFactory(conf, rowType))
           .uid(opUID("stream_write", conf))
           .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
+    }
+  }
+
+  /**
+   * Creates a bucket assignment stream that routes records to appropriate file groups based on the index type.
+   *
+   * @param inputStream The input data stream of HoodieFlinkInternalRow records to be assigned to buckets
+   * @param conf        The configuration containing index and assignment settings
+   * @param rowType     The logical row type of the input data stream
+   * @return A DataStream of HoodieFlinkInternalRow records with bucket assignments
+   */
+  private static DataStream<HoodieFlinkInternalRow> createBucketAssignStream(
+      DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType) {
+    String assignerOperatorName = "bucket_assigner";
+    if (OptionsResolver.isMiniBatchBucketAssign(conf)) {
+      return inputStream
+          .partitionCustom(new RecordIndexPartitioner(conf), row -> new HoodieKey(row.getRecordKey(), row.getPartitionPath()))
+          .transform(
+              assignerOperatorName,
+              new HoodieFlinkInternalRowTypeInfo(rowType),
+              new MiniBatchBucketAssignOperator(new MinibatchBucketAssignFunction(conf)))
+          .uid(opUID(assignerOperatorName, conf))
+          .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
+    } else {
+      return inputStream
+          // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
+          .keyBy(HoodieFlinkInternalRow::getRecordKey)
+          .transform(
+              assignerOperatorName,
+              new HoodieFlinkInternalRowTypeInfo(rowType),
+              new KeyedProcessOperator<>(new BucketAssignFunction(conf)))
+          .uid(opUID(assignerOperatorName, conf))
+          .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     }
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -27,6 +26,8 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
@@ -42,8 +43,6 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.List;
@@ -108,13 +107,13 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     readerContext.initRecordMergerForIngestion(table.getConfig().getProps());
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getMetaClient());
-    Schema recordSchema;
+    HoodieSchema recordSchema;
     if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
-      recordSchema = new Schema.Parser().parse(table.getConfig().getPartialUpdateSchema());
+      recordSchema = HoodieSchema.parse(table.getConfig().getPartialUpdateSchema());
     } else {
-      recordSchema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
+      recordSchema = HoodieSchema.parse(table.getConfig().getWriteSchema());
     }
-    recordSchema = AvroSchemaCache.intern(recordSchema);
+    recordSchema = HoodieSchemaCache.intern(recordSchema);
     TypedProperties mergedProperties = readerContext.getMergeProps(table.getConfig().getProps());
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
@@ -146,7 +145,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                        String[] orderingFieldNames);
 
   protected static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
-                                                     HoodieRecord<T> previous, HoodieRecord<T> next, Schema schema, RecordContext<T> recordContext, DeleteContext deleteContext) {
+                                                     HoodieRecord<T> previous, HoodieRecord<T> next, HoodieSchema schema, RecordContext<T> recordContext, DeleteContext deleteContext) {
     try {
       // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
       // If the return value is empty, it means the previous should be chosen.

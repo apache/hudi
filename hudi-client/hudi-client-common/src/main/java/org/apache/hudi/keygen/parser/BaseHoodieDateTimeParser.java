@@ -20,6 +20,7 @@ package org.apache.hudi.keygen.parser;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormatter;
 
@@ -32,6 +33,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 public abstract class BaseHoodieDateTimeParser implements Serializable {
 
   protected final TypedProperties config;
+  @Getter
   protected final String configInputDateFormatDelimiter;
 
   public BaseHoodieDateTimeParser(TypedProperties config) {
@@ -67,12 +69,5 @@ public abstract class BaseHoodieDateTimeParser implements Serializable {
    * Returns the datetime zone using which the final partition paths for hudi dataset are created.
    */
   public abstract DateTimeZone getOutputDateTimeZone();
-
-  /**
-   * Returns the input date format delimiter, comma by default.
-   */
-  public String getConfigInputDateFormatDelimiter() {
-    return this.configInputDateFormatDelimiter;
-  }
 
 }

@@ -26,10 +26,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.parquet.io.ParquetBinaryCopyChecker;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -43,10 +42,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * This strategy extends SparkBinaryCopyClusteringExecutionStrategy and modifies
  * the supportBinaryStreamCopy method to skip schema checks when schema evolution is disabled.
  */
-public class SparkStreamCopyClusteringExecutionStrategy<T> 
+@Slf4j
+public class SparkStreamCopyClusteringExecutionStrategy<T>
     extends SparkBinaryCopyClusteringExecutionStrategy<T> {
-  
-  private static final Logger LOG = LoggerFactory.getLogger(SparkStreamCopyClusteringExecutionStrategy.class);
   
   public SparkStreamCopyClusteringExecutionStrategy(HoodieTable table,
                                                     HoodieEngineContext engineContext,
@@ -59,7 +57,7 @@ public class SparkStreamCopyClusteringExecutionStrategy<T>
                                         Map<String, String> strategyParams) {
     // Check if table type is Copy-on-Write
     if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
-      LOG.warn("SparkStreamCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
+      log.warn("SparkStreamCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
       return false;
     }
     
@@ -69,25 +67,25 @@ public class SparkStreamCopyClusteringExecutionStrategy<T>
             .map(listStr -> listStr.split(","));
     
     if (orderByColumnsOpt.isPresent()) {
-      LOG.warn("SparkStreamCopyClusteringExecutionStrategy does not support sort by columns. Will fall back to common clustering execution strategy.");
+      log.warn("SparkStreamCopyClusteringExecutionStrategy does not support sort by columns. Will fall back to common clustering execution strategy.");
       return false;
     }
     
     // Check if base file format is Parquet
     if (!getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
-      LOG.warn("SparkStreamCopyClusteringExecutionStrategy only supports parquet base files. Will fall back to common clustering execution strategy.");
+      log.warn("SparkStreamCopyClusteringExecutionStrategy only supports parquet base files. Will fall back to common clustering execution strategy.");
       return false;
     }
     
     // Check if schema evolution is enabled
     if (!writeConfig.isBinaryCopySchemaEvolutionEnabled()) {
       // Skip schema checking when schema evolution is disabled
-      LOG.info("Schema evolution disabled, skipping schema compatibility checks for binary stream copy");
+      log.info("Schema evolution disabled, skipping schema compatibility checks for binary stream copy");
       return true;
     }
     
     // Perform schema compatibility checks when schema evolution is enabled
-    LOG.info("Schema evolution enabled, performing schema compatibility checks for binary stream copy");
+    log.info("Schema evolution enabled, performing schema compatibility checks for binary stream copy");
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     
     List<ParquetBinaryCopyChecker.ParquetFileInfo> fileStatus = engineContext.parallelize(inputGroups, inputGroups.size())
@@ -102,7 +100,7 @@ public class SparkStreamCopyClusteringExecutionStrategy<T>
     
     boolean compatible = ParquetBinaryCopyChecker.verifyFiles(fileStatus);
     if (!compatible) {
-      LOG.warn("Schema compatibility check failed. Will fall back to common clustering execution strategy.");
+      log.warn("Schema compatibility check failed. Will fall back to common clustering execution strategy.");
     }
     
     return compatible;

@@ -19,11 +19,11 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.SizeEstimator;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -36,13 +36,13 @@ import java.util.HashMap;
 public class TestAvroRecordSizeEstimator {
   @Test
   void testEstimatingRecord() throws IOException {
-    Schema schema = SchemaTestUtil.getSimpleSchema();
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
     // testing Avro builtin IndexedRecord
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    SizeEstimator<BufferedRecord<IndexedRecord>> estimator = new AvroRecordSizeEstimator(schema);
+    SizeEstimator<BufferedRecord<IndexedRecord>> estimator = new AvroRecordSizeEstimator(schema.toAvroSchema());
     BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
     long size = estimator.sizeEstimate(bufferedRecord);
     // size can be various for different OS / JVM version

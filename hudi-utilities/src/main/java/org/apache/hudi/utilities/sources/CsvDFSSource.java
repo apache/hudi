@@ -30,7 +30,7 @@ import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.avro.SchemaConverters;
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
@@ -86,8 +86,7 @@ public class CsvDFSSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
     if (schemaProvider != null) {
-      sourceSchema = (StructType) SchemaConverters.toSqlType(schemaProvider.getSourceHoodieSchema().toAvroSchema())
-          .dataType();
+      sourceSchema = (StructType) HoodieSparkSchemaConverters.toSqlType(schemaProvider.getSourceHoodieSchema())._1;
     } else {
       sourceSchema = null;
     }

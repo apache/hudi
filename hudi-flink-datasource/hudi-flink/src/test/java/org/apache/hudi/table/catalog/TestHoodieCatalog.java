@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -261,7 +262,7 @@ public class TestHoodieCatalog extends BaseTestHoodieCatalog {
     HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(
         catalog.getTable(tablePath).getOptions().get(FlinkOptions.PATH.key()),
         HadoopConfigurations.getHadoopConf(new Configuration())).get();
-    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    Option<HoodieSchema> tableCreateSchema = tableConfig.getTableCreateSchema();
     assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
     assertThat(tableCreateSchema.get().getFullName(), is("hoodie.tb1.tb1_record"));
 

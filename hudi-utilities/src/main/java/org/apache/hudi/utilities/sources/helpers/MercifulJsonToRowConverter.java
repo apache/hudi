@@ -30,6 +30,8 @@ import org.apache.hudi.avro.processors.LocalTimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.Parser;
 import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -41,7 +43,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.spark.sql.Row;
@@ -87,9 +88,9 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
    * During the conversion here, we sanitize the fields in the data
    *
    * @param json   Json record
-   * @param schema Schema
+   * @param schema HoodieSchema
    */
-  public Row convertToRow(String json, Schema schema) {
+  public Row convertToRow(String json, HoodieSchema schema) {
     try {
       Map<String, Object> jsonObjectMap = mapper.readValue(json, Map.class);
       return convertJsonToRow(jsonObjectMap, schema);
@@ -98,11 +99,11 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     }
   }
 
-  private Row convertJsonToRow(Map<String, Object> inputJson, Schema schema) {
-    List<Schema.Field> fields = schema.getFields();
+  private Row convertJsonToRow(Map<String, Object> inputJson, HoodieSchema schema) {
+    List<HoodieSchemaField> fields = schema.getFields();
     List<Object> values = new ArrayList<>(Collections.nCopies(fields.size(), null));
 
-    for (Schema.Field f : fields) {
+    for (HoodieSchemaField f : fields) {
       Object val = shouldSanitize ? getFieldFromJson(f, inputJson, schema.getFullName(), invalidCharMask) : inputJson.get(f.name());
       if (val != null) {
         values.set(f.pos(), SparkValueMetadataUtils.convertJavaTypeToSparkType(convertJsonField(val, f.name(), f.schema()), useJava8api));
@@ -113,33 +114,35 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
   private class DecimalToRowLogicalTypeProcessor extends DecimalLogicalTypeProcessor {
     @Override
-    public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+    public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
       if (!isValidDecimalTypeConfig(schema)) {
         return Pair.of(false, null);
       }
 
-      if (schema.getType() == Type.FIXED && value instanceof List<?>) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
+      if (decimalSchema.isFixed() && value instanceof List<?>) {
         // Case 1: Input is a list. It is expected to be raw Fixed byte array input, and we only support
         // parsing it to Fixed type.
         JsonFieldProcessor processor = generateFixedTypeHandler();
         Pair<Boolean, Object> fixedTypeResult = processor.convert(value, name, schema);
         if (fixedTypeResult.getLeft()) {
           byte[] byteArray = (byte[]) fixedTypeResult.getRight();
-          GenericFixed fixedValue = new GenericData.Fixed(schema, byteArray);
+          Schema avroSchema = schema.toAvroSchema();
+          GenericFixed fixedValue = new GenericData.Fixed(avroSchema, byteArray);
           // Convert the GenericFixed to BigDecimal
           return Pair.of(true, new Conversions
               .DecimalConversion()
               .fromFixed(
                   fixedValue,
-                  schema,
-                  schema.getLogicalType()
+                  avroSchema,
+                  avroSchema.getLogicalType()
               )
           );
         }
       }
 
       // Case 2: Input is a number or String number or base64 encoded string number
-      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, schema);
+      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, decimalSchema);
       return Pair.of(parseResult.getLeft(), parseResult.getRight());
     }
   }
@@ -163,7 +166,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
     @Override
     public Pair<Boolean, Object> convert(
-        Object value, String name, Schema schema) {
+        Object value, String name, HoodieSchema schema) {
       throw new HoodieJsonToRowConversionException("Duration type is not supported in Row object");
     }
   }
@@ -171,7 +174,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   private static class DateToRowLogicalTypeProcessor extends DateLogicalTypeProcessor {
 
     @Override
-    public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+    public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
       return convertCommon(new Parser.DateParser(), value, schema);
     }
   }
@@ -180,7 +183,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   protected JsonFieldProcessor generateBytesTypeHandler() {
     return new JsonFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+      public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
         return Pair.of(true, value.toString().getBytes());
       }
     };
@@ -193,7 +196,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
   private static class FixedToRowTypeProcessor extends FixedTypeProcessor {
     @Override
-    public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+    public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
       return Pair.of(true, convertToJavaObject(value, name, schema));
     }
   }
@@ -205,7 +208,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
   private static class EnumToRowTypeProcessor extends EnumTypeProcessor {
     @Override
-    public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+    public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
       return Pair.of(true, convertToJavaObject(value, name, schema));
     }
   }
@@ -214,7 +217,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   protected JsonFieldProcessor generateRecordTypeHandler() {
     return new JsonFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+      public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
         return Pair.of(true, convertJsonToRow((Map<String, Object>) value, schema));
       }
     };
@@ -228,7 +231,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   private static class TimestampMilliToRowLogicalTypeProcessor extends TimestampMilliLogicalTypeProcessor {
     @Override
     public Pair<Boolean, Object> convert(
-        Object value, String name, Schema schema) {
+        Object value, String name, HoodieSchema schema) {
       Pair<Boolean, Object> result = convertCommon(
           new Parser.LongParser() {
             @Override
@@ -265,7 +268,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   private static class TimestampMicroToRowLogicalTypeProcessor extends TimestampMicroLogicalTypeProcessor {
     @Override
     public Pair<Boolean, Object> convert(
-        Object value, String name, Schema schema) {
+        Object value, String name, HoodieSchema schema) {
       Pair<Boolean, Object> result = convertCommon(
           new Parser.LongParser() {
             @Override
@@ -288,7 +291,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
     @Override
     public Pair<Boolean, Object> convert(
-        Object value, String name, Schema schema) {
+        Object value, String name, HoodieSchema schema) {
       return convertCommon(
           new Parser.LongParser() {
             @Override
@@ -328,7 +331,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   private static class LocalTimestampMilliToRowLogicalTypeProcessor extends LocalTimestampMilliLogicalTypeProcessor {
     @Override
     public Pair<Boolean, Object> convert(
-        Object value, String name, Schema schema) {
+        Object value, String name, HoodieSchema schema) {
       return convertCommon(
           new Parser.LongParser() {
             @Override
@@ -368,8 +371,8 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
   @Override
   protected JsonFieldProcessor generateArrayTypeHandler() {
     return new JsonFieldProcessor() {
-      private List<Object> convertToJavaObject(Object value, String name, Schema schema) {
-        Schema elementSchema = schema.getElementType();
+      private List<Object> convertToJavaObject(Object value, String name, HoodieSchema schema) {
+        HoodieSchema elementSchema = schema.getElementType();
         List<Object> listRes = new ArrayList<>();
         for (Object v : (List) value) {
           listRes.add(convertJsonField(v, name, elementSchema));
@@ -378,7 +381,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
       }
 
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+      public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
         return Pair.of(true,
             convertToJavaObject(
                 value,
@@ -394,8 +397,8 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
       public Map<String, Object> convertToJavaObject(
           Object value,
           String name,
-          Schema schema) {
-        Schema valueSchema = schema.getValueType();
+          HoodieSchema schema) {
+        HoodieSchema valueSchema = schema.getValueType();
         Map<String, Object> mapRes = new HashMap<>();
         for (Map.Entry<String, Object> v : ((Map<String, Object>) value).entrySet()) {
           mapRes.put(v.getKey(), convertJsonField(v.getValue(), name, valueSchema));
@@ -404,7 +407,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
       }
 
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+      public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
         return Pair.of(true, JavaConverters
             .mapAsScalaMapConverter(
                 convertToJavaObject(

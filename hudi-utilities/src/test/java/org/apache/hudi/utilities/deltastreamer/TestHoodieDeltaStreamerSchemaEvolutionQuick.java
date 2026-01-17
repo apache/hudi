@@ -21,6 +21,9 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -28,7 +31,6 @@ import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -170,7 +172,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(allowNullForDeletedCols), jsc);
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    String datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     addData(df, true);
     deltaStreamer.sync();
@@ -181,7 +183,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //add extra log files
     if (multiLogFiles) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       addData(df, false);
       deltaStreamer.sync();
@@ -194,7 +196,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //make other filegroups
     if (addFilegroups) {
-      datapath = String.class.getResource("/data/schema-evolution/newFileGroupsTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/newFileGroupsTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       addData(df, false);
       deltaStreamer.sync();
@@ -205,7 +207,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     }
 
     //write updates
-    datapath = String.class.getResource("/data/schema-evolution/endTestEverything.json").getPath();
+    datapath = getClass().getResource("/data/schema-evolution/endTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     //do casting
     Column col = df.col("tip_history");
@@ -246,8 +248,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     assertRecordCount(numRecords);
 
     df = sparkSession.read().format("hudi").load(tableBasePath);
-    df.show(100,false);
     df.cache();
+    // assert data can be read
+    df.limit(100).collect();
     assertDataType(df, "tip_history", DataTypes.createArrayType(DataTypes.LongType));
     assertDataType(df, "fare", DataTypes.createStructType(new StructField[]{
         new StructField("amount", DataTypes.StringType, true, Metadata.empty()),
@@ -295,7 +298,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     tableBasePath = basePath + tableName;
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    String datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     resetTopicAndDeltaStreamer(allowNullForDeletedCols);
     addData(df, true);
@@ -307,7 +310,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //add extra log files
     if (tableType.equals("MERGE_ON_READ")) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       addData(df, false);
       deltaStreamer.sync();
@@ -326,8 +329,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     //test reordering column
-    datapath =
-        String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     df = df.drop("rider").withColumn("rider", functions.lit("rider-003"));
 
@@ -335,10 +337,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+    Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
         dsConfig.targetBasePath, metaClient);
-    assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
-        .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+    Option<HoodieSchemaField> riderFieldOpt = latestTableSchemaOpt.get().getField("rider");
+    assertTrue(riderFieldOpt.isPresent());
+    assertTrue(riderFieldOpt.get().schema().getTypes()
+        .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
   }
 
@@ -368,7 +372,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     tableBasePath = basePath + tableName;
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    String datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     resetTopicAndDeltaStreamer(allowNullForDeletedCols);
     addData(df, true);
@@ -380,7 +384,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //add extra log files
     if (tableType.equals("MERGE_ON_READ")) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       addData(df, false);
       deltaStreamer.sync();
@@ -401,7 +405,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     // drop column
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     Dataset<Row> droppedColumnDf = df.drop("rider");
     try {
@@ -410,10 +414,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+      Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
           dsConfig.targetBasePath, metaClient);
-      assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
-          .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+      Option<HoodieSchemaField> riderFieldOpt = latestTableSchemaOpt.get().getField("rider");
+      assertTrue(riderFieldOpt.isPresent());
+      assertTrue(riderFieldOpt.get().schema().getTypes()
+          .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
@@ -446,7 +452,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     tableBasePath = basePath + tableName;
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    String datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     df = TestHoodieSparkUtils.setColumnNotNullable(df, "rider");
     resetTopicAndDeltaStreamer(allowNullForDeletedCols);
@@ -459,7 +465,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //add extra log files
     if (tableType.equals("MERGE_ON_READ")) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       df = TestHoodieSparkUtils.setColumnNotNullable(df, "rider");
       addData(df, false);
@@ -481,7 +487,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     // drop column
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     Dataset<Row> droppedColumnDf = df.drop("rider");
     try {
@@ -490,10 +496,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+      Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
           dsConfig.targetBasePath, metaClient);
-      assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
-          .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+      Option<HoodieSchemaField> riderFieldOpt = latestTableSchemaOpt.get().getField("rider");
+      assertTrue(riderFieldOpt.isPresent());
+      assertTrue(riderFieldOpt.get().schema().getTypes()
+          .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(containsErrorMessage(e, "has no default value and is non-nullable",
@@ -527,7 +535,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     tableBasePath = basePath + tableName;
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    String datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     resetTopicAndDeltaStreamer(allowNullForDeletedCols);
     addData(df, true);
@@ -539,7 +547,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //add extra log files
     if (tableType.equals("MERGE_ON_READ")) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       addData(df, false);
       deltaStreamer.sync();
@@ -560,7 +568,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     // type promotion for dataset (int -> long)
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     Column col = df.col("distance_in_meters");
     Dataset<Row> typePromotionDf = df.withColumn("distance_in_meters", col.cast(DataTypes.DoubleType));
@@ -570,11 +578,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertFalse(targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+      Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
           dsConfig.targetBasePath, metaClient);
-      assertTrue(latestTableSchemaOpt.get().getField("distance_in_meters").schema().getTypes()
-              .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)),
-          latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
+      Option<HoodieSchemaField> distanceInMetersFieldOpt = latestTableSchemaOpt.get().getField("distance_in_meters");
+      assertTrue(distanceInMetersFieldOpt.isPresent());
+      assertTrue(distanceInMetersFieldOpt.get().schema().getTypes()
+              .stream().anyMatch(t -> HoodieSchemaType.DOUBLE == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(targetSchemaSameAsTableSchema);
@@ -617,7 +626,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     tableBasePath = basePath + tableName;
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    String datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     resetTopicAndDeltaStreamer(allowNullForDeletedCols);
     addData(df, true);
@@ -629,7 +638,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
     //add extra log files
     if (tableType.equals("MERGE_ON_READ")) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      datapath = getClass().getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
       addData(df, false);
       deltaStreamer.sync();
@@ -650,8 +659,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     // type demotion
-    datapath =
-        String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath = getClass().getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     Column col = df.col("current_ts");
     Dataset<Row> typeDemotionDf = df.withColumn("current_ts", col.cast(DataTypes.IntegerType));
@@ -659,10 +667,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+    Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
         dsConfig.targetBasePath, metaClient);
-    assertTrue(latestTableSchemaOpt.get().getField("current_ts").schema().getTypes()
-        .stream().anyMatch(t -> t.getType().equals(Schema.Type.LONG)));
+    Option<HoodieSchemaField> currentTsFieldOpt = latestTableSchemaOpt.get().getField("current_ts");
+    assertTrue(currentTsFieldOpt.isPresent());
+    assertTrue(currentTsFieldOpt.get().schema().getTypes()
+        .stream().anyMatch(t -> HoodieSchemaType.LONG == t.getType()));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
   }
 

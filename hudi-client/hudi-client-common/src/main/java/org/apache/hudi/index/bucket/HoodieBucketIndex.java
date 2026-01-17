@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -46,10 +46,10 @@ import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 /**
  * Hash indexing mechanism.
  */
+@Slf4j
 public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBucketIndex.class);
-
+  @Getter
   protected final int numBuckets;
   protected final List<String> indexKeyFields;
 
@@ -58,7 +58,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
     this.numBuckets = config.getBucketIndexNumBuckets();
     this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
-    LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
+    log.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 
   @Override
@@ -153,9 +153,5 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   @Override
   public boolean isImplicitWithStorage() {
     return true;
-  }
-
-  public int getNumBuckets() {
-    return numBuckets;
   }
 }

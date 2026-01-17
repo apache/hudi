@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
+import org.apache.hudi.{HoodieCLIUtils, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -215,7 +215,7 @@ class RunClusteringProcedure extends BaseProcedure
 
     // Resolve partition predicates
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema)
+    val tableSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schemaResolver.getTableSchema)
     val condition = resolveExpr(sparkSession, predicate, tableSchema)
     val partitionColumns = metaClient.getTableConfig.getPartitionFields.orElse(Array[String]())
     val (partitionPredicates, dataPredicates) = splitPartitionAndDataPredicates(
@@ -233,7 +233,7 @@ class RunClusteringProcedure extends BaseProcedure
     }
 
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
-    val fields = tableSchemaResolver.getTableAvroSchema(false)
+    val fields = tableSchemaResolver.getTableSchema(false)
       .getFields.asScala.map(_.name().toLowerCase)
     orderColumns.split(",").foreach(col => {
       if (!fields.contains(col.toLowerCase)) {

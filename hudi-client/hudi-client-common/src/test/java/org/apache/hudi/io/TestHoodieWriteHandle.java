@@ -19,6 +19,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
@@ -27,13 +28,16 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +49,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -124,13 +131,12 @@ class TestHoodieWriteHandle {
   @Test
   void testAppendEventTimeMetadataWithEventTimeField() {
     // Setup: Create a test record with event time field
-    Schema schema = Schema.createRecord("test", null, null, false);
-    schema.setFields(java.util.Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
-        new Schema.Field("event_time", Schema.create(Schema.Type.LONG), null, null)
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, "", Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("event_time", HoodieSchema.create(HoodieSchemaType.LONG))
     ));
 
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "test_id");
     record.put("event_time", 1234567890L);
 
@@ -153,13 +159,12 @@ class TestHoodieWriteHandle {
   @Test
   void testAppendEventTimeMetadataWithExistingMetadata() {
     // Setup: Create a test record with event time field
-    Schema schema = Schema.createRecord("test", null, null, false);
-    schema.setFields(java.util.Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
-        new Schema.Field("event_time", Schema.create(Schema.Type.LONG), null, null)
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, "", Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("event_time", HoodieSchema.create(HoodieSchemaType.LONG))
     ));
 
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "test_id");
     record.put("event_time", 1234567890L);
 
@@ -188,12 +193,11 @@ class TestHoodieWriteHandle {
   @Test
   void testAppendEventTimeMetadataWithoutEventTimeField() {
     // Setup: Create a test record without event time field
-    Schema schema = Schema.createRecord("test", null, null, false);
-    schema.setFields(java.util.Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null)
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, "", Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING))
     ));
 
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "test_id");
 
     HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
@@ -209,13 +213,12 @@ class TestHoodieWriteHandle {
   @Test
   void testAppendEventTimeMetadataWithNullEventTimeValue() {
     // Setup: Create a test record with null event time value
-    Schema schema = Schema.createRecord("test", null, null, false);
-    schema.setFields(java.util.Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
-        new Schema.Field("event_time", Schema.create(Schema.Type.LONG), null, null)
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, "", Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("event_time", HoodieSchema.create(HoodieSchemaType.LONG))
     ));
 
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "test_id");
     record.put("event_time", null);
 
@@ -232,13 +235,12 @@ class TestHoodieWriteHandle {
   @Test
   void testAppendEventTimeMetadataWithStringEventTime() {
     // Setup: Create a test record with string event time
-    Schema schema = Schema.createRecord("test", null, null, false);
-    schema.setFields(java.util.Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
-        new Schema.Field("event_time", Schema.create(Schema.Type.STRING), null, null)
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, "", Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("event_time", HoodieSchema.create(HoodieSchemaType.STRING))
     ));
 
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "test_id");
     record.put("event_time", "2023-01-01T00:00:00Z");
 
@@ -260,21 +262,19 @@ class TestHoodieWriteHandle {
   @Test
   void testAppendEventTimeMetadataWithNestedEventTimeField() {
     // Setup: Create a test record with nested event time field
-    Schema nestedSchema = Schema.createRecord("nested", null, null, false);
-    nestedSchema.setFields(java.util.Arrays.asList(
-        new Schema.Field("event_time", Schema.create(Schema.Type.LONG), null, null)
+    HoodieSchema nestedSchema = HoodieSchema.createRecord("nested", null, "", Arrays.asList(
+        HoodieSchemaField.of("event_time", HoodieSchema.create(HoodieSchemaType.LONG))
     ));
 
-    Schema schema = Schema.createRecord("test", null, null, false);
-    schema.setFields(java.util.Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
-        new Schema.Field("nested", nestedSchema, null, null)
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, "", Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nested", nestedSchema)
     ));
 
-    GenericRecord nestedRecord = new GenericData.Record(nestedSchema);
+    GenericRecord nestedRecord = new GenericData.Record(nestedSchema.toAvroSchema());
     nestedRecord.put("event_time", 1234567890L);
 
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "test_id");
     record.put("nested", nestedRecord);
 
@@ -339,18 +339,18 @@ class TestHoodieWriteHandle {
       return isTrackingEventTimeWatermark;
     }
 
-    public Option<Map<String, String>> testAppendEventTimeMetadata(HoodieRecord record, Schema schema, Properties props) {
+    public Option<Map<String, String>> testAppendEventTimeMetadata(HoodieRecord record, HoodieSchema schema, Properties props) {
       return getRecordMetadata(record, schema, props);
     }
 
     @Override
-    public java.util.List<org.apache.hudi.client.WriteStatus> close() {
-      return java.util.Collections.emptyList();
+    public List<WriteStatus> close() {
+      return Collections.emptyList();
     }
 
     @Override
-    public org.apache.hudi.common.model.IOType getIOType() {
-      return org.apache.hudi.common.model.IOType.MERGE;
+    public IOType getIOType() {
+      return IOType.MERGE;
     }
   }
 }

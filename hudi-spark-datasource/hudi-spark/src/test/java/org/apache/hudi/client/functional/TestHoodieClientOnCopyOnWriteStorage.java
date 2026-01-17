@@ -608,7 +608,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       WriteClientTestUtils.startCommitWithTime(client, commitTime1);
       List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, 100);
       JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 10);
-      BulkInsertPartitioner<JavaRDD<HoodieRecord>> partitioner = new RDDCustomColumnsSortPartitioner(new String[] {"rider"}, HoodieTestDataGenerator.AVRO_SCHEMA, config);
+      BulkInsertPartitioner<JavaRDD<HoodieRecord>> partitioner = new RDDCustomColumnsSortPartitioner(new String[] {"rider"}, HoodieTestDataGenerator.HOODIE_SCHEMA, config);
       List<WriteStatus> statuses = client.bulkInsert(insertRecordsRDD1, commitTime1, Option.of(partitioner)).collect();
       assertNoWriteErrors(statuses);
     }

@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 
 import com.codahale.metrics.SlidingWindowReservoir;
+import lombok.Setter;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
 import org.apache.flink.dropwizard.metrics.DropwizardMeterWrapper;
 import org.apache.flink.metrics.Histogram;
@@ -49,6 +50,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   /**
    * Current write buffer size in StreamWriteFunction.
    */
+  @Setter
   private long writeBufferedSize;
 
   /**
@@ -65,6 +67,11 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
    * Number of files written during a checkpoint window.
    */
   private long numOfFilesWritten;
+
+  /**
+   * Number of record write failure during a checkpoint window.
+   */
+  private long numOfRecordWriteFailures;
 
   /**
    * Number of records written per seconds.
@@ -104,15 +111,13 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     metricGroup.gauge("fileFlushTotalCosts", () -> fileFlushTotalCosts);
     metricGroup.gauge("numOfFilesWritten", () -> numOfFilesWritten);
     metricGroup.gauge("numOfOpenHandle", () -> numOfOpenHandle);
+    metricGroup.gauge("numOfRecordWriteFailures", () -> numOfRecordWriteFailures);
+
 
     metricGroup.meter("handleSwitchPerSecond", handleSwitchPerSecond);
 
     metricGroup.histogram("handleCreationCosts", handleCreationCosts);
     metricGroup.histogram("fileFlushCost", fileFlushCost);
-  }
-
-  public void setWriteBufferedSize(long writeBufferedSize) {
-    this.writeBufferedSize = writeBufferedSize;
   }
 
   public void startDataFlush() {
@@ -130,6 +135,14 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
 
   public void increaseNumOfFilesWritten() {
     numOfFilesWritten += 1;
+  }
+
+  public void increaseNumOfRecordWriteFailure(long recordWriteFailures) {
+    numOfRecordWriteFailures += recordWriteFailures;
+  }
+
+  public long getNumOfRecordWriteFailures() {
+    return numOfRecordWriteFailures;
   }
 
   public void increaseNumOfOpenHandle() {
@@ -165,6 +178,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     this.numOfOpenHandle = 0;
     this.writeBufferedSize = 0;
     this.fileFlushTotalCosts = 0;
+    this.numOfRecordWriteFailures = 0;
   }
 
 }

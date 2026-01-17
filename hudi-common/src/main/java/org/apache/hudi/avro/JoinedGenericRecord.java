@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
@@ -27,8 +28,10 @@ import org.apache.avro.generic.GenericRecord;
  * Impl of {@link GenericRecord} to abstract meta fields and an actual data records of type GenericRecord.
  */
 public class JoinedGenericRecord implements GenericRecord {
+
   private final GenericRecord dataRecord;
   private final Object[] metaFields;
+  @Getter
   private final Schema schema;
 
   public JoinedGenericRecord(GenericRecord dataRecord, int metaFieldsSize, Schema schema) {
@@ -81,10 +84,5 @@ public class JoinedGenericRecord implements GenericRecord {
       return HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.size();
     }
     return pos;
-  }
-
-  @Override
-  public Schema getSchema() {
-    return schema;
   }
 }

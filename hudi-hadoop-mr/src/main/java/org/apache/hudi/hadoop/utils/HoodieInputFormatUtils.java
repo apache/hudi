@@ -52,11 +52,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -131,12 +129,6 @@ public class HoodieInputFormatUtils {
   }
 
   public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, boolean usePreApacheFormat) {
-    if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && usePreApacheFormat) {
-      // Parquet input format had an InputFormat class visible under the old naming scheme.
-      return realtime
-          ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
-          : com.uber.hoodie.hadoop.HoodieInputFormat.class.getName();
-    }
     return getInputFormatClassName(baseFileFormat, realtime);
   }
 
@@ -499,7 +491,7 @@ public class HoodieInputFormatUtils {
                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
-    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
       fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));
@@ -526,8 +518,8 @@ public class HoodieInputFormatUtils {
       return realtimeSplit.getBasePath();
     } else {
       Path inputPath = ((FileSplit) split).getPath();
-      FileSystem fs = inputPath.getFileSystem(jobConf);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+              convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(jobConf));
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return tablePath.get().toString();
     }

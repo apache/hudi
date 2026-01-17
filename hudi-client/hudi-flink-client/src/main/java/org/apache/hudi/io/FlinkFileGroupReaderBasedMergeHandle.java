@@ -30,8 +30,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -46,11 +45,10 @@ import java.util.Iterator;
  * the file path when the data buffer writes finish. When next data buffer write starts,
  * {@link FlinkFileGroupReaderBasedIncrementalMergeHandle} will be used to write records into a rollover file.
  */
+@Slf4j
 public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     extends FileGroupReaderBasedMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkFileGroupReaderBasedMergeHandle.class);
 
   public FlinkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                               Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -104,7 +102,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     }
     try {
       if (storage.exists(path)) {
-        LOG.info("Deleting invalid MERGE base file due to task retry: {}", lastDataFileName);
+        log.info("Deleting invalid MERGE base file due to task retry: {}", lastDataFileName);
         storage.deleteFile(path);
       }
     } catch (IOException e) {
@@ -116,12 +114,6 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
   protected void createMarkerFile(String partitionPath, String dataFileName) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
     writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
-  }
-
-  @Override
-  public boolean isEmptyNewRecords() {
-    // `keyToNewRecords` is not initialized or used for file group reader based handle.
-    return false;
   }
 
   @Override
@@ -139,13 +131,13 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.error("Failed to close the MERGE handle", throwable);
+      log.error("Failed to close the MERGE handle", throwable);
       try {
         storage.deleteFile(newFilePath);
-        LOG.info("Successfully deleted the intermediate MERGE data file: {}", newFilePath);
+        log.info("Successfully deleted the intermediate MERGE data file: {}", newFilePath);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Failed to delete the intermediate MERGE data file: {}", newFilePath, e);
+        log.warn("Failed to delete the intermediate MERGE data file: {}", newFilePath, e);
 
       }
     }

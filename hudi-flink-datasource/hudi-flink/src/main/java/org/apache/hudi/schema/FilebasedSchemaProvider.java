@@ -92,11 +92,13 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
+  @Deprecated
   public Schema getSourceSchema() {
     return sourceSchema;
   }
 
   @Override
+  @Deprecated
   public Schema getTargetSchema() {
     if (targetSchema != null) {
       return targetSchema;

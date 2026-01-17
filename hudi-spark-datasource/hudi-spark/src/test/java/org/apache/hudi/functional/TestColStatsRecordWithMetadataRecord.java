@@ -18,7 +18,6 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -54,15 +54,13 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -88,9 +86,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestColStatsRecordWithMetadataRecord.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -206,7 +203,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     HoodieCreateHandle handle = new HoodieCreateHandle(mdtWriteConfig, newCommitTime, table, COLUMN_STATS.getPartitionPath(), "col-stats-00001-0", new PhoneyTaskContextSupplier());
 
     // write the record to hfile.
-    Schema writeSchema = AvroSchemaCache.intern(new Schema.Parser().parse(mdtWriteConfig.getSchema()));
+    HoodieSchema writeSchema = HoodieSchemaCache.intern(HoodieSchema.parse(mdtWriteConfig.getSchema()));
     TypedProperties properties = new TypedProperties();
     columnStatsRecords.forEach(record -> handle.write(record, writeSchema, properties));
     WriteStatus writeStatus = (WriteStatus) handle.close().get(0);
@@ -237,7 +234,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     allRecords.forEach(record -> {
       HoodieMetadataColumnStats actualColStatsMetadata = record.getData().getColumnStatMetadata().get();
       HoodieMetadataColumnStats expectedColStatsMetadata = expectedColumnStatsRecords.get(finalCounter.getAndIncrement()).getData().getColumnStatMetadata().get();
-      LOG.info("Validating {}, {}",expectedColStatsMetadata.getColumnName(), expectedColStatsMetadata.getMinValue().getClass().getSimpleName());
+      log.info("Validating {}, {}",expectedColStatsMetadata.getColumnName(), expectedColStatsMetadata.getMinValue().getClass().getSimpleName());
       if (expectedColStatsMetadata.getMinValue().getClass().getSimpleName().equals(DecimalWrapper.class.getSimpleName())) {
         // Big decimal gets wrapped w/ Decimal wrapper and converts to bytes.
         assertEquals(expectedColStatsMetadata.getMinValue().toString(), actualColStatsMetadata.getMinValue().toString());

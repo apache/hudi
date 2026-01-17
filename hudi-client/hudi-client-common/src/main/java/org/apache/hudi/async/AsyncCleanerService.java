@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -34,9 +33,8 @@ import java.util.concurrent.Executors;
 /**
  * Async clean service to run concurrently with write operation.
  */
+@Slf4j
 public class AsyncCleanerService extends HoodieAsyncTableService {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AsyncCleanerService.class);
 
   private final BaseHoodieWriteClient writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -57,7 +55,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
   public static AsyncCleanerService startAsyncCleaningIfEnabled(BaseHoodieWriteClient writeClient) {
     HoodieWriteConfig config = writeClient.getConfig();
     if (!config.isAutoClean() || !config.isAsyncClean()) {
-      LOG.info("The HoodieWriteClient is not configured to auto & async clean. Async clean service will not start.");
+      log.info("The HoodieWriteClient is not configured to auto & async clean. Async clean service will not start.");
       return null;
     }
     AsyncCleanerService asyncCleanerService = new AsyncCleanerService(writeClient);
@@ -67,7 +65,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
 
   public static void waitForCompletion(AsyncCleanerService asyncCleanerService) {
     if (asyncCleanerService != null) {
-      LOG.info("Waiting for async clean service to finish");
+      log.info("Waiting for async clean service to finish");
       try {
         asyncCleanerService.waitForShutdown();
       } catch (Exception e) {
@@ -78,7 +76,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
 
   public static void forceShutdown(AsyncCleanerService asyncCleanerService) {
     if (asyncCleanerService != null) {
-      LOG.info("Shutting down async clean service...");
+      log.info("Shutting down async clean service...");
       asyncCleanerService.shutdown(true);
     }
   }

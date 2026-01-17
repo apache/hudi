@@ -19,7 +19,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
+import org.apache.hudi.io.storage.hadoop.HoodieHadoopIOFactory;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.row.HoodieRowDataFileWriterFactory;

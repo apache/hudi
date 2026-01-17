@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -44,7 +45,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -81,7 +81,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS =
       "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}, "
           + "useMetadataTable={3}, enableFileGroupIdKeySorting={4}";

@@ -37,6 +37,8 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.util.Lazy;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -235,6 +237,7 @@ public class HoodieAvroWrapperUtils {
     return Pair.of(false, null);
   }
 
+  @AllArgsConstructor
   public enum PrimitiveWrapperType {
     V1(Object.class, HoodieAvroWrapperUtils::wrapValueIntoAvro, HoodieAvroWrapperUtils::unwrapAvroValueWrapper, GenericRecord.class),
     NULL(Void.class, HoodieAvroWrapperUtils::wrapNull, HoodieAvroWrapperUtils::unwrapNull, Void.class),
@@ -246,21 +249,12 @@ public class HoodieAvroWrapperUtils {
     STRING(String.class, HoodieAvroWrapperUtils::wrapString, HoodieAvroWrapperUtils::unwrapString, StringWrapper.class),
     BYTES(ByteBuffer.class, HoodieAvroWrapperUtils::wrapBytes, HoodieAvroWrapperUtils::unwrapBytes, BytesWrapper.class);
 
+    @Getter
     private final Class<?> clazz;
     private final Function<Comparable<?>, Object> wrapper;
     private final Function<Object, Comparable<?>> unwrapper;
+    @Getter
     private final Class<?> wrapperClass;
-
-    PrimitiveWrapperType(Class<?> clazz, Function<Comparable<?>, Object> wrapper, Function<Object, Comparable<?>> unwrapper, Class<?> wrapperClass) {
-      this.clazz = clazz;
-      this.wrapper = wrapper;
-      this.unwrapper = unwrapper;
-      this.wrapperClass = wrapperClass;
-    }
-
-    public Class<?> getClazz() {
-      return clazz;
-    }
 
     public Object wrap(Comparable<?> value) {
       return wrapper.apply(value);
@@ -268,10 +262,6 @@ public class HoodieAvroWrapperUtils {
 
     public Comparable<?> unwrap(Object value) {
       return unwrapper.apply(value);
-    }
-
-    public Class<?> getWrapperClass() {
-      return wrapperClass;
     }
   }
 
