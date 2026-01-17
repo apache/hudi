@@ -48,7 +48,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
-    if (oldValue.recordBytes.length == 0) {
+    if (oldValue.isEmptyRecord() || isDeletedRecord) {
       // use natural order for delete record
       return this;
     }

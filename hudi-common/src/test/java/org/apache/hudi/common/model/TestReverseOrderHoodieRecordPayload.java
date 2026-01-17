@@ -21,7 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.testutils.PreCombineTestUtils;
+import org.apache.hudi.common.testutils.OrderingFieldsTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -57,9 +57,9 @@ public class TestReverseOrderHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
   public void testPrecombineAndCombineAndGetUpdateValueMethods(String key) throws IOException {
-    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");

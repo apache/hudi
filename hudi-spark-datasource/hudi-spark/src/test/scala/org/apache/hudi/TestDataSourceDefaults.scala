@@ -21,6 +21,7 @@ import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.HoodieRecord.SENTINEL
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
@@ -41,8 +42,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-
-import org.apache.hudi.common.model.HoodieRecord.SENTINEL
 
 /**
  * Tests on the default key generator, payload classes.
